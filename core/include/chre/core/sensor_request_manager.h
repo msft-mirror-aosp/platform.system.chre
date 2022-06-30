@@ -285,7 +285,7 @@ class SensorRequestManager : public NonCopyable {
    *
    * @param nanoapp A non-null pointer to the nanoapp.
    *
-   * @return The number of disabled subscriptions.
+   * @return The number of subscriptions disabled.
    */
   uint32_t disableAllSubscriptions(Nanoapp *nanoapp);
 

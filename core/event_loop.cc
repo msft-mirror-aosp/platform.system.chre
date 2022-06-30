@@ -15,6 +15,7 @@
  */
 
 #include "chre/core/event_loop.h"
+#include <cinttypes>
 
 #include "chre/core/event.h"
 #include "chre/core/event_loop_manager.h"
@@ -470,19 +471,13 @@ void EventLoop::unloadNanoappAtIndex(size_t index) {
   mCurrentApp = nanoapp.get();
   nanoapp->end();
 
-  // TODO: right now we assume that the nanoapp will clean up all of its
-  // resource allocations in its nanoappEnd callback (memory, sensor
-  // subscriptions, etc.), otherwise we're leaking resources. We should
-  // perform resource cleanup automatically here to avoid these types of
-  // potential leaks.
-
   // Cleanup resources.
 #ifdef CHRE_WIFI_SUPPORT_ENABLED
   const uint32_t numDisabledWifiSubscriptions =
       EventLoopManagerSingleton::get()
           ->getWifiRequestManager()
           .disableAllSubscriptions(nanoapp.get());
-  LOGV("Disabled %" PRId32 " wifi subscriptions", numDisabledWifiSubscriptions);
+  logDanglingResources("WIFI subscriptions", numDisabledWifiSubscriptions);
 #endif  // CHRE_WIFI_SUPPORT_ENABLED
 
 #ifdef CHRE_GNSS_SUPPORT_ENABLED
@@ -490,7 +485,7 @@ void EventLoop::unloadNanoappAtIndex(size_t index) {
       EventLoopManagerSingleton::get()
           ->getGnssManager()
           .disableAllSubscriptions(nanoapp.get());
-  LOGV("Disabled %" PRId32 " GNSS subscriptions", numDisabledGnssSubscriptions);
+  logDanglingResources("GNSS subscriptions", numDisabledGnssSubscriptions);
 #endif  // CHRE_GNSS_SUPPORT_ENABLED
 
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
@@ -498,8 +493,7 @@ void EventLoop::unloadNanoappAtIndex(size_t index) {
       EventLoopManagerSingleton::get()
           ->getSensorRequestManager()
           .disableAllSubscriptions(nanoapp.get());
-  LOGV("Disabled %" PRId32 " sensor subscriptions",
-       numDisabledSensorSubscriptions);
+  logDanglingResources("Sensor subscriptions", numDisabledSensorSubscriptions);
 #endif  // CHRE_SENSORS_SUPPORT_ENABLED
 
 #ifdef CHRE_AUDIO_SUPPORT_ENABLED
@@ -507,8 +501,24 @@ void EventLoop::unloadNanoappAtIndex(size_t index) {
       EventLoopManagerSingleton::get()
           ->getAudioRequestManager()
           .disableAllAudioRequests(nanoapp.get());
-  LOGV("Disabled %" PRId32 " audio requests", numDisabledAudioRequests);
+  logDanglingResources("Audio requests", numDisabledAudioRequests);
 #endif  // CHRE_AUDIO_SUPPORT_ENABLED
+
+#ifdef CHRE_BLE_SUPPORT_ENABLED
+  const uint32_t numDisabledBleScans = EventLoopManagerSingleton::get()
+                                           ->getBleRequestManager()
+                                           .disableActiveScan(nanoapp.get());
+  logDanglingResources("BLE scan", numDisabledBleScans);
+#endif  // CHRE_BLE_SUPPORT_ENABLED
+
+  const uint32_t numCancelledTimers =
+      getTimerPool().cancelAllNanoappTimers(nanoapp.get());
+  logDanglingResources("timers", numCancelledTimers);
+
+  const uint32_t numFreedBlocks =
+      EventLoopManagerSingleton::get()->getMemoryManager().nanoappFreeAll(
+          nanoapp.get());
+  logDanglingResources("heap blocks", numFreedBlocks);
 
   mCurrentApp = nullptr;
 
@@ -526,6 +536,13 @@ void EventLoop::handleNanoappWakeupBuckets() {
     for (auto &nanoapp : mNanoapps) {
       nanoapp->cycleWakeupBuckets(numBuckets);
     }
+  }
+}
+
+void EventLoop::logDanglingResources(const char *name, uint32_t count) {
+  if (count > 0) {
+    LOGE("App 0x%016" PRIx64 " had %" PRIu32 " remaining %s at unload",
+         mCurrentApp->getAppId(), count, name);
   }
 }
 

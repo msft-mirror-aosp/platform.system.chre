@@ -40,38 +40,25 @@ const chreBleScanMode kScanModes[] = {CHRE_BLE_SCAN_MODE_BACKGROUND,
 
 enum ScanRequestType {
   NO_FILTER = 0,
-  SERVICE_DATA_UUID_16 = 1,
-  SERVICE_DATA_UUID_32 = 2,
-  SERVICE_DATA_UUID_128 = 3,
-  STOP_SCAN = 4,
+  SERVICE_DATA_16 = 1,
+  STOP_SCAN = 2,
 };
 
 chreBleScanFilter *getBleScanFilter(ScanRequestType &scanRequestType) {
-  UniquePtr<chreBleScanFilter> filter = MakeUniqueZeroFill<chreBleScanFilter>();
+  chre::UniquePtr<chreBleScanFilter> filter =
+      chre::MakeUniqueZeroFill<chreBleScanFilter>();
   filter->rssiThreshold = CHRE_BLE_RSSI_THRESHOLD_NONE;
   filter->scanFilterCount = 1;
-  UniquePtr<chreBleGenericFilter> scanFilter =
-      MakeUniqueZeroFill<chreBleGenericFilter>();
+  chre::UniquePtr<chreBleGenericFilter> scanFilter =
+      chre::MakeUniqueZeroFill<chreBleGenericFilter>();
   switch (scanRequestType) {
     case NO_FILTER:
       filter = nullptr;
-      scanRequestType = SERVICE_DATA_UUID_16;
+      scanRequestType = SERVICE_DATA_16;
       break;
-    case SERVICE_DATA_UUID_16:
-      scanFilter->type = CHRE_BLE_FILTER_TYPE_SERVICE_DATA_UUID_16;
+    case SERVICE_DATA_16:
+      scanFilter->type = CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16;
       scanFilter->len = 2;
-      filter->scanFilters = scanFilter.release();
-      scanRequestType = SERVICE_DATA_UUID_32;
-      break;
-    case SERVICE_DATA_UUID_32:
-      scanFilter->type = CHRE_BLE_FILTER_TYPE_SERVICE_DATA_UUID_32;
-      scanFilter->len = 4;
-      filter->scanFilters = scanFilter.release();
-      scanRequestType = SERVICE_DATA_UUID_128;
-      break;
-    case SERVICE_DATA_UUID_128:
-      scanFilter->type = CHRE_BLE_FILTER_TYPE_SERVICE_DATA_UUID_128;
-      scanFilter->len = 16;
       filter->scanFilters = scanFilter.release();
       scanRequestType = STOP_SCAN;
       break;
@@ -105,9 +92,10 @@ void makeBleScanRequest() {
     }
     if (filter != nullptr) {
       if (filter->scanFilters != nullptr) {
-        memoryFree(const_cast<chreBleGenericFilter *>(filter->scanFilters));
+        chre::memoryFree(
+            const_cast<chreBleGenericFilter *>(filter->scanFilters));
       }
-      memoryFree(filter);
+      chre::memoryFree(filter);
     }
   } else {
     if (chreBleStopScanAsync()) {

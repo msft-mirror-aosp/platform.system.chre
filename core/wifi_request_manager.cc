@@ -19,7 +19,6 @@
 #include <cstdint>
 #include <cstring>
 
-#include "chre/core/api_manager_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/settings.h"
 #include "chre/core/wifi_request_manager.h"
@@ -487,6 +486,20 @@ void WifiRequestManager::handleNanServiceTerminatedEventSync(
   }
 }
 
+void WifiRequestManager::handleNanServiceSubscriptionCanceledEventSync(
+    uint8_t errorCode, uint32_t subscriptionId) {
+  for (size_t i = 0; i < mNanoappSubscriptions.size(); ++i) {
+    if (mNanoappSubscriptions[i].subscriptionId == subscriptionId) {
+      if (errorCode != CHRE_ERROR_NONE) {
+        LOGE("Subscription %" PRIu32 " cancelation error: %" PRIu8,
+             subscriptionId, errorCode);
+      }
+      mNanoappSubscriptions.erase(i);
+      break;
+    }
+  }
+}
+
 void WifiRequestManager::handleNanServiceTerminatedEvent(
     uint8_t errorCode, uint32_t subscriptionId) {
   auto callback = [](uint16_t /*type*/, void *data, void *extraData) {
@@ -495,6 +508,23 @@ void WifiRequestManager::handleNanServiceTerminatedEvent(
     EventLoopManagerSingleton::get()
         ->getWifiRequestManager()
         .handleNanServiceTerminatedEventSync(errorCode, subscriptionId);
+  };
+
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::WifiNanServiceTerminatedEvent,
+      NestedDataPtr<uint8_t>(errorCode), callback,
+      NestedDataPtr<uint32_t>(subscriptionId));
+}
+
+void WifiRequestManager::handleNanServiceSubscriptionCanceledEvent(
+    uint8_t errorCode, uint32_t subscriptionId) {
+  auto callback = [](uint16_t /*type*/, void *data, void *extraData) {
+    auto errorCode = NestedDataPtr<uint8_t>(data);
+    auto subscriptionId = NestedDataPtr<uint32_t>(extraData);
+    EventLoopManagerSingleton::get()
+        ->getWifiRequestManager()
+        .handleNanServiceSubscriptionCanceledEventSync(errorCode,
+                                                       subscriptionId);
   };
 
   EventLoopManagerSingleton::get()->deferCallback(
@@ -546,11 +576,11 @@ void WifiRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
 
   debugDump.print(" API error distribution (error-code indexed):\n");
   debugDump.print("   Scan monitor:\n");
-  WifiRequestManager::logErrorHistogram(debugDump, mScanMonitorErrorHistogram,
-                                        CHRE_ERROR_SIZE);
+  debugDump.logErrorHistogram(mScanMonitorErrorHistogram,
+                              ARRAY_SIZE(mScanMonitorErrorHistogram));
   debugDump.print("   Active Scan:\n");
-  WifiRequestManager::logErrorHistogram(debugDump, mActiveScanErrorHistogram,
-                                        CHRE_ERROR_SIZE);
+  debugDump.logErrorHistogram(mActiveScanErrorHistogram,
+                              ARRAY_SIZE(mActiveScanErrorHistogram));
 
   if (!mNanoappSubscriptions.empty()) {
     debugDump.print(" Active NAN service subscriptions:\n");
@@ -616,13 +646,13 @@ bool WifiRequestManager::addScanMonitorRequestToQueue(Nanoapp *nanoapp,
 
 bool WifiRequestManager::nanoappHasPendingScanMonitorRequest(
     uint16_t instanceId) const {
-  if (!mPendingScanMonitorRequests.empty()) {
-    for (size_t i = mPendingScanMonitorRequests.size() - 1; i >= 0; i--) {
-      const PendingScanMonitorRequest &request = mPendingScanMonitorRequests[i];
-      // The last pending request determines the state of the scan monitoring.
-      if (request.nanoappInstanceId == instanceId) {
-        return request.enable;
-      }
+  const int numRequests = static_cast<int>(mPendingScanMonitorRequests.size());
+  for (int i = numRequests - 1; i >= 0; i--) {
+    const PendingScanMonitorRequest &request =
+        mPendingScanMonitorRequests[static_cast<size_t>(i)];
+    // The last pending request determines the state of the scan monitoring.
+    if (request.nanoappInstanceId == instanceId) {
+      return request.enable;
     }
   }
 
@@ -635,12 +665,21 @@ bool WifiRequestManager::updateNanoappScanMonitoringList(bool enable,
   Nanoapp *nanoapp =
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByInstanceId(
           instanceId);
+  size_t nanoappIndex;
+  bool hasExistingRequest =
+      nanoappHasScanMonitorRequest(instanceId, &nanoappIndex);
+
   if (nanoapp == nullptr) {
-    LOGW("Failed to update scan monitoring list for non-existent nanoapp");
+    // When the scan monitoring is disabled from inside nanoappEnd() or when
+    // CHRE cleanup the subscription automatically it is possible that the
+    // current method is called after the nanoapp is unloaded. In such a case
+    // we still want to remove the nanoapp from mScanMonitorNanoapps.
+    if (!enable && hasExistingRequest) {
+      mScanMonitorNanoapps.erase(nanoappIndex);
+    } else {
+      LOGW("Failed to update scan monitoring list for non-existent nanoapp");
+    }
   } else {
-    size_t nanoappIndex;
-    bool hasExistingRequest =
-        nanoappHasScanMonitorRequest(instanceId, &nanoappIndex);
     if (enable) {
       if (!hasExistingRequest) {
         // The scan monitor was successfully enabled for this nanoapp and
@@ -1038,19 +1077,6 @@ void WifiRequestManager::freeNanDiscoveryEventCallback(uint16_t /* eventType */,
       .mPlatformWifi.releaseNanDiscoveryEvent(event);
 }
 
-void WifiRequestManager::logErrorHistogram(DebugDumpWrapper &debugDump,
-                                           const uint32_t *histogram,
-                                           uint8_t histogramLength) const {
-  debugDump.print("     [");
-  for (int i = 0; i < histogramLength; i++) {
-    debugDump.print("%" PRIu32, histogram[i]);
-    if (i < histogramLength - 1) {
-      debugDump.print(",");
-    }
-  }
-  debugDump.print("]\n");
-}
-
 bool WifiRequestManager::nanSubscribe(
     Nanoapp *nanoapp, const struct chreWifiNanSubscribeConfig *config,
     const void *cookie) {
@@ -1101,15 +1127,13 @@ bool WifiRequestManager::nanSubscribeCancel(Nanoapp *nanoapp,
         mNanoappSubscriptions[i].nanoappInstanceId ==
             nanoapp->getInstanceId()) {
       success = mPlatformWifi.nanSubscribeCancel(subscriptionId);
-      if (success) {
-        mNanoappSubscriptions.erase(i);
-      }
       break;
     }
   }
 
-  if (mNanoappSubscriptions.empty()) {
-    sendNanConfiguration(false /*enable*/);
+  if (!success) {
+    LOGE("Failed to cancel subscription %" PRIu32 " for napp %" PRIu16,
+         subscriptionId, nanoapp->getInstanceId());
   }
 
   return success;
@@ -1191,7 +1215,7 @@ void WifiRequestManager::cancelNanPendingRequestsAndInformNanoapps() {
   mPendingNanSubscribeRequests.clear();
 }
 
-void WifiRequestManager::updateNanAvailability(bool available) {
+void WifiRequestManager::handleNanAvailabilitySync(bool available) {
   PendingNanConfigType nanState =
       available ? PendingNanConfigType::ENABLE : PendingNanConfigType::DISABLE;
   mNanIsAvailable = available;
@@ -1207,6 +1231,19 @@ void WifiRequestManager::updateNanAvailability(bool available) {
     cancelNanPendingRequestsAndInformNanoapps();
     cancelNanSubscriptionsAndInformNanoapps();
   }
+}
+
+void WifiRequestManager::updateNanAvailability(bool available) {
+  auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
+    bool cbAvail = NestedDataPtr<bool>(data);
+    EventLoopManagerSingleton::get()
+        ->getWifiRequestManager()
+        .handleNanAvailabilitySync(cbAvail);
+  };
+
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::WifiNanAvailabilityEvent,
+      NestedDataPtr<bool>(available), callback);
 }
 
 void WifiRequestManager::sendNanConfiguration(bool enable) {
