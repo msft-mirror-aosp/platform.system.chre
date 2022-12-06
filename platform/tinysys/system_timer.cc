@@ -23,7 +23,9 @@ namespace chre {
 
 void SystemTimerBase::rtTimerCallback(struct rt_timer *rtTimer) {
   if (rtTimer != nullptr) {
-    SystemTimer *systemTimer = static_cast<SystemTimer *>(rtTimer->private_ptr);
+    // TODO(b/254708051): rtTimer->context is just a place holder. The actual
+    // variable name depends on the final fix of this bug.
+    SystemTimer *systemTimer = static_cast<SystemTimer *>(rtTimer->context);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(systemTimer->mCallbackRunnerHandle,
                            &xHigherPriorityTaskWoken);
