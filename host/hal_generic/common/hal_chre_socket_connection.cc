@@ -95,6 +95,12 @@ bool HalChreSocketConnection::getContextHubs(
   return mHubInfoValid;
 }
 
+bool HalChreSocketConnection::sendDebugConfiguration() {
+  FlatBufferBuilder builder;
+  HostProtocolHost::encodeDebugConfiguration(builder);
+  return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
+}
+
 bool HalChreSocketConnection::sendMessageToHub(long nanoappId,
                                                uint32_t messageType,
                                                uint16_t hostEndpointId,
@@ -168,6 +174,11 @@ bool HalChreSocketConnection::onHostEndpointDisconnected(
   return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
+bool HalChreSocketConnection::isLoadTransactionPending() {
+  std::lock_guard<std::mutex> lock(mPendingLoadTransactionMutex);
+  return mPendingLoadTransaction.has_value();
+}
+
 HalChreSocketConnection::SocketCallbacks::SocketCallbacks(
     HalChreSocketConnection &parent, IChreSocketCallback *callback)
     : mParent(parent), mCallback(callback) {
@@ -189,6 +200,7 @@ void HalChreSocketConnection::SocketCallbacks::onConnected() {
     ALOGI("Reconnected to CHRE daemon");
     mCallback->onContextHubRestarted();
   }
+  mParent.sendDebugConfiguration();
   mHaveConnected = true;
 }
 
@@ -363,7 +375,6 @@ bool HalChreSocketConnection::sendFragmentedLoadNanoAppRequest(
 
 #ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
 void HalChreSocketConnection::reportMetric(const VendorAtom atom) {
-  // check service availability
   const std::string statsServiceName =
       std::string(IStats::descriptor).append("/default");
   if (!AServiceManager_isDeclared(statsServiceName.c_str())) {
@@ -371,9 +382,12 @@ void HalChreSocketConnection::reportMetric(const VendorAtom atom) {
     return;
   }
 
-  // obtain the service
   std::shared_ptr<IStats> stats_client = IStats::fromBinder(ndk::SpAIBinder(
       AServiceManager_waitForService(statsServiceName.c_str())));
+  if (stats_client == nullptr) {
+    ALOGE("Failed to get IStats service");
+    return;
+  }
 
   const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(atom);
   if (!ret.isOk()) {
