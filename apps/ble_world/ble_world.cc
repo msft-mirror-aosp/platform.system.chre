@@ -89,6 +89,7 @@ bool nanoappStart() {
     LOGE("BLE scan result batching is unavailable");
   } else {
     gBleBatchDurationMs = 5000;
+    LOGI("BLE batching enabled");
   }
 #endif  // BLE_WORLD_ENABLE_BATCHING
   bool success = enableBleScans();
@@ -194,9 +195,9 @@ void handleTimerEvent(const void *cookie) {
     }
 #endif  // BLE_WORLD_ENABLE_BATCHING
   } else if (cookie == &gReadRssiTimerHandle) {
-    auto ok = chreBleReadRssiAsync(gReadRssiConnectionHandle, nullptr);
-    LOGI("Reading RSSI for handle 0x%" PRIx16 ", status=%" PRId8,
-         gReadRssiConnectionHandle, ok);
+    bool success = chreBleReadRssiAsync(gReadRssiConnectionHandle, nullptr);
+    LOGI("Reading RSSI for handle 0x%" PRIx16 ", status=%d",
+         gReadRssiConnectionHandle, success);
   } else {
     LOGE("Received unknown timer cookie %p", cookie);
   }
@@ -205,6 +206,11 @@ void handleTimerEvent(const void *cookie) {
 void handleRssiEvent(const chreBleReadRssiEvent *event) {
   LOGI("Received RSSI Read with status 0x%" PRIx8 " and rssi %" PRIi8,
        event->result.errorCode, event->rssi);
+}
+
+void handleBatchCompleteEvent(const chreBatchCompleteEvent *event) {
+  LOGI("Received Batch complete event with event type %" PRIu16,
+       event->eventType);
 }
 
 void nanoappHandleEvent(uint32_t senderInstanceId, uint16_t eventType,
@@ -229,6 +235,9 @@ void nanoappHandleEvent(uint32_t senderInstanceId, uint16_t eventType,
     case CHRE_EVENT_BLE_RSSI_READ:
       handleRssiEvent(static_cast<const chreBleReadRssiEvent *>(eventData));
       break;
+    case CHRE_EVENT_BLE_BATCH_COMPLETE:
+      handleBatchCompleteEvent(
+          static_cast<const chreBatchCompleteEvent *>(eventData));
     default:
       LOGW("Unhandled event type %" PRIu16, eventType);
       break;

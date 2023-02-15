@@ -18,6 +18,7 @@
 
 namespace android::hardware::contexthub::common::implementation {
 
+using aidl::android::hardware::contexthub::ContextHubMessage;
 using aidl::android::hardware::contexthub::HostEndpointInfo;
 using aidl::android::hardware::contexthub::IContextHubCallback;
 
@@ -69,17 +70,6 @@ bool HalClientManager::registerCallback(
     mPIdsToClientIds[pid] = clientId;
     mClientIdsToClientInfo.emplace(clientId, HalClientInfo(callback));
   }
-
-  // once the call to AIBinder_linkToDeath() is successful, the cookie is
-  // supposed to be release by the death recipient later.
-  auto *cookie = new pid_t(pid);
-  if (AIBinder_linkToDeath(callback->asBinder().get(), mDeathRecipient.get(),
-                           cookie) != STATUS_OK) {
-    LOGE("Failed to link client binder to death recipient");
-    delete cookie;
-    return false;
-  }
-  LOGI("Registered a callback for process %" PRIu32, pid);
   return true;
 }
 
@@ -106,9 +96,6 @@ void HalClientManager::handleClientDeath(pid_t pid) {
       mPendingUnloadTransaction->clientId == clientId) {
     mPendingUnloadTransaction.reset();
   }
-  // TODO(b/247124878): For every connected endpoint, we should also notify CHRE
-  //   about its disconnection. To achieve that, the link death handler should
-  //   be created from the HAL level.
   for (const auto &endpointId : clientInfo.endpointIds) {
     mEndpointIdsToClientIds.erase(endpointId);
   }
@@ -298,14 +285,29 @@ std::shared_ptr<IContextHubCallback> HalClientManager::getCallbackForEndpoint(
   return mClientIdsToClientInfo[clientId].callback;
 }
 
-void HalClientManager::forAllCallbacks(
-    const std::function<void(std::shared_ptr<IContextHubCallback>)>
-        &halCallback) {
+void HalClientManager::sendMessageForAllCallbacks(
+    const ContextHubMessage &message,
+    const std::vector<std::string> &messageParams) {
   const std::lock_guard<std::mutex> lock(mLock);
   for (const auto &[_, clientInfo] : mClientIdsToClientInfo) {
     if (clientInfo.callback != nullptr) {
-      halCallback(clientInfo.callback);
+      clientInfo.callback->handleContextHubMessage(message, messageParams);
     }
   }
+}
+
+const std::unordered_set<HostEndpointId>
+    *HalClientManager::getAllConnectedEndpoints(pid_t pid) {
+  const std::lock_guard<std::mutex> lock(mLock);
+  if (!isKnownPId(pid)) {
+    LOGE("Unknown HAL client with pid %d", pid);
+    return nullptr;
+  }
+  HalClientId clientId = mPIdsToClientIds[pid];
+  if (mClientIdsToClientInfo.find(clientId) == mClientIdsToClientInfo.end()) {
+    LOGE("Can't find any information for client id %" PRIu16, clientId);
+    return nullptr;
+  }
+  return &mClientIdsToClientInfo[clientId].endpointIds;
 }
 }  // namespace android::hardware::contexthub::common::implementation
