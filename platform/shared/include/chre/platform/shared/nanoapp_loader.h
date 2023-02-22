@@ -256,6 +256,14 @@ class NanoappLoader {
   /**
    * Rounds the given address down to the closest alignment boundary.
    *
+   * The alignment follows ELF's p_align semantics:
+   *
+   * [p_align] holds the value to which the segments are aligned in memory and
+   * in the file. Loadable process segments must have congruent values for
+   * p_vaddr and p_offset, modulo the page size. Values of zero and one mean no
+   * alignment is required. Otherwise, p_align should be a positive, integral
+   * power of two, and p_vaddr should equal p_offset, modulo p_align.
+   *
    * @param virtualAddr The address to be rounded.
    * @param alignment Alignment to which the address is rounded to.
    * @return An address that is a multiple of the platform's alignment and is
@@ -352,6 +360,15 @@ class NanoappLoader {
    * @return The value found at the entry. 0 if the entry isn't found.
    */
   static ElfWord getDynEntry(DynamicHeader *dyn, int field);
+
+  /**
+   * Handle reolcation for entries in the specified table.
+   *
+   * @param dyn The dynamic header for the binary.
+   * @param tableTag The dynamic tag (DT_x) of the relocation table.
+   * @return True if success or unsupported, false if failure.
+   */
+  bool relocateTable(DynamicHeader *dyn, int tableTag);
 };
 
 }  // namespace chre

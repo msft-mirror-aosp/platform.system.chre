@@ -367,6 +367,7 @@ EMBOS_CFLAGS += $(FLATBUFFERS_CFLAGS)
 # name in the path below, and let the linker deal with finding the symbol.
 EMBOS_CFLAGS += -I$(CHRE_PREFIX)/platform/embos/include/chre/embos
 
+EMBOS_SRCS += $(CHRE_PREFIX)/platform/arm/nanoapp_loader.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/embos/context.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/embos/init.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/embos/memory.cc
@@ -453,6 +454,9 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/freertos/init.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/freertos/platform_nanoapp.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/freertos/memory_manager.cc
 
+# RISCV
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/riscv/nanoapp_loader.cc
+
 # Shared sources
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/assert.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_audio.cc
@@ -472,10 +476,10 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/host_protocol_common.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/log_buffer.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/memory_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_load_manager.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_loader.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_sensor_stub.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_system_api.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_debug_dump_manager.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_loader.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/system_time.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/tracing.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/version.cc
@@ -503,7 +507,6 @@ endif
 # Compiler flags
 
 # Variables
-TINYSYS_CLANG_PREFIX = $(RISCV_TINYSYS_PREFIX)/../../../../prebuilts/clang
 TINYSYS_PLATFORM = mt6985
 
 # CHRE include paths
@@ -530,7 +533,10 @@ TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/$(TINYSYS_PLATFOR
 TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/common/platform/inc
 
 # Clang include paths
-TINYSYS_CFLAGS += -I$(TINYSYS_CLANG_PREFIX)/md32rv/linux-x86/lib/clang/9.0.1/include
-TINYSYS_CFLAGS += -I$(TINYSYS_CLANG_PREFIX)/md32rv/linux-x86/dkwlib/MRV55E03v/include
+TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/lib/clang/9.0.1/include
+TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/dkwlib/MRV55E03v/include
 
 TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
+
+TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
+TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
