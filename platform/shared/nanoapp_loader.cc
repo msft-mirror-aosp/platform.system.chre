@@ -302,7 +302,7 @@ bool NanoappLoader::open() {
     } else {
       // Wipe caches before calling init array to ensure initializers are not in
       // the data cache.
-      wipeSystemCaches();
+      wipeSystemCaches(reinterpret_cast<uintptr_t>(mMapping), mMemorySpan);
       if (!callInitArray()) {
         LOGE("Failed to perform static init");
       } else {
@@ -396,7 +396,7 @@ bool NanoappLoader::callInitArray() {
 
 uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr,
                                           size_t alignment) {
-  return virtualAddr & -alignment;
+  return alignment == 0 ? virtualAddr : virtualAddr & -alignment;
 }
 
 void NanoappLoader::freeAllocatedData() {
@@ -690,6 +690,7 @@ bool NanoappLoader::createMappings() {
         LOG_OOM();
       } else {
         LOGV("Starting location of mappings %p", mMapping);
+        mMemorySpan = memorySpan;
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr =
