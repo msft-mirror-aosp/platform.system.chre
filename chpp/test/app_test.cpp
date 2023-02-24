@@ -26,7 +26,6 @@
 #include "chpp/clients/loopback.h"
 #include "chpp/clients/timesync.h"
 #include "chpp/log.h"
-#include "chpp/platform/platform_link.h"
 #include "chpp/transport.h"
 
 /*
@@ -39,16 +38,15 @@ class ChppAppTest : public AppTestBase {};
 
 TEST_F(ChppAppTest, SimpleStartStop) {
   // Simple test to make sure start/stop work threads work without crashing
-  ASSERT_TRUE(mClientLinkContext.linkEstablished);
-  ASSERT_TRUE(mServiceLinkContext.linkEstablished);
+  ASSERT_TRUE(mClientTransportContext.linkParams.linkEstablished);
+  ASSERT_TRUE(mServiceTransportContext.linkParams.linkEstablished);
 }
 
 TEST_F(ChppAppTest, TransportLayerLoopback) {
   // This tests the more limited transport-layer-looopback. In contrast,
   // the regular application-layer loopback test provides a more thorough test
   // and test results.
-  constexpr size_t kTestLen =
-      CHPP_LINUX_LINK_TX_MTU_BYTES - CHPP_TRANSPORT_ENCODING_OVERHEAD_BYTES;
+  constexpr size_t kTestLen = CHPP_TRANSPORT_TX_MTU_BYTES;
   uint8_t buf[kTestLen];
   for (size_t i = 0; i < kTestLen; i++) {
     buf[i] = (uint8_t)(i + 100);
@@ -88,9 +86,8 @@ TEST_F(ChppAppTest, TransportLayerLoopback) {
 }
 
 TEST_F(ChppAppTest, SimpleLoopback) {
-  constexpr size_t kTestLen = CHPP_LINUX_LINK_TX_MTU_BYTES -
-                              CHPP_TRANSPORT_ENCODING_OVERHEAD_BYTES -
-                              CHPP_LOOPBACK_HEADER_LEN;
+  constexpr size_t kTestLen =
+      CHPP_TRANSPORT_TX_MTU_BYTES - CHPP_LOOPBACK_HEADER_LEN;
   uint8_t buf[kTestLen];
   for (size_t i = 0; i < kTestLen; i++) {
     buf[i] = (uint8_t)(i + 100);
@@ -136,8 +133,7 @@ TEST_F(ChppAppTest, FragmentedLoopback) {
 
   result = chppRunLoopbackTest(
       &mClientAppContext, buf,
-      chppTransportTxMtuSize(mClientAppContext.transportContext) -
-          CHPP_LOOPBACK_HEADER_LEN + 1);
+      CHPP_TRANSPORT_TX_MTU_BYTES - CHPP_LOOPBACK_HEADER_LEN + 1);
   EXPECT_EQ(result.error, CHPP_APP_ERROR_NONE);
 }
 

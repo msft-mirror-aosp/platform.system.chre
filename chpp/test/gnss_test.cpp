@@ -95,10 +95,10 @@ TEST_F(ChppGnssTest, GnssCapabilitiesTest) {
   // Set the linkActive flag to false so that CHPP link layer does not
   // receive/send message, which causes the capabilities to be set to the
   // default CHPP_GNSS_DEFAULT_CAPABILITIES
-  mClientLinkContext.isLinkActive = false;
+  mClientTransportContext.linkParams.isLinkActive = false;
   uint32_t capabilities = gApi->getCapabilities();
   ASSERT_EQ(capabilities, CHPP_GNSS_DEFAULT_CAPABILITIES);
-  mClientLinkContext.isLinkActive = true;
+  mClientTransportContext.linkParams.isLinkActive = true;
 
   gApi->close();
 }
