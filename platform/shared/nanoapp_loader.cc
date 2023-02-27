@@ -152,6 +152,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(log1pf),
     ADD_EXPORTED_C_SYMBOL(log2f),
     ADD_EXPORTED_C_SYMBOL(logf),
+    ADD_EXPORTED_C_SYMBOL(lrintf),
     ADD_EXPORTED_C_SYMBOL(lroundf),
     ADD_EXPORTED_C_SYMBOL(powf),
     ADD_EXPORTED_C_SYMBOL(remainderf),
@@ -302,7 +303,7 @@ bool NanoappLoader::open() {
     } else {
       // Wipe caches before calling init array to ensure initializers are not in
       // the data cache.
-      wipeSystemCaches();
+      wipeSystemCaches(reinterpret_cast<uintptr_t>(mMapping), mMemorySpan);
       if (!callInitArray()) {
         LOGE("Failed to perform static init");
       } else {
@@ -690,6 +691,7 @@ bool NanoappLoader::createMappings() {
         LOG_OOM();
       } else {
         LOGV("Starting location of mappings %p", mMapping);
+        mMemorySpan = memorySpan;
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr =
