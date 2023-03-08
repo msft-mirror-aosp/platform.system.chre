@@ -18,6 +18,7 @@
 #include <chre/platform/shared/host_protocol_common.h>
 #include <chre_host/generated/host_messages_generated.h>
 #include <chre_host/log.h>
+#include "chre/event.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
 #include "permissions_util.h"
@@ -46,6 +47,31 @@ bool isValidContextHubId(uint32_t hubId) {
     return false;
   }
   return true;
+}
+
+bool getFbsSetting(const Setting &setting, fbs::Setting *fbsSetting) {
+  bool foundSetting = true;
+  switch (setting) {
+    case Setting::LOCATION:
+      *fbsSetting = fbs::Setting::LOCATION;
+      break;
+    case Setting::AIRPLANE_MODE:
+      *fbsSetting = fbs::Setting::AIRPLANE_MODE;
+      break;
+    case Setting::MICROPHONE:
+      *fbsSetting = fbs::Setting::MICROPHONE;
+      break;
+    default:
+      foundSetting = false;
+      LOGE("Setting update with invalid enum value %hhu", setting);
+      break;
+  }
+  return foundSetting;
+}
+
+chre::fbs::SettingState toFbsSettingState(bool enabled) {
+  return enabled ? chre::fbs::SettingState::ENABLED
+                 : chre::fbs::SettingState::DISABLED;
 }
 
 // functions that extract different version numbers
@@ -99,7 +125,7 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-
+  LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
   auto transaction = std::make_unique<FragmentedLoadTransaction>(
@@ -163,9 +189,54 @@ ScopedAStatus MultiClientContextHubBase::enableNanoapp(
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus MultiClientContextHubBase::onSettingChanged(Setting /*setting*/,
-                                                          bool /*enabled*/) {
-  // To be implemented.
+ScopedAStatus MultiClientContextHubBase::onSettingChanged(Setting setting,
+                                                          bool enabled) {
+  mSettingEnabled[setting] = enabled;
+  fbs::Setting fbsSetting;
+  bool isWifiOrBtSetting =
+      (setting == Setting::WIFI_MAIN || setting == Setting::WIFI_SCANNING ||
+       setting == Setting::BT_MAIN || setting == Setting::BT_SCANNING);
+  if (!isWifiOrBtSetting && getFbsSetting(setting, &fbsSetting)) {
+    flatbuffers::FlatBufferBuilder builder(64);
+    HostProtocolHost::encodeSettingChangeNotification(
+        builder, fbsSetting, toFbsSettingState(enabled));
+    mConnection->sendMessage(builder);
+  }
+
+  bool isWifiMainEnabled = isSettingEnabled(Setting::WIFI_MAIN);
+  bool isWifiScanEnabled = isSettingEnabled(Setting::WIFI_SCANNING);
+  bool isAirplaneModeEnabled = isSettingEnabled(Setting::AIRPLANE_MODE);
+
+  // Because the airplane mode impact on WiFi is not standardized in Android,
+  // we write a specific handling in the Context Hub HAL to inform CHRE.
+  // The following definition is a default one, and can be adjusted
+  // appropriately if necessary.
+  bool isWifiAvailable = isAirplaneModeEnabled
+                             ? (isWifiMainEnabled)
+                             : (isWifiMainEnabled || isWifiScanEnabled);
+  if (!mIsWifiAvailable.has_value() || (isWifiAvailable != mIsWifiAvailable)) {
+    flatbuffers::FlatBufferBuilder builder(64);
+    HostProtocolHost::encodeSettingChangeNotification(
+        builder, fbs::Setting::WIFI_AVAILABLE,
+        toFbsSettingState(isWifiAvailable));
+    mConnection->sendMessage(builder);
+    mIsWifiAvailable = isWifiAvailable;
+  }
+
+  // The BT switches determine whether we can BLE scan which is why things are
+  // mapped like this into CHRE.
+  bool isBtMainEnabled = isSettingEnabled(Setting::BT_MAIN);
+  bool isBtScanEnabled = isSettingEnabled(Setting::BT_SCANNING);
+  bool isBleAvailable = isBtMainEnabled || isBtScanEnabled;
+  if (!mIsBleAvailable.has_value() || (isBleAvailable != mIsBleAvailable)) {
+    flatbuffers::FlatBufferBuilder builder(64);
+    HostProtocolHost::encodeSettingChangeNotification(
+        builder, fbs::Setting::BLE_AVAILABLE,
+        toFbsSettingState(isBleAvailable));
+    mConnection->sendMessage(builder);
+    mIsBleAvailable = isBleAvailable;
+  }
+
   return ScopedAStatus::ok();
 }
 
@@ -197,7 +268,17 @@ ScopedAStatus MultiClientContextHubBase::registerCallback(
     LOGE("Callback of context hub HAL must not be null.");
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  mHalClientManager->registerCallback(callback);
+  if (!mHalClientManager->registerCallback(callback)) {
+    return fromResult(false);
+  }
+  // once the call to AIBinder_linkToDeath() is successful, the cookie is
+  // supposed to be release by the death recipient later.
+  auto *cookie = new HalDeathRecipientCookie(this, AIBinder_getCallingPid());
+  if (AIBinder_linkToDeath(callback->asBinder().get(), mDeathRecipient.get(),
+                           cookie) != STATUS_OK) {
+    LOGE("Failed to link client binder to death recipient");
+    delete cookie;
+  }
   return ScopedAStatus::ok();
 }
 
@@ -206,27 +287,69 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
+  HostEndpointId hostEndpointId = message.hostEndPoint;
+  if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), hostEndpointId)) {
+    return fromResult(false);
+  }
   flatbuffers::FlatBufferBuilder builder(1024);
   HostProtocolHost::encodeNanoappMessage(
-      builder, message.nanoappId, message.messageType, message.hostEndPoint,
+      builder, message.nanoappId, message.messageType, hostEndpointId,
       message.messageBody.data(), message.messageBody.size());
   return fromResult(mConnection->sendMessage(builder));
 }
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
-    const HostEndpointInfo & /*in_info*/) {
-  // To be implemented.
-  return ScopedAStatus::ok();
+    const HostEndpointInfo &info) {
+  uint8_t type;
+  switch (info.type) {
+    case HostEndpointInfo::Type::APP:
+      type = CHRE_HOST_ENDPOINT_TYPE_APP;
+      break;
+    case HostEndpointInfo::Type::NATIVE:
+      type = CHRE_HOST_ENDPOINT_TYPE_NATIVE;
+      break;
+    case HostEndpointInfo::Type::FRAMEWORK:
+      type = CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK;
+      break;
+    default:
+      LOGE("Unsupported host endpoint type %" PRIu32, type);
+      return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
+  uint16_t endpointId = info.hostEndpointId;
+  if (!mHalClientManager->registerEndpointId(info.hostEndpointId) ||
+      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), endpointId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+  flatbuffers::FlatBufferBuilder builder(64);
+  HostProtocolHost::encodeHostEndpointConnected(
+      builder, endpointId, type, info.packageName.value_or(std::string()),
+      info.attributionTag.value_or(std::string()));
+  return fromResult(mConnection->sendMessage(builder));
 }
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointDisconnected(
-    char16_t /*in_hostEndpointId*/) {
-  // To be implemented.
-  return ScopedAStatus::ok();
+    char16_t in_hostEndpointId) {
+  HostEndpointId hostEndpointId = in_hostEndpointId;
+  if (!mHalClientManager->removeEndpointId(hostEndpointId) ||
+      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), hostEndpointId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+  flatbuffers::FlatBufferBuilder builder(64);
+  HostProtocolHost::encodeHostEndpointDisconnected(builder, hostEndpointId);
+  return fromResult(mConnection->sendMessage(builder));
 }
 
 ScopedAStatus MultiClientContextHubBase::onNanSessionStateChanged(
-    bool /*in_state*/) {
+    const NanSessionStateUpdate & /*in_update*/) {
+  // TODO(271471342): Add support for NAN session management.
+  return ndk::ScopedAStatus::ok();
+}
+
+ScopedAStatus MultiClientContextHubBase::setTestMode(bool /*enable*/) {
   // To be implemented.
   return ScopedAStatus::ok();
 }
@@ -257,6 +380,10 @@ void MultiClientContextHubBase::handleMessageFromChre(
     }
     case fbs::ChreMessage::UnloadNanoappResponse: {
       onUnloadNanoappResponse(*message.AsUnloadNanoappResponse(), clientId);
+      break;
+    }
+    case fbs::ChreMessage::NanoappMessage: {
+      onNanoappMessage(*message.AsNanoappMessage());
       break;
     }
     default:
@@ -353,5 +480,50 @@ void MultiClientContextHubBase::onUnloadNanoappResponse(
     callback->handleTransactionResult(response.transaction_id,
                                       /* in_success= */ response.success);
   }
+}
+void MultiClientContextHubBase::onNanoappMessage(
+    const ::chre::fbs::NanoappMessageT &message) {
+  ContextHubMessage outMessage;
+  outMessage.nanoappId = message.app_id;
+  outMessage.hostEndPoint = message.host_endpoint;
+  outMessage.messageType = message.message_type;
+  outMessage.messageBody = message.message;
+  outMessage.permissions = chreToAndroidPermissions(message.permissions);
+  auto messageContentPerms =
+      chreToAndroidPermissions(message.message_permissions);
+  // broadcast message is sent to every connected endpoint
+  if (message.host_endpoint == CHRE_HOST_ENDPOINT_BROADCAST) {
+    mHalClientManager->sendMessageForAllCallbacks(outMessage,
+                                                  messageContentPerms);
+  } else if (auto callback = mHalClientManager->getCallbackForEndpoint(
+                 message.host_endpoint);
+             callback != nullptr) {
+    outMessage.hostEndPoint =
+        HalClientManager::convertToOriginalEndpointId(message.host_endpoint);
+    callback->handleContextHubMessage(outMessage, messageContentPerms);
+  }
+}
+
+void MultiClientContextHubBase::onClientDied(void *cookie) {
+  auto *info = static_cast<HalDeathRecipientCookie *>(cookie);
+  info->hal->handleClientDeath(info->clientPid);
+  delete info;
+}
+
+void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
+  LOGI("Process %d is dead. Cleaning up.", clientPid);
+  if (auto endpoints = mHalClientManager->getAllConnectedEndpoints(clientPid)) {
+    for (auto endpointId : *endpoints) {
+      LOGI("Sending message to remove endpoint 0x%" PRIx16, endpointId);
+      if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(clientPid,
+                                                               endpointId)) {
+        continue;
+      }
+      flatbuffers::FlatBufferBuilder builder(64);
+      HostProtocolHost::encodeHostEndpointDisconnected(builder, endpointId);
+      mConnection->sendMessage(builder);
+    }
+  }
+  mHalClientManager->handleClientDeath(clientPid);
 }
 }  // namespace android::hardware::contexthub::common::implementation

@@ -21,11 +21,15 @@ NANOAPP_VERSION = 0x00000001
 
 NANOAPP_PATH = $(CHRE_PREFIX)/apps/test/common/chre_api_test
 
-
 # Source Code ##################################################################
 
 COMMON_SRCS += $(NANOAPP_PATH)/src/chre_api_test_manager.cc
+COMMON_SRCS += $(NANOAPP_PATH)/src/chre_api_test_service.cc
 COMMON_SRCS += $(NANOAPP_PATH)/src/chre_api_test.cc
+
+# Utilities ####################################################################
+
+COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/ble.cc
 
 # Compiler Flags ###############################################################
 
@@ -33,6 +37,7 @@ COMMON_SRCS += $(NANOAPP_PATH)/src/chre_api_test.cc
 COMMON_CFLAGS += -DNANOAPP_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG
 COMMON_CFLAGS += -DLOG_TAG=\"[ChreApiTest]\"
 COMMON_CFLAGS += -DCHRE_ASSERTIONS_ENABLED
+COMMON_CFLAGS += -DPB_FIELD_16BIT
 
 # Includes
 COMMON_CFLAGS += -I$(NANOAPP_PATH)/inc

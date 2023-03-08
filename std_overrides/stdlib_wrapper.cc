@@ -74,6 +74,10 @@ void exit(int exitCode) {
     ;
 }
 
+void abort(void) {
+  exit(CHRE_ERROR);
+}
+
 int fprintf(FILE * /*stream*/, const char * /*fmt*/, ...) {
   return 0;
 }
@@ -97,10 +101,5 @@ void operator delete(void * /*ptr*/, std::align_val_t /*al*/) {
 
 void operator delete(void * /*ptr*/, std::size_t /*sz*/,
                      std::align_val_t /*al*/) {
-  CHRE_ASSERT(false);
-}
-
-// This is needed for nanoapps to handle errors from virtual functions.
-extern "C" void __cxa_pure_virtual() {
   CHRE_ASSERT(false);
 }

@@ -18,6 +18,7 @@
 #define ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <chre_host/generated/host_messages_generated.h>
 
 #include "chre_connection_callback.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
@@ -38,6 +39,11 @@ using ::ndk::ScopedAStatus;
  *
  * TODO(b/247124878): A few things are pending:
  *   - Some APIs of IContextHub are not implemented yet;
+ *   - onHostEndpointConnected/Disconnected now returns an error if the endpoint
+ *     id is illegal or already connected/disconnected. The doc of
+ *     IContextHub.aidl should be updated accordingly.
+ *   - registerCallback() can fail if mHalClientManager sees an error during
+ *     registration. The doc of IContextHub.aidl should be updated accordingly.
  *   - Involve EventLogger to log API calls;
  *   - extends DebugDumpHelper to ease debugging
  */
@@ -46,6 +52,9 @@ class MultiClientContextHubBase
       public ::android::hardware::contexthub::common::implementation::
           ChreConnectionCallback {
  public:
+  /** The entry point of death recipient for a disconnected client. */
+  static void onClientDied(void *cookie);
+
   // functions implementing IContextHub
   ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *contextHubInfos) override;
@@ -65,17 +74,27 @@ class MultiClientContextHubBase
       const std::shared_ptr<IContextHubCallback> &callback) override;
   ScopedAStatus sendMessageToHub(int32_t contextHubId,
                                  const ContextHubMessage &message) override;
-  ScopedAStatus onHostEndpointConnected(
-      const HostEndpointInfo &in_info) override;
+  ScopedAStatus onHostEndpointConnected(const HostEndpointInfo &info) override;
   ScopedAStatus onHostEndpointDisconnected(char16_t in_hostEndpointId) override;
   ScopedAStatus getPreloadedNanoappIds(std::vector<int64_t> *result) override;
-  ScopedAStatus onNanSessionStateChanged(bool in_state) override;
+  ScopedAStatus onNanSessionStateChanged(
+      const NanSessionStateUpdate &in_update) override;
+  ScopedAStatus setTestMode(bool enable) override;
 
   // The callback function implementing ChreConnectionCallback
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
 
  protected:
+  // The data needed by the death client to clear states of a client.
+  struct HalDeathRecipientCookie {
+    MultiClientContextHubBase *hal;
+    pid_t clientPid;
+    HalDeathRecipientCookie(MultiClientContextHubBase *hal, pid_t pid) {
+      this->hal = hal;
+      this->clientPid = pid;
+    }
+  };
   MultiClientContextHubBase() = default;
 
   bool sendFragmentedLoadRequest(HalClientId clientId,
@@ -90,13 +109,21 @@ class MultiClientContextHubBase
   void onUnloadNanoappResponse(
       const ::chre::fbs::UnloadNanoappResponseT &response,
       HalClientId clientid);
+  void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message);
+
+  void handleClientDeath(pid_t pid);
+
+  inline bool isSettingEnabled(Setting setting) {
+    return mSettingEnabled.find(setting) != mSettingEnabled.end() &&
+           mSettingEnabled[setting];
+  }
 
   // HAL is the unique owner of the communication channel to CHRE.
   std::unique_ptr<ChreConnection> mConnection{};
 
-  // HalClientManager class should be a singleton and the only owner of the
-  // HalClientManager instance. HAL just needs a pointer to call its APIs.
-  HalClientManager *mHalClientManager{};
+  // HalClientManager maintains states of hal clients. Each HAL should only have
+  // one instance of a HalClientManager.
+  std::unique_ptr<HalClientManager> mHalClientManager{};
 
   std::unique_ptr<PreloadedNanoappLoader> mPreloadedNanoappLoader{};
 
@@ -105,6 +132,14 @@ class MultiClientContextHubBase
   // Mutex and CV are used to get context hub info synchronously.
   std::mutex mHubInfoMutex;
   std::condition_variable mHubInfoCondition;
+
+  // Death recipient handling clients' disconnections
+  ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
+
+  // States of settings
+  std::unordered_map<Setting, bool> mSettingEnabled;
+  std::optional<bool> mIsWifiAvailable;
+  std::optional<bool> mIsBleAvailable;
 };
 }  // namespace android::hardware::contexthub::common::implementation
 #endif  // ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_

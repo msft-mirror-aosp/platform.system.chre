@@ -26,21 +26,17 @@ import android.hardware.location.NanoAppBinary;
 import androidx.test.InstrumentationRegistry;
 
 import com.google.android.chre.utils.pigweed.ChreRpcClient;
+import com.google.android.utils.chre.ChreApiTestUtil;
 import com.google.android.utils.chre.ChreTestUtil;
-import com.google.protobuf.MessageLite;
 
 import org.junit.Assert;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.chre.rpc.proto.ChreApiTest;
-import dev.pigweed.pw_rpc.Call.UnaryFuture;
-import dev.pigweed.pw_rpc.MethodClient;
 import dev.pigweed.pw_rpc.Service;
-import dev.pigweed.pw_rpc.UnaryResult;
 
 public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientCallback {
     private final Context mContext = InstrumentationRegistry.getTargetContext();
@@ -50,15 +46,31 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
     private final AtomicBoolean mChreReset = new AtomicBoolean(false);
     private final ContextHubManager mContextHubManager;
     private final ContextHubInfo mContextHub;
+    private final List<Long> mPreloadedNanoappIds;
     private final ChreRpcClient mRpcClient;
+
+    private static final int CHRE_SENSOR_ACCELEROMETER_INTERVAL_NS = 20000000;
+    private static final int CHRE_SENSOR_GYROSCOPE_INTERVAL_NS = 2500000;
+
+    // TODO(b/262043286): Enable this once BLE is available
+    /*
+    private static final int CHRE_BLE_CAPABILITIES_SCAN = 1 << 0;
+    private static final int CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA = 1 << 7;
+    */
+
+    private static final int CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT = 2;
+    private static final int CHRE_SENSOR_TYPE_ACCELEROMETER = 1;
+    private static final int CHRE_SENSOR_TYPE_GYROSCOPE = 6;
+
+    private static final int CHRE_AUDIO_MIN_BUFFER_SIZE_NS = 2000000000;
 
     private static final int RPC_TIMEOUT_IN_SECONDS = 2;
     private static final int MAX_AUDIO_SOURCES_TO_TRY = 10;
 
     /**
-    * Formats for audio that can be provided to a nanoapp. See enum chreAudioDataFormat in the
-    * CHRE API.
-    */
+     * Formats for audio that can be provided to a nanoapp. See enum chreAudioDataFormat in the
+     * CHRE API.
+     */
     public enum ChreAudioDataFormat {
         /**
          * Unsigned, 8-bit u-Law encoded data as specified by ITU-T G.711.
@@ -97,28 +109,12 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
         mContextHub = contextHubs.get(0);
         mContextHubClient = mContextHubManager.createClient(mContextHub, this);
 
-        Service chreApiService = new Service("chre.rpc.ChreApiTestService",
-                Service.unaryMethod("ChreBleGetCapabilities",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.Capabilities.class),
-                Service.unaryMethod("ChreBleGetFilterCapabilities",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.Capabilities.class),
-                Service.unaryMethod("ChreSensorFindDefault",
-                        ChreApiTest.ChreSensorFindDefaultInput.class,
-                        ChreApiTest.ChreSensorFindDefaultOutput.class),
-                Service.unaryMethod("ChreGetSensorInfo",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreGetSensorInfoOutput.class),
-                Service.unaryMethod("ChreGetSensorSamplingStatus",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreGetSensorSamplingStatusOutput.class),
-                Service.unaryMethod("ChreSensorConfigureModeOnly",
-                        ChreApiTest.ChreSensorConfigureModeOnlyInput.class,
-                        ChreApiTest.Status.class),
-                Service.unaryMethod("ChreAudioGetSource",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreAudioGetSourceOutput.class));
+        mPreloadedNanoappIds = new ArrayList<Long>();
+        for (long nanoappId: mContextHubManager.getPreloadedNanoAppIds(mContextHub)) {
+            mPreloadedNanoappIds.add(nanoappId);
+        }
+
+        Service chreApiService = ChreApiTestUtil.getChreApiService();
         mRpcClient = new ChreRpcClient(mContextHubManager, mContextHub, mNanoAppId,
                 List.of(chreApiService), this);
     }
@@ -150,16 +146,47 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
     }
 
     /**
-     * Gets the preloaded nanoapp IDs
-     *
-     * @return List<Long>       the list of nanoapp IDs
+     * Tests for specific sensors for activity.
      */
-    public List<Long> getPreloadedNanoappIds() {
-        List<Long> preloadedNanoappIds = new ArrayList<Long>();
-        for (long nanoappId: mContextHubManager.getPreloadedNanoAppIds(mContextHub)) {
-            preloadedNanoappIds.add(nanoappId);
-        }
-        return preloadedNanoappIds;
+    public void assertActivitySensors() throws Exception {
+        findDefaultSensorAndAssertItExists(CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT);
+        int accelerometerHandle =
+                findDefaultSensorAndAssertItExists(CHRE_SENSOR_TYPE_ACCELEROMETER);
+        getSensorInfoAndVerifyInterval(accelerometerHandle,
+                CHRE_SENSOR_ACCELEROMETER_INTERVAL_NS);
+    }
+
+    /**
+     * Tests for specific sensors for movement.
+     */
+    public void assertMovementSensors() throws Exception {
+        findDefaultSensorAndAssertItExists(CHRE_SENSOR_TYPE_ACCELEROMETER);
+        int gyroscopeHandle =
+                findDefaultSensorAndAssertItExists(CHRE_SENSOR_TYPE_GYROSCOPE);
+        getSensorInfoAndVerifyInterval(gyroscopeHandle,
+                CHRE_SENSOR_GYROSCOPE_INTERVAL_NS);
+
+        findAudioSourceAndAssertItExists(CHRE_AUDIO_MIN_BUFFER_SIZE_NS,
+                ChreAudioDataFormat.CHRE_AUDIO_DATA_FORMAT_16_BIT_SIGNED_PCM);
+    }
+
+    /**
+     * Tests for specific BLE capabilities.
+     */
+    public void assertBleSensors() throws Exception {
+        // TODO(b/262043286): Enable this once BLE is available
+        /*
+        mExecutor.getBleCapabilitiesAndAssertCapabilityExists(CHRE_BLE_CAPABILITIES_SCAN);
+        mExecutor.getBleFilterCapabilitiesAndAssertCapabilityExists(
+                CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA);
+        */
+    }
+
+    /**
+     * Returns true if the nanoappId represents a preloaded nanoapp; false otherwise.
+     */
+    public boolean isNanoappPreloaded(long nanoappId) {
+        return mPreloadedNanoappIds.contains(nanoappId);
     }
 
     /**
@@ -173,7 +200,8 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
         ChreApiTest.ChreSensorFindDefaultInput input = ChreApiTest.ChreSensorFindDefaultInput
                 .newBuilder().setSensorType(sensorType).build();
         ChreApiTest.ChreSensorFindDefaultOutput response =
-                callRpcMethod("chre.rpc.ChreApiTestService.ChreSensorFindDefault", input);
+                ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                        "chre.rpc.ChreApiTestService.ChreSensorFindDefault", input);
         Assert.assertTrue("Did not find sensor with type: " + sensorType,
                 response.getFoundSensor());
         return response.getSensorHandle();
@@ -193,7 +221,8 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
                 ChreApiTest.ChreHandleInput.newBuilder()
                 .setHandle(sensorHandle).build();
         ChreApiTest.ChreGetSensorInfoOutput response =
-                callRpcMethod("chre.rpc.ChreApiTestService.ChreGetSensorInfo", input);
+                ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                        "chre.rpc.ChreApiTestService.ChreGetSensorInfo", input);
         Assert.assertTrue("Failed to get sensor info for sensor with handle: " + sensorHandle,
                 response.getStatus());
         Assert.assertTrue("The sensor with handle: " + sensorHandle
@@ -216,7 +245,8 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
                     ChreApiTest.ChreHandleInput.newBuilder()
                     .setHandle(i).build();
             ChreApiTest.ChreAudioGetSourceOutput response =
-                    callRpcMethod("chre.rpc.ChreApiTestService.ChreAudioGetSource", input);
+                    ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                            "chre.rpc.ChreApiTestService.ChreAudioGetSource", input);
             if (response.getStatus()
                     && response.getMinBufferDuration() >= expectedMinBufferSizeNs
                     && response.getFormat() == format.getId()) {
@@ -269,46 +299,11 @@ public class ContextHubNanoAppRequirementsTestExecutor extends ContextHubClientC
      *
     private void getCapabilitiesAndAssertCapabilityExists(String function,
             int capability, String errorMessage) throws Exception {
-        ChreApiTest.Capabilities capabilitiesResponse = callRpcMethod(function);
+        ChreApiTest.Capabilities capabilitiesResponse =
+                ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient, function);
         int capabilities = capabilitiesResponse.getCapabilities();
         Assert.assertTrue(errorMessage + ": " + capability,
                 (capabilities & capability) != 0);
-    }
-    */
-
-    /**
-     * Calls an RPC method with RPC_TIMEOUT_IN_SECONDS seconds of timeout
-     *
-     * @param <InputType>   the type of the input (proto generated type)
-     * @param <OutputType>  the type of the output (proto generated type)
-     * @param method        the fully-qualified method name
-     * @param input         the input object
-     *
-     * @return              the proto output
-     */
-    private <InputType extends MessageLite, OutputType extends MessageLite> OutputType
-            callRpcMethod(String method, InputType input) throws Exception {
-        MethodClient methodClient = mRpcClient.getMethodClient(method);
-        UnaryFuture<OutputType> responseFuture = methodClient.invokeUnaryFuture(input);
-        UnaryResult<OutputType> responseResult = responseFuture.get(RPC_TIMEOUT_IN_SECONDS,
-                TimeUnit.SECONDS);
-        return responseResult.response();
-    }
-
-    // TODO(b/262043286): Enable this once BLE is available
-    /*
-    /**
-     * Calls an RPC method with RPC_TIMEOUT_IN_SECONDS seconds of timeout with a void input
-     *
-     * @param <OutputType>  the type of the output (proto generated type)
-     * @param method        the fully-qualified method name
-     *
-     * @return              the proto output
-     *
-    private <OutputType extends MessageLite> OutputType callRpcMethod(String method)
-            throws Exception {
-        ChreApiTest.Void input = ChreApiTest.Void.newBuilder().build();
-        return callRpcMethod(method, input);
     }
     */
 }

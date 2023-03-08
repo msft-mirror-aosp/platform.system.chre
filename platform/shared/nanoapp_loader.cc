@@ -55,17 +55,31 @@ NanoappLoader *gCurrentlyLoadingNanoapp = nullptr;
 //! Indicates whether a failure occurred during static initialization.
 bool gStaticInitFailure = false;
 
-// atexit is used to register functions that must be called when a binary is
-// removed from the system.
-int atexitOverride(void (*function)(void)) {
-  LOGV("atexit invoked with %p", function);
+int atexitInternal(struct AtExitCallback &cb) {
   if (gCurrentlyLoadingNanoapp == nullptr) {
     CHRE_ASSERT_LOG(false,
                     "atexit is only supported during static initialization.");
     return -1;
   }
 
-  gCurrentlyLoadingNanoapp->registerAtexitFunction(function);
+  gCurrentlyLoadingNanoapp->registerAtexitFunction(cb);
+  return 0;
+}
+
+// atexit is used to register functions that must be called when a binary is
+// removed from the system. The call back function has an arg (void *)
+int cxaAtexitOverride(void (*func)(void *), void *arg, void *dso) {
+  LOGV("__cxa_atexit invoked with %p, %p, %p", func, arg, dso);
+  struct AtExitCallback cb(func, arg);
+  atexitInternal(cb);
+  return 0;
+}
+
+// The call back function has no arg.
+int atexitOverride(void (*func)(void)) {
+  LOGV("atexit invoked with %p", func);
+  struct AtExitCallback cb(func);
+  atexitInternal(cb);
   return 0;
 }
 
@@ -152,6 +166,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(log1pf),
     ADD_EXPORTED_C_SYMBOL(log2f),
     ADD_EXPORTED_C_SYMBOL(logf),
+    ADD_EXPORTED_C_SYMBOL(lrintf),
     ADD_EXPORTED_C_SYMBOL(lroundf),
     ADD_EXPORTED_C_SYMBOL(powf),
     ADD_EXPORTED_C_SYMBOL(remainderf),
@@ -162,6 +177,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
+    ADD_EXPORTED_SYMBOL(cxaAtexitOverride, "__cxa_atexit"),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_C_SYMBOL(dlsym),
     ADD_EXPORTED_C_SYMBOL(isgraph),
@@ -184,6 +200,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleReadRssiAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleGetScanStatus),
     ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
     ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
     ADD_EXPORTED_C_SYMBOL(chreConfigureNanoappInfoEvents),
@@ -301,7 +318,7 @@ bool NanoappLoader::open() {
     } else {
       // Wipe caches before calling init array to ensure initializers are not in
       // the data cache.
-      wipeSystemCaches();
+      wipeSystemCaches(reinterpret_cast<uintptr_t>(mMapping), mMemorySpan);
       if (!callInitArray()) {
         LOGE("Failed to perform static init");
       } else {
@@ -335,8 +352,8 @@ void *NanoappLoader::findSymbolByName(const char *name) {
   return nullptr;
 }
 
-void NanoappLoader::registerAtexitFunction(void (*function)(void)) {
-  if (!mAtexitFunctions.push_back(function)) {
+void NanoappLoader::registerAtexitFunction(struct AtExitCallback &cb) {
+  if (!mAtexitFunctions.push_back(cb)) {
     LOG_OOM();
     gStaticInitFailure = true;
   }
@@ -395,7 +412,7 @@ bool NanoappLoader::callInitArray() {
 
 uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr,
                                           size_t alignment) {
-  return virtualAddr & -alignment;
+  return alignment == 0 ? virtualAddr : virtualAddr & -alignment;
 }
 
 void NanoappLoader::freeAllocatedData() {
@@ -665,7 +682,7 @@ bool NanoappLoader::createMappings() {
     // program header offset
     bool valid =
         (first->p_offset < elfHeader->e_phoff) &&
-        (first->p_filesz >
+        (first->p_filesz >=
          (elfHeader->e_phoff + (numProgramHeaders * sizeof(ProgramHeader))));
     if (!valid) {
       LOGE("Load segment program header validation failed");
@@ -689,6 +706,7 @@ bool NanoappLoader::createMappings() {
         LOG_OOM();
       } else {
         LOGV("Starting location of mappings %p", mMapping);
+        mMemorySpan = memorySpan;
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr =
@@ -813,129 +831,38 @@ NanoappLoader::ElfWord NanoappLoader::getDynEntry(DynamicHeader *dyn,
 }
 
 bool NanoappLoader::fixRelocations() {
-  ElfAddr *addr;
   DynamicHeader *dyn = getDynamicHeader();
   ProgramHeader *roSeg = getFirstRoSegHeader();
 
   bool success = false;
   if ((dyn == nullptr) || (roSeg == nullptr)) {
     LOGE("Mandatory headers missing from shared object, aborting load");
-  } else if (getDynEntry(dyn, DT_RELA) != 0) {
-    LOGE("Elf binaries with a DT_RELA dynamic entry are unsupported");
-  } else {
-    ElfRel *reloc =
-        reinterpret_cast<ElfRel *>(mBinary + getDynEntry(dyn, DT_REL));
-    size_t relocSize = getDynEntry(dyn, DT_RELSZ);
-    size_t nRelocs = relocSize / sizeof(ElfRel);
-    LOGV("Relocation %zu entries in DT_REL table", nRelocs);
+  }
 
-    bool resolvedAllSymbols = true;
-    size_t i;
-    for (i = 0; i < nRelocs; ++i) {
-      ElfRel *curr = &reloc[i];
-      int relocType = ELFW_R_TYPE(curr->r_info);
-      switch (relocType) {
-        case R_ARM_RELATIVE:
-          LOGV("Resolving ARM_RELATIVE at offset %lx",
-               static_cast<long unsigned int>(curr->r_offset));
-          addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
-          // TODO: When we move to DRAM allocations, we need to check if the
-          // above address is in a Read-Only section of memory, and give it
-          // temporary write permission if that is the case.
-          *addr += reinterpret_cast<uintptr_t>(mMapping);
-          break;
+  // Must return true if it table is not required or is empty. If
+  // the entry is present when not expected, this must return false.
+  success = relocateTable(dyn, DT_RELA);
+  if (success) {
+    success = relocateTable(dyn, DT_REL);
+  }
 
-        case R_ARM_ABS32: {
-          LOGV("Resolving ARM_ABS32 at offset %lx",
-               static_cast<long unsigned int>(curr->r_offset));
-          addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
-          size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
-          auto *dynamicSymbolTable =
-              reinterpret_cast<ElfSym *>(getDynamicSymbolTable());
-          ElfSym *sym = &dynamicSymbolTable[posInSymbolTable];
-          *addr = reinterpret_cast<uintptr_t>(mMapping + sym->st_value);
-
-          break;
-        }
-
-        case R_ARM_GLOB_DAT: {
-          LOGV("Resolving type ARM_GLOB_DAT at offset %lx",
-               static_cast<long unsigned int>(curr->r_offset));
-          addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
-          size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
-          void *resolved = resolveData(posInSymbolTable);
-          if (resolved == nullptr) {
-            LOGV("Failed to resolve global symbol(%zu) at offset 0x%lx", i,
-                 static_cast<long unsigned int>(curr->r_offset));
-            resolvedAllSymbols = false;
-          }
-          // TODO: When we move to DRAM allocations, we need to check if the
-          // above address is in a Read-Only section of memory, and give it
-          // temporary write permission if that is the case.
-          *addr = reinterpret_cast<ElfAddr>(resolved);
-          break;
-        }
-
-        case R_ARM_COPY:
-          LOGE("R_ARM_COPY is an invalid relocation for shared libraries");
-          break;
-        default:
-          LOGE("Invalid relocation type %u", relocType);
-          break;
-      }
-    }
-
-    if (!resolvedAllSymbols) {
-      LOGE("Unable to resolve all symbols in the binary");
-    } else {
-      success = true;
-    }
+  if (!success) {
+    LOGE("Unable to resolve all symbols in the binary");
   }
 
   return success;
 }
 
-bool NanoappLoader::resolveGot() {
-  ElfAddr *addr;
-  ElfRel *reloc = reinterpret_cast<ElfRel *>(
-      mMapping + getDynEntry(getDynamicHeader(), DT_JMPREL));
-  size_t relocSize = getDynEntry(getDynamicHeader(), DT_PLTRELSZ);
-  size_t nRelocs = relocSize / sizeof(ElfRel);
-  LOGV("Resolving GOT with %zu relocations", nRelocs);
-
-  for (size_t i = 0; i < nRelocs; ++i) {
-    ElfRel *curr = &reloc[i];
-    int relocType = ELFW_R_TYPE(curr->r_info);
-
-    switch (relocType) {
-      case R_ARM_JUMP_SLOT: {
-        LOGV("Resolving ARM_JUMP_SLOT at offset %lx",
-             static_cast<long unsigned int>(curr->r_offset));
-        addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
-        size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
-        void *resolved = resolveData(posInSymbolTable);
-        if (resolved == nullptr) {
-          LOGV("Failed to resolve symbol(%zu) at offset 0x%x", i,
-               curr->r_offset);
-          return false;
-        }
-        *addr = reinterpret_cast<ElfAddr>(resolved);
-        break;
-      }
-
-      default:
-        LOGE("Unsupported relocation type: %u for symbol %s", relocType,
-             getDataName(getDynamicSymbol(ELFW_R_SYM(curr->r_info))));
-        return false;
-    }
-  }
-  return true;
-}
-
 void NanoappLoader::callAtexitFunctions() {
   while (!mAtexitFunctions.empty()) {
-    LOGV("Calling atexit at %p", mAtexitFunctions.back());
-    mAtexitFunctions.back()();
+    struct AtExitCallback cb = mAtexitFunctions.back();
+    if (cb.arg.has_value()) {
+      LOGV("Calling __cxa_atexit at %p, arg %p", cb.func1, cb.arg.value());
+      cb.func1(cb.arg.value());
+    } else {
+      LOGV("Calling atexit at %p", cb.func0);
+      cb.func0();
+    }
     mAtexitFunctions.pop_back();
   }
 }

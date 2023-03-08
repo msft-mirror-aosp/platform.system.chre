@@ -260,15 +260,16 @@ void BleRequestManager::handlePlatformChange(bool enable, uint8_t errorCode) {
 void BleRequestManager::handlePlatformChangeSync(bool enable,
                                                  uint8_t errorCode) {
   bool success = (errorCode == CHRE_ERROR_NONE);
-  if (mPendingPlatformRequest.isEnabled() != enable) {
+  // Requests to disable BLE scans should always succeed
+  if (!mPendingPlatformRequest.isEnabled() && enable) {
     errorCode = CHRE_ERROR;
     success = false;
-    CHRE_ASSERT_LOG(false, "BLE PAL did not transition to expected state");
+    CHRE_ASSERT_LOG(false, "Unable to stop BLE scan");
   }
   if (mInternalRequestPending) {
     mInternalRequestPending = false;
     if (!success) {
-      FATAL_ERROR("Failed to resync BLE platform");
+      LOGE("Failed to resync BLE platform");
     }
   } else {
     for (BleRequest &req : mRequests.getMutableRequests()) {
@@ -467,6 +468,11 @@ uint8_t BleRequestManager::readRssi(uint16_t connectionHandle) {
   }
 }
 #endif
+
+bool BleRequestManager::getScanStatus(struct chreBleScanStatus * /* status */) {
+  // TODO(b/266820139): Implement this
+  return false;
+}
 
 void BleRequestManager::onSettingChanged(Setting setting, bool /* state */) {
   if (setting == Setting::BLE_AVAILABLE) {

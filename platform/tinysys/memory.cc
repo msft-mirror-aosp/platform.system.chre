@@ -16,6 +16,7 @@
 
 #include "chre/platform/memory.h"
 #include "chre/platform/shared/memory.h"
+#include "mt_alloc.h"
 
 namespace chre {
 
@@ -26,7 +27,7 @@ void nanoappBinaryFree(void *pointer) {
 }
 
 void nanoappBinaryDramFree(void *pointer) {
-  memoryFree(pointer);
+  aligned_dram_free(pointer);
 }
 
 void *memoryAllocDram(size_t size) {
@@ -50,9 +51,10 @@ void *nanoappBinaryAlloc(size_t /*size*/, size_t /*alignment*/) {
   return nullptr;
 }
 
-void *nanoappBinaryDramAlloc(size_t /*size*/, size_t /*alignment*/) {
-  // TODO(b/252874047): Implementation is only required for dynamic loading.
-  return nullptr;
+void *nanoappBinaryDramAlloc(size_t size, size_t alignment) {
+  // aligned_dram_malloc() requires the alignment being multiple of
+  // CACHE_LINE_SIZE (128 bytes), we will align to page size (4k)
+  return aligned_dram_malloc(size, alignment);
 }
 
 }  // namespace chre

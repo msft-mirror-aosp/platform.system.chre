@@ -34,7 +34,7 @@ TARGET_CFLAGS += -DCFG_AMP_CORE1_EN
 # chre platform
 TARGET_CFLAGS += -DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_7
 # TODO(b/254121302): Needs to confirm with MTK about the max message size below
-TARGET_CFLAGS += -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=2048
+TARGET_CFLAGS += -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096
 TARGET_CFLAGS += -DCHRE_FREERTOS_TASK_PRIORITY=2
 # TODO(b/255828039): Enabling buffered logging incurs linking error
 # TARGET_CFLAGS += -DCHRE_USE_BUFFERED_LOGGING
@@ -47,6 +47,19 @@ TARGET_CFLAGS += -DCHRE_CREATE_MUTEX_ON_HEAP
 ifeq ($(IS_ARCHIVE_ONLY_BUILD),)
 TARGET_SO_LDFLAGS += -shared
 TARGET_CFLAGS += -fpic
+
+# Enable compiler-rt dependencies
+LLVM_RTLIB=$(RISCV_TOOLCHAIN_PATH)/lib/clang/9.0.1/libpic/riscv32/MRV55E03
+TARGET_SO_LDFLAGS += -L$(LLVM_RTLIB)
+TARGET_SO_LDFLAGS += -lclang_rt.builtins-riscv32
+endif
+
+ifneq ($(IS_NANOAPP_BUILD),)
+# Used to expose libc headers to nanoapps that aren't supported on the given platform
+TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
+
+TARGET_VARIANT_SRCS += $(DSO_SUPPORT_LIB_SRCS)
+TARGET_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
 endif
 
 TARGET_CFLAGS += --target=riscv32-unknown-elf
@@ -58,3 +71,4 @@ TARGET_CFLAGS += -mcpu=MRV55E03
 include $(CHRE_PREFIX)/build/arch/riscv.mk
 include $(CHRE_PREFIX)/build/build_template.mk
 endif
+
