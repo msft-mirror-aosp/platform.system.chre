@@ -19,9 +19,10 @@
 #include "chre/platform/system_time.h"
 
 extern "C" {
-#include "sensorhub/comm/timesync.h"
 #include "xgpt.h"
 }
+
+extern int64_t ap_sync_time_offset;
 
 namespace chre {
 
@@ -30,7 +31,9 @@ Nanoseconds SystemTime::getMonotonicTime() {
 }
 
 int64_t SystemTime::getEstimatedHostTimeOffset() {
-  return timesync_get_host_offset_time();
+  // TODO(b/264541538): switch to use timesync_get_host_offset_time()
+  // API when we go to the U build
+  return ap_sync_time_offset;
 }
 
 void SystemTime::setEstimatedHostTimeOffset(int64_t offset) {

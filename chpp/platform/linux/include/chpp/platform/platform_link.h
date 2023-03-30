@@ -40,17 +40,14 @@ struct ChppLinuxLinkState {
   //! link send() will fail if this field is set to false.
   bool linkEstablished;
 
-  //! A pointer to the link context of the remote endpoint.
-  struct ChppLinuxLinkState *remoteLinkState;
+  //! A pointer to the transport context of the remote endpoint.
+  struct ChppTransportState *remoteTransportContext;
 
   //! A thread to use when sending data to the remote endpoint asynchronously.
   pthread_t linkSendThread;
 
   //! The notifier for linkSendThread.
   struct ChppNotifier notifier;
-
-  //! The notifier to unblock TX thread when RX is complete.
-  struct ChppNotifier rxNotifier;
 
   //! The mutex to protect buf/bufLen.
   struct ChppMutex mutex;

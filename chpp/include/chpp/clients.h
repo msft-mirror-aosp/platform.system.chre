@@ -329,7 +329,7 @@ bool chppSendTimestampedRequestAndWaitTimeout(
     uint64_t timeoutNs);
 
 /**
- * Marks a closed client as pseudo-open, so that it would be opened upon a
+ * Markes a closed client as pseudo-open, so that it would be opened upon a
  * reset.
  *
  * @param clientState State variable of the client.

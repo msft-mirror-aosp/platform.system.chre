@@ -40,6 +40,10 @@ class ClientsTest : public testing::Test {
   void SetUp() override {
     chppClearTotalAllocBytes();
 
+    chppClearGnssClientContextTestOnly();
+    chppClearWifiClientContextTestOnly();
+    chppClearWwanClientContextTestOnly();
+
     memset(&mAppContext, 0, sizeof(mAppContext));
     memset(&mTransportContext, 0, sizeof(mTransportContext));
     memset(&mLinkContext, 0, sizeof(mLinkContext));

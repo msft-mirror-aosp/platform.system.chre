@@ -968,6 +968,7 @@ static void chppClearTxDatagramQueue(struct ChppTransportState *context) {
 static void chppTransportDoWork(struct ChppTransportState *context) {
   bool havePacketForLinkLayer = false;
   struct ChppTransportHeader *txHeader;
+  struct ChppAppHeader *timeoutResponse = NULL;
 
   // Note: For a future ACK window >1, there needs to be a loop outside the lock
   chppMutexLock(&context->mutex);
@@ -1051,19 +1052,15 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
   }
 
 #ifdef CHPP_CLIENT_ENABLED
-  {  // create a scope to declare timeoutResponse (C89).
-    struct ChppAppHeader *timeoutResponse =
-        chppTransportGetClientRequestTimeoutResponse(context);
-
-    if (timeoutResponse != NULL) {
-      CHPP_LOGE("Response timeout H#%" PRIu8 " cmd=%" PRIu16 " ID=%" PRIu8,
-                timeoutResponse->handle, timeoutResponse->command,
-                timeoutResponse->transaction);
-      chppAppProcessRxDatagram(context->appContext, (uint8_t *)timeoutResponse,
-                               sizeof(struct ChppAppHeader));
-    }
+  timeoutResponse = chppTransportGetClientRequestTimeoutResponse(context);
+#endif
+  if (timeoutResponse != NULL) {
+    CHPP_LOGE("Response timeout H#%" PRIu8 " cmd=%" PRIu16 " ID=%" PRIu8,
+              timeoutResponse->handle, timeoutResponse->command,
+              timeoutResponse->transaction);
+    chppAppProcessRxDatagram(context->appContext, (uint8_t *)timeoutResponse,
+                             sizeof(struct ChppAppHeader));
   }
-#endif  // CHPP_CLIENT_ENABLED
 }
 
 /**
@@ -1572,8 +1569,7 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
   CHPP_LOGD("NextDoWork=%" PRIu64 " currentTime=%" PRIu64 " delta=%" PRId64,
             nextDoWorkTime / CHPP_NSEC_PER_MSEC,
             currentTime / CHPP_NSEC_PER_MSEC,
-            (nextDoWorkTime > currentTime ? nextDoWorkTime - currentTime : 0) /
-                (int64_t)CHPP_NSEC_PER_MSEC);
+            (nextDoWorkTime - currentTime) / (int64_t)CHPP_NSEC_PER_MSEC);
 
   return nextDoWorkTime <= currentTime ? CHPP_TRANSPORT_TIMEOUT_IMMEDIATE
                                        : nextDoWorkTime - currentTime;
