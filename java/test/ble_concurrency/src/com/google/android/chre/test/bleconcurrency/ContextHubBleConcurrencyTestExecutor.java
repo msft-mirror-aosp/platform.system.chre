@@ -67,7 +67,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestE
     private static final int CHRE_BLE_CAPABILITIES_SCAN = 1 << 0;
     private static final int CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA = 1 << 7;
 
-    private final BluetoothLeScanner mBluetoothLeScanner;
+    private BluetoothLeScanner mBluetoothLeScanner = null;
 
     private final ScanCallback mScanCallback = new ScanCallback() {
         @Override
@@ -92,9 +92,9 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestE
         BluetoothManager bluetoothManager = mContext.getSystemService(BluetoothManager.class);
         assertThat(bluetoothManager).isNotNull();
         BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
-        assertThat(bluetoothAdapter).isNotNull();
-        mBluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
-        assertThat(mBluetoothLeScanner).isNotNull();
+        if (bluetoothAdapter != null) {
+            mBluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        }
     }
 
     /**
@@ -179,7 +179,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestE
 
         ChreApiTestUtil util = new ChreApiTestUtil();
         List<ChreApiTest.GeneralSyncMessage> response =
-                util.callServerStreamingRpcMethodSync(mRpcClient,
+                util.callServerStreamingRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleStartScanSync",
                         inputBuilder.build());
         assertThat(response).isNotEmpty();
@@ -195,7 +195,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestE
     private void chreBleStopScanSync() throws Exception {
         ChreApiTestUtil util = new ChreApiTestUtil();
         List<ChreApiTest.GeneralSyncMessage> response =
-                util.callServerStreamingRpcMethodSync(mRpcClient,
+                util.callServerStreamingRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleStopScanSync");
         assertThat(response).isNotEmpty();
         for (ChreApiTest.GeneralSyncMessage status: response) {
@@ -208,13 +208,17 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestE
      * otherwise returns false.
      */
     private boolean doesNecessaryBleCapabilitiesExist() throws Exception {
+        if (mBluetoothLeScanner == null) {
+            return false;
+        }
+
         ChreApiTest.Capabilities capabilitiesResponse =
-                ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                ChreApiTestUtil.callUnaryRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleGetCapabilities");
         int capabilities = capabilitiesResponse.getCapabilities();
         if ((capabilities & CHRE_BLE_CAPABILITIES_SCAN) != 0) {
             ChreApiTest.Capabilities filterCapabilitiesResponse =
-                    ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                    ChreApiTestUtil.callUnaryRpcMethodSync(getRpcClient(),
                             "chre.rpc.ChreApiTestService.ChreBleGetFilterCapabilities");
             int filterCapabilities = filterCapabilitiesResponse.getCapabilities();
             return (filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA) != 0;
