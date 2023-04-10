@@ -19,24 +19,21 @@
 #include "chre/platform/system_time.h"
 
 extern "C" {
+#include "sensorhub/comm/timesync.h"
 #include "xgpt.h"
 }
 
 namespace chre {
-
-namespace {
-int64_t gEstimatedHostTimeOffset = 0;
-}  // anonymous namespace
 
 Nanoseconds SystemTime::getMonotonicTime() {
   return Nanoseconds(get_boot_time_ns());
 }
 
 int64_t SystemTime::getEstimatedHostTimeOffset() {
-  return gEstimatedHostTimeOffset;
+  return timesync_get_host_offset_time();
 }
 
 void SystemTime::setEstimatedHostTimeOffset(int64_t offset) {
-  gEstimatedHostTimeOffset = offset;
+  // not implemented for Tinysys
 }
 }  // namespace chre

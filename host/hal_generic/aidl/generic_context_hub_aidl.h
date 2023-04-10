@@ -35,6 +35,20 @@ namespace aidl::android::hardware::contexthub {
 
 using ::android::chre::NanoAppBinaryHeader;
 
+/**
+ * Contains information about a preloaded nanoapp. Used when getting
+ * preloaded nanoapp information from the config.
+ */
+struct chrePreloadedNanoappInfo {
+  chrePreloadedNanoappInfo(int64_t _id, const std::string &_name,
+                           const NanoAppBinaryHeader &_header)
+      : id(_id), name(_name), header(_header) {}
+
+  int64_t id;
+  std::string name;
+  NanoAppBinaryHeader header;
+};
+
 class ContextHub : public BnContextHub,
                    public ::android::hardware::contexthub::DebugDumpHelper,
                    public ::android::hardware::contexthub::common::
@@ -57,6 +71,7 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus onSettingChanged(Setting setting, bool enabled) override;
   ::ndk::ScopedAStatus queryNanoapps(int32_t contextHubId) override;
   ::ndk::ScopedAStatus getPreloadedNanoappIds(
+      int32_t contextHubId,
       std::vector<int64_t> *out_preloadedNanoappIds) override;
   ::ndk::ScopedAStatus registerCallback(
       int32_t contextHubId,
@@ -68,7 +83,8 @@ class ContextHub : public BnContextHub,
       const HostEndpointInfo &in_info) override;
   ::ndk::ScopedAStatus onHostEndpointDisconnected(
       char16_t in_hostEndpointId) override;
-  ::ndk::ScopedAStatus onNanSessionStateChanged(bool in_state) override;
+  ::ndk::ScopedAStatus onNanSessionStateChanged(
+      const NanSessionStateUpdate &in_update) override;
 
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) override;
 
@@ -179,36 +195,25 @@ class ContextHub : public BnContextHub,
    * names and headers are in the same order (one nanoapp has the same index in
    * each).
    *
-   * @param preloadedNanoappIds         out parameter, nanoapp IDs.
-   * @param out_preloadedNanoappNames            out parameter, optional,
-   * nanoapp names.
-   * @param out_preloadedNanoappHeaders          out parameter, optional,
-   * nanoapp headers.
+   * @param out_preloadedNanoapps       out parameter, the nanoapp information.
    * @param out_directory               out parameter, optional, the directory
    * that contains the nanoapps.
    * @return true                       the operation was successful.
    * @return false                      the operation was not successful.
    */
   bool getPreloadedNanoappIdsFromConfigFile(
-      std::vector<int64_t> &preloadedNanoappIds,
-      std::vector<std::string> *out_preloadedNanoappNames,
-      std::vector<NanoAppBinaryHeader> *out_preloadedNanoappHeaders,
+      std::vector<chrePreloadedNanoappInfo> &out_preloadedNanoapps,
       std::string *out_directory) const;
 
   /**
-   * Helper function for disableTestMode. Selects the nanoapps to load -> all
-   * preloaded and non-system nanoapps.
+   * Selects the nanoapps to load -> all preloaded and non-system nanoapps.
    *
-   * @param preloadedNanoappIds         the preloaded nanoapp IDs.
-   * @param preloadedNanoappNames       the preloaded nanoapp names.
-   * @param prelaodedNnaoappHeaders     the preloaded nanoapp headers.
+   * @param preloadedNanoapps           the preloaded nanoapps.
    * @param preloadedNanoappDirectory   the preloaded nanoapp directory.
    * @return                            the nanoapps to load.
    */
-  std::vector<NanoappBinary> disableTestModeHelper(
-      const std::vector<int64_t> &preloadedNanoappIds,
-      const std::vector<std::string> &preloadedNanoappNames,
-      const std::vector<NanoAppBinaryHeader> &preloadedNanoappHeaders,
+  std::vector<NanoappBinary> selectPreloadedNanoappsToLoad(
+      std::vector<chrePreloadedNanoappInfo> &preloadedNanoapps,
       const std::string &preloadedNanoappDirectory);
 
   bool isSettingEnabled(Setting setting) {

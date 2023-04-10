@@ -113,11 +113,11 @@ void nanoappHandleEventCompat(uint32_t senderInstanceId, uint16_t eventType,
 //! sections, since for compilers with a default size-1 alignment, there might
 //! be a spill-over from the previous segment if not zero-padded, when we
 //! attempt to read the string.
-DLL_EXPORT extern "C" const char _chreNanoappUnstableId[]
+extern "C" DLL_EXPORT const char _chreNanoappUnstableId[]
     __attribute__((section(".unstable_id"))) __attribute__((aligned(8))) =
         NANOAPP_UNSTABLE_ID;
 
-DLL_EXPORT extern "C" const struct chreNslNanoappInfo _chreNslDsoNanoappInfo = {
+extern "C" DLL_EXPORT const struct chreNslNanoappInfo _chreNslDsoNanoappInfo = {
     /* magic */ CHRE_NSL_NANOAPP_INFO_MAGIC,
     /* structMinorVersion */ CHRE_NSL_NANOAPP_INFO_STRUCT_MINOR_VERSION,
     /* isSystemNanoapp */ NANOAPP_IS_SYSTEM_NANOAPP,
@@ -246,6 +246,18 @@ WEAK_SYMBOL
 bool chreBleStopScanAsync() {
   auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreBleStopScanAsync);
   return (fptr != nullptr) ? fptr() : false;
+}
+
+WEAK_SYMBOL
+bool chreBleReadRssiAsync(uint16_t connectionHandle, const void *cookie) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreBleReadRssiAsync);
+  return (fptr != nullptr) ? fptr(connectionHandle, cookie) : false;
+}
+
+WEAK_SYMBOL
+bool chreBleGetScanStatus(struct chreBleScanStatus *status) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreBleGetScanStatus);
+  return (fptr != nullptr) ? fptr(status) : false;
 }
 
 #endif /* CHRE_NANOAPP_USES_BLE */

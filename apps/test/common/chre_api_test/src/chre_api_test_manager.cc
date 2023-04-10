@@ -16,30 +16,110 @@
 
 #include "chre_api_test_manager.h"
 
-#include <limits>
-
 #include "chre.h"
 #include "chre/util/nanoapp/log.h"
+#include "chre/util/time.h"
 
-pw::Status ChreApiTestService::ChreBleGetCapabilities(
-    const chre_rpc_Void & /* request */, chre_rpc_Capabilities &response) {
+namespace {
+constexpr uint64_t kSyncFunctionTimeout = 2 * chre::kOneSecondInNanoseconds;
+
+/**
+ * The following constants are defined in chre_api_test.options.
+ */
+constexpr uint32_t kThreeAxisDataReadingsMaxCount = 10;
+
+/**
+ * Closes the writer and invalidates the writer.
+ *
+ * @param T                   the RPC message type.
+ * @param writer              the RPC ServerWriter.
+ */
+template <typename T>
+void finishAndCloseWriter(
+    Optional<ChreApiTestService::ServerWriter<T>> &writer) {
+  CHRE_ASSERT(writer.has_value());
+
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
-  response.capabilities = chreBleGetCapabilities();
+  writer->Finish();
+  writer.reset();
+}
 
-  LOGD("ChreBleGetCapabilities: capabilities: %" PRIu32, response.capabilities);
-  return pw::OkStatus();
+/**
+ * Writes a message to the writer, then closes the writer and invalidates the
+ * writer.
+ *
+ * @param T                   the RPC message type.
+ * @param writer              the RPC ServerWriter.
+ * @param message             the message to write.
+ */
+template <typename T>
+void sendFinishAndCloseWriter(
+    Optional<ChreApiTestService::ServerWriter<T>> &writer, const T &message) {
+  CHRE_ASSERT(writer.has_value());
+
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  pw::Status status = writer->Write(message);
+  CHRE_ASSERT(status.ok());
+  finishAndCloseWriter(writer);
+}
+
+/**
+ * Sends a failure message. If there is not a valid writer, this returns
+ * without doing anything.
+ *
+ * @param T                   the RPC message type.
+ * @param writer              the RPC ServerWriter.
+ */
+template <typename T>
+void sendFailureAndFinishCloseWriter(
+    Optional<ChreApiTestService::ServerWriter<T>> &writer) {
+  CHRE_ASSERT(writer.has_value());
+
+  T message;
+  message.status = false;
+  sendFinishAndCloseWriter(writer, message);
+}
+}  // namespace
+
+// Start ChreApiTestService RPC generated functions
+
+pw::Status ChreApiTestService::ChreBleGetCapabilities(
+    const chre_rpc_Void &request, chre_rpc_Capabilities &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreBleGetCapabilities(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreBleGetFilterCapabilities(
-    const chre_rpc_Void & /* request */, chre_rpc_Capabilities &response) {
+    const chre_rpc_Void &request, chre_rpc_Capabilities &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
-  response.capabilities = chreBleGetFilterCapabilities();
+  return validateInputAndCallChreBleGetFilterCapabilities(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
 
-  LOGD("ChreBleGetFilterCapabilities: capabilities: %" PRIu32,
-       response.capabilities);
-  return pw::OkStatus();
+pw::Status ChreApiTestService::ChreBleStartScanAsync(
+    const chre_rpc_ChreBleStartScanAsyncInput &request,
+    chre_rpc_Status &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreBleStartScanAsync(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
+
+pw::Status ChreApiTestService::ChreBleStopScanAsync(
+    const chre_rpc_Void &request, chre_rpc_Status &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreBleStopScanAsync(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreSensorFindDefault(
@@ -47,18 +127,9 @@ pw::Status ChreApiTestService::ChreSensorFindDefault(
     chre_rpc_ChreSensorFindDefaultOutput &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
-
-  if (request.sensorType > std::numeric_limits<uint8_t>::max()) {
-    return pw::Status::InvalidArgument();
-  }
-
-  uint8_t sensorType = (uint8_t)request.sensorType;
-  response.foundSensor =
-      chreSensorFindDefault(sensorType, &response.sensorHandle);
-
-  LOGD("ChreSensorFindDefault: foundSensor: %s, sensorHandle: %" PRIu32,
-       response.foundSensor ? "true" : "false", response.sensorHandle);
-  return pw::OkStatus();
+  return validateInputAndCallChreSensorFindDefault(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreGetSensorInfo(
@@ -66,38 +137,9 @@ pw::Status ChreApiTestService::ChreGetSensorInfo(
     chre_rpc_ChreGetSensorInfoOutput &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
-
-  struct chreSensorInfo sensorInfo;
-  memset(&sensorInfo, 0, sizeof(sensorInfo));
-
-  response.status = chreGetSensorInfo(request.handle, &sensorInfo);
-
-  if (response.status) {
-    copyString(response.sensorName, sensorInfo.sensorName, kMaxNameStringSize);
-  } else {
-    response.sensorName[0] = '\0';
-  }
-
-  response.sensorType = sensorInfo.sensorType;
-  response.isOnChange = sensorInfo.isOnChange;
-  response.isOneShot = sensorInfo.isOneShot;
-  response.reportsBiasEvents = sensorInfo.reportsBiasEvents;
-  response.supportsPassiveMode = sensorInfo.supportsPassiveMode;
-  response.unusedFlags = sensorInfo.unusedFlags;
-  response.minInterval = sensorInfo.minInterval;
-  response.sensorIndex = sensorInfo.sensorIndex;
-
-  LOGD("ChreGetSensorInfo: status: %s, sensorType: %" PRIu32
-       ", isOnChange: %" PRIu32
-       ", "
-       "isOneShot: %" PRIu32 ", reportsBiasEvents: %" PRIu32
-       ", supportsPassiveMode: %" PRIu32 ", unusedFlags: %" PRIu32
-       ", minInterval: %" PRIu64 ", sensorIndex: %" PRIu32,
-       response.status ? "true" : "false", response.sensorType,
-       response.isOnChange, response.isOneShot, response.reportsBiasEvents,
-       response.supportsPassiveMode, response.unusedFlags, response.minInterval,
-       response.sensorIndex);
-  return pw::OkStatus();
+  return validateInputAndCallChreGetSensorInfo(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreGetSensorSamplingStatus(
@@ -105,21 +147,19 @@ pw::Status ChreApiTestService::ChreGetSensorSamplingStatus(
     chre_rpc_ChreGetSensorSamplingStatusOutput &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreGetSensorSamplingStatus(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
 
-  struct chreSensorSamplingStatus samplingStatus;
-  memset(&samplingStatus, 0, sizeof(samplingStatus));
-
-  response.status =
-      chreGetSensorSamplingStatus(request.handle, &samplingStatus);
-  response.interval = samplingStatus.interval;
-  response.latency = samplingStatus.latency;
-  response.enabled = samplingStatus.enabled;
-
-  LOGD("ChreGetSensorSamplingStatus: status: %s, interval: %" PRIu64
-       ", latency: %" PRIu64 ", enabled: %s",
-       response.status ? "true" : "false", response.interval, response.latency,
-       response.enabled ? "true" : "false");
-  return pw::OkStatus();
+pw::Status ChreApiTestService::ChreSensorConfigure(
+    const chre_rpc_ChreSensorConfigureInput &request,
+    chre_rpc_Status &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreSensorConfigure(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreSensorConfigureModeOnly(
@@ -127,14 +167,9 @@ pw::Status ChreApiTestService::ChreSensorConfigureModeOnly(
     chre_rpc_Status &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
-
-  chreSensorConfigureMode mode =
-      static_cast<chreSensorConfigureMode>(request.mode);
-  response.status = chreSensorConfigureModeOnly(request.sensorHandle, mode);
-
-  LOGD("ChreSensorConfigureModeOnly: status: %s",
-       response.status ? "true" : "false");
-  return pw::OkStatus();
+  return validateInputAndCallChreSensorConfigureModeOnly(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
 }
 
 pw::Status ChreApiTestService::ChreAudioGetSource(
@@ -142,30 +177,299 @@ pw::Status ChreApiTestService::ChreAudioGetSource(
     chre_rpc_ChreAudioGetSourceOutput &response) {
   ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
       CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreAudioGetSource(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
 
-  struct chreAudioSource audioSource;
-  memset(&audioSource, 0, sizeof(audioSource));
+pw::Status ChreApiTestService::ChreConfigureHostEndpointNotifications(
+    const chre_rpc_ChreConfigureHostEndpointNotificationsInput &request,
+    chre_rpc_Status &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreConfigureHostEndpointNotifications(request,
+                                                                    response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
 
-  response.status = chreAudioGetSource(request.handle, &audioSource);
+pw::Status ChreApiTestService::RetrieveLatestDisconnectedHostEndpointEvent(
+    const chre_rpc_Void &request,
+    chre_rpc_RetrieveLatestDisconnectedHostEndpointEventOutput &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndRetrieveLatestDisconnectedHostEndpointEvent(request,
+                                                                     response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
 
-  if (response.status) {
-    copyString(response.name, audioSource.name, kMaxNameStringSize);
-  } else {
-    response.name[0] = '\0';
+pw::Status ChreApiTestService::ChreGetHostEndpointInfo(
+    const chre_rpc_ChreGetHostEndpointInfoInput &request,
+    chre_rpc_ChreGetHostEndpointInfoOutput &response) {
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  return validateInputAndCallChreGetHostEndpointInfo(request, response)
+             ? pw::OkStatus()
+             : pw::Status::InvalidArgument();
+}
+
+// End ChreApiTestService RPC generated functions
+
+// Start ChreApiTestService RPC sync functions
+
+void ChreApiTestService::ChreBleStartScanSync(
+    const chre_rpc_ChreBleStartScanAsyncInput &request,
+    ServerWriter<chre_rpc_GeneralSyncMessage> &writer) {
+  if (mWriter.has_value()) {
+    ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+        CHRE_MESSAGE_PERMISSION_NONE);
+    writer.Finish();
+    LOGE("ChreBleStartScanSync: a sync message already exists");
+    return;
   }
 
-  response.sampleRate = audioSource.sampleRate;
-  response.minBufferDuration = audioSource.minBufferDuration;
-  response.maxBufferDuration = audioSource.maxBufferDuration;
-  response.format = audioSource.format;
+  mWriter = std::move(writer);
+  CHRE_ASSERT(mSyncTimerHandle == CHRE_TIMER_INVALID);
+  mRequestType = CHRE_BLE_REQUEST_TYPE_START_SCAN;
 
-  LOGD("ChreAudioGetSource: status: %s, name: %s, sampleRate %" PRIu32
-       ", "
-       "minBufferDuration: %" PRIu64 ", maxBufferDuration %" PRIu64
-       ", format: %" PRIu32,
-       response.status ? "true" : "false", response.name, response.sampleRate,
-       response.minBufferDuration, response.maxBufferDuration, response.format);
-  return pw::OkStatus();
+  chre_rpc_Status status;
+  if (!validateInputAndCallChreBleStartScanAsync(request, status) ||
+      !status.status || !startSyncTimer()) {
+    sendFailureAndFinishCloseWriter(mWriter);
+    mSyncTimerHandle = CHRE_TIMER_INVALID;
+    LOGD("ChreBleStartScanSync: status: false (error)");
+  }
+}
+
+void ChreApiTestService::ChreBleStopScanSync(
+    const chre_rpc_Void &request,
+    ServerWriter<chre_rpc_GeneralSyncMessage> &writer) {
+  if (mWriter.has_value()) {
+    ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+        CHRE_MESSAGE_PERMISSION_NONE);
+    writer.Finish();
+    LOGE("ChreBleStopScanSync: a sync message already exists");
+    return;
+  }
+
+  mWriter = std::move(writer);
+  CHRE_ASSERT(mSyncTimerHandle == CHRE_TIMER_INVALID);
+  mRequestType = CHRE_BLE_REQUEST_TYPE_STOP_SCAN;
+
+  chre_rpc_Status status;
+  if (!validateInputAndCallChreBleStopScanAsync(request, status) ||
+      !status.status || !startSyncTimer()) {
+    sendFailureAndFinishCloseWriter(mWriter);
+    mSyncTimerHandle = CHRE_TIMER_INVALID;
+    LOGD("ChreBleStopScanSync: status: false (error)");
+  }
+}
+
+// End ChreApiTestService RPC sync functions
+
+// Start ChreApiTestService event functions
+
+void ChreApiTestService::GatherEvents(
+    const chre_rpc_GatherEventsInput &request,
+    ServerWriter<chre_rpc_GeneralEventsMessage> &writer) {
+  if (mEventWriter.has_value()) {
+    LOGE("GatherEvents: an event gathering call already exists");
+    ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+        CHRE_MESSAGE_PERMISSION_NONE);
+    writer.Finish();
+    return;
+  }
+
+  if (request.eventTypeCount > kMaxNumEventTypes) {
+    LOGE("GatherEvents: request.eventTypeCount is out of bounds");
+    ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+        CHRE_MESSAGE_PERMISSION_NONE);
+    writer.Finish();
+    return;
+  }
+
+  if (request.eventTypeCount == 0) {
+    LOGE("GatherEvents: request.eventTypeCount == 0");
+    ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+        CHRE_MESSAGE_PERMISSION_NONE);
+    writer.Finish();
+    return;
+  }
+
+  for (uint32_t i = 0; i < request.eventTypeCount; ++i) {
+    if (request.eventTypes[i] < std::numeric_limits<uint16_t>::min() ||
+        request.eventTypes[i] > std::numeric_limits<uint16_t>::max()) {
+      LOGE("GatherEvents: invalid request.eventTypes: i: %" PRIu32, i);
+      ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+          CHRE_MESSAGE_PERMISSION_NONE);
+      writer.Finish();
+      return;
+    }
+
+    mEventTypes[i] = static_cast<uint16_t>(request.eventTypes[i]);
+    LOGD("GatherEvents: Watching for events with type: %" PRIu16,
+         mEventTypes[i]);
+  }
+
+  mEventWriter = std::move(writer);
+  CHRE_ASSERT(mEventTimerHandle == CHRE_TIMER_INVALID);
+  mEventTimerHandle = chreTimerSet(
+      request.timeoutInNs, &mEventTimerHandle /* cookie */, true /* oneShot */);
+  if (mEventTimerHandle == CHRE_TIMER_INVALID) {
+    LOGE("GatherEvents: Cannot set the event timer");
+    sendFailureAndFinishCloseWriter(mEventWriter);
+    mEventTimerHandle = CHRE_TIMER_INVALID;
+  } else {
+    mEventTypeCount = request.eventTypeCount;
+    mEventExpectedCount = request.eventCount;
+    mEventSentCount = 0;
+    LOGD("GatherEvents: mEventTypeCount: %" PRIu32
+         " mEventExpectedCount: %" PRIu32,
+         mEventTypeCount, mEventExpectedCount);
+  }
+}
+
+// End ChreApiTestService event functions
+
+void ChreApiTestService::handleBleAsyncResult(const chreAsyncResult *result) {
+  if (result == nullptr || !mWriter.has_value()) {
+    return;
+  }
+
+  if (result->requestType == mRequestType) {
+    chreTimerCancel(mSyncTimerHandle);
+    mSyncTimerHandle = CHRE_TIMER_INVALID;
+
+    chre_rpc_GeneralSyncMessage generalSyncMessage;
+    generalSyncMessage.status = result->success;
+    sendFinishAndCloseWriter(mWriter, generalSyncMessage);
+    LOGD("Active BLE sync function: status: %s",
+         generalSyncMessage.status ? "true" : "false");
+  }
+}
+
+void ChreApiTestService::handleGatheringEvent(uint16_t eventType,
+                                              const void *eventData) {
+  if (!mEventWriter.has_value()) {
+    return;
+  }
+
+  bool matchedEvent = false;
+  for (uint32_t i = 0; i < mEventTypeCount; ++i) {
+    if (mEventTypes[i] == eventType) {
+      matchedEvent = true;
+      break;
+    }
+  }
+  if (!matchedEvent) {
+    LOGD("GatherEvents: Received event with type: %" PRIu16
+         " that did not match any gathered events",
+         eventType);
+    return;
+  }
+
+  LOGD("Gather events Received matching event with type: %" PRIu16, eventType);
+
+  chre_rpc_GeneralEventsMessage message;
+  message.status = false;
+  switch (eventType) {
+    case CHRE_EVENT_SENSOR_ACCELEROMETER_DATA: {
+      message.status = true;
+      message.which_data =
+          chre_rpc_GeneralEventsMessage_chreSensorThreeAxisData_tag;
+
+      const struct chreSensorThreeAxisData *data =
+          static_cast<const struct chreSensorThreeAxisData *>(eventData);
+      message.data.chreSensorThreeAxisData.header.baseTimestamp =
+          data->header.baseTimestamp;
+      message.data.chreSensorThreeAxisData.header.sensorHandle =
+          data->header.sensorHandle;
+      message.data.chreSensorThreeAxisData.header.readingCount =
+          data->header.readingCount;
+      message.data.chreSensorThreeAxisData.header.accuracy =
+          data->header.accuracy;
+      message.data.chreSensorThreeAxisData.header.reserved =
+          data->header.reserved;
+
+      uint32_t numReadings =
+          MIN(data->header.readingCount, kThreeAxisDataReadingsMaxCount);
+      message.data.chreSensorThreeAxisData.readings_count = numReadings;
+      for (uint32_t i = 0; i < numReadings; ++i) {
+        message.data.chreSensorThreeAxisData.readings[i].timestampDelta =
+            data->readings[i].timestampDelta;
+        message.data.chreSensorThreeAxisData.readings[i].x =
+            data->readings[i].x;
+        message.data.chreSensorThreeAxisData.readings[i].y =
+            data->readings[i].y;
+        message.data.chreSensorThreeAxisData.readings[i].z =
+            data->readings[i].z;
+      }
+      break;
+    }
+    case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
+      const struct chreSensorSamplingStatusEvent *data =
+          static_cast<const struct chreSensorSamplingStatusEvent *>(eventData);
+      message.data.chreSensorSamplingStatusEvent.sensorHandle =
+          data->sensorHandle;
+      message.data.chreSensorSamplingStatusEvent.status.interval =
+          data->status.interval;
+      message.data.chreSensorSamplingStatusEvent.status.latency =
+          data->status.latency;
+      message.data.chreSensorSamplingStatusEvent.status.enabled =
+          data->status.enabled;
+
+      message.status = true;
+      message.which_data =
+          chre_rpc_GeneralEventsMessage_chreSensorSamplingStatusEvent_tag;
+      break;
+    }
+    default: {
+      LOGE("GatherEvents: event type: %" PRIu16 " not implemented", eventType);
+    }
+  }
+
+  if (!message.status) {
+    LOGE("GatherEvents: unable to create message for event with type: %" PRIu16,
+         eventType);
+    return;
+  }
+
+  ChreApiTestManagerSingleton::get()->setPermissionForNextMessage(
+      CHRE_MESSAGE_PERMISSION_NONE);
+  pw::Status status = mEventWriter->Write(message);
+  CHRE_ASSERT(status.ok());
+  ++mEventSentCount;
+
+  if (mEventSentCount == mEventExpectedCount) {
+    chreTimerCancel(mEventTimerHandle);
+    mEventTimerHandle = CHRE_TIMER_INVALID;
+    finishAndCloseWriter(mEventWriter);
+    LOGD("GatherEvents: Finish");
+  }
+}
+
+void ChreApiTestService::handleTimerEvent(const void *cookie) {
+  if (mWriter.has_value() && cookie == &mSyncTimerHandle) {
+    sendFailureAndFinishCloseWriter(mWriter);
+    mSyncTimerHandle = CHRE_TIMER_INVALID;
+    LOGD("Active sync function: status: false (timeout)");
+  } else if (mEventWriter.has_value() && cookie == &mEventTimerHandle) {
+    finishAndCloseWriter(mEventWriter);
+    mEventTimerHandle = CHRE_TIMER_INVALID;
+    LOGD("Timeout for event collection");
+  }
+}
+
+void ChreApiTestService::handleHostEndpointNotificationEvent(
+    const chreHostEndpointNotification *data) {
+  if (data->notificationType != HOST_ENDPOINT_NOTIFICATION_TYPE_DISCONNECT) {
+    LOGW("Received non disconnected event");
+    return;
+  }
+
+  ++mReceivedHostEndpointDisconnectedNum;
+  mLatestHostEndpointNotification = *data;
 }
 
 void ChreApiTestService::copyString(char *destination, const char *source,
@@ -185,6 +489,14 @@ void ChreApiTestService::copyString(char *destination, const char *source,
   memset(&destination[i], 0, maxChars - i);
 }
 
+bool ChreApiTestService::startSyncTimer() {
+  mSyncTimerHandle = chreTimerSet(
+      kSyncFunctionTimeout, &mSyncTimerHandle /* cookie */, true /* oneShot */);
+  return mSyncTimerHandle != CHRE_TIMER_INVALID;
+}
+
+// Start ChreApiTestManager functions
+
 bool ChreApiTestManager::start() {
   chre::RpcServer::Service service = {.service = mChreApiTestService,
                                       .id = 0x61002d392de8430a,
@@ -197,8 +509,8 @@ bool ChreApiTestManager::start() {
   return true;
 }
 
-void ChreApiTestManager::setPermissionForNextMessage(uint32_t permission) {
-  mServer.setPermissionForNextMessage(permission);
+void ChreApiTestManager::end() {
+  // do nothing
 }
 
 void ChreApiTestManager::handleEvent(uint32_t senderInstanceId,
@@ -207,8 +519,29 @@ void ChreApiTestManager::handleEvent(uint32_t senderInstanceId,
   if (!mServer.handleEvent(senderInstanceId, eventType, eventData)) {
     LOGE("An RPC error occurred");
   }
+
+  mChreApiTestService.handleGatheringEvent(eventType, eventData);
+
+  switch (eventType) {
+    case CHRE_EVENT_BLE_ASYNC_RESULT:
+      mChreApiTestService.handleBleAsyncResult(
+          static_cast<const chreAsyncResult *>(eventData));
+      break;
+    case CHRE_EVENT_TIMER:
+      mChreApiTestService.handleTimerEvent(eventData);
+      break;
+    case CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION:
+      mChreApiTestService.handleHostEndpointNotificationEvent(
+          static_cast<const chreHostEndpointNotification *>(eventData));
+      break;
+    default: {
+      // ignore
+    }
+  }
 }
 
-void ChreApiTestManager::end() {
-  // do nothing
+void ChreApiTestManager::setPermissionForNextMessage(uint32_t permission) {
+  mServer.setPermissionForNextMessage(permission);
 }
+
+// End ChreApiTestManager functions
