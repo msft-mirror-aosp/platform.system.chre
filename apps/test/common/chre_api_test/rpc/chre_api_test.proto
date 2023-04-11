@@ -34,12 +34,30 @@ service ChreApiTestService {
   rpc ChreGetSensorSamplingStatus(ChreHandleInput)
       returns (ChreGetSensorSamplingStatusOutput) {}
 
+  // Configures a sensor.
+  rpc ChreSensorConfigure(ChreSensorConfigureInput) returns (Status) {}
+
   // Configures a sensor's mode.
   rpc ChreSensorConfigureModeOnly(ChreSensorConfigureModeOnlyInput)
       returns (Status) {}
 
   // Gets the audio source's information.
   rpc ChreAudioGetSource(ChreHandleInput) returns (ChreAudioGetSourceOutput) {}
+
+  // Configures the nanoapp to receive host endpoint information for a host
+  // endpoint id.
+  rpc ChreConfigureHostEndpointNotifications(
+      ChreConfigureHostEndpointNotificationsInput) returns (Status) {}
+
+  // TODO(b/274791978): Deprecate this once we can capture event
+  // Retrieves the latest disconnected host endpoint event and the number of
+  // disconnect event received.
+  rpc RetrieveLatestDisconnectedHostEndpointEvent(Void)
+      returns (RetrieveLatestDisconnectedHostEndpointEventOutput) {}
+
+  // Gets the host endpoint info for a given host endpoint id.
+  rpc ChreGetHostEndpointInfo(ChreGetHostEndpointInfoInput)
+      returns (ChreGetHostEndpointInfoOutput) {}
 
   // Start synchronous functions
 
@@ -57,6 +75,9 @@ service ChreApiTestService {
    * return the event's success field.
    */
   rpc ChreBleStopScanSync(Void) returns (stream GeneralSyncMessage) {}
+
+  // Returns events that match the eventType filter
+  rpc GatherEvents(GatherEventsInput) returns (stream GeneralEventsMessage) {}
 }
 
 // General messages
@@ -84,11 +105,98 @@ message GeneralSyncMessage {
   bool status = 1;
 }
 
+// Event capturing messages
+
+// Contains event filters for gathering events
+message GatherEventsInput {
+  repeated uint32 eventTypes = 1;
+  uint32 eventTypeCount = 2;
+  uint32 eventCount = 3;
+  uint64 timeoutInNs = 4;
+}
+
+// Contains events that were gathered
+// To gather a new type of event, add its message to the oneof data
+message GeneralEventsMessage {
+  bool status = 1;
+  oneof data {
+    ChreSensorThreeAxisData chreSensorThreeAxisData = 2;
+    ChreSensorSamplingStatusEvent chreSensorSamplingStatusEvent = 3;
+  }
+}
+
+// A sensor sampling status update event
+message ChreSensorSamplingStatusEvent {
+  uint32 sensorHandle = 1;
+  ChreSensorSamplingStatus status = 2;
+}
+
+// The sampling status of a sensor
+message ChreSensorSamplingStatus {
+  uint64 interval = 1;
+  uint64 latency = 2;
+  bool enabled = 3;
+}
+
+// Contains three axis data for use with the accelerometer and other sensors
+message ChreSensorThreeAxisData {
+  ChreSensorDataHeader header = 1;
+  repeated ChreSensorThreeAxisSampleData readings = 2;
+}
+
+// Header for sensor data
+message ChreSensorDataHeader {
+  uint64 baseTimestamp = 1;
+  uint32 sensorHandle = 2;
+  uint32 readingCount = 3;
+  uint32 accuracy = 4;
+  uint32 reserved = 5;
+}
+
+// Individual sample data for a three-axis sensor.
+message ChreSensorThreeAxisSampleData {
+  uint32 timestampDelta = 1;
+  float x = 2;
+  float y = 3;
+  float z = 4;
+}
+
 // Function specific messages
 
 // Input value for ChreSensorFindDefault
 message ChreSensorFindDefaultInput {
   uint32 sensorType = 1;
+}
+
+// Input value for ChreConfigureHostEndpointNotifications
+message ChreConfigureHostEndpointNotificationsInput {
+  uint32 hostEndpointId = 1;
+  bool enable = 2;
+}
+
+// Retrieving subscribed disconnected host endpoint notification
+message RetrieveLatestDisconnectedHostEndpointEventOutput {
+  // Records how many disconnected event received by this nanoapp.
+  uint32 disconnectedCount = 1;
+  uint32 hostEndpointId = 2;
+}
+
+// Input value for ChreGetHostEndpointInfo
+message ChreGetHostEndpointInfoInput {
+  uint32 hostEndpointId = 1;
+}
+
+// Return value for ChreGetHostEndpointInfo.
+// Bool + chreHostEndpointInfo
+// @see chreHostEndpointInfo for description of each field.
+message ChreGetHostEndpointInfoOutput {
+  bool status = 1;
+  uint32 hostEndpointId = 2;
+  uint32 hostEndpointType = 3;
+  bool isNameValid = 4;
+  bool isTagValid = 5;
+  string endpointName = 6;
+  string endpointTag = 7;
 }
 
 // Return value for ChreSensorFindDefault. sensorHandle is only valid if
@@ -118,6 +226,14 @@ message ChreGetSensorSamplingStatusOutput {
   uint64 interval = 2;
   uint64 latency = 3;
   bool enabled = 4;
+}
+
+// Input value for ChreSensorConfigureModeOnly
+message ChreSensorConfigureInput {
+  uint32 sensorHandle = 1;
+  uint32 mode = 2;
+  uint64 interval = 3;
+  uint64 latency = 4;
 }
 
 // Input value for ChreSensorConfigureModeOnly

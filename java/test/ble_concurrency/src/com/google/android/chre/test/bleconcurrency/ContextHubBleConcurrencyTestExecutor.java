@@ -26,18 +26,10 @@ import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
-import android.content.Context;
-import android.hardware.location.ContextHubClient;
-import android.hardware.location.ContextHubClientCallback;
-import android.hardware.location.ContextHubInfo;
-import android.hardware.location.ContextHubManager;
 import android.hardware.location.NanoAppBinary;
 
-import androidx.test.InstrumentationRegistry;
-
-import com.google.android.chre.utils.pigweed.ChreRpcClient;
+import com.google.android.chre.test.chqts.ContextHubChreApiTestExecutor;
 import com.google.android.utils.chre.ChreApiTestUtil;
-import com.google.android.utils.chre.ChreTestUtil;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 
@@ -45,15 +37,13 @@ import org.junit.Assert;
 
 import java.util.HexFormat;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.chre.rpc.proto.ChreApiTest;
-import dev.pigweed.pw_rpc.Service;
 
 /**
  * A class that can execute the CHRE BLE concurrency test.
  */
-public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallback {
+public class ContextHubBleConcurrencyTestExecutor extends ContextHubChreApiTestExecutor {
     private static final String TAG = "ContextHubBleConcurrencyTestExecutor";
 
     /**
@@ -77,15 +67,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
     private static final int CHRE_BLE_CAPABILITIES_SCAN = 1 << 0;
     private static final int CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA = 1 << 7;
 
-    private final BluetoothLeScanner mBluetoothLeScanner;
-    private final Context mContext = InstrumentationRegistry.getTargetContext();
-    private final ContextHubInfo mContextHub;
-    private final ContextHubClient mContextHubClient;
-    private final ContextHubManager mContextHubManager;
-    private final AtomicBoolean mChreReset = new AtomicBoolean(false);
-    private final NanoAppBinary mNanoAppBinary;
-    private final long mNanoAppId;
-    private final ChreRpcClient mRpcClient;
+    private BluetoothLeScanner mBluetoothLeScanner = null;
 
     private final ScanCallback mScanCallback = new ScanCallback() {
         @Override
@@ -105,37 +87,14 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
     };
 
     public ContextHubBleConcurrencyTestExecutor(NanoAppBinary nanoapp) {
-        mNanoAppBinary = nanoapp;
-        mNanoAppId = nanoapp.getNanoAppId();
-        mContextHubManager = mContext.getSystemService(ContextHubManager.class);
-        assertThat(mContextHubManager).isNotNull();
-        List<ContextHubInfo> contextHubs = mContextHubManager.getContextHubs();
-        assertThat(contextHubs).isNotEmpty();
-        mContextHub = contextHubs.get(0);
-        mContextHubClient = mContextHubManager.createClient(mContextHub, /* callback= */ this);
-        Service chreApiService = ChreApiTestUtil.getChreApiService();
-        mRpcClient = new ChreRpcClient(mContextHubManager, mContextHub, mNanoAppId,
-                List.of(chreApiService), /* callback= */ this);
+        super(nanoapp);
 
         BluetoothManager bluetoothManager = mContext.getSystemService(BluetoothManager.class);
         assertThat(bluetoothManager).isNotNull();
         BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
-        assertThat(bluetoothAdapter).isNotNull();
-        mBluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
-        assertThat(mBluetoothLeScanner).isNotNull();
-    }
-
-    @Override
-    public void onHubReset(ContextHubClient client) {
-        mChreReset.set(true);
-    }
-
-    /**
-     * Should be invoked before run() is invoked to set up the test, e.g. in a @Before method.
-     */
-    public void init() {
-        mContextHubManager.enableTestMode();
-        ChreTestUtil.loadNanoAppAssertSuccess(mContextHubManager, mContextHub, mNanoAppBinary);
+        if (bluetoothAdapter != null) {
+            mBluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        }
     }
 
     /**
@@ -147,19 +106,6 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
             Thread.sleep(1000);
             testChreScanFirst();
         }
-    }
-
-    /**
-     * Cleans up the test, should be invoked in e.g. @After method.
-     */
-    public void deinit() {
-        if (mChreReset.get()) {
-            Assert.fail("CHRE reset during the test");
-        }
-
-        ChreTestUtil.unloadNanoAppAssertSuccess(mContextHubManager, mContextHub, mNanoAppId);
-        mContextHubManager.disableTestMode();
-        mContextHubClient.close();
     }
 
     /**
@@ -233,7 +179,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
 
         ChreApiTestUtil util = new ChreApiTestUtil();
         List<ChreApiTest.GeneralSyncMessage> response =
-                util.callServerStreamingRpcMethodSync(mRpcClient,
+                util.callServerStreamingRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleStartScanSync",
                         inputBuilder.build());
         assertThat(response).isNotEmpty();
@@ -249,7 +195,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
     private void chreBleStopScanSync() throws Exception {
         ChreApiTestUtil util = new ChreApiTestUtil();
         List<ChreApiTest.GeneralSyncMessage> response =
-                util.callServerStreamingRpcMethodSync(mRpcClient,
+                util.callServerStreamingRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleStopScanSync");
         assertThat(response).isNotEmpty();
         for (ChreApiTest.GeneralSyncMessage status: response) {
@@ -262,13 +208,17 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubClientCallba
      * otherwise returns false.
      */
     private boolean doesNecessaryBleCapabilitiesExist() throws Exception {
+        if (mBluetoothLeScanner == null) {
+            return false;
+        }
+
         ChreApiTest.Capabilities capabilitiesResponse =
-                ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                ChreApiTestUtil.callUnaryRpcMethodSync(getRpcClient(),
                         "chre.rpc.ChreApiTestService.ChreBleGetCapabilities");
         int capabilities = capabilitiesResponse.getCapabilities();
         if ((capabilities & CHRE_BLE_CAPABILITIES_SCAN) != 0) {
             ChreApiTest.Capabilities filterCapabilitiesResponse =
-                    ChreApiTestUtil.callUnaryRpcMethodSync(mRpcClient,
+                    ChreApiTestUtil.callUnaryRpcMethodSync(getRpcClient(),
                             "chre.rpc.ChreApiTestService.ChreBleGetFilterCapabilities");
             int filterCapabilities = filterCapabilitiesResponse.getCapabilities();
             return (filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA) != 0;

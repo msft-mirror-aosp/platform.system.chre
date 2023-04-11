@@ -81,6 +81,13 @@ class ChreApiTestService final
       chre_rpc_ChreGetSensorSamplingStatusOutput &response);
 
   /**
+   * Configures a given sensor.
+   */
+  pw::Status ChreSensorConfigure(
+      const chre_rpc_ChreSensorConfigureInput &request,
+      chre_rpc_Status &response);
+
+  /**
    * Configures the mode for a sensor.
    */
   pw::Status ChreSensorConfigureModeOnly(
@@ -92,6 +99,27 @@ class ChreApiTestService final
    */
   pw::Status ChreAudioGetSource(const chre_rpc_ChreHandleInput &request,
                                 chre_rpc_ChreAudioGetSourceOutput &response);
+
+  /**
+   * Configures host endpoint notification.
+   */
+  pw::Status ChreConfigureHostEndpointNotifications(
+      const chre_rpc_ChreConfigureHostEndpointNotificationsInput &request,
+      chre_rpc_Status &response);
+
+  /**
+   * Retrieve the last host endpoint notification.
+   */
+  pw::Status RetrieveLatestDisconnectedHostEndpointEvent(
+      const chre_rpc_Void &request,
+      chre_rpc_RetrieveLatestDisconnectedHostEndpointEventOutput &response);
+
+  /**
+   * Gets the host endpoint info for a given host endpoint id.
+   */
+  pw::Status ChreGetHostEndpointInfo(
+      const chre_rpc_ChreGetHostEndpointInfoInput &request,
+      chre_rpc_ChreGetHostEndpointInfoOutput &response);
 
   /**
    * Starts a BLE scan synchronously. Waits for the CHRE_EVENT_BLE_ASYNC_RESULT
@@ -108,6 +136,13 @@ class ChreApiTestService final
                            ServerWriter<chre_rpc_GeneralSyncMessage> &writer);
 
   /**
+   * Gathers events that match the input filter before the timeout in ns or
+   * the max event count.
+   */
+  void GatherEvents(const chre_rpc_GatherEventsInput &request,
+                    ServerWriter<chre_rpc_GeneralEventsMessage> &writer);
+
+  /**
    * Handles a BLE event from CHRE.
    *
    * @param result              the event result.
@@ -115,11 +150,27 @@ class ChreApiTestService final
   void handleBleAsyncResult(const chreAsyncResult *result);
 
   /**
+   * Gathers the event if there is an existing event writer.
+   *
+   * @param eventType           the event type.
+   * @param eventData           the event data.
+   */
+  void handleGatheringEvent(uint16_t eventType, const void *eventData);
+
+  /**
    * Handles a timer event from CHRE.
    *
    * @param cookie              the cookie from the event.
    */
   void handleTimerEvent(const void *cookie);
+
+  /**
+   * Handles host endpoint notification event from CHRE.
+   *
+   * @param data                the data from event.
+   */
+  void handleHostEndpointNotificationEvent(
+      const chreHostEndpointNotification *data);
 
  private:
   /**
@@ -133,29 +184,11 @@ class ChreApiTestService final
   void copyString(char *destination, const char *source, size_t maxChars);
 
   /**
-   * Sends a failure message. If there is not a valid writer, this returns
-   * without doing anything. This function assumes the synchronous function
-   * timeout timer has either been triggered or is already invalid, cancelled,
-   * or never started.
-   */
-  void sendFailureAndFinishSyncMessage();
-
-  /**
-   * Writes a message to the writer, then closes the writer and invalidates the
-   * stored writer and the synchronous function timeout timer handle. This
-   * assumes the timer has either been triggered or is already invalid,
-   * cancelled, or never started.
-   *
-   * @param message              the message to write.
-   */
-  void sendAndFinishSyncMessage(const chre_rpc_GeneralSyncMessage &message);
-
-  /**
    * Sets the synchronous timeout timer for the active sync message.
    *
    * @return                     if the operation was successful.
    */
-  bool setSyncTimer();
+  bool startSyncTimer();
 
   /**
    * The following functions validate the RPC input: request, calls the
@@ -191,6 +224,10 @@ class ChreApiTestService final
       const chre_rpc_ChreHandleInput &request,
       chre_rpc_ChreGetSensorSamplingStatusOutput &response);
 
+  bool validateInputAndCallChreSensorConfigure(
+      const chre_rpc_ChreSensorConfigureInput &request,
+      chre_rpc_Status &response);
+
   bool validateInputAndCallChreSensorConfigureModeOnly(
       const chre_rpc_ChreSensorConfigureModeOnlyInput &request,
       chre_rpc_Status &response);
@@ -199,13 +236,45 @@ class ChreApiTestService final
       const chre_rpc_ChreHandleInput &request,
       chre_rpc_ChreAudioGetSourceOutput &response);
 
+  bool validateInputAndCallChreConfigureHostEndpointNotifications(
+      const chre_rpc_ChreConfigureHostEndpointNotificationsInput &request,
+      chre_rpc_Status &response);
+
+  bool validateInputAndRetrieveLatestDisconnectedHostEndpointEvent(
+      const chre_rpc_Void &request,
+      chre_rpc_RetrieveLatestDisconnectedHostEndpointEventOutput &response);
+
+  bool validateInputAndCallChreGetHostEndpointInfo(
+      const chre_rpc_ChreGetHostEndpointInfoInput &request,
+      chre_rpc_ChreGetHostEndpointInfoOutput &response);
+
+  constexpr static uint32_t kMaxNumEventTypes =
+      10;  // declared in chre_api_test.options
+
   /**
    * Variables to control synchronization for sync API calls.
    * Only one sync API call may be made at a time.
    */
   Optional<ServerWriter<chre_rpc_GeneralSyncMessage>> mWriter;
-  uint32_t mTimerHandle;
+  uint32_t mSyncTimerHandle = CHRE_TIMER_INVALID;
   uint8_t mRequestType;
+
+  /**
+   * Variables to store disconnected host endpoint notification.
+   */
+  uint32_t mReceivedHostEndpointDisconnectedNum = 0;
+  chreHostEndpointNotification mLatestHostEndpointNotification;
+
+  /*
+   * Variables to control synchronization for sync events calls.
+   * Only one sync event call may be made at a time.
+   */
+  Optional<ServerWriter<chre_rpc_GeneralEventsMessage>> mEventWriter;
+  uint32_t mEventTimerHandle = CHRE_TIMER_INVALID;
+  uint16_t mEventTypes[kMaxNumEventTypes];
+  uint32_t mEventTypeCount;
+  uint32_t mEventExpectedCount;
+  uint32_t mEventSentCount;
 };
 
 /**

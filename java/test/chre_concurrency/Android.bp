@@ -22,7 +22,7 @@ package {
 }
 
 java_library {
-    name: "context-hub-ble-concurrency-test",
+    name: "context-hub-chre-concurrency-test",
 
     srcs: ["src/**/*.java"],
 
