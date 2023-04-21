@@ -810,6 +810,7 @@ static bool chppGnssClientConfigurePassiveLocationListener(bool enable) {
  ***********************************************/
 
 void chppRegisterGnssClient(struct ChppAppState *appContext) {
+  memset(&gGnssClientContext, 0, sizeof(gGnssClientContext));
   chppRegisterClient(appContext, (void *)&gGnssClientContext,
                      &gGnssClientContext.client, gGnssClientContext.rRState,
                      &kGnssClientConfig);

@@ -125,12 +125,13 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-
+  LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
   auto transaction = std::make_unique<FragmentedLoadTransaction>(
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
-      appBinary.flags, targetApiVersion, appBinary.customBinary);
+      appBinary.flags, targetApiVersion, appBinary.customBinary,
+      mConnection->getLoadFragmentSizeBytes());
   if (!mHalClientManager->registerPendingLoadTransaction(
           std::move(transaction))) {
     return fromResult(false);
@@ -138,12 +139,15 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   auto clientId = mHalClientManager->getClientId();
   auto request = mHalClientManager->getNextFragmentedLoadRequest(
       clientId, transactionId, std::nullopt);
-  if (!request.has_value()) {
-    LOGE("Failed to get the first load request.");
-    return fromResult(false);
+
+  if (request.has_value() &&
+      sendFragmentedLoadRequest(clientId, request.value())) {
+    return ScopedAStatus::ok();
   }
-  bool result = sendFragmentedLoadRequest(clientId, request.value());
-  return fromResult(result);
+  LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
+       appBinary.nanoappId);
+  mHalClientManager->resetPendingLoadTransaction();
+  return fromResult(false);
 }
 
 bool MultiClientContextHubBase::sendFragmentedLoadRequest(
@@ -173,6 +177,9 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
                                        builder.GetSize(),
                                        mHalClientManager->getClientId());
   bool result = mConnection->sendMessage(builder);
+  if (!result) {
+    mHalClientManager->resetPendingUnloadTransaction();
+  }
   return fromResult(result);
 }
 
@@ -253,7 +260,7 @@ ScopedAStatus MultiClientContextHubBase::queryNanoapps(int32_t contextHubId) {
 }
 
 ScopedAStatus MultiClientContextHubBase::getPreloadedNanoappIds(
-    std::vector<int64_t> * /*result*/) {
+    int32_t /* contextHubId */, std::vector<int64_t> * /*result*/) {
   // To be implemented.
   return ScopedAStatus::ok();
 }
@@ -268,7 +275,9 @@ ScopedAStatus MultiClientContextHubBase::registerCallback(
     LOGE("Callback of context hub HAL must not be null.");
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  mHalClientManager->registerCallback(callback);
+  if (!mHalClientManager->registerCallback(callback)) {
+    return fromResult(false);
+  }
   // once the call to AIBinder_linkToDeath() is successful, the cookie is
   // supposed to be release by the death recipient later.
   auto *cookie = new HalDeathRecipientCookie(this, AIBinder_getCallingPid());
@@ -285,9 +294,14 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
+  HostEndpointId hostEndpointId = message.hostEndPoint;
+  if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), hostEndpointId)) {
+    return fromResult(false);
+  }
   flatbuffers::FlatBufferBuilder builder(1024);
   HostProtocolHost::encodeNanoappMessage(
-      builder, message.nanoappId, message.messageType, message.hostEndPoint,
+      builder, message.nanoappId, message.messageType, hostEndpointId,
       message.messageBody.data(), message.messageBody.size());
   return fromResult(mConnection->sendMessage(builder));
 }
@@ -306,35 +320,40 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
       type = CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK;
       break;
     default:
-      LOGE("Unsupported host endpoint type %" PRIu32, type);
+      LOGE("Unsupported host endpoint type %" PRIu32, info.type);
       return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  if (!mHalClientManager->registerEndpointId(info.hostEndpointId)) {
-    return fromResult(false);
+
+  uint16_t endpointId = info.hostEndpointId;
+  if (!mHalClientManager->registerEndpointId(info.hostEndpointId) ||
+      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), endpointId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeHostEndpointConnected(
-      builder, info.hostEndpointId, type,
-      info.packageName.value_or(std::string()),
+      builder, endpointId, type, info.packageName.value_or(std::string()),
       info.attributionTag.value_or(std::string()));
   return fromResult(mConnection->sendMessage(builder));
 }
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointDisconnected(
-    char16_t hostEndpointId) {
-  if (!mHalClientManager->removeEndpointId(hostEndpointId)) {
-    return fromResult(false);
+    char16_t in_hostEndpointId) {
+  HostEndpointId hostEndpointId = in_hostEndpointId;
+  if (!mHalClientManager->removeEndpointId(hostEndpointId) ||
+      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(
+          AIBinder_getCallingPid(), hostEndpointId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeHostEndpointDisconnected(builder, hostEndpointId);
   return fromResult(mConnection->sendMessage(builder));
 }
 
 ScopedAStatus MultiClientContextHubBase::onNanSessionStateChanged(
-    bool /*in_state*/) {
-  // To be implemented.
-  return ScopedAStatus::ok();
+    const NanSessionStateUpdate & /*in_update*/) {
+  // TODO(271471342): Add support for NAN session management.
+  return ndk::ScopedAStatus::ok();
 }
 
 ScopedAStatus MultiClientContextHubBase::setTestMode(bool /*enable*/) {
@@ -436,9 +455,9 @@ void MultiClientContextHubBase::onLoadNanoappResponse(
     mPreloadedNanoappLoader->onLoadNanoappResponse(response, clientId);
     return;
   }
-
   auto nextFragmentedRequest = mHalClientManager->getNextFragmentedLoadRequest(
       clientId, response.transaction_id, response.fragment_id);
+  // continue to send the next fragment if there is any.
   if (response.success && nextFragmentedRequest.has_value()) {
     LOGD("Sending next FragmentedLoadRequest for client %" PRIu16
          ": (transaction: %" PRIu32 ", fragment %zu)",
@@ -447,11 +466,13 @@ void MultiClientContextHubBase::onLoadNanoappResponse(
     sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value());
     return;
   }
-
+  // Clears out the pending load transaction if the previous fragment fails to
+  // load.
   if (!response.success) {
     LOGE("Sending FragmentedLoadRequest for client %" PRIu16
          " failed: (transaction: %" PRIu32 ", fragment %" PRIu32 ")",
          clientId, response.transaction_id, response.fragment_id);
+    mHalClientManager->resetPendingLoadTransaction();
   }
   if (auto callback = mHalClientManager->getCallback(clientId);
       callback != nullptr) {
@@ -486,21 +507,37 @@ void MultiClientContextHubBase::onNanoappMessage(
   } else if (auto callback = mHalClientManager->getCallbackForEndpoint(
                  message.host_endpoint);
              callback != nullptr) {
+    outMessage.hostEndPoint =
+        HalClientManager::convertToOriginalEndpointId(message.host_endpoint);
     callback->handleContextHubMessage(outMessage, messageContentPerms);
   }
 }
 
 void MultiClientContextHubBase::onClientDied(void *cookie) {
   auto *info = static_cast<HalDeathRecipientCookie *>(cookie);
-  if (auto endpoints = info->hal->mHalClientManager->getAllConnectedEndpoints(
-          info->clientPid)) {
-    for (const auto &endpointId : *endpoints) {
+  info->hal->handleClientDeath(info->clientPid);
+  delete info;
+}
+
+void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
+  LOGI("Process %d is dead. Cleaning up.", clientPid);
+  if (auto endpoints = mHalClientManager->getAllConnectedEndpoints(clientPid)) {
+    for (auto endpointId : *endpoints) {
+      LOGI("Sending message to remove endpoint 0x%" PRIx16, endpointId);
+      if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(clientPid,
+                                                               endpointId)) {
+        continue;
+      }
       flatbuffers::FlatBufferBuilder builder(64);
       HostProtocolHost::encodeHostEndpointDisconnected(builder, endpointId);
-      info->hal->mConnection->sendMessage(builder);
+      mConnection->sendMessage(builder);
     }
   }
-  info->hal->mHalClientManager->handleClientDeath(info->clientPid);
-  delete info;
+  mHalClientManager->handleClientDeath(clientPid);
+}
+
+void MultiClientContextHubBase::onChreRestarted() {
+  mIsWifiAvailable.reset();
+  mHalClientManager->handleChreRestart();
 }
 }  // namespace android::hardware::contexthub::common::implementation

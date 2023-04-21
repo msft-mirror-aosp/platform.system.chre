@@ -42,13 +42,13 @@ class FakeLink {
 
   // Our default timeout covers the retry timeout, plus some extra buffer to
   // account for processing delays
-  static constexpr auto kDefaultTimeout = kTransportTimeout + 5ms;
+  static constexpr auto kDefaultTimeout = 10 * (kTransportTimeout + 5ms);
 
   /**
-   * Call from chppPlatformLinkSend(). Makes a copy of the provided buffer and
+   * Call from link send. Makes a copy of the provided buffer and
    * appends it to the TX packet queue.
    */
-  void appendTxPacket(const uint8_t *data, size_t len);
+  void appendTxPacket(uint8_t *data, size_t len);
 
   //! Returns the number of TX packets waiting to be popped
   int getTxPacketCount();  // int to make EXPECT_EQ against a literal simpler

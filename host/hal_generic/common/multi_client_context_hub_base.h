@@ -39,6 +39,11 @@ using ::ndk::ScopedAStatus;
  *
  * TODO(b/247124878): A few things are pending:
  *   - Some APIs of IContextHub are not implemented yet;
+ *   - onHostEndpointConnected/Disconnected now returns an error if the endpoint
+ *     id is illegal or already connected/disconnected. The doc of
+ *     IContextHub.aidl should be updated accordingly.
+ *   - registerCallback() can fail if mHalClientManager sees an error during
+ *     registration. The doc of IContextHub.aidl should be updated accordingly.
  *   - Involve EventLogger to log API calls;
  *   - extends DebugDumpHelper to ease debugging
  */
@@ -71,13 +76,16 @@ class MultiClientContextHubBase
                                  const ContextHubMessage &message) override;
   ScopedAStatus onHostEndpointConnected(const HostEndpointInfo &info) override;
   ScopedAStatus onHostEndpointDisconnected(char16_t in_hostEndpointId) override;
-  ScopedAStatus getPreloadedNanoappIds(std::vector<int64_t> *result) override;
-  ScopedAStatus onNanSessionStateChanged(bool in_state) override;
+  ScopedAStatus getPreloadedNanoappIds(int32_t contextHubId,
+                                       std::vector<int64_t> *result) override;
+  ScopedAStatus onNanSessionStateChanged(
+      const NanSessionStateUpdate &in_update) override;
   ScopedAStatus setTestMode(bool enable) override;
 
   // The callback function implementing ChreConnectionCallback
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
+  void onChreRestarted() override;
 
  protected:
   // The data needed by the death client to clear states of a client.
@@ -104,6 +112,8 @@ class MultiClientContextHubBase
       const ::chre::fbs::UnloadNanoappResponseT &response,
       HalClientId clientid);
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message);
+
+  void handleClientDeath(pid_t pid);
 
   inline bool isSettingEnabled(Setting setting) {
     return mSettingEnabled.find(setting) != mSettingEnabled.end() &&
