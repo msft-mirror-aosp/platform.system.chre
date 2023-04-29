@@ -1,13 +1,10 @@
 #
-# Google Reference CHRE Implementation for MTK riscv Tinysys
-#
-# TODO(b/254121302): We will rename this file once targets from multiple riscv
-# ISAs are needed. At that time platform.mk needs to be updated too.
+# Google Reference CHRE Implementation for MTK riscv (v55e03) Tinysys
 #
 
 include $(CHRE_PREFIX)/build/clean_build_template_args.mk
 
-TARGET_NAME = aosp_riscv_tinysys
+TARGET_NAME = aosp_riscv55e03_tinysys
 ifneq ($(filter $(TARGET_NAME)% all, $(MAKECMDGOALS)),)
 
 ifeq ($(RISCV_TINYSYS_PREFIX),)
@@ -23,6 +20,14 @@ TARGET_SO_LATE_LIBS = $(AOSP_RISCV_TINYSYS_LATE_LIBS)
 TARGET_PLATFORM_ID = 0x476f6f676c003000
 
 # Macros #######################################################################
+
+TINYSYS_CFLAGS += -D__riscv
+TINYSYS_CFLAGS += -DMRV55
+TINYSYS_CFLAGS += -D_LIBCPP_HAS_NO_LONG_LONG
+
+TINYSYS_CFLAGS += --target=riscv32-unknown-elf
+TINYSYS_CFLAGS += -march=rv32imafcv
+TINYSYS_CFLAGS += -mcpu=MRV55E03
 
 # Word size for this architecture
 TARGET_CFLAGS += -DCHRE_32_BIT_WORD_SIZE
@@ -54,6 +59,14 @@ TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/l
 
 TARGET_VARIANT_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 TARGET_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+
+ifeq ($(CHRE_TCM_ENABLED),true)
+TARGET_CFLAGS += -DCHRE_TCM_ENABLED
+# Flags:
+# Signed                 = 0x00000001
+# TCM-capable            = 0x00000004
+TARGET_NANOAPP_FLAGS = 0x00000005
+endif
 endif
 
 # Other makefiles ##############################################################
