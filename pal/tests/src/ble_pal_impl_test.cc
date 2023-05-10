@@ -105,8 +105,9 @@ void advertisingEventCallback(struct chreBleAdvertisementEvent *event) {
 class PalBleTest : public testing::Test {
  protected:
   void SetUp() override {
-    chre::TaskManagerSingleton::init();
     gCallbacks = MakeUnique<Callbacks>();
+    chre::TaskManagerSingleton::deinit();
+    chre::TaskManagerSingleton::init();
     mApi = chrePalBleGetApi(CHRE_PAL_BLE_API_CURRENT_VERSION);
     ASSERT_NE(mApi, nullptr);
     EXPECT_EQ(mApi->moduleVersion, CHRE_PAL_BLE_API_CURRENT_VERSION);
@@ -114,11 +115,11 @@ class PalBleTest : public testing::Test {
   }
 
   void TearDown() override {
-    gCallbacks = nullptr;
     if (mApi != nullptr) {
       mApi->close();
     }
     chre::TaskManagerSingleton::deinit();
+    gCallbacks = nullptr;
   }
 
   chreBleGenericFilter createBleGenericFilter(uint8_t type, uint8_t len,

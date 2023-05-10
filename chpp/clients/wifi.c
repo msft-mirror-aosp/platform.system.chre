@@ -1160,15 +1160,19 @@ static bool chppWifiClientNanRequestNanRanging(
   return result;
 }
 
+static bool chppWifiGetNanCapabilites(
+    struct chreWifiNanCapabilities *capabilities) {
+  // Not implemented yet.
+  UNUSED_VAR(capabilities);
+  return false;
+}
+
 /************************************************
  *  Public Functions
  ***********************************************/
 
-void chppClearWifiClientContextTestOnly(void) {
-  memset(&gWifiClientContext, 0, sizeof(gWifiClientContext));
-}
-
 void chppRegisterWifiClient(struct ChppAppState *appContext) {
+  memset(&gWifiClientContext, 0, sizeof(gWifiClientContext));
   chppRegisterClient(appContext, (void *)&gWifiClientContext,
                      &gWifiClientContext.client, gWifiClientContext.rRState,
                      &kWifiClientConfig);
@@ -1206,6 +1210,7 @@ const struct chrePalWifiApi *chppPalWifiGetApi(uint32_t requestedApiVersion) {
       .nanSubscribeCancel = chppWifiClientNanSubscribeCancel,
       .releaseNanDiscoveryEvent = chppWifiClientNanReleaseDiscoveryEvent,
       .requestNanRanging = chppWifiClientNanRequestNanRanging,
+      .getNanCapabilities = chppWifiGetNanCapabilites,
   };
 
   CHPP_STATIC_ASSERT(

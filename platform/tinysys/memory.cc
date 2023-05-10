@@ -17,13 +17,23 @@
 #include "chre/platform/memory.h"
 #include "chre/platform/shared/memory.h"
 #include "mt_alloc.h"
+#include "mt_dma.h"
+#include "portable.h"
+
+extern "C" {
+#include "resource_req.h"
+}
 
 namespace chre {
 
-void forceDramAccess() {}
+void forceDramAccess() {
+#ifdef CFG_DMA_SUPPORT
+  dvfs_enable_DRAM_resource(DMA_MEM_ID);
+#endif
+}
 
 void nanoappBinaryFree(void *pointer) {
-  memoryFree(pointer);
+  aligned_free(pointer);
 }
 
 void nanoappBinaryDramFree(void *pointer) {
@@ -31,11 +41,11 @@ void nanoappBinaryDramFree(void *pointer) {
 }
 
 void *memoryAllocDram(size_t size) {
-  return memoryAlloc(size);
+  return pvPortDramMalloc(size);
 }
 
 void memoryFreeDram(void *pointer) {
-  memoryFree(pointer);
+  vPortDramFree(pointer);
 }
 
 void *palSystemApiMemoryAlloc(size_t size) {
@@ -46,9 +56,8 @@ void palSystemApiMemoryFree(void *pointer) {
   memoryFree(pointer);
 }
 
-void *nanoappBinaryAlloc(size_t /*size*/, size_t /*alignment*/) {
-  // TODO(b/252874047): Implementation is only required for dynamic loading.
-  return nullptr;
+void *nanoappBinaryAlloc(size_t size, size_t alignment) {
+  return aligned_malloc(size, alignment);
 }
 
 void *nanoappBinaryDramAlloc(size_t size, size_t alignment) {

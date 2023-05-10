@@ -222,7 +222,12 @@ ScopedAStatus ContextHub::queryNanoapps(int32_t contextHubId) {
 }
 
 ::ndk::ScopedAStatus ContextHub::getPreloadedNanoappIds(
-    std::vector<int64_t> *out_preloadedNanoappIds) {
+    int32_t contextHubId, std::vector<int64_t> *out_preloadedNanoappIds) {
+  if (contextHubId != kDefaultHubId) {
+    LOGE("Invalid ID %" PRId32, contextHubId);
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+
   if (out_preloadedNanoappIds == nullptr) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -356,12 +361,7 @@ void ContextHub::onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) {
 
 void ContextHub::onNanoappListResponse(
     const ::chre::fbs::NanoappListResponseT &response) {
-  std::lock_guard<std::mutex> lock(mCallbackMutex);
-  if (mCallback == nullptr) {
-    return;
-  }
   std::vector<NanoappInfo> appInfoList;
-
   for (const std::unique_ptr<::chre::fbs::NanoappListEntryT> &nanoapp :
        response.nanoapps) {
     // TODO(b/245202050): determine if this is really required, and if so, have
@@ -403,7 +403,10 @@ void ContextHub::onNanoappListResponse(
     }
   }
 
-  mCallback->handleNanoappInfo(appInfoList);
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
+  if (mCallback != nullptr) {
+    mCallback->handleNanoappInfo(appInfoList);
+  }
 }
 
 void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
@@ -502,7 +505,8 @@ ScopedAStatus ContextHub::enableTestMode() {
     LOGE("There exists a pending load transaction. Cannot enable test mode.");
   } else if (!queryNanoappsInternal(kDefaultHubId, &loadedNanoappIds)) {
     LOGE("Could not query nanoapps to enable test mode.");
-  } else if (!getPreloadedNanoappIds(&preloadedNanoappIds).isOk()) {
+  } else if (!getPreloadedNanoappIds(kDefaultHubId, &preloadedNanoappIds)
+                  .isOk()) {
     LOGE("Unable to get preloaded nanoapp IDs from the config file.");
   } else {
     std::sort(loadedNanoappIds.begin(), loadedNanoappIds.end());

@@ -107,9 +107,15 @@ class HalClientManager {
    * Registers a IContextHubCallback function mapped to the current client's
    * client id.
    *
+   * @param deathRecipient and @param deathRecipientCookie are used to unlink
+   * the previous registered callback for the same client, if any.
+   *
    * @return true if success, otherwise false.
    */
-  bool registerCallback(const std::shared_ptr<IContextHubCallback> &callback);
+  bool registerCallback(
+      const std::shared_ptr<IContextHubCallback> &callback,
+      const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+      void *deathRecipientCookie);
 
   /**
    * Registers a FragmentedLoadTransaction for the current HAL client.
@@ -121,6 +127,9 @@ class HalClientManager {
    */
   bool registerPendingLoadTransaction(
       std::unique_ptr<chre::FragmentedLoadTransaction> transaction);
+
+  /** Clears the pending load transaction. */
+  void resetPendingLoadTransaction();
 
   /**
    * Gets the next FragmentedLoadRequest from PendingLoadTransaction if it's
@@ -149,6 +158,9 @@ class HalClientManager {
    * @return true if success, otherwise false.
    */
   bool registerPendingUnloadTransaction();
+
+  /** Clears the pending unload transaction. */
+  void resetPendingUnloadTransaction();
 
   /**
    * Clears the PendingUnloadTransaction registered by clientId after the
@@ -202,16 +214,20 @@ class HalClientManager {
    * Handles the client death event.
    *
    * @param pid of the client that loses the binder connection to the HAL.
+   * @param deathRecipient to be unlinked with the client's callback
    */
-  void handleClientDeath(pid_t pid);
+  void handleClientDeath(
+      pid_t pid, const ndk::ScopedAIBinder_DeathRecipient &deathRecipient);
+
+  /** Handles CHRE restart event. */
+  void handleChreRestart();
 
  protected:
   static constexpr char kClientMappingFilePath[] =
-      "/data/vendor/chre_hal_clients.json";
+      "/data/vendor/chre/chre_hal_clients.json";
   static constexpr char kJsonClientId[] = "ClientId";
   static constexpr char kJsonProcessName[] = "ProcessName";
   static constexpr int64_t kTransactionTimeoutThresholdMs = 5000;  // 5 seconds
-  static constexpr char kSystemServerName[] = "system_server";
   static constexpr uint8_t kNumOfBitsForEndpointId = 6;
   static constexpr HostEndpointId kMaxVendorEndpointId =
       (1 << kNumOfBitsForEndpointId) - 1;
@@ -219,12 +235,15 @@ class HalClientManager {
   static constexpr HostEndpointId kVendorEndpointIdBitMask = 0x8000;
 
   struct HalClientInfo {
-    explicit HalClientInfo(
-        const std::shared_ptr<IContextHubCallback> &callback) {
+    explicit HalClientInfo(const std::shared_ptr<IContextHubCallback> &callback,
+                           void *cookie) {
       this->callback = callback;
+      this->deathRecipientCookie = cookie;
     }
     HalClientInfo() = default;
     std::shared_ptr<IContextHubCallback> callback;
+    // cookie is used by the death recipient's linked callback
+    void *deathRecipientCookie{};
     std::unordered_set<HostEndpointId> endpointIds{};
   };
 
@@ -308,8 +327,7 @@ class HalClientManager {
    */
   inline bool isAllocatedClientIdLocked(HalClientId clientId) {
     return mClientIdsToClientInfo.find(clientId) !=
-               mClientIdsToClientInfo.end() ||
-           clientId == kDefaultHalClientId || clientId == kHalId;
+           mClientIdsToClientInfo.end();
   }
 
   /**
@@ -329,6 +347,16 @@ class HalClientManager {
     }
     return true;
   }
+
+  /**
+   * Overrides the old callback registered with the client.
+   *
+   * @return true if success, otherwise false
+   */
+  bool overrideCallbackLocked(
+      pid_t pid, const std::shared_ptr<IContextHubCallback> &callback,
+      const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+      void *deathRecipientCookie);
 
   /**
    * Extracts the client id from the endpoint id.
