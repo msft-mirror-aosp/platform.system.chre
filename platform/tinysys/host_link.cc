@@ -564,14 +564,12 @@ void HostLinkBase::sendLogMessageV2(const uint8_t *logMessage,
   };
 
   constexpr size_t kInitialSize = 128;
-  bool result = true;
+  bool result = false;
   if (isInitialized()) {
     result = buildAndEnqueueMessage(
         PendingMessageType::EncodedLogMessage,
         kInitialSize + logMessageSize + sizeof(numLogsDropped), msgBuilder,
         &logMessageData);
-  } else {
-    LOGW("Dropping outbound message: host link not initialized yet");
   }
 
 #ifdef CHRE_USE_BUFFERED_LOGGING
@@ -745,4 +743,23 @@ void HostMessageHandlers::handleSelfTestRequest(uint16_t hostClientId) {
 void HostMessageHandlers::handleNanConfigurationUpdate(bool /* enabled */) {
   LOGE("%s NAN unsupported.", __func__);
 }
+
+void sendAudioRequest() {
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void * /*cookie*/) {
+    HostProtocolChre::encodeLowPowerMicAccessRequest(builder);
+  };
+  constexpr size_t kInitialSize = 32;
+  buildAndEnqueueMessage(PendingMessageType::LowPowerMicAccessRequest,
+                         kInitialSize, msgBuilder, /* cookie= */ nullptr);
+}
+
+void sendAudioRelease() {
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void * /*cookie*/) {
+    HostProtocolChre::encodeLowPowerMicAccessRelease(builder);
+  };
+  constexpr size_t kInitialSize = 32;
+  buildAndEnqueueMessage(PendingMessageType::LowPowerMicAccessRelease,
+                         kInitialSize, msgBuilder, /* cookie= */ nullptr);
+}
+
 }  // namespace chre

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "hal_client_manager.h"
+#include <aidl/android/hardware/contexthub/AsyncEventType.h>
 #include <android-base/strings.h>
 #include <json/json.h>
 #include <utils/SystemClock.h>
@@ -21,6 +22,7 @@
 
 namespace android::hardware::contexthub::common::implementation {
 
+using aidl::android::hardware::contexthub::AsyncEventType;
 using aidl::android::hardware::contexthub::ContextHubMessage;
 using aidl::android::hardware::contexthub::HostEndpointInfo;
 using aidl::android::hardware::contexthub::IContextHubCallback;
@@ -89,19 +91,27 @@ std::shared_ptr<IContextHubCallback> HalClientManager::getCallback(
     HalClientId clientId) {
   const std::lock_guard<std::mutex> lock(mLock);
   if (isAllocatedClientIdLocked(clientId)) {
-    return mClientIdsToClientInfo[clientId].callback;
+    return mClientIdsToClientInfo.at(clientId).callback;
   }
-  LOGE("Failed to find the client id %" PRIu16, clientId);
+  LOGE("Failed to find the callback for the client id %" PRIu16, clientId);
   return nullptr;
 }
 
 bool HalClientManager::registerCallback(
-    const std::shared_ptr<IContextHubCallback> &callback) {
+    const std::shared_ptr<IContextHubCallback> &callback,
+    const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+    void *deathRecipientCookie) {
   pid_t pid = AIBinder_getCallingPid();
   const std::lock_guard<std::mutex> lock(mLock);
-  if (isKnownPIdLocked(pid)) {
-    LOGE("The pid %d has already registered its callback.", pid);
+  if (AIBinder_linkToDeath(callback->asBinder().get(), deathRecipient.get(),
+                           deathRecipientCookie) != STATUS_OK) {
+    LOGE("Failed to link client binder to death recipient.");
     return false;
+  }
+  if (isKnownPIdLocked(pid)) {
+    LOGW("The pid %d has already registered. Overriding its callback.", pid);
+    return overrideCallbackLocked(pid, callback, deathRecipient,
+                                  deathRecipientCookie);
   }
   std::string processName = getProcessName(pid);
   std::optional<HalClientId> clientIdOptional =
@@ -117,7 +127,8 @@ bool HalClientManager::registerCallback(
     return false;
   }
   mPIdsToClientIds[pid] = clientId;
-  mClientIdsToClientInfo.emplace(clientId, HalClientInfo(callback));
+  mClientIdsToClientInfo.emplace(clientId,
+                                 HalClientInfo(callback, deathRecipientCookie));
   if (mFrameworkServiceClientId == kDefaultHalClientId &&
       processName == kSystemServerName) {
     mFrameworkServiceClientId = clientId;
@@ -125,7 +136,27 @@ bool HalClientManager::registerCallback(
   return true;
 }
 
-void HalClientManager::handleClientDeath(pid_t pid) {
+bool HalClientManager::overrideCallbackLocked(
+    pid_t pid, const std::shared_ptr<IContextHubCallback> &callback,
+    const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+    void *deathRecipientCookie) {
+  LOGI("Overriding the callback for pid %d", pid);
+  HalClientInfo &clientInfo =
+      mClientIdsToClientInfo.at(mPIdsToClientIds.at(pid));
+  if (AIBinder_unlinkToDeath(clientInfo.callback->asBinder().get(),
+                             deathRecipient.get(),
+                             clientInfo.deathRecipientCookie) != STATUS_OK) {
+    LOGE("Unable to unlink the old callback for pid %d", pid);
+    return false;
+  }
+  clientInfo.callback.reset();
+  clientInfo.callback = callback;
+  clientInfo.deathRecipientCookie = deathRecipientCookie;
+  return true;
+}
+
+void HalClientManager::handleClientDeath(
+    pid_t pid, const ndk::ScopedAIBinder_DeathRecipient &deathRecipient) {
   const std::lock_guard<std::mutex> lock(mLock);
   if (!isKnownPIdLocked(pid)) {
     LOGE("Failed to locate the dead pid %d", pid);
@@ -138,15 +169,20 @@ void HalClientManager::handleClientDeath(pid_t pid) {
     return;
   }
 
-  auto clientInfo = mClientIdsToClientInfo.at(clientId);
+  HalClientInfo &clientInfo = mClientIdsToClientInfo.at(clientId);
+  if (AIBinder_unlinkToDeath(clientInfo.callback->asBinder().get(),
+                             deathRecipient.get(),
+                             clientInfo.deathRecipientCookie) != STATUS_OK) {
+    LOGE("Unable to unlink the old callback for pid %d in death handler", pid);
+  }
   clientInfo.callback.reset();
   if (mPendingLoadTransaction.has_value() &&
       mPendingLoadTransaction->clientId == clientId) {
-    resetPendingLoadTransaction();
+    mPendingLoadTransaction.reset();
   }
   if (mPendingUnloadTransaction.has_value() &&
       mPendingUnloadTransaction->clientId == clientId) {
-    resetPendingUnloadTransaction();
+    mPendingLoadTransaction.reset();
   }
   mClientIdsToClientInfo.erase(clientId);
   if (mFrameworkServiceClientId == clientId) {
@@ -196,11 +232,14 @@ HalClientManager::getNextFragmentedLoadRequest(
     return std::nullopt;
   }
   if (mPendingLoadTransaction->transaction->isComplete()) {
-    resetPendingLoadTransaction();
+    mPendingLoadTransaction.reset();
+    LOGI("Pending load transaction is finished with client %" PRIu16, clientId);
     return std::nullopt;
   }
   auto request = mPendingLoadTransaction->transaction->getNextRequest();
   mPendingLoadTransaction->currentFragmentId = request.fragmentId;
+  LOGD("Client %" PRIu16 " has fragment #%zu ready", clientId,
+       request.fragmentId);
   return request;
 }
 
@@ -247,7 +286,7 @@ void HalClientManager::finishPendingUnloadTransaction(HalClientId clientId) {
          mPendingUnloadTransaction->clientId, clientId);
     return;
   }
-  resetPendingUnloadTransaction();
+  mPendingUnloadTransaction.reset();
 }
 
 bool HalClientManager::isNewTransactionAllowedLocked(HalClientId clientId) {
@@ -265,7 +304,7 @@ bool HalClientManager::isNewTransactionAllowedLocked(HalClientId clientId) {
          "'s pending load transaction is overridden by client %" PRIu16
          " after holding the slot for %" PRIu64 " ms",
          mPendingLoadTransaction->clientId, clientId, timeElapsedMs);
-    resetPendingLoadTransaction();
+    mPendingLoadTransaction.reset();
     return true;
   }
   if (mPendingUnloadTransaction.has_value()) {
@@ -282,7 +321,7 @@ bool HalClientManager::isNewTransactionAllowedLocked(HalClientId clientId) {
          " is overridden by a new transaction from client %" PRIu16
          " after holding the slot for %" PRIu64 "ms",
          mPendingUnloadTransaction->clientId, clientId, timeElapsedMs);
-    resetPendingUnloadTransaction();
+    mPendingUnloadTransaction.reset();
     return true;
   }
   return true;
@@ -428,6 +467,31 @@ HalClientManager::HalClientManager() {
     if (mNextClientId <= clientId) {
       mNextClientId = clientId + 1;
     }
+  }
+}
+
+void HalClientManager::resetPendingLoadTransaction() {
+  const std::lock_guard<std::mutex> lock(mLock);
+  mPendingLoadTransaction.reset();
+}
+
+void HalClientManager::resetPendingUnloadTransaction() {
+  const std::lock_guard<std::mutex> lock(mLock);
+  mPendingUnloadTransaction.reset();
+}
+
+void HalClientManager::handleChreRestart() {
+  {
+    const std::lock_guard<std::mutex> lock(mLock);
+    mPendingLoadTransaction.reset();
+    mPendingUnloadTransaction.reset();
+    for (auto &[_, clientInfo] : mClientIdsToClientInfo) {
+      clientInfo.endpointIds.clear();
+    }
+  }
+  // Incurs callbacks without holding the lock to avoid deadlocks.
+  for (auto &[_, clientInfo] : mClientIdsToClientInfo) {
+    clientInfo.callback->handleContextHubAsyncEvent(AsyncEventType::RESTARTED);
   }
 }
 }  // namespace android::hardware::contexthub::common::implementation
