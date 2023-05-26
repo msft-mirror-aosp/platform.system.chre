@@ -109,7 +109,6 @@ SLPI_SRCS += platform/shared/nanoapp_load_manager.cc
 SLPI_SRCS += platform/shared/nanoapp/nanoapp_dso_util.cc
 SLPI_SRCS += platform/shared/pal_system_api.cc
 SLPI_SRCS += platform/shared/platform_debug_dump_manager.cc
-SLPI_SRCS += platform/shared/pw_tokenized_log.cc
 SLPI_SRCS += platform/shared/system_time.cc
 SLPI_SRCS += platform/shared/tracing.cc
 SLPI_SRCS += platform/shared/version.cc
@@ -440,6 +439,7 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/chre_init.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/condition_variable_base.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/host_cpu_update.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/host_link.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/log_buffer_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/memory.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_cache_management.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_pal.cc
@@ -474,10 +474,10 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/host_link.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/host_protocol_chre.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/host_protocol_common.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/log_buffer.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/log_buffer_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/memory_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_load_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_loader.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_sensor_stub.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_system_api.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_debug_dump_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/system_time.cc
@@ -487,7 +487,6 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp/nanoapp_dso_util.cc
 
 ifeq ($(CHRE_BLE_SUPPORT_ENABLED), true)
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_ble.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_ble_stub.cc
 endif
 
 ifeq ($(CHRE_SENSORS_SUPPORT_ENABLED), true)
@@ -499,9 +498,7 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/sensor_pal/platform_sensor_type_h
 endif
 
 ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/audio_pal/include
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/audio_pal/platform_audio.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_audio_stub.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_audio.cc
 endif
 
 # Compiler flags
@@ -515,28 +512,8 @@ TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 
-# Tinysys include paths
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/kernel/FreeRTOS_v10.1.0.1/FreeRTOS/Source/include
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/kernel/FreeRTOS_v10.1.0.1/FreeRTOS/Source/portable/LLVM/RV55
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/common/drivers/dma/v3/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/common/drivers/irq/v3/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/common/drivers/mbox/v2/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/common/include
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/RV55_A/$(TINYSYS_PLATFORM)/dma
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/RV55_A/$(TINYSYS_PLATFORM)/intc/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/RV55_A/$(TINYSYS_PLATFORM)/mbox
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/common/dma/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/common/dram_region_mgmt
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/drivers/common/xgpt/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/middleware/sensorhub/include
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/$(TINYSYS_PLATFORM)/platform/inc
-TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/common/platform/inc
-
-# Clang include paths
-TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/lib/clang/9.0.1/include
-TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/dkwlib/MRV55E03v/include
-
 TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
 
 TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
 TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
+TINYSYS_CFLAGS += -DCHRE_NANOAPP_LOAD_ALIGNMENT=4096

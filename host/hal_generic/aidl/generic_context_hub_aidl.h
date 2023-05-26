@@ -71,6 +71,7 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus onSettingChanged(Setting setting, bool enabled) override;
   ::ndk::ScopedAStatus queryNanoapps(int32_t contextHubId) override;
   ::ndk::ScopedAStatus getPreloadedNanoappIds(
+      int32_t contextHubId,
       std::vector<int64_t> *out_preloadedNanoappIds) override;
   ::ndk::ScopedAStatus registerCallback(
       int32_t contextHubId,
@@ -82,7 +83,8 @@ class ContextHub : public BnContextHub,
       const HostEndpointInfo &in_info) override;
   ::ndk::ScopedAStatus onHostEndpointDisconnected(
       char16_t in_hostEndpointId) override;
-  ::ndk::ScopedAStatus onNanSessionStateChanged(bool in_state) override;
+  ::ndk::ScopedAStatus onNanSessionStateChanged(
+      const NanSessionStateUpdate &in_update) override;
 
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) override;
 

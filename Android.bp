@@ -149,6 +149,11 @@ cc_binary {
     static_libs: ["chre_client"],
 }
 
+filegroup {
+    name: "st_hal_lpma_handler",
+    srcs: ["host/common/st_hal_lpma_handler.cc"],
+}
+
 cc_binary {
     name: "chre_aidl_hal_client",
     vendor: true,
@@ -492,6 +497,7 @@ cc_library_static {
 cc_test_host {
     name: "chre_unit_tests",
     isolated: true,
+    test_suites: ["general-tests"],
     srcs: [
         "core/tests/**/*.cc",
         "pal/tests/**/*_test.cc",
@@ -618,6 +624,7 @@ cc_test_host {
     name: "chre_simulation_tests",
     // TODO(b/232537107): Evaluate if isolated can be turned on
     isolated: false,
+    test_suites: ["general-tests"],
     srcs: [
         "test/simulation/*.cc",
     ],

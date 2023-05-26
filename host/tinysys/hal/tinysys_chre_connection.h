@@ -22,10 +22,13 @@
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/log.h"
 #include "chre_host/log_message_parser.h"
+#include "chre_host/st_hal_lpma_handler.h"
 
 #include <unistd.h>
 #include <cassert>
 #include <thread>
+
+using ::android::chre::StHalLpmaHandler;
 
 namespace aidl::android::hardware::contexthub {
 
@@ -36,16 +39,19 @@ using namespace ::android::hardware::contexthub::common::implementation;
 class TinysysChreConnection : public ChreConnection {
  public:
   TinysysChreConnection(ChreConnectionCallback *callback)
-      : mCallback(callback) {
+      : mCallback(callback), mLpmaHandler(/* allowed= */ true) {
     mPayload = std::make_unique<uint8_t[]>(kMaxPayloadBytes);
     mChreMessage = std::make_unique<ChreConnectionMessage>();
   };
 
-  ~TinysysChreConnection() {
+  ~TinysysChreConnection() override {
     // TODO(b/264308286): Need a decent way to terminate the listener thread.
     close(mChreFileDescriptor);
     if (mMessageListener.joinable()) {
       mMessageListener.join();
+    }
+    if (mStateListener.joinable()) {
+      mStateListener.join();
     }
   }
 
@@ -61,13 +67,21 @@ class TinysysChreConnection : public ChreConnection {
     return mCallback;
   }
 
+  inline StHalLpmaHandler *getLpmaHandler() {
+    return &mLpmaHandler;
+  }
+
  private:
   // The wakelock used to keep device awake while handleUsfMsgAsync() is being
   // called.
   static constexpr char kWakeLock[] = "tinysys_chre_hal_wakelock";
 
   // Max payload size that can be sent to CHRE
-  static constexpr uint32_t kMaxPayloadBytes = 4096;
+  // TODO(b/277235389): Adjust max payload size (AP -> SCP and SCP -> AP)
+  // as appropriate. This is a temp/quick fix for b/272311907 and b/270758946
+  // setting max payload allowed to CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128 byte
+  // to account for transport overhead.
+  static constexpr uint32_t kMaxPayloadBytes = 4224;  // 4096 + 128
 
   // Max overhead of the nanoapp binary payload caused by the fbs encapsulation
   static constexpr uint32_t kMaxPayloadOverheadBytes = 1024;
@@ -96,9 +110,14 @@ class TinysysChreConnection : public ChreConnection {
   };
 
   // The task receiving message from CHRE
-  static void messageListenerTask(TinysysChreConnection *chreConnection);
+  [[noreturn]] static void messageListenerTask(
+      TinysysChreConnection *chreConnection);
 
-  inline int getChreFileDescriptor() {
+  // The task receiving CHRE state update
+  [[noreturn]] static void chreStateMonitorTask(
+      TinysysChreConnection *chreConnection);
+
+  [[nodiscard]] inline int getChreFileDescriptor() const {
     return mChreFileDescriptor;
   }
 
@@ -113,12 +132,17 @@ class TinysysChreConnection : public ChreConnection {
 
   // the message listener thread that hosts messageListenerTask
   std::thread mMessageListener;
+  // the status listener thread that hosts chreStateMonitorTask
+  std::thread mStateListener;
 
   // Payload received from CHRE
   std::unique_ptr<uint8_t[]> mPayload;
 
   // message to be sent to CHRE
   std::unique_ptr<ChreConnectionMessage> mChreMessage;
+
+  //! The LPMA handler to talk to the ST HAL
+  StHalLpmaHandler mLpmaHandler;
 };
 }  // namespace aidl::android::hardware::contexthub
 
