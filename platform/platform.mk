@@ -478,17 +478,16 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/log_buffer_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/memory_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_load_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_loader.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_sensor_stub.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_system_api.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_debug_dump_manager.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/system_time.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/tracing.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/version.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp/nanoapp_dso_util.cc
+TINYSYS_SRCS += $(MBEDTLS_SRCS)
 
 ifeq ($(CHRE_BLE_SUPPORT_ENABLED), true)
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_ble.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_ble_stub.cc
 endif
 
 ifeq ($(CHRE_SENSORS_SUPPORT_ENABLED), true)
@@ -500,9 +499,7 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/sensor_pal/platform_sensor_type_h
 endif
 
 ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/audio_pal/include
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/audio_pal/platform_audio.cc
-TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/pal_audio_stub.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_audio.cc
 endif
 
 # Compiler flags
@@ -517,6 +514,7 @@ TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 
 TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
+TINYSYS_CFLAGS += $(MBEDTLS_CFLAGS)
 
 TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
 TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV

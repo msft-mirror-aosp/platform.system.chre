@@ -31,6 +31,7 @@
 using aidl::android::hardware::contexthub::ContextHubMessage;
 using aidl::android::hardware::contexthub::HostEndpointInfo;
 using aidl::android::hardware::contexthub::IContextHubCallback;
+using android::chre::FragmentedLoadTransaction;
 using HostEndpointId = uint16_t;
 
 namespace android::hardware::contexthub::common::implementation {
@@ -105,11 +106,19 @@ class HalClientManager {
 
   /**
    * Registers a IContextHubCallback function mapped to the current client's
-   * client id.
+   * client id. @p deathRecipient and @p deathRecipientCookie are used to unlink
+   * the previous registered callback for the same client, if any.
+   *
+   * @param callback a function incurred to handle the client death event.
+   * @param deathRecipient a handle on the death notification.
+   * @param deathRecipientCookie the data used by the callback.
    *
    * @return true if success, otherwise false.
    */
-  bool registerCallback(const std::shared_ptr<IContextHubCallback> &callback);
+  bool registerCallback(
+      const std::shared_ptr<IContextHubCallback> &callback,
+      const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+      void *deathRecipientCookie);
 
   /**
    * Registers a FragmentedLoadTransaction for the current HAL client.
@@ -120,28 +129,36 @@ class HalClientManager {
    * @return true if success, otherwise false.
    */
   bool registerPendingLoadTransaction(
-      std::unique_ptr<chre::FragmentedLoadTransaction> transaction);
+      std::unique_ptr<FragmentedLoadTransaction> transaction);
 
-  /** Clears the pending load transaction. */
+  /**
+   * Returns true if the load transaction matches the arguments provided.
+   */
+  bool isPendingLoadTransactionExpected(HalClientId clientId,
+                                        uint32_t transactionId,
+                                        uint32_t currentFragmentId) {
+    const std::lock_guard<std::mutex> lock(mLock);
+    return isPendingLoadTransactionMatchedLocked(clientId, transactionId,
+                                                 currentFragmentId);
+  }
+
+  /**
+   * Clears the pending load transaction.
+   *
+   * This function is called to proactively clear out a pending load transaction
+   * that is not timed out yet.
+   *
+   */
   void resetPendingLoadTransaction();
 
   /**
    * Gets the next FragmentedLoadRequest from PendingLoadTransaction if it's
    * available.
    *
-   * @param clientId the client id of the caller.
-   * @param transactionId unique id of the load transaction.
-   * @param currentFragmentId the fragment id that was previously sent out. Use
-   * std::nullopt to indicate no fragment was sent out before.
-   *
-   * TODO(b/247124878): It would be better to differentiate between
-   *   no-more-fragment and fail-to-get-fragment
    * @return an optional FragmentedLoadRequest, std::nullopt if unavailable.
    */
 
-  std::optional<chre::FragmentedLoadRequest> getNextFragmentedLoadRequest(
-      HalClientId clientId, uint32_t transactionId,
-      std::optional<size_t> currentFragmentId);
+  std::optional<chre::FragmentedLoadRequest> getNextFragmentedLoadRequest();
 
   /**
    * Registers the current HAL client as having a pending unload transaction.
@@ -151,16 +168,22 @@ class HalClientManager {
    *
    * @return true if success, otherwise false.
    */
-  bool registerPendingUnloadTransaction();
-
-  /** Clears the pending unload transaction. */
-  void resetPendingUnloadTransaction();
+  bool registerPendingUnloadTransaction(uint32_t transactionId);
 
   /**
-   * Clears the PendingUnloadTransaction registered by clientId after the
-   * operation is finished.
+   * Clears the pending unload transaction.
+   *
+   * This function is called to proactively clear out a pending unload
+   * transaction that is not timed out yet. @p clientId and @p
+   * transactionId must match the existing pending transaction.
+   *
+   * @param clientId the client id of the caller.
+   * @param transactionId unique id of the transaction.
+   *
+   * @return true if the pending transaction is cleared, otherwise false.
    */
-  void finishPendingUnloadTransaction(HalClientId clientId);
+  bool resetPendingUnloadTransaction(HalClientId clientId,
+                                     uint32_t transactionId);
 
   /**
    * Registers an endpoint id when it is connected to HAL.
@@ -208,13 +231,16 @@ class HalClientManager {
    * Handles the client death event.
    *
    * @param pid of the client that loses the binder connection to the HAL.
+   * @param deathRecipient to be unlinked with the client's callback
    */
-  void handleClientDeath(pid_t pid);
+  void handleClientDeath(
+      pid_t pid, const ndk::ScopedAIBinder_DeathRecipient &deathRecipient);
 
   /** Handles CHRE restart event. */
   void handleChreRestart();
 
  protected:
+  static constexpr char kSystemServerName[] = "system_server";
   static constexpr char kClientMappingFilePath[] =
       "/data/vendor/chre/chre_hal_clients.json";
   static constexpr char kJsonClientId[] = "ClientId";
@@ -227,21 +253,27 @@ class HalClientManager {
   static constexpr HostEndpointId kVendorEndpointIdBitMask = 0x8000;
 
   struct HalClientInfo {
-    explicit HalClientInfo(
-        const std::shared_ptr<IContextHubCallback> &callback) {
+    explicit HalClientInfo(const std::shared_ptr<IContextHubCallback> &callback,
+                           void *cookie) {
       this->callback = callback;
+      this->deathRecipientCookie = cookie;
     }
     HalClientInfo() = default;
     std::shared_ptr<IContextHubCallback> callback;
+    // cookie is used by the death recipient's linked callback
+    void *deathRecipientCookie{};
     std::unordered_set<HostEndpointId> endpointIds{};
   };
 
   struct PendingTransaction {
-    PendingTransaction(HalClientId clientId, int64_t registeredTimeMs) {
+    PendingTransaction(HalClientId clientId, uint32_t transactionId,
+                       int64_t registeredTimeMs) {
       this->clientId = clientId;
+      this->transactionId = transactionId;
       this->registeredTimeMs = registeredTimeMs;
     }
     HalClientId clientId;
+    uint32_t transactionId;
     int64_t registeredTimeMs;
   };
 
@@ -251,14 +283,14 @@ class HalClientManager {
   struct PendingLoadTransaction : public PendingTransaction {
     PendingLoadTransaction(
         HalClientId clientId, int64_t registeredTimeMs,
-        std::optional<size_t> currentFragmentId,
+        uint32_t currentFragmentId,
         std::unique_ptr<chre::FragmentedLoadTransaction> transaction)
-        : PendingTransaction(clientId, registeredTimeMs) {
+        : PendingTransaction(clientId, transaction->getTransactionId(),
+                             registeredTimeMs) {
       this->currentFragmentId = currentFragmentId;
       this->transaction = std::move(transaction);
     }
-
-    std::optional<size_t> currentFragmentId;  // the fragment id being sent out.
+    uint32_t currentFragmentId;  // the fragment id being sent out.
     std::unique_ptr<chre::FragmentedLoadTransaction> transaction;
 
     [[nodiscard]] std::string toString() const {
@@ -284,13 +316,26 @@ class HalClientManager {
       const std::string &processName);
 
   /**
+   * Returns true if @p clientId and @p transactionId match the
+   * corresponding values in @p transaction.
+   *
+   * mLock must be held when this function is called.
+   */
+  static bool isPendingTransactionMatchedLocked(
+      HalClientId clientId, uint32_t transactionId,
+      const std::optional<PendingTransaction> &transaction) {
+    return transaction.has_value() && transaction->clientId == clientId &&
+           transaction->transactionId == transactionId;
+  }
+
+  /**
    * Returns true if the load transaction is expected.
    *
    * mLock must be held when this function is called.
    */
-  bool isPendingLoadTransactionExpectedLocked(
-      HalClientId clientId, uint32_t transactionId,
-      std::optional<size_t> currentFragmentId);
+  bool isPendingLoadTransactionMatchedLocked(HalClientId clientId,
+                                             uint32_t transactionId,
+                                             uint32_t currentFragmentId);
 
   /**
    * Checks if the transaction registration is allowed and clears out any stale
@@ -305,6 +350,7 @@ class HalClientManager {
    * mLock must be held when this function is called.
    *
    * @param clientId id of the client trying to register the transaction
+   *
    * @return true if registration is allowed, otherwise false.
    */
   bool isNewTransactionAllowedLocked(HalClientId clientId);
@@ -316,8 +362,7 @@ class HalClientManager {
    */
   inline bool isAllocatedClientIdLocked(HalClientId clientId) {
     return mClientIdsToClientInfo.find(clientId) !=
-               mClientIdsToClientInfo.end() ||
-           clientId == kDefaultHalClientId || clientId == kHalId;
+           mClientIdsToClientInfo.end();
   }
 
   /**
@@ -339,6 +384,16 @@ class HalClientManager {
   }
 
   /**
+   * Overrides the old callback registered with the client.
+   *
+   * @return true if success, otherwise false
+   */
+  bool overrideCallbackLocked(
+      pid_t pid, const std::shared_ptr<IContextHubCallback> &callback,
+      const ndk::ScopedAIBinder_DeathRecipient &deathRecipient,
+      void *deathRecipientCookie);
+
+  /**
    * Extracts the client id from the endpoint id.
    *
    * @param endpointId the endpoint id received from CHRE, before any conversion
@@ -350,6 +405,18 @@ class HalClientManager {
     }
     return mFrameworkServiceClientId;
   }
+
+  std::string getProcessName(pid_t /*pid*/) {
+    // TODO(b/274597758): this is a temporary solution that should be updated
+    //   after b/274597758 is resolved.
+    if (mIsFirstClient) {
+      mIsFirstClient = false;
+      return kSystemServerName;
+    }
+    return "the_vendor_client";
+  }
+
+  bool mIsFirstClient = true;
 
   // next available client id
   HalClientId mNextClientId = kDefaultHalClientId + 1;

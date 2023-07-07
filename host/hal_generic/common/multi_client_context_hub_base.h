@@ -17,10 +17,15 @@
 #ifndef ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
 #define ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
 
+#ifndef LOG_TAG
+#define LOG_TAG "CHRE.HAL"
+#endif
+
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
 #include <chre_host/generated/host_messages_generated.h>
 
 #include "chre_connection_callback.h"
+#include "chre_host/napp_header.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
@@ -106,11 +111,11 @@ class MultiClientContextHubBase
   void handleHubInfoResponse(const ::chre::fbs::HubInfoResponseT &message);
   void onNanoappListResponse(const ::chre::fbs::NanoappListResponseT &response,
                              HalClientId clientid);
-  void onLoadNanoappResponse(const ::chre::fbs::LoadNanoappResponseT &response,
-                             HalClientId clientid);
-  void onUnloadNanoappResponse(
+  void onNanoappLoadResponse(const ::chre::fbs::LoadNanoappResponseT &response,
+                             HalClientId clientId);
+  void onNanoappUnloadResponse(
       const ::chre::fbs::UnloadNanoappResponseT &response,
-      HalClientId clientid);
+      HalClientId clientId);
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message);
 
   void handleClientDeath(pid_t pid);
@@ -142,6 +147,10 @@ class MultiClientContextHubBase
   std::unordered_map<Setting, bool> mSettingEnabled;
   std::optional<bool> mIsWifiAvailable;
   std::optional<bool> mIsBleAvailable;
+
+  // A mutex to synchronize access to the list of preloaded nanoapp IDs.
+  std::mutex mPreloadedNanoappIdsMutex;
+  std::optional<std::vector<uint64_t>> mPreloadedNanoappIds{};
 };
 }  // namespace android::hardware::contexthub::common::implementation
 #endif  // ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
