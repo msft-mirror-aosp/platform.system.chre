@@ -52,6 +52,8 @@ public class ContextHubBleSettingsTestExecutor {
 
     private boolean mInitialBluetoothEnabled;
 
+    private boolean mInitialAirplaneMode;
+
     private boolean mInitialBluetoothScanningEnabled;
 
     public static class BluetoothUpdateListener {
@@ -89,8 +91,11 @@ public class ContextHubBleSettingsTestExecutor {
     public void setUp() {
         mInitialBluetoothEnabled = mSettingsUtil.isBluetoothEnabled();
         mInitialBluetoothScanningEnabled = mSettingsUtil.isBluetoothScanningAlwaysEnabled();
+        mInitialAirplaneMode = mSettingsUtil.isAirplaneModeOn();
         Log.d(TAG, "isBluetoothEnabled=" + mInitialBluetoothEnabled
-                    + "; isBluetoothScanningEnabled=" + mInitialBluetoothScanningEnabled);
+                    + "; isBluetoothScanningEnabled=" + mInitialBluetoothScanningEnabled
+                    + "; isAirplaneModeOn=" + mInitialAirplaneMode);
+        mSettingsUtil.setAirplaneMode(false /* enable */);
         mExecutor.init();
     }
 
@@ -108,6 +113,7 @@ public class ContextHubBleSettingsTestExecutor {
         mExecutor.deinit();
         mSettingsUtil.setBluetooth(mInitialBluetoothEnabled);
         mSettingsUtil.setBluetoothScanningSettings(mInitialBluetoothScanningEnabled);
+        mSettingsUtil.setAirplaneMode(mInitialAirplaneMode);
     }
 
     /**
@@ -140,7 +146,10 @@ public class ContextHubBleSettingsTestExecutor {
             Assert.assertTrue(bluetoothAdapter.enableBLE());
         }
         try {
-            bluetoothUpdateListener.mBluetoothLatch.await(30, TimeUnit.SECONDS);
+            bluetoothUpdateListener.mBluetoothLatch.await(10, TimeUnit.SECONDS);
+            Assert.assertTrue(enable == mSettingsUtil.isBluetoothEnabled());
+            Assert.assertTrue(enableBluetoothScanning
+                    == mSettingsUtil.isBluetoothScanningAlwaysEnabled());
 
             // Wait a few seconds to ensure setting is propagated to CHRE path
             Thread.sleep(2000);
