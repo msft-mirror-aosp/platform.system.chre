@@ -23,12 +23,20 @@
 
 #include "chpp/log.h"
 #include "chpp/macros.h"
+#include "chpp/notifier.h"
 #include "chpp/platform/platform_link.h"
 #include "chpp/transport.h"
 
 // The set of signals to use for the linkSendThread.
 #define SIGNAL_EXIT UINT32_C(1 << 0)
 #define SIGNAL_DATA UINT32_C(1 << 1)
+#define SIGNAL_DATA_RX UINT32_C(1 << 2)
+
+struct ChppNotifier gCycleSendThreadNotifier;
+
+void cycleSendThread(void) {
+  chppNotifierSignal(&gCycleSendThreadNotifier, 1);
+}
 
 /**
  * This thread is used to "send" TX data to the remote endpoint. The remote
@@ -39,30 +47,43 @@ static void *linkSendThread(void *linkContext) {
   struct ChppLinuxLinkState *context =
       (struct ChppLinuxLinkState *)(linkContext);
   while (true) {
+    if (context->manualSendCycle) {
+      chppNotifierWait(&gCycleSendThreadNotifier);
+    }
     uint32_t signal = chppNotifierTimedWait(&context->notifier, CHPP_TIME_MAX);
 
     if (signal & SIGNAL_EXIT) {
       break;
     }
+
     if (signal & SIGNAL_DATA) {
       enum ChppLinkErrorCode error;
 
       chppMutexLock(&context->mutex);
 
-      if (context->remoteTransportContext == NULL) {
-        CHPP_LOGW("remoteTransportContext is NULL");
+      if (context->remoteLinkState == NULL) {
+        CHPP_LOGW("remoteLinkState is NULL");
         error = CHPP_LINK_ERROR_NONE_SENT;
 
       } else if (!context->linkEstablished) {
         CHPP_LOGE("No (fake) link");
         error = CHPP_LINK_ERROR_NO_LINK;
 
-      } else if (!chppRxDataCb(context->remoteTransportContext, context->buf,
-                               context->bufLen)) {
-        CHPP_LOGW("chppRxDataCb return state!=preamble (packet incomplete)");
-        error = CHPP_LINK_ERROR_NONE_SENT;
-
       } else {
+        // Use notifiers only when there are 2 different link layers (i.e. no
+        // loopback). Otherwise call chppRxDataCb directly.
+        if (context->rxInRemoteEndpointWorker &&
+            context->remoteLinkState != context) {
+          chppNotifierSignal(&context->remoteLinkState->notifier,
+                             SIGNAL_DATA_RX);
+
+          // Wait for the RX thread to consume the buffer before we can modify
+          // it.
+          chppNotifierTimedWait(&context->rxNotifier, CHPP_TIME_MAX);
+        } else if (!chppRxDataCb(context->remoteLinkState->transportContext,
+                                 context->buf, context->bufLen)) {
+          CHPP_LOGW("chppRxDataCb return state!=preamble (packet incomplete)");
+        }
         error = CHPP_LINK_ERROR_NONE_SENT;
       }
 
@@ -70,6 +91,16 @@ static void *linkSendThread(void *linkContext) {
       chppLinkSendDoneCb(context->transportContext, error);
 
       chppMutexUnlock(&context->mutex);
+    }
+
+    if (signal & SIGNAL_DATA_RX) {
+      CHPP_NOT_NULL(context->transportContext);
+      CHPP_NOT_NULL(context->remoteLinkState);
+      // Process RX data which are the TX data from the remote link.
+      chppRxDataCb(context->transportContext, context->remoteLinkState->buf,
+                   context->remoteLinkState->bufLen);
+      // Unblock the TX thread when the buffer has been consumed.
+      chppNotifierSignal(&context->remoteLinkState->rxNotifier, 0x01);
     }
   }
 
@@ -84,6 +115,8 @@ static void init(void *linkContext,
   context->transportContext = transportContext;
   chppMutexInit(&context->mutex);
   chppNotifierInit(&context->notifier);
+  chppNotifierInit(&context->rxNotifier);
+  chppNotifierInit(&gCycleSendThreadNotifier);
   pthread_create(&context->linkSendThread, NULL /* attr */, linkSendThread,
                  context);
   if (context->linkThreadName != NULL) {
@@ -96,8 +129,14 @@ static void deinit(void *linkContext) {
       (struct ChppLinuxLinkState *)(linkContext);
   context->bufLen = 0;
   chppNotifierSignal(&context->notifier, SIGNAL_EXIT);
+  if (context->manualSendCycle) {
+    // Unblock the send thread so it exits.
+    cycleSendThread();
+  }
   pthread_join(context->linkSendThread, NULL /* retval */);
   chppNotifierDeinit(&context->notifier);
+  chppNotifierDeinit(&context->rxNotifier);
+  chppNotifierDeinit(&gCycleSendThreadNotifier);
   chppMutexDeinit(&context->mutex);
 }
 

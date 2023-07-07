@@ -80,7 +80,7 @@ PW_RPC_GEN_SRCS = $(patsubst %.proto, \
 # Include to-be-generated files
 COMMON_CFLAGS += -I$(PW_RPC_GEN_PATH)
 COMMON_CFLAGS += -I$(PW_RPC_GEN_PATH)/$(PIGWEED_DIR)
-COMMON_CFLAGS += $(addprefix -I$(PW_RPC_GEN_PATH)/, $(abspath $(dir PW_RPC_SRCS)))
+COMMON_CFLAGS += $(addprefix -I$(PW_RPC_GEN_PATH)/, $(abspath $(dir $(PW_RPC_SRCS))))
 
 COMMON_SRCS += $(PW_RPC_GEN_SRCS)
 
@@ -156,6 +156,8 @@ COMMON_CFLAGS += -DPW_RPC_DYNAMIC_CONTAINER_INCLUDE='"chre/util/dynamic_vector.h
 COMMON_SRCS += $(NANOPB_PREFIX)/pb_common.c
 COMMON_SRCS += $(NANOPB_PREFIX)/pb_decode.c
 COMMON_SRCS += $(NANOPB_PREFIX)/pb_encode.c
+
+COMMON_CFLAGS += -DPB_NO_PACKED_STRUCTS=1
 
 # Add CHRE Pigweed util sources since nanoapps should always use these
 COMMON_SRCS += $(PIGWEED_CHRE_UTIL_DIR)/chre_channel_output.cc

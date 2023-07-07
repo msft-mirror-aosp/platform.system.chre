@@ -40,8 +40,10 @@ void sendDebugDumpResultToHost(uint16_t hostClientId, const char *debugStr,
 class HostLinkBase {
  public:
   HostLinkBase();
+  ~HostLinkBase();
 
-  static void vChreTask(void * /*pvParameters*/);
+  static void vChreReceiveTask(void * /*pvParameters*/);
+  static void vChreSendTask(void * /*pvParameters*/);
   static void chreIpiHandler(unsigned int /*id*/, void * /*prdata*/,
                              void * /*data*/, unsigned int /*len*/);
   void initializeIpi(void);
@@ -92,6 +94,17 @@ class HostLinkBase {
  private:
   AtomicBool mInitialized = false;
 };
+
+/**
+ * Sends a request to the host to enable the audio feature.
+ */
+void sendAudioRequest();
+
+/**
+ * Sends a request to the host to disable the audio feature.
+ */
+void sendAudioRelease();
+
 }  // namespace chre
 
 #endif  // CHRE_PLATFORM_TINYSYS_HOST_LINK_BASE_H_

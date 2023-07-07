@@ -55,17 +55,31 @@ NanoappLoader *gCurrentlyLoadingNanoapp = nullptr;
 //! Indicates whether a failure occurred during static initialization.
 bool gStaticInitFailure = false;
 
-// atexit is used to register functions that must be called when a binary is
-// removed from the system.
-int atexitOverride(void (*function)(void)) {
-  LOGV("atexit invoked with %p", function);
+int atexitInternal(struct AtExitCallback &cb) {
   if (gCurrentlyLoadingNanoapp == nullptr) {
     CHRE_ASSERT_LOG(false,
                     "atexit is only supported during static initialization.");
     return -1;
   }
 
-  gCurrentlyLoadingNanoapp->registerAtexitFunction(function);
+  gCurrentlyLoadingNanoapp->registerAtexitFunction(cb);
+  return 0;
+}
+
+// atexit is used to register functions that must be called when a binary is
+// removed from the system. The call back function has an arg (void *)
+int cxaAtexitOverride(void (*func)(void *), void *arg, void *dso) {
+  LOGV("__cxa_atexit invoked with %p, %p, %p", func, arg, dso);
+  struct AtExitCallback cb(func, arg);
+  atexitInternal(cb);
+  return 0;
+}
+
+// The call back function has no arg.
+int atexitOverride(void (*func)(void)) {
+  LOGV("atexit invoked with %p", func);
+  struct AtExitCallback cb(func);
+  atexitInternal(cb);
   return 0;
 }
 
@@ -152,6 +166,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(log1pf),
     ADD_EXPORTED_C_SYMBOL(log2f),
     ADD_EXPORTED_C_SYMBOL(logf),
+    ADD_EXPORTED_C_SYMBOL(lrintf),
     ADD_EXPORTED_C_SYMBOL(lroundf),
     ADD_EXPORTED_C_SYMBOL(powf),
     ADD_EXPORTED_C_SYMBOL(remainderf),
@@ -162,6 +177,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
+    ADD_EXPORTED_SYMBOL(cxaAtexitOverride, "__cxa_atexit"),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_C_SYMBOL(dlsym),
     ADD_EXPORTED_C_SYMBOL(isgraph),
@@ -302,7 +318,7 @@ bool NanoappLoader::open() {
     } else {
       // Wipe caches before calling init array to ensure initializers are not in
       // the data cache.
-      wipeSystemCaches();
+      wipeSystemCaches(reinterpret_cast<uintptr_t>(mMapping), mMemorySpan);
       if (!callInitArray()) {
         LOGE("Failed to perform static init");
       } else {
@@ -336,8 +352,8 @@ void *NanoappLoader::findSymbolByName(const char *name) {
   return nullptr;
 }
 
-void NanoappLoader::registerAtexitFunction(void (*function)(void)) {
-  if (!mAtexitFunctions.push_back(function)) {
+void NanoappLoader::registerAtexitFunction(struct AtExitCallback &cb) {
+  if (!mAtexitFunctions.push_back(cb)) {
     LOG_OOM();
     gStaticInitFailure = true;
   }
@@ -690,6 +706,7 @@ bool NanoappLoader::createMappings() {
         LOG_OOM();
       } else {
         LOGV("Starting location of mappings %p", mMapping);
+        mMemorySpan = memorySpan;
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr =
@@ -838,8 +855,14 @@ bool NanoappLoader::fixRelocations() {
 
 void NanoappLoader::callAtexitFunctions() {
   while (!mAtexitFunctions.empty()) {
-    LOGV("Calling atexit at %p", mAtexitFunctions.back());
-    mAtexitFunctions.back()();
+    struct AtExitCallback cb = mAtexitFunctions.back();
+    if (cb.arg.has_value()) {
+      LOGV("Calling __cxa_atexit at %p, arg %p", cb.func1, cb.arg.value());
+      cb.func1(cb.arg.value());
+    } else {
+      LOGV("Calling atexit at %p", cb.func0);
+      cb.func0();
+    }
     mAtexitFunctions.pop_back();
   }
 }

@@ -42,8 +42,9 @@ constexpr uint32_t kTestResultMessageType =
     chre_audio_concurrency_test_MessageType_TEST_RESULT;
 
 //! The maximum number of samples that can be missed before triggering a suspend
-//! event.
-constexpr uint32_t kMaxMissedSamples = 10;
+//! event. 50 samples at a sample rate of 44100 (typical) is approximately 1 ms
+//! of audio gap.
+constexpr uint32_t kMaxMissedSamples = 50;
 
 bool isTestSupported() {
   // CHRE audio was supported in CHRE v1.2
@@ -54,15 +55,18 @@ bool getTestStep(const chre_audio_concurrency_test_TestCommand &command,
                  Manager::TestStep *step) {
   bool success = true;
   switch (command.step) {
-    case chre_audio_concurrency_test_TestCommand_Step_ENABLE_AUDIO:
+    case chre_audio_concurrency_test_TestCommand_Step_ENABLE_AUDIO: {
       *step = Manager::TestStep::ENABLE_AUDIO;
       break;
-    case chre_audio_concurrency_test_TestCommand_Step_VERIFY_AUDIO_RESUME:
+    }
+    case chre_audio_concurrency_test_TestCommand_Step_VERIFY_AUDIO_RESUME: {
       *step = Manager::TestStep::VERIFY_AUDIO_RESUME;
       break;
-    default:
+    }
+    default: {
       LOGE("Unknown test step %d", command.step);
       success = false;
+    }
   }
 
   return success;
@@ -79,16 +83,17 @@ Manager::~Manager() {
 }
 
 bool Manager::handleTestCommandMessage(uint16_t hostEndpointId, TestStep step) {
-  bool success = true;
-
   // Treat as success if CHRE audio is unsupported
   // TODO: Use all available audio sources
   if (!isTestSupported() || !chreAudioGetSource(kAudioHandle, &mAudioSource)) {
     sendTestResultToHost(hostEndpointId, kTestResultMessageType,
                          true /* success */);
-  } else {
-    success = false;
-    if (step == TestStep::ENABLE_AUDIO) {
+    return true;
+  }
+
+  bool success = false;
+  switch (step) {
+    case TestStep::ENABLE_AUDIO: {
       if (!chreAudioConfigureSource(kAudioHandle, true /* enable */,
                                     mAudioSource.minBufferDuration,
                                     mAudioSource.minBufferDuration)) {
@@ -100,15 +105,21 @@ bool Manager::handleTestCommandMessage(uint16_t hostEndpointId, TestStep step) {
         // a reasonably long timeout.
         success = setTimeoutTimer(20 /* durationSeconds */);
       }
-    } else if (step == TestStep::VERIFY_AUDIO_RESUME) {
+      break;
+    }
+    case TestStep::VERIFY_AUDIO_RESUME: {
       success = setTimeoutTimer(20 /* durationSeconds */);
+      break;
     }
+    default: {
+      break;
+    }
+  }
 
-    if (success) {
-      mTestSession = TestSession(hostEndpointId, step);
-      LOGI("Starting test step %" PRIu8,
-           static_cast<uint8_t>(mTestSession->step));
-    }
+  if (success) {
+    mTestSession = TestSession(hostEndpointId, step);
+    LOGI("Starting test step %" PRIu8,
+         static_cast<uint8_t>(mTestSession->step));
   }
 
   return success;
@@ -232,9 +243,8 @@ bool Manager::validateAudioDataEvent(const chreAudioDataEvent *data) {
           !mSawSuspendAudioEvent) {
         LOGE(
             "Audio was suspended, but we did not receive a "
-            "CHRE_EVENT_AUDIO_SAMPLING_CHANGE event with "
-            "suspended set correctly. gap = %" PRIu64 " ns",
-            gapNs);
+            "CHRE_EVENT_AUDIO_SAMPLING_CHANGE event.");
+        LOGE("gap = %" PRIu64 " ns", gapNs);
         gapValidationValid = false;
       }
     }
@@ -250,54 +260,64 @@ bool Manager::validateAudioDataEvent(const chreAudioDataEvent *data) {
 }
 
 void Manager::handleAudioDataEvent(const chreAudioDataEvent *data) {
-  if (mTestSession.has_value()) {
-    if (!validateAudioDataEvent(data)) {
-      sendTestResultToHost(mTestSession->hostEndpointId, kTestResultMessageType,
-                           false /* success */);
+  if (!mTestSession.has_value()) {
+    return;
+  }
+
+  if (!validateAudioDataEvent(data)) {
+    sendTestResultToHost(mTestSession->hostEndpointId, kTestResultMessageType,
+                         false /* success */);
+    mTestSession.reset();
+    return;
+  }
+
+  switch (mTestSession->step) {
+    case TestStep::ENABLE_AUDIO: {
+      cancelTimeoutTimer();
+      sendEmptyMessageToHost(
+          mTestSession->hostEndpointId,
+          chre_audio_concurrency_test_MessageType_TEST_AUDIO_ENABLED);
+
+      // Reset the test session to avoid sending multiple TEST_AUDIO_ENABLED
+      // messages to the host, while we wait for the next step.
       mTestSession.reset();
-    } else {
-      switch (mTestSession->step) {
-        case TestStep::ENABLE_AUDIO: {
-          cancelTimeoutTimer();
-          sendEmptyMessageToHost(
-              mTestSession->hostEndpointId,
-              chre_audio_concurrency_test_MessageType_TEST_AUDIO_ENABLED);
-
-          // Reset the test session to avoid sending multiple TEST_AUDIO_ENABLED
-          // messages to the host, while we wait for the next step.
-          mTestSession.reset();
-          break;
-        }
-
-        case TestStep::VERIFY_AUDIO_RESUME: {
-          cancelTimeoutTimer();
-          sendTestResultToHost(mTestSession->hostEndpointId,
-                               kTestResultMessageType, true /* success */);
-          mTestSession.reset();
-          break;
-        }
-
-        default:
-          LOGE("Unexpected test step %" PRIu8,
-               static_cast<uint8_t>(mTestSession->step));
-          break;
-      }
+      break;
     }
+
+    case TestStep::VERIFY_AUDIO_RESUME: {
+      cancelTimeoutTimer();
+      sendTestResultToHost(mTestSession->hostEndpointId, kTestResultMessageType,
+                           true /* success */);
+      mTestSession.reset();
+      break;
+    }
+
+    default:
+      LOGE("Unexpected test step %" PRIu8,
+           static_cast<uint8_t>(mTestSession->step));
+      break;
   }
 }
 
 void Manager::handleAudioSourceStatusEvent(
     const chreAudioSourceStatusEvent *data) {
-  if (mTestSession.has_value()) {
-    if (data == nullptr) {
-      LOGE("Invalid data (data == nullptr)");
-      sendTestResultToHost(mTestSession->hostEndpointId, kTestResultMessageType,
-                           false /* success */);
-      mTestSession.reset();
-    } else if (data->handle == kAudioHandle &&
-               mTestSession->step == TestStep::VERIFY_AUDIO_RESUME) {
-      mSawSuspendAudioEvent = data->status.suspended;
+  if (data != nullptr) {
+    LOGI("Audio source status event received");
+    LOGI("Event: handle: %" PRIu32 ", enabled: %s, suspended: %s", data->handle,
+         data->status.enabled ? "true" : "false",
+         data->status.suspended ? "true" : "false");
+
+    if (mTestSession.has_value() &&
+        (mTestSession->step == TestStep::ENABLE_AUDIO ||
+         mTestSession->step == TestStep::VERIFY_AUDIO_RESUME) &&
+        data->handle == kAudioHandle && data->status.suspended) {
+      mSawSuspendAudioEvent = true;
     }
+  } else if (mTestSession.has_value()) {
+    LOGE("Invalid data (data == nullptr)");
+    sendTestResultToHost(mTestSession->hostEndpointId, kTestResultMessageType,
+                         false /* success */);
+    mTestSession.reset();
   }
 }
 

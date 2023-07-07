@@ -548,11 +548,7 @@ static void chppProcessResetAck(struct ChppTransportState *context) {
   chppClearRxDatagram(context);
 
 #ifdef CHPP_CLIENT_ENABLED_DISCOVERY
-  if (!context->appContext->isDiscoveryComplete) {
-    chppMutexUnlock(&context->mutex);
-    chppInitiateDiscovery(context->appContext);
-    chppMutexLock(&context->mutex);
-  } else {
+  if (context->appContext->isDiscoveryComplete) {
     chppEnqueueTxPacket(context, CHPP_TRANSPORT_ERROR_NONE);
   }
 #else
@@ -783,7 +779,7 @@ static void chppRegisterRxAck(struct ChppTransportState *context) {
  * CHPP_TRANSPORT_ERROR_NONE indicates that no error was reported (i.e. either
  * an ACK or an implicit NACK)
  *
- * Note that the decision as to wheather to include a payload will be taken
+ * Note that the decision as to whether to include a payload will be taken
  * later, i.e. before the packet is being sent out from the queue. A payload is
  * expected to be included if there is one or more pending Tx datagrams and we
  * are not waiting on a pending ACK. A (repeat) payload is also included if we
@@ -968,7 +964,6 @@ static void chppClearTxDatagramQueue(struct ChppTransportState *context) {
 static void chppTransportDoWork(struct ChppTransportState *context) {
   bool havePacketForLinkLayer = false;
   struct ChppTransportHeader *txHeader;
-  struct ChppAppHeader *timeoutResponse = NULL;
 
   // Note: For a future ACK window >1, there needs to be a loop outside the lock
   chppMutexLock(&context->mutex);
@@ -1052,15 +1047,19 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
   }
 
 #ifdef CHPP_CLIENT_ENABLED
-  timeoutResponse = chppTransportGetClientRequestTimeoutResponse(context);
-#endif
-  if (timeoutResponse != NULL) {
-    CHPP_LOGE("Response timeout H#%" PRIu8 " cmd=%" PRIu16 " ID=%" PRIu8,
-              timeoutResponse->handle, timeoutResponse->command,
-              timeoutResponse->transaction);
-    chppAppProcessRxDatagram(context->appContext, (uint8_t *)timeoutResponse,
-                             sizeof(struct ChppAppHeader));
+  {  // create a scope to declare timeoutResponse (C89).
+    struct ChppAppHeader *timeoutResponse =
+        chppTransportGetClientRequestTimeoutResponse(context);
+
+    if (timeoutResponse != NULL) {
+      CHPP_LOGE("Response timeout H#%" PRIu8 " cmd=%" PRIu16 " ID=%" PRIu8,
+                timeoutResponse->handle, timeoutResponse->command,
+                timeoutResponse->transaction);
+      chppAppProcessRxDatagram(context->appContext, (uint8_t *)timeoutResponse,
+                               sizeof(struct ChppAppHeader));
+    }
   }
+#endif  // CHPP_CLIENT_ENABLED
 }
 
 /**
@@ -1232,7 +1231,7 @@ static void chppReset(struct ChppTransportState *transportContext,
   if (transportContext->txStatus.linkBusy == true) {
     // TODO: Give time for link layer to finish before resorting to a reset
 
-    transportContext->linkApi->reset(&transportContext->linkContext);
+    transportContext->linkApi->reset(transportContext->linkContext);
   }
 
   // Free memory allocated for any ongoing rx datagrams
@@ -1569,7 +1568,8 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
   CHPP_LOGD("NextDoWork=%" PRIu64 " currentTime=%" PRIu64 " delta=%" PRId64,
             nextDoWorkTime / CHPP_NSEC_PER_MSEC,
             currentTime / CHPP_NSEC_PER_MSEC,
-            (nextDoWorkTime - currentTime) / (int64_t)CHPP_NSEC_PER_MSEC);
+            (nextDoWorkTime > currentTime ? nextDoWorkTime - currentTime : 0) /
+                (int64_t)CHPP_NSEC_PER_MSEC);
 
   return nextDoWorkTime <= currentTime ? CHPP_TRANSPORT_TIMEOUT_IMMEDIATE
                                        : nextDoWorkTime - currentTime;
@@ -1772,18 +1772,15 @@ void chppTransportSendReset(struct ChppTransportState *context,
     config->version.minor = 0;
     config->version.patch = 0;
 
-    // Max Rx window size
-    // Note: current implementation does not support a window size >1
-    config->windowSize = 1;
+    config->reserved1 = 0;
+    config->reserved2 = 0;
+    config->reserved3 = 0;
 
     if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
       CHPP_LOGD("Sending RESET-ACK");
+      chppSetResetComplete(context);
     } else {
       CHPP_LOGD("Sending RESET");
-    }
-
-    if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
-      chppSetResetComplete(context);
     }
 
     context->resetTimeNs = chppGetCurrentTimeNs();

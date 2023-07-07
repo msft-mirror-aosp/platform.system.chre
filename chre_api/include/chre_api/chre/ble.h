@@ -268,7 +268,7 @@ extern "C" {
 enum chreBleRequestType {
   CHRE_BLE_REQUEST_TYPE_START_SCAN = 1,
   CHRE_BLE_REQUEST_TYPE_STOP_SCAN = 2,
-  CHRE_BLE_REQUEST_TYPE_FLUSH = 3,  //!< @since v1.7
+  CHRE_BLE_REQUEST_TYPE_FLUSH = 3,      //!< @since v1.7
   CHRE_BLE_REQUEST_TYPE_READ_RSSI = 4,  //!< @since v1.8
 };
 
@@ -306,7 +306,15 @@ enum chreBleScanMode {
  */
 enum chreBleAdType {
   //! Service Data with 16-bit UUID
+  //! @deprecated as of v1.8
+  //! TODO(b/285207430): Remove this enum once CHRE has been updated.
   CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16 = 0x16,
+
+  //! Service Data with 16-bit UUID
+  //! @since v1.8 CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16 was renamed
+  //! CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE to reflect that nanoapps
+  //! compiled against v1.8+ should use OTA format for service data filters.
+  CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE = 0x16,
 
   //! Manufacturer Specific Data
   //! @since v1.8
@@ -333,11 +341,25 @@ enum chreBleAdType {
  * can be represented by this structure. Use chreBleGetFilterCapabilities() to
  * discover supported filtering capabilities at runtime.
  *
+ * @since v1.8 The data and dataMask must be in OTA format. The nanoapp support
+ * library will handle converting the data and dataMask values to the correct
+ * format if a pre v1.8 version of CHRE is running.
+ *
+ * NOTE: CHRE versions 1.6 and 1.7 expect the 2-byte UUID prefix in
+ * CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16 to be given as big-endian. This
+ * was corrected in v1.8 to match the OTA format and Bluetooth specification,
+ * which uses little-endian. This enum has been removed and replaced with
+ * CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE to ensure that nanoapps
+ * compiled against v1.8 and later specify their UUID filter using
+ * little-endian. Nanoapps compiled against v1.7 or earlier should continue to
+ * use big-endian, as CHRE must provide cross-version compatibility for all
+ * possible version combinations.
+ *
  * Example 1: To filter on a 16 bit service data UUID of 0xFE2C, the following
  * settings would be used:
  *   type = CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16
  *   len = 2
- *   data = {0xFE, 0x2C}
+ *   data = {0x2C, 0xFE}
  *   dataMask = {0xFF, 0xFF}
  *
  * Example 2: To filter for manufacturer data of 0x12, 0x34 from Google (0x00E0),
@@ -506,11 +528,13 @@ struct chreBleAdvertisingReport {
   //! device).
   uint8_t directAddress[CHRE_BLE_ADDRESS_LEN];
 
-  //! Length of data field. Acceptable range is [0, 31] for legacy and
-  //! [0, 229] for extended advertisements.
+  //! Length of data field. Acceptable range is [0, 62] for legacy and
+  //! [0, 255] for extended advertisements.
   uint16_t dataLength;
 
-  //! dataLength bytes of data, or null if dataLength is 0
+  //! dataLength bytes of data, or null if dataLength is 0. This represents
+  //! the ADV_IND payload, optionally concatenated with SCAN_RSP, as indicated
+  //! by eventTypeAndDataStatus.
   const uint8_t *data;
 
   //! Reserved for future use; set to 0
@@ -667,8 +691,18 @@ static inline uint8_t chreBleGetEventTypeAndDataStatus(uint8_t eventType,
  * The scan results will be delivered asynchronously via the CHRE event
  * CHRE_EVENT_BLE_ADVERTISEMENT.
  *
- * If the Bluetooth setting is disabled at the Android level, CHRE is expected
- * to return a result with CHRE_ERROR_FUNCTION_DISABLED.
+ * If CHRE_USER_SETTING_BLE_AVAILABLE is disabled, CHRE is expected to return an
+ * async result with error CHRE_ERROR_FUNCTION_DISABLED. If this setting is
+ * enabled, the Bluetooth subsystem may still be powered down in the scenario
+ * where the main Bluetooth toggle is disabled, but the Bluetooth scanning
+ * setting is enabled, and there is no request for BLE to be enabled at the
+ * Android level. In this scenario, CHRE will return an async result with error
+ * CHRE_ERROR_FUNCTION_DISABLED.
+ *
+ * To ensure that Bluetooth remains powered on in this settings configuration so
+ * that a nanoapp can scan, the nanoapp's Android host entity should use the
+ * BluetoothAdapter.enableBLE() API to register this request with the Android
+ * Bluetooth stack.
  *
  * If chreBleStartScanAsync() is called while a previous scan has been started,
  * the previous scan will be stopped first and replaced with the new scan.
@@ -807,7 +841,6 @@ bool chreBleGetScanStatus(struct chreBleScanStatus *status);
 
 #define chreBleReadRssiAsync(...) \
   CHRE_BUILD_ERROR(CHRE_BLE_PERM_ERROR_STRING "chreBleReadRssiAsync")
-
 
 #endif  // defined(CHRE_NANOAPP_USES_BLE) || !defined(CHRE_IS_NANOAPP_BUILD)
 
