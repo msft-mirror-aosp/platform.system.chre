@@ -80,8 +80,9 @@ bool TinysysChreConnection::init() {
     return false;
   }
   mLogger.init();
-  // launch the listener tasks
+  // launch the tasks
   mMessageListener = std::thread(messageListenerTask, this);
+  mMessageSender = std::thread(messageSenderTask, this);
   mStateListener = std::thread(chreStateMonitorTask, this);
   mLpmaHandler.init();
   return true;
@@ -94,8 +95,16 @@ bool TinysysChreConnection::init() {
     {
       ssize_t payloadSize = TEMP_FAILURE_RETRY(
           read(chreFd, chreConnection->mPayload.get(), kMaxPayloadBytes));
+      if (payloadSize == 0) {
+        // Payload size 0 is a fake signal from kernel which is normal if the
+        // device is in sleep.
+        LOGW("%s: Received a payload size 0. Ignored. errno=%d", __func__,
+             errno);
+        continue;
+      }
       if (payloadSize < 0) {
-        LOGE("%s: read failed. errno=%d\n", __func__, errno);
+        LOGE("%s: read failed. payload size: %zu. errno=%d", __func__,
+             payloadSize, errno);
         continue;
       }
       handleMessageFromChre(chreConnection, chreConnection->mPayload.get(),
@@ -120,10 +129,29 @@ bool TinysysChreConnection::init() {
     LOGI("Retrieved the next state: %" PRIu32, nextState);
     auto chreNextState = static_cast<ChreState>(nextState);
     if (chreCurrentState == SCP_CHRE_STOP && chreNextState == SCP_CHRE_START) {
-      LOGW("SCP restarted.");
+      // TODO(b/277128368): We should have an explicit indication from CHRE for
+      // restart recovery.
+      LOGW("SCP restarted. Give it 5s for recovery before notifying clients");
+      std::this_thread::sleep_for(std::chrono::milliseconds(5000));
       chreConnection->getCallback()->onChreRestarted();
     }
     chreCurrentState = chreNextState;
+  }
+}
+
+[[noreturn]] void TinysysChreConnection::messageSenderTask(
+    TinysysChreConnection *chreConnection) {
+  LOGI("Message sender task is launched.");
+  int chreFd = chreConnection->getChreFileDescriptor();
+  while (true) {
+    chreConnection->mQueue.waitForMessage();
+    ChreConnectionMessage &message = chreConnection->mQueue.front();
+    auto size =
+        TEMP_FAILURE_RETRY(write(chreFd, &message, message.getMessageSize()));
+    if (size < 0) {
+      LOGE("Failed to write to chre file descriptor. errno=%d\n", errno);
+    }
+    chreConnection->mQueue.pop();
   }
 }
 
@@ -132,20 +160,14 @@ bool TinysysChreConnection::sendMessage(void *data, size_t length) {
     LOGE("length %zu is not within the accepted range.", length);
     return false;
   }
-  mChreMessage->setData(data, length);
-  auto size = TEMP_FAILURE_RETRY(write(mChreFileDescriptor, mChreMessage.get(),
-                                       mChreMessage->getMessageSize()));
-  if (size < 0) {
-    LOGE("Failed to write to chre file descriptor. errno=%d\n", errno);
-    return false;
-  }
-  return true;
+  return mQueue.emplace(data, length);
 }
 
 void TinysysChreConnection::handleMessageFromChre(
     TinysysChreConnection *chreConnection, const unsigned char *messageBuffer,
     size_t messageLen) {
-  // TODO(b/267188769): Move the wake lock acquisition/release to RAII pattern.
+  // TODO(b/267188769): Move the wake lock acquisition/release to RAII
+  // pattern.
   bool isWakelockAcquired =
       acquire_wake_lock(PARTIAL_WAKE_LOCK, kWakeLock) == 0;
   if (!isWakelockAcquired) {

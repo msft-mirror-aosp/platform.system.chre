@@ -26,6 +26,9 @@
 #include "location/lbs/contexthub/nanoapps/nearby/adv_report_cache.h"
 #include "location/lbs/contexthub/nanoapps/nearby/ble_scanner.h"
 #include "location/lbs/contexthub/nanoapps/nearby/filter.h"
+#ifdef ENABLE_EXTENSION
+#include "location/lbs/contexthub/nanoapps/nearby/filter_extension.h"
+#endif
 #include "third_party/contexthub/chre/util/include/chre/util/singleton.h"
 #include "third_party/contexthub/chre/util/include/chre/util/time.h"
 
@@ -45,21 +48,59 @@ class AppManager {
   // Handles a message from host.
   void HandleMessageFromHost(const chreMessageFromHostData *event);
   // Acknowledge a host's SET_FILTER_REQUEST to indicate success or failure.
-  void RespondHostSetFilterRequest(const bool success);
+  void RespondHostSetFilterRequest(bool success);
   // Handles config request from the host.
   void HandleHostConfigRequest(const uint8_t *message, uint32_t message_size);
   // Handles advertise reports to match filters.
   // Advertise reports will be cleared at the end of this function.
   void HandleMatchAdvReports(AdvReportCache &adv_reports);
 
-  void SendFilterResultToHost(
+  // If encoded byte size for filter results is larger than output buffer, sends
+  // each filter result. Otherwise, sends filter results together.
+  void SendBulkFilterResultsToHost(
       const chre::DynamicVector<nearby_BleFilterResult> &filter_results);
+
   // Serializes filter_results into stream after encoding as BleFilterResults.
   // Returns false if encoding fails.
+  void SendFilterResultsToHost(
+      const chre::DynamicVector<nearby_BleFilterResult> &filter_results);
+
+  // Serializes a filter_result into stream after encoding as BleFilterResults.
+  // Returns false if encoding fails.
+  void SendFilterResultToHost(const nearby_BleFilterResult &filter_result);
+
+  // Updates Filter extension with event. Returns true if event is sent
+  // from an OEM service.
+  bool UpdateFilterExtension(const chreMessageFromHostData *event);
+
+  // Updates BLE scan state to start or stop based on filter configurations.
+  void UpdateBleScanState();
+
+  // Encodes filter results as BleFilterResults format. Returns true if encoding
+  // was successful.
   static bool EncodeFilterResults(
       const chre::DynamicVector<nearby_BleFilterResult> &filter_results,
       pb_ostream_t *stream, size_t *msg_size);
 
+  // Encodes a filter result as BleFilterResults format. Returns true if
+  // encoding was successful.
+  static bool EncodeFilterResult(const nearby_BleFilterResult &filter_result,
+                                 pb_ostream_t *stream, size_t *msg_size);
+
+  // Gets the expected encoded message size of filter results, which is
+  // equivalent to msg_size output of EncodeFilterResults()
+  static bool GetEncodedSizeFromFilterResults(
+      const chre::DynamicVector<nearby_BleFilterResult> &filter_results,
+      size_t &encoded_size);
+
+#ifdef ENABLE_EXTENSION
+  static void SendFilterExtensionConfigResultToHost(
+      uint16_t host_end_point,
+      const nearby_extension_FilterConfigResult &config_result);
+
+  static void SendFilterExtensionResultToHost(
+      chre::DynamicVector<FilterExtensionResult> &filter_results);
+#endif
   // TODO(b/193756395): Find the optimal size or compute the size in runtime.
   // Note: the nanopb API pb_get_encoded_size
   // (https://jpa.kapsi.fi/nanopb/docs/reference.html#pb_get_encoded_size)
@@ -76,6 +117,9 @@ class AppManager {
       5 * chre::kOneSecondInNanoseconds;
 
   Filter filter_;
+#ifdef ENABLE_EXTENSION
+  FilterExtension filter_extension_;
+#endif
   BleScanner ble_scanner_;
 
   uint16_t host_endpoint_ = 0;
@@ -83,6 +127,10 @@ class AppManager {
   bool fp_screen_on_sent_ = false;
   AdvReportCache adv_reports_cache_;
   chre::DynamicVector<nearby_BleFilterResult> fp_filter_cache_results_;
+#ifdef ENABLE_EXTENSION
+  chre::DynamicVector<FilterExtensionResult>
+      screen_on_filter_extension_results_;
+#endif
   uint64_t fp_filter_cache_time_nanosec_;
   uint64_t fp_filter_cache_expire_nanosec_ = kFpFilterResultExpireTimeNanoSec;
 #ifdef NEARBY_PROFILE
