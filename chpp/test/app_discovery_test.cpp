@@ -61,8 +61,8 @@ void *workThread(void *transportState) {
 constexpr uint16_t kNumCommands = 1;
 
 struct ClientState {
-  struct ChppClientState chppClientState;
-  struct ChppRequestResponseState rRState[kNumCommands];
+  struct ChppEndpointState chppClientState;
+  struct ChppOutgoingRequestState outReqStates[kNumCommands];
   bool resetNotified;
   bool matchNotified;
 };
@@ -84,7 +84,7 @@ constexpr struct ChppClient kClient = {
     .notificationDispatchFunctionPtr = nullptr,
     .initFunctionPtr = &clientInit,
     .deinitFunctionPtr = &clientDeinit,
-    .rRStateCount = kNumCommands,
+    .outReqCount = kNumCommands,
     .minLength = sizeof(struct ChppAppHeader),
 };
 
@@ -115,8 +115,8 @@ void clientDeinit(void *clientState) {
 
 // Service
 struct ServiceState {
-  struct ChppServiceState chppServiceState;
-  struct ChppRequestResponseState rRState[kNumCommands];
+  struct ChppEndpointState chppServiceState;
+  struct ChppIncomingRequestState inReqStates[kNumCommands];
   bool resetNotified;
 };
 
@@ -212,8 +212,8 @@ TEST_F(AppDiscoveryTest, workWhenThereIsNoService) {
   // Register the client
   memset(&mClientState, 0, sizeof(mClientState));
   chppRegisterClient(&mClientAppContext, &mClientState,
-                     &mClientState.chppClientState, &mClientState.rRState[0],
-                     &kClient);
+                     &mClientState.chppClientState,
+                     &mClientState.outReqStates[0], &kClient);
 
   pthread_create(&mClientWorkThread, NULL, workThread,
                  &mClientTransportContext);
@@ -252,7 +252,8 @@ TEST_F(AppDiscoveryTest, servicesShouldBeDiscovered) {
   // Register the service
   memset(&mServiceState, 0, sizeof(mServiceState));
   chppRegisterService(&mServiceAppContext, &mServiceState,
-                      &mServiceState.chppServiceState, &kService);
+                      &mServiceState.chppServiceState, NULL /*outReqStates*/,
+                      &kService);
 
   pthread_create(&mServiceWorkThread, NULL, workThread,
                  &mServiceTransportContext);
@@ -280,8 +281,8 @@ TEST_F(AppDiscoveryTest, discoveredServiceShouldBeMatchedWithClients) {
   // Register the client
   memset(&mClientState, 0, sizeof(mClientState));
   chppRegisterClient(&mClientAppContext, &mClientState,
-                     &mClientState.chppClientState, &mClientState.rRState[0],
-                     &kClient);
+                     &mClientState.chppClientState,
+                     &mClientState.outReqStates[0], &kClient);
 
   pthread_create(&mClientWorkThread, NULL, workThread,
                  &mClientTransportContext);
@@ -291,7 +292,8 @@ TEST_F(AppDiscoveryTest, discoveredServiceShouldBeMatchedWithClients) {
   // Register the service
   memset(&mServiceState, 0, sizeof(mServiceState));
   chppRegisterService(&mServiceAppContext, &mServiceState,
-                      &mServiceState.chppServiceState, &kService);
+                      &mServiceState.chppServiceState, NULL /*outReqStates*/,
+                      &kService);
 
   pthread_create(&mServiceWorkThread, NULL, workThread,
                  &mServiceTransportContext);

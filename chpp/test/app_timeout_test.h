@@ -28,8 +28,8 @@ extern "C" {
  *  Functions necessary for unit testing
  ***********************************************/
 
-struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
-    struct ChppTransportState *context);
+struct ChppAppHeader *chppTransportGetRequestTimeoutResponse(
+    struct ChppTransportState *context, enum ChppEndpointType type);
 
 #ifdef __cplusplus
 }

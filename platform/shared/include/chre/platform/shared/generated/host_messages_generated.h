@@ -99,6 +99,12 @@ struct NanConfigurationUpdateBuilder;
 struct DebugConfiguration;
 struct DebugConfigurationBuilder;
 
+struct PulseRequest;
+struct PulseRequestBuilder;
+
+struct PulseResponse;
+struct PulseResponseBuilder;
+
 struct HostAddress;
 
 struct MessageContainer;
@@ -175,6 +181,108 @@ inline const char *EnumNameSettingState(SettingState e) {
   return EnumNamesSettingState()[index];
 }
 
+enum class LogLevel : int8_t {
+  ERROR = 1,
+  WARNING = 2,
+  INFO = 3,
+  DEBUG = 4,
+  VERBOSE = 5,
+  MIN = ERROR,
+  MAX = VERBOSE
+};
+
+inline const LogLevel (&EnumValuesLogLevel())[5] {
+  static const LogLevel values[] = {
+    LogLevel::ERROR,
+    LogLevel::WARNING,
+    LogLevel::INFO,
+    LogLevel::DEBUG,
+    LogLevel::VERBOSE
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesLogLevel() {
+  static const char * const names[6] = {
+    "ERROR",
+    "WARNING",
+    "INFO",
+    "DEBUG",
+    "VERBOSE",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameLogLevel(LogLevel e) {
+  if (flatbuffers::IsOutRange(e, LogLevel::ERROR, LogLevel::VERBOSE)) return "";
+  const size_t index = static_cast<size_t>(e) - static_cast<size_t>(LogLevel::ERROR);
+  return EnumNamesLogLevel()[index];
+}
+
+enum class LogType : int8_t {
+  STRING = 0,
+  TOKENIZED = 1,
+  BLUETOOTH = 2,
+  MIN = STRING,
+  MAX = BLUETOOTH
+};
+
+inline const LogType (&EnumValuesLogType())[3] {
+  static const LogType values[] = {
+    LogType::STRING,
+    LogType::TOKENIZED,
+    LogType::BLUETOOTH
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesLogType() {
+  static const char * const names[4] = {
+    "STRING",
+    "TOKENIZED",
+    "BLUETOOTH",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameLogType(LogType e) {
+  if (flatbuffers::IsOutRange(e, LogType::STRING, LogType::BLUETOOTH)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesLogType()[index];
+}
+
+enum class BtSnoopDirection : int8_t {
+  INCOMING_FROM_BT_CONTROLLER = 0,
+  OUTGOING_TO_ARBITER = 1,
+  MIN = INCOMING_FROM_BT_CONTROLLER,
+  MAX = OUTGOING_TO_ARBITER
+};
+
+inline const BtSnoopDirection (&EnumValuesBtSnoopDirection())[2] {
+  static const BtSnoopDirection values[] = {
+    BtSnoopDirection::INCOMING_FROM_BT_CONTROLLER,
+    BtSnoopDirection::OUTGOING_TO_ARBITER
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesBtSnoopDirection() {
+  static const char * const names[3] = {
+    "INCOMING_FROM_BT_CONTROLLER",
+    "OUTGOING_TO_ARBITER",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameBtSnoopDirection(BtSnoopDirection e) {
+  if (flatbuffers::IsOutRange(e, BtSnoopDirection::INCOMING_FROM_BT_CONTROLLER, BtSnoopDirection::OUTGOING_TO_ARBITER)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesBtSnoopDirection()[index];
+}
+
 /// A union that joins together all possible messages. Note that in FlatBuffers,
 /// unions have an implicit type
 enum class ChreMessage : uint8_t {
@@ -207,11 +315,13 @@ enum class ChreMessage : uint8_t {
   NanConfigurationRequest = 26,
   NanConfigurationUpdate = 27,
   DebugConfiguration = 28,
+  PulseRequest = 29,
+  PulseResponse = 30,
   MIN = NONE,
-  MAX = DebugConfiguration
+  MAX = PulseResponse
 };
 
-inline const ChreMessage (&EnumValuesChreMessage())[29] {
+inline const ChreMessage (&EnumValuesChreMessage())[31] {
   static const ChreMessage values[] = {
     ChreMessage::NONE,
     ChreMessage::NanoappMessage,
@@ -241,13 +351,15 @@ inline const ChreMessage (&EnumValuesChreMessage())[29] {
     ChreMessage::BatchedMetricLog,
     ChreMessage::NanConfigurationRequest,
     ChreMessage::NanConfigurationUpdate,
-    ChreMessage::DebugConfiguration
+    ChreMessage::DebugConfiguration,
+    ChreMessage::PulseRequest,
+    ChreMessage::PulseResponse
   };
   return values;
 }
 
 inline const char * const *EnumNamesChreMessage() {
-  static const char * const names[30] = {
+  static const char * const names[32] = {
     "NONE",
     "NanoappMessage",
     "HubInfoRequest",
@@ -277,13 +389,15 @@ inline const char * const *EnumNamesChreMessage() {
     "NanConfigurationRequest",
     "NanConfigurationUpdate",
     "DebugConfiguration",
+    "PulseRequest",
+    "PulseResponse",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameChreMessage(ChreMessage e) {
-  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::DebugConfiguration)) return "";
+  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::PulseResponse)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesChreMessage()[index];
 }
@@ -402,6 +516,14 @@ template<> struct ChreMessageTraits<chre::fbs::NanConfigurationUpdate> {
 
 template<> struct ChreMessageTraits<chre::fbs::DebugConfiguration> {
   static const ChreMessage enum_value = ChreMessage::DebugConfiguration;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::PulseRequest> {
+  static const ChreMessage enum_value = ChreMessage::PulseRequest;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::PulseResponse> {
+  static const ChreMessage enum_value = ChreMessage::PulseResponse;
 };
 
 bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, ChreMessage type);
@@ -1860,8 +1982,8 @@ struct LogMessageV2 FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   ///
   /// uint8_t                 - Log metadata, encoded as follows:
   ///                           [EI(Upper nibble) | Level(Lower nibble)]
-  ///                            * EI: Encoding indicator (eg: via tokenization)
-  ///                              (0 = No encoding, 1 = Tokenized log)
+  ///                            * Log Type
+  ///                              (0 = No encoding, 1 = Tokenized log, 2 = BT snoop log)
   ///                            * LogBuffer log level (1 = error, 2 = warn,
   ///                                                   3 = info,  4 = debug,
   ///                                                   5 = verbose)
@@ -1879,6 +2001,13 @@ struct LogMessageV2 FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   ///   be needed to encode this as: [Size(1B) | Data(24B)]. A decoder would
   ///   then have to decode this starting from a 1 byte offset from the
   ///   received buffer.
+  ///
+  /// * Bt Snoop logs: The first byte of the log buffer indicates the direction
+  ///   of the bt snoop log, depending on whether it is incoming for the BT
+  ///   controller or outgoing to the arbiter. The second byte indicates the size
+  ///   of the actual BT payload followed. For example, if a bt snoop log of
+  ///   size 24 bytes were to be represented, a buffer of size 26 bytes would
+  ///   be needed to encode this as: [Direction(1B) | Size(1B) | Data(24B)].
   ///
   /// This pattern repeats until the end of the buffer for multiple log
   /// messages. The last byte will always be a null-terminator. There are no
@@ -2398,6 +2527,66 @@ inline flatbuffers::Offset<DebugConfiguration> CreateDebugConfiguration(
   return builder_.Finish();
 }
 
+struct PulseRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef PulseRequestBuilder Builder;
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+};
+
+struct PulseRequestBuilder {
+  typedef PulseRequest Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  explicit PulseRequestBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  PulseRequestBuilder &operator=(const PulseRequestBuilder &);
+  flatbuffers::Offset<PulseRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<PulseRequest>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<PulseRequest> CreatePulseRequest(
+    flatbuffers::FlatBufferBuilder &_fbb) {
+  PulseRequestBuilder builder_(_fbb);
+  return builder_.Finish();
+}
+
+struct PulseResponse FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef PulseResponseBuilder Builder;
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+};
+
+struct PulseResponseBuilder {
+  typedef PulseResponse Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  explicit PulseResponseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  PulseResponseBuilder &operator=(const PulseResponseBuilder &);
+  flatbuffers::Offset<PulseResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<PulseResponse>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<PulseResponse> CreatePulseResponse(
+    flatbuffers::FlatBufferBuilder &_fbb) {
+  PulseResponseBuilder builder_(_fbb);
+  return builder_.Finish();
+}
+
 /// The top-level container that encapsulates all possible messages. Note that
 /// per FlatBuffers requirements, we can't use a union as the top-level
 /// structure (root type), so we must wrap it in a table.
@@ -2498,6 +2687,12 @@ struct MessageContainer FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   const chre::fbs::DebugConfiguration *message_as_DebugConfiguration() const {
     return message_type() == chre::fbs::ChreMessage::DebugConfiguration ? static_cast<const chre::fbs::DebugConfiguration *>(message()) : nullptr;
+  }
+  const chre::fbs::PulseRequest *message_as_PulseRequest() const {
+    return message_type() == chre::fbs::ChreMessage::PulseRequest ? static_cast<const chre::fbs::PulseRequest *>(message()) : nullptr;
+  }
+  const chre::fbs::PulseResponse *message_as_PulseResponse() const {
+    return message_type() == chre::fbs::ChreMessage::PulseResponse ? static_cast<const chre::fbs::PulseResponse *>(message()) : nullptr;
   }
   /// The originating or destination client ID on the host side, used to direct
   /// responses only to the client that sent the request. Although initially
@@ -2628,6 +2823,14 @@ template<> inline const chre::fbs::NanConfigurationUpdate *MessageContainer::mes
 
 template<> inline const chre::fbs::DebugConfiguration *MessageContainer::message_as<chre::fbs::DebugConfiguration>() const {
   return message_as_DebugConfiguration();
+}
+
+template<> inline const chre::fbs::PulseRequest *MessageContainer::message_as<chre::fbs::PulseRequest>() const {
+  return message_as_PulseRequest();
+}
+
+template<> inline const chre::fbs::PulseResponse *MessageContainer::message_as<chre::fbs::PulseResponse>() const {
+  return message_as_PulseResponse();
 }
 
 struct MessageContainerBuilder {
@@ -2784,6 +2987,14 @@ inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, 
     }
     case ChreMessage::DebugConfiguration: {
       auto ptr = reinterpret_cast<const chre::fbs::DebugConfiguration *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::PulseRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::PulseRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::PulseResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::PulseResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;
