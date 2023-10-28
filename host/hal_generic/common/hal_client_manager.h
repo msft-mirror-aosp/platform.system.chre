@@ -16,18 +16,21 @@
 #ifndef ANDROID_HARDWARE_CONTEXTHUB_COMMON_HAL_CLIENT_MANAGER_H_
 #define ANDROID_HARDWARE_CONTEXTHUB_COMMON_HAL_CLIENT_MANAGER_H_
 
-#include <aidl/android/hardware/contexthub/ContextHubMessage.h>
-#include <aidl/android/hardware/contexthub/IContextHub.h>
-#include <aidl/android/hardware/contexthub/IContextHubCallback.h>
-#include <chre_host/fragmented_load_transaction.h>
-#include <chre_host/preloaded_nanoapp_loader.h>
+#include "chre/platform/shared/host_protocol_common.h"
+#include "chre_host/fragmented_load_transaction.h"
+#include "chre_host/log.h"
+#include "chre_host/preloaded_nanoapp_loader.h"
+#include "hal_client_id.h"
+
 #include <sys/types.h>
 #include <cstddef>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include "chre_host/log.h"
-#include "hal_client_id.h"
+
+#include <aidl/android/hardware/contexthub/ContextHubMessage.h>
+#include <aidl/android/hardware/contexthub/IContextHub.h>
+#include <aidl/android/hardware/contexthub/IContextHubCallback.h>
 
 using aidl::android::hardware::contexthub::ContextHubMessage;
 using aidl::android::hardware::contexthub::HostEndpointInfo;
@@ -85,6 +88,7 @@ class HalClientManager {
  public:
   struct HalClient {
     static constexpr pid_t PID_UNSET = 0;
+
     explicit HalClient(const std::string &uuid, const HalClientId clientId)
         : HalClient(uuid, clientId, /* pid= */ PID_UNSET,
                     /* callback= */ nullptr,
@@ -98,6 +102,7 @@ class HalClientManager {
           pid{pid},
           callback{callback},
           deathRecipientCookie{deathRecipientCookie} {}
+
     /** Resets the client's fields except uuid and clientId. */
     void reset(pid_t processId,
                const std::shared_ptr<IContextHubCallback> &contextHubCallback,
@@ -107,6 +112,7 @@ class HalClientManager {
       deathRecipientCookie = cookie;
       endpointIds.clear();
     }
+
     const std::string uuid;
     const HalClientId clientId;
     pid_t pid{};
@@ -116,11 +122,17 @@ class HalClientManager {
     std::unordered_set<HostEndpointId> endpointIds{};
   };
 
+  // The endpoint id is from a vendor client if the highest bit is set to 1.
+  static constexpr HostEndpointId kVendorEndpointIdBitMask = 0x8000;
+  static constexpr uint8_t kNumOfBitsForEndpointId = 6;
+
   using DeadClientUnlinker = std::function<bool(
       const std::shared_ptr<IContextHubCallback> &callback, void *cookie)>;
 
-  explicit HalClientManager(DeadClientUnlinker deadClientUnlinker,
-                            const std::string &clientIdMappingFilePath);
+  explicit HalClientManager(
+      DeadClientUnlinker deadClientUnlinker,
+      const std::string &clientIdMappingFilePath,
+      const std::unordered_set<HalClientId> &reservedClientIds = {});
   virtual ~HalClientManager() = default;
 
   /** Disable copy constructor and copy assignment to avoid duplicates. */
@@ -136,8 +148,8 @@ class HalClientManager {
    *
    * @param pid process id of the current client
    *
-   * @return client id assigned to the calling process, or kDefaultHalClientId
-   * if the process id is not found.
+   * @return client id assigned to the calling process, or
+   * ::chre::kHostClientIdUnspecified if the process id is not found.
    */
   HalClientId getClientId(pid_t pid);
 
@@ -302,11 +314,8 @@ class HalClientManager {
   static constexpr char kJsonClientId[] = "ClientId";
   static constexpr char kJsonUuid[] = "uuid";
   static constexpr int64_t kTransactionTimeoutThresholdMs = 5000;  // 5 seconds
-  static constexpr uint8_t kNumOfBitsForEndpointId = 6;
   static constexpr HostEndpointId kMaxVendorEndpointId =
       (1 << kNumOfBitsForEndpointId) - 1;
-  // The endpoint id is from a vendor client if the highest bit is set to 1.
-  static constexpr HostEndpointId kVendorEndpointIdBitMask = 0x8000;
 
   struct PendingTransaction {
     PendingTransaction(HalClientId clientId, uint32_t transactionId,
@@ -354,10 +363,16 @@ class HalClientManager {
    * mLock must be held when this function is called.
    *
    */
-  virtual bool createClientLocked(
-      const std::string &uuid, pid_t pid,
-      const std::shared_ptr<IContextHubCallback> &callback,
-      void *deathRecipientCookie);
+  bool createClientLocked(const std::string &uuid, pid_t pid,
+                          const std::shared_ptr<IContextHubCallback> &callback,
+                          void *deathRecipientCookie);
+
+  /**
+   * Update @p mNextClientId to be the next available one.
+   *
+   * @return true if success, otherwise false.
+   */
+  bool updateNextClientIdLocked();
 
   /**
    * Returns true if @p clientId and @p transactionId match the
@@ -432,7 +447,10 @@ class HalClientManager {
   std::string mClientMappingFilePath{};
 
   // next available client id
-  HalClientId mNextClientId = kDefaultHalClientId + 1;
+  HalClientId mNextClientId = ::chre::kHostClientIdUnspecified;
+
+  // reserved client ids that will not be used
+  std::unordered_set<HalClientId> mReservedClientIds;
 
   // The lock guarding the access to clients' states and pending transactions
   std::mutex mLock;
