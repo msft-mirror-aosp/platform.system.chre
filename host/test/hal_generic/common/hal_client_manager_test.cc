@@ -9,6 +9,7 @@
 #include <aidl/android/hardware/contexthub/BnContextHubCallback.h>
 #include <aidl/android/hardware/contexthub/IContextHub.h>
 #include <aidl/android/hardware/contexthub/NanoappBinary.h>
+#include "chre/platform/shared/host_protocol_common.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "hal_client_manager.h"
@@ -88,13 +89,25 @@ class ContextHubCallbackForTest : public BnContextHubCallback {
 
 class HalClientManagerForTest : public HalClientManager {
  public:
-  HalClientManagerForTest(DeadClientUnlinker deadClientUnlinker,
-                          const std::string &clientIdMappingFilePath)
-      : HalClientManager(std::move(deadClientUnlinker),
-                         clientIdMappingFilePath) {}
+  HalClientManagerForTest(
+      DeadClientUnlinker deadClientUnlinker,
+      const std::string &clientIdMappingFilePath,
+      const std::unordered_set<HalClientId> &reservedClientIds = {})
+      : HalClientManager(std::move(deadClientUnlinker), clientIdMappingFilePath,
+                         reservedClientIds) {}
 
   const std::vector<HalClient> getClients() {
     return mClients;
+  }
+
+  bool createClientForTest(const std::string &uuid, pid_t pid) {
+    // No need to hold the lock during a unit test which is single-threaded
+    return createClientLocked(uuid, pid, /* callback= */ nullptr,
+                              /* deathRecipientCookie= */ nullptr);
+  }
+
+  HalClientId getNextClientId() {
+    return mNextClientId;
   }
 
   static int64_t getTransactionTimeoutSeconds() {
@@ -189,7 +202,7 @@ TEST_F(HalClientManagerTest, CallbackRegistryBasic) {
   EXPECT_EQ(client.callback, callback);
   EXPECT_EQ(client.uuid, kSystemServerUuid);
   EXPECT_EQ(client.pid, kSystemServerPid);
-  EXPECT_NE(client.clientId, kDefaultHalClientId);
+  EXPECT_NE(client.clientId, ::chre::kHostClientIdUnspecified);
 }
 
 TEST_F(HalClientManagerTest, CallbackRegistryTwiceFromSameClient) {
@@ -244,6 +257,49 @@ TEST_F(HalClientManagerTest, CallbackRetrievalByEndpoint) {
             vendorCallback);
   EXPECT_EQ(halClientManager->getCallbackForEndpoint(systemServerEndpointId),
             systemCallback);
+}
+
+TEST_F(HalClientManagerTest, ClientCreation) {
+  auto halClientManager = std::make_unique<HalClientManagerForTest>(
+      mockDeadClientUnlinker, kClientIdMappingFilePath);
+  int uuid = 1;
+  int pid = 1;
+  for (int i = 0; i < kMaxNumOfHalClients; i++, uuid++, pid++) {
+    EXPECT_TRUE(
+        halClientManager->createClientForTest(std::to_string(uuid), pid));
+  }
+  // if max number of clients are reached no more client can be created
+  EXPECT_FALSE(
+      halClientManager->createClientForTest(std::to_string(uuid), pid));
+  // mNextClientId is reset to ::chre::kHostClientIdUnspecified when new client
+  // is not accepted
+  EXPECT_EQ(halClientManager->getNextClientId(),
+            ::chre::kHostClientIdUnspecified);
+}
+
+TEST_F(HalClientManagerTest, ClientCreationWithReservedClientId) {
+  std::unordered_set<HalClientId> reservedClientIds{
+      ::chre::kHostClientIdUnspecified + 1, 64};
+  auto halClientManager = std::make_unique<HalClientManagerForTest>(
+      mockDeadClientUnlinker, kClientIdMappingFilePath, reservedClientIds);
+  int uuid = 1;
+  int pid = 1;
+  for (int i = 0; i < kMaxNumOfHalClients - reservedClientIds.size();
+       i++, uuid++, pid++) {
+    EXPECT_TRUE(
+        halClientManager->createClientForTest(std::to_string(uuid), pid));
+  }
+  // if max number of clients are reached no more client can be created
+  EXPECT_FALSE(
+      halClientManager->createClientForTest(std::to_string(uuid), pid));
+  // mNextClientId is reset to ::chre::kHostClientIdUnspecified when new client
+  // is not accepted
+  EXPECT_EQ(halClientManager->getNextClientId(),
+            ::chre::kHostClientIdUnspecified);
+  // Verify that every reserved client id is not used:
+  for (HalClient client : halClientManager->getClients()) {
+    EXPECT_EQ(reservedClientIds.find(client.clientId), reservedClientIds.end());
+  };
 }
 
 TEST_F(HalClientManagerTest, TransactionRegistryAndOverridden) {
@@ -388,7 +444,7 @@ TEST_F(HalClientManagerTest, handleDeathClient) {
   EXPECT_EQ(client.callback, nullptr);
   EXPECT_EQ(client.pid, HalClient::PID_UNSET);
   EXPECT_EQ(client.uuid, kSystemServerUuid);
-  EXPECT_NE(client.clientId, kDefaultHalClientId);
+  EXPECT_NE(client.clientId, ::chre::kHostClientIdUnspecified);
   EXPECT_THAT(client.endpointIds, IsEmpty());
 }
 
