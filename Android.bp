@@ -58,6 +58,7 @@ cc_library_static {
     srcs: [
         "host/common/file_stream.cc",
         "host/common/fragmented_load_transaction.cc",
+        "host/common/hal_client.cc",
         "host/common/host_protocol_host.cc",
         "host/common/log.cc",
         "host/common/pigweed/hal_channel_output.cc",
@@ -68,6 +69,8 @@ cc_library_static {
     header_libs: ["chre_flatbuffers"],
     export_header_lib_headers: ["chre_flatbuffers"],
     shared_libs: [
+        "android.hardware.contexthub-V3-ndk",
+        "libbinder_ndk",
         "libcutils",
         "liblog",
         "libutils",
@@ -223,13 +226,15 @@ filegroup {
 cc_binary {
     name: "chre_aidl_hal_client",
     vendor: true,
+    cpp_std: "c++20",
     local_include_dirs: [
         "host/common/include",
         "chre_api/include",
     ],
     srcs: [
-        "host/common/file_stream.cc",
         "host/common/chre_aidl_hal_client.cc",
+        "host/common/file_stream.cc",
+        "host/common/log.cc",
     ],
     shared_libs: [
         "android.hardware.contexthub-V3-ndk",
@@ -239,8 +244,15 @@ cc_binary {
         "liblog",
         "libutils",
     ],
-    static_libs: ["chre_host_common"],
-    cflags: ["-Wall", "-Werror", "-fexceptions"],
+    static_libs: [
+        "chre_client",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-fexceptions",
+        "-DLOG_TAG=\"CHRE.HAL.CLIENT\"",
+    ],
 }
 
 cc_test {
@@ -452,6 +464,7 @@ cc_test_host {
         "host/test/**/*_test.cc",
         "host/hal_generic/common/hal_client_manager.cc",
         "host/common/fragmented_load_transaction.cc",
+        "host/common/hal_client.cc",
     ],
     local_include_dirs: [
         "host/common/include",
