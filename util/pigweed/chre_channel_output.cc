@@ -50,7 +50,6 @@ pw::Status sendToNanoapp(uint32_t targetInstanceId, uint16_t eventType,
     }
 
     data->msgSize = buffer.size();
-    data->msg = &data[1];
     memcpy(data->msg, buffer.data(), buffer.size());
 
     if (!chreSendEvent(eventType, data, nappMessageFreeCb, targetInstanceId)) {
@@ -82,8 +81,7 @@ pw::Status ChreServerNanoappChannelOutput::Send(
   // reset the value as it is only applicable to the next message.
   mPermission.getAndReset();
 
-  return sendToNanoapp(mClientInstanceId, PW_RPC_CHRE_NAPP_RESPONSE_EVENT_TYPE,
-                       buffer);
+  return sendToNanoapp(mClientInstanceId, CHRE_EVENT_RPC_RESPONSE, buffer);
 }
 
 void ChreClientNanoappChannelOutput::setServer(uint32_t instanceId) {
@@ -101,8 +99,7 @@ size_t ChreClientNanoappChannelOutput::MaximumTransmissionUnit() {
 
 pw::Status ChreClientNanoappChannelOutput::Send(
     pw::span<const std::byte> buffer) {
-  return sendToNanoapp(mServerInstanceId, PW_RPC_CHRE_NAPP_REQUEST_EVENT_TYPE,
-                       buffer);
+  return sendToNanoapp(mServerInstanceId, CHRE_EVENT_RPC_REQUEST, buffer);
 }
 
 void ChreServerHostChannelOutput::setHostEndpoint(uint16_t hostEndpoint) {
@@ -125,7 +122,7 @@ pw::Status ChreServerHostChannelOutput::Send(pw::span<const std::byte> buffer) {
     } else {
       memcpy(data, buffer.data(), buffer.size());
       if (!chreSendMessageWithPermissions(
-              data, buffer.size(), PW_RPC_CHRE_HOST_MESSAGE_TYPE, mEndpointId,
+              data, buffer.size(), CHRE_MESSAGE_TYPE_RPC, mEndpointId,
               permission, heapFreeMessageCallback)) {
         returnCode = PW_STATUS_INVALID_ARGUMENT;
       }

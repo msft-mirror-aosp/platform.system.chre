@@ -86,18 +86,21 @@ namespace android::hardware::contexthub::common::implementation {
  */
 class HalClientManager {
  public:
-  struct HalClient {
+  struct Client {
     static constexpr pid_t PID_UNSET = 0;
 
-    explicit HalClient(const std::string &uuid, const HalClientId clientId)
-        : HalClient(uuid, clientId, /* pid= */ PID_UNSET,
-                    /* callback= */ nullptr,
-                    /* deathRecipientCookie= */ nullptr) {}
+    explicit Client(const std::string &uuid, const std::string &name,
+                    const HalClientId clientId)
+        : Client(uuid, name, clientId, /* pid= */ PID_UNSET,
+                 /* callback= */ nullptr,
+                 /* deathRecipientCookie= */ nullptr) {}
 
-    explicit HalClient(std::string uuid, const HalClientId clientId, pid_t pid,
-                       const std::shared_ptr<IContextHubCallback> &callback,
-                       void *deathRecipientCookie)
+    explicit Client(std::string uuid, std::string name,
+                    const HalClientId clientId, pid_t pid,
+                    const std::shared_ptr<IContextHubCallback> &callback,
+                    void *deathRecipientCookie)
         : uuid{std::move(uuid)},
+          name{std::move(name)},
           clientId{clientId},
           pid{pid},
           callback{callback},
@@ -114,6 +117,7 @@ class HalClientManager {
     }
 
     const std::string uuid;
+    std::string name;
     const HalClientId clientId;
     pid_t pid{};
     std::shared_ptr<IContextHubCallback> callback{};
@@ -313,6 +317,7 @@ class HalClientManager {
   static constexpr char kVendorClientUuid[] = "vendor-client";
   static constexpr char kJsonClientId[] = "ClientId";
   static constexpr char kJsonUuid[] = "uuid";
+  static constexpr char kJsonName[] = "name";
   static constexpr int64_t kTransactionTimeoutThresholdMs = 5000;  // 5 seconds
   static constexpr HostEndpointId kMaxVendorEndpointId =
       (1 << kNumOfBitsForEndpointId) - 1;
@@ -416,16 +421,16 @@ class HalClientManager {
 
   /** Returns true if the endpoint id is within the accepted range. */
   [[nodiscard]] static inline bool isValidEndpointId(
-      const HalClient *client, const HostEndpointId &endpointId) {
+      const Client *client, const HostEndpointId &endpointId) {
     return client->uuid == kSystemServerUuid ||
            endpointId <= kMaxVendorEndpointId;
   }
 
   // TODO(b/290375569): isSystemServerConnectedLocked() and getUuidLocked() are
-  //   temporary solutions to get a pseudo-uuid. callback->getUuid() should be
-  //   used after flag-guarding the changes.
+  //   temporary solutions to get a pseudo-uuid. Remove these two functions when
+  //   flag context_hub_callback_uuid_enabled is ramped up.
   inline bool isSystemServerConnectedLocked() {
-    HalClient *client = getClientByUuidLocked(kSystemServerUuid);
+    Client *client = getClientByUuidLocked(kSystemServerUuid);
     return client != nullptr && client->pid != 0;
   }
   inline std::string getUuidLocked() {
@@ -433,18 +438,18 @@ class HalClientManager {
                                            : kSystemServerUuid;
   }
 
-  HalClient *getClientByField(
-      const std::function<bool(const HalClient &client)> &fieldMatcher);
+  Client *getClientByField(
+      const std::function<bool(const Client &client)> &fieldMatcher);
 
-  HalClient *getClientByClientIdLocked(HalClientId clientId);
+  Client *getClientByClientIdLocked(HalClientId clientId);
 
-  HalClient *getClientByUuidLocked(const std::string &uuid);
+  Client *getClientByUuidLocked(const std::string &uuid);
 
-  HalClient *getClientByProcessIdLocked(pid_t pid);
+  Client *getClientByProcessIdLocked(pid_t pid);
 
   DeadClientUnlinker mDeadClientUnlinker{};
 
-  std::string mClientMappingFilePath{};
+  std::string mClientMappingFilePath;
 
   // next available client id
   HalClientId mNextClientId = ::chre::kHostClientIdUnspecified;
@@ -455,7 +460,7 @@ class HalClientManager {
   // The lock guarding the access to clients' states and pending transactions
   std::mutex mLock;
 
-  std::vector<HalClient> mClients{};
+  std::vector<Client> mClients;
 
   // States tracking pending transactions
   std::optional<PendingLoadTransaction> mPendingLoadTransaction = std::nullopt;

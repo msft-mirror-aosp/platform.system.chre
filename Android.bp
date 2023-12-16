@@ -31,16 +31,27 @@ license {
 }
 
 filegroup {
-    name: "contexthub_generic_aidl_hal_core",
+    name: "contexthub_hal_socket",
+    srcs: ["host/common/socket_server.cc"]
+}
+
+filegroup {
+    name: "contexthub_hal_wifi",
+    srcs: ["host/common/wifi_ext_hal_handler.cc"]
+}
+
+filegroup {
+    name: "contexthub_hal_core",
     srcs: [
+        "host/common/bt_snoop_log_parser.cc",
+        "host/common/config_util.cc",
+        "host/common/log.cc",
+        "host/common/log_message_parser.cc",
         "host/common/preloaded_nanoapp_loader.cc",
         "host/common/time_syncer.cc",
-        "host/common/config_util.cc",
-        "host/common/log_message_parser.cc",
-        "host/common/bt_snoop_log_parser.cc",
-        "host/hal_generic/common/permissions_util.cc",
         "host/hal_generic/common/hal_client_manager.cc",
         "host/hal_generic/common/multi_client_context_hub_base.cc",
+        "host/hal_generic/common/permissions_util.cc",
     ],
 }
 
@@ -58,6 +69,7 @@ cc_library_static {
     srcs: [
         "host/common/file_stream.cc",
         "host/common/fragmented_load_transaction.cc",
+        "host/common/hal_client.cc",
         "host/common/host_protocol_host.cc",
         "host/common/log.cc",
         "host/common/pigweed/hal_channel_output.cc",
@@ -68,6 +80,8 @@ cc_library_static {
     header_libs: ["chre_flatbuffers"],
     export_header_lib_headers: ["chre_flatbuffers"],
     shared_libs: [
+        "android.hardware.contexthub-V3-ndk",
+        "libbinder_ndk",
         "libcutils",
         "liblog",
         "libutils",
@@ -223,13 +237,15 @@ filegroup {
 cc_binary {
     name: "chre_aidl_hal_client",
     vendor: true,
+    cpp_std: "c++20",
     local_include_dirs: [
         "host/common/include",
         "chre_api/include",
     ],
     srcs: [
-        "host/common/file_stream.cc",
         "host/common/chre_aidl_hal_client.cc",
+        "host/common/file_stream.cc",
+        "host/common/log.cc",
     ],
     shared_libs: [
         "android.hardware.contexthub-V3-ndk",
@@ -239,8 +255,15 @@ cc_binary {
         "liblog",
         "libutils",
     ],
-    static_libs: ["chre_host_common"],
-    cflags: ["-Wall", "-Werror", "-fexceptions"],
+    static_libs: [
+        "chre_client",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-fexceptions",
+        "-DLOG_TAG=\"CHRE.HAL.CLIENT\"",
+    ],
 }
 
 cc_test {
@@ -452,9 +475,9 @@ cc_test_host {
         "host/test/**/*_test.cc",
         "host/hal_generic/common/hal_client_manager.cc",
         "host/common/fragmented_load_transaction.cc",
+        "host/common/hal_client.cc",
     ],
     local_include_dirs: [
-        "util/include",
         "host/common/include",
         "host/hal_generic/common/",
         "util/include/",
@@ -463,8 +486,9 @@ cc_test_host {
     ],
     static_libs: [
         "android.hardware.contexthub-V3-ndk",
-        "event_logger",
+        "chre_flags_c_lib",
         "chre_host_common",
+        "event_logger",
         "libgmock",
     ],
     shared_libs: [
@@ -474,6 +498,7 @@ cc_test_host {
         "liblog",
         "libjsoncpp",
         "libbinder_ndk",
+        "server_configurable_flags",
     ],
     header_libs: [
         "chre_flatbuffers",
@@ -495,15 +520,7 @@ cc_test_host {
 genrule {
     name: "chre_atoms_log.h",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --header $(genDir)/chre_atoms_log.h " +
-         "--module chre " +
-         "--namespace android,chre,Atoms " +
-         "--vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
-    srcs: [
-        "//hardware/google/pixel/pixelstats:pixelatoms_proto",
-        ":libstats_atom_options_protos",
-        ":libprotobuf-internal-descriptor-proto",
-    ],
+    cmd: "$(location stats-log-api-gen) --header $(genDir)/chre_atoms_log.h --module chre --namespace android,chre,Atoms --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
     out: [
         "chre_atoms_log.h",
     ],
@@ -1045,5 +1062,6 @@ aconfig_declarations {
 cc_aconfig_library {
     name: "chre_flags_c_lib",
     aconfig_declarations: "chre_flags",
+    host_supported: true,
     vendor: true,
 }

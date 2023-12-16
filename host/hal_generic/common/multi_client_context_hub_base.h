@@ -17,16 +17,13 @@
 #ifndef ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
 #define ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
 
-#ifndef LOG_TAG
-#define LOG_TAG "CHRE.HAL"
-#endif
-
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
 #include <chre_host/generated/host_messages_generated.h>
 
 #include "chre_connection_callback.h"
 #include "chre_host/napp_header.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
+#include "chre_host/time_syncer.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_client_id.h"
@@ -39,7 +36,7 @@ using namespace android::chre;
 using ::ndk::ScopedAStatus;
 
 /**
- * The base class of multiclients HAL.
+ * The base class of multiclient HAL.
  *
  * A subclass should initiate mConnection, mHalClientManager and
  * mPreloadedNanoappLoader in its constructor.
@@ -52,6 +49,8 @@ class MultiClientContextHubBase
  public:
   /** The entry point of death recipient for a disconnected client. */
   static void onClientDied(void *cookie);
+
+  MultiClientContextHubBase();
 
   // functions implementing IContextHub
   ScopedAStatus getContextHubs(
@@ -79,6 +78,9 @@ class MultiClientContextHubBase
   ScopedAStatus onNanSessionStateChanged(
       const NanSessionStateUpdate &in_update) override;
   ScopedAStatus setTestMode(bool enable) override;
+  ScopedAStatus sendMessageDeliveryStatusToHub(
+      int32_t contextHubId,
+      const MessageDeliveryStatus &messageDeliveryStatus) override;
 
   // The callback function implementing ChreConnectionCallback
   void handleMessageFromChre(const unsigned char *messageBuffer,
@@ -103,7 +105,12 @@ class MultiClientContextHubBase
 
   static constexpr uint32_t kDefaultTestModeTransactionId = 0x80000000;
 
-  MultiClientContextHubBase() = default;
+  void tryTimeSync(size_t numOfRetries, useconds_t retryDelayUs) {
+    if (mConnection->isTimeSyncNeeded()) {
+      TimeSyncer::sendTimeSyncWithRetry(mConnection.get(), numOfRetries,
+                                        retryDelayUs);
+    }
+  }
 
   bool sendFragmentedLoadRequest(HalClientId clientId,
                                  FragmentedLoadRequest &fragmentedLoadRequest);
@@ -130,6 +137,8 @@ class MultiClientContextHubBase
     return mSettingEnabled.find(setting) != mSettingEnabled.end() &&
            mSettingEnabled[setting];
   }
+
+  HalClientManager::DeadClientUnlinker mDeadClientUnlinker;
 
   // HAL is the unique owner of the communication channel to CHRE.
   std::unique_ptr<ChreConnection> mConnection{};

@@ -15,6 +15,7 @@
  */
 
 #include "multi_client_context_hub_base.h"
+
 #include <chre/platform/shared/host_protocol_common.h>
 #include <chre_host/generated/host_messages_generated.h>
 #include <chre_host/log.h>
@@ -22,6 +23,7 @@
 #include "chre_host/config_util.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
+#include "hal_error.h"
 #include "permissions_util.h"
 
 namespace android::hardware::contexthub::common::implementation {
@@ -38,12 +40,6 @@ constexpr uint32_t kDefaultHubId = 0;
 constexpr auto kHubInfoQueryTimeout = std::chrono::seconds(5);
 // timeout for enable/disable test mode, which is synchronous
 constexpr std::chrono::duration ktestModeTimeOut = std::chrono::seconds(5);
-
-enum class HalErrorCode : int32_t {
-  OPERATION_FAILED = -1,
-  INVALID_RESULT = -2,
-  INVALID_ARGUMENT = -3,
-};
 
 bool isValidContextHubId(uint32_t hubId) {
   if (hubId != kDefaultHubId) {
@@ -90,15 +86,33 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
 }
 
 // functions that help to generate ScopedAStatus from different values.
-inline ScopedAStatus fromServiceError(HalErrorCode errorCode) {
+inline ScopedAStatus fromServiceError(HalError errorCode) {
   return ScopedAStatus::fromServiceSpecificError(
       static_cast<int32_t>(errorCode));
 }
 inline ScopedAStatus fromResult(bool result) {
   return result ? ScopedAStatus::ok()
-                : fromServiceError(HalErrorCode::OPERATION_FAILED);
+                : fromServiceError(HalError::OPERATION_FAILED);
 }
 }  // anonymous namespace
+
+MultiClientContextHubBase::MultiClientContextHubBase() {
+  mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
+      AIBinder_DeathRecipient_new(onClientDied));
+  AIBinder_DeathRecipient_setOnUnlinked(
+      mDeathRecipient.get(), /*onUnlinked= */ [](void *cookie) {
+        LOGI("Callback is unlinked. Releasing the death recipient cookie.");
+        delete static_cast<HalDeathRecipientCookie *>(cookie);
+      });
+  mDeadClientUnlinker =
+      [&deathRecipient = mDeathRecipient](
+          const std::shared_ptr<IContextHubCallback> &callback,
+          void *deathRecipientCookie) {
+        return AIBinder_unlinkToDeath(callback->asBinder().get(),
+                                      deathRecipient.get(),
+                                      deathRecipientCookie) == STATUS_OK;
+      };
+}
 
 ScopedAStatus MultiClientContextHubBase::getContextHubs(
     std::vector<ContextHubInfo> *contextHubInfos) {
@@ -109,7 +123,7 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
     HostProtocolHost::encodeHubInfoRequest(builder);
     if (!mConnection->sendMessage(builder)) {
       LOGE("Failed to send a message to CHRE to get context hub info.");
-      return fromServiceError(HalErrorCode::OPERATION_FAILED);
+      return fromServiceError(HalError::OPERATION_FAILED);
     }
     mHubInfoCondition.wait_for(lock, kHubInfoQueryTimeout,
                                [this]() { return mContextHubInfo != nullptr; });
@@ -120,7 +134,7 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
   }
   LOGE("Unable to get a valid context hub info for PID %d",
        AIBinder_getCallingPid());
-  return fromServiceError(HalErrorCode::INVALID_RESULT);
+  return fromServiceError(HalError::INVALID_RESULT);
 }
 
 ScopedAStatus MultiClientContextHubBase::loadNanoapp(
@@ -353,14 +367,14 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
       break;
     default:
       LOGE("Unsupported host endpoint type %" PRIu32, info.type);
-      return fromServiceError(HalErrorCode::INVALID_ARGUMENT);
+      return fromServiceError(HalError::INVALID_ARGUMENT);
   }
 
   uint16_t endpointId = info.hostEndpointId;
   pid_t pid = AIBinder_getCallingPid();
   if (!mHalClientManager->registerEndpointId(pid, info.hostEndpointId) ||
       !mHalClientManager->mutateEndpointIdFromHostIfNeeded(pid, endpointId)) {
-    return fromServiceError(HalErrorCode::INVALID_ARGUMENT);
+    return fromServiceError(HalError::INVALID_ARGUMENT);
   }
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeHostEndpointConnected(
@@ -395,6 +409,13 @@ ScopedAStatus MultiClientContextHubBase::onNanSessionStateChanged(
 
 ScopedAStatus MultiClientContextHubBase::setTestMode(bool enable) {
   return fromResult(enable ? enableTestMode() : disableTestMode());
+}
+
+ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
+    int32_t /* contextHubId */,
+    const MessageDeliveryStatus & /* messageDeliveryStatus */) {
+  // TODO(b/312417087): Implement reliable message support - transaction status
+  return ndk::ScopedAStatus::ok();
 }
 
 bool MultiClientContextHubBase::enableTestMode() {
@@ -471,6 +492,14 @@ void MultiClientContextHubBase::handleMessageFromChre(
       onNanoappLoadResponse(*message.AsLoadNanoappResponse(), clientId);
       break;
     }
+    case fbs::ChreMessage::TimeSyncRequest: {
+      if (mConnection->isTimeSyncNeeded()) {
+        TimeSyncer::sendTimeSync(mConnection.get());
+      } else {
+        LOGW("Received an unexpected time sync request from CHRE.");
+      }
+      break;
+    }
     case fbs::ChreMessage::UnloadNanoappResponse: {
       onNanoappUnloadResponse(*message.AsUnloadNanoappResponse(), clientId);
       break;
@@ -509,6 +538,9 @@ void MultiClientContextHubBase::handleHubInfoResponse(
   mContextHubInfo->chreApiMinorVersion = extractChreApiMinorVersion(version);
   mContextHubInfo->chrePatchVersion = extractChrePatchVersion(version);
   mContextHubInfo->supportedPermissions = kSupportedPermissions;
+
+  // TODO(b/312417087): Implement reliable message support
+  mContextHubInfo->supportsReliableMessages = false;
   mHubInfoCondition.notify_all();
 }
 

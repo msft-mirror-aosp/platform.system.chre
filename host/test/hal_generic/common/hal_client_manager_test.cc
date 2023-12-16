@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <stdlib.h>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <thread>
 
@@ -36,6 +36,7 @@ namespace {
 using aidl::android::hardware::contexthub::AsyncEventType;
 using aidl::android::hardware::contexthub::BnContextHubCallback;
 using aidl::android::hardware::contexthub::ContextHubMessage;
+using aidl::android::hardware::contexthub::MessageDeliveryStatus;
 using aidl::android::hardware::contexthub::NanoappInfo;
 using aidl::android::hardware::contexthub::NanSessionRequest;
 
@@ -48,20 +49,21 @@ using ::testing::Return;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAre;
 
-using HalClient = HalClientManager::HalClient;
+using HalClient = HalClientManager::Client;
 
-static constexpr pid_t kSystemServerPid = 1000;
+constexpr pid_t kSystemServerPid = 1000;
 // The uuid assigned to ContextHubService
-static const std::string kSystemServerUuid = "9a17008d6bf1445a90116d21bd985b6c";
+const std::string kSystemServerUuid = "9a17008d6bf1445a90116d21bd985b6c";
 
-static constexpr pid_t kVendorPid = 1001;
-static const std::string kVendorUuid = "6e406b36cf4f4c0d8183db3708f45d8f";
+constexpr pid_t kVendorPid = 1001;
+const std::string kVendorUuid = "6e406b36cf4f4c0d8183db3708f45d8f";
 
 const std::string kClientIdMappingFilePath = "./chre_hal_clients.json";
+const std::string kClientName = "HalClientManagerTest";
 
 class ContextHubCallbackForTest : public BnContextHubCallback {
  public:
-  ContextHubCallbackForTest(const std::string &uuid) {
+  explicit ContextHubCallbackForTest(const std::string &uuid) {
     assert(uuid.length() == 32);  // 2 digits for one bytes x 16 bytes
     for (int i = 0; i < 16; i++) {
       mUuid[i] = strtol(uuid.substr(i * 2, 2).c_str(), /* end_ptr= */ nullptr,
@@ -94,12 +96,25 @@ class ContextHubCallbackForTest : public BnContextHubCallback {
       const NanSessionRequest & /* request */) override {
     return ScopedAStatus::ok();
   }
+
+  ScopedAStatus handleMessageDeliveryStatus(
+      char16_t /* hostEndPointId */,
+      const MessageDeliveryStatus & /* messageDeliveryStatus */) override {
+    return ScopedAStatus::ok();
+  }
+
   ScopedAStatus getUuid(std::array<uint8_t, 16> *out_uuid) override {
     *out_uuid = mUuid;
     return ScopedAStatus::ok();
   }
 
+  ScopedAStatus getName(std::string *out_name) override {
+    *out_name = kClientName;
+    return ScopedAStatus::ok();
+  }
+
  private:
+  const std::string kClientName = "HalClientManagerUnitTest";
   std::array<uint8_t, 16> mUuid{};
 };
 
@@ -112,13 +127,16 @@ class HalClientManagerForTest : public HalClientManager {
       : HalClientManager(std::move(deadClientUnlinker), clientIdMappingFilePath,
                          reservedClientIds) {}
 
-  const std::vector<HalClient> getClients() {
+  const std::vector<Client> getClients() {
     return mClients;
   }
 
   bool createClientForTest(const std::string &uuid, pid_t pid) {
     // No need to hold the lock during a unit test which is single-threaded
-    return createClientLocked(uuid, pid, /* callback= */ nullptr,
+    std::shared_ptr<ContextHubCallbackForTest> callback =
+        ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
+            kSystemServerUuid);
+    return createClientLocked(uuid, pid, callback,
                               /* deathRecipientCookie= */ nullptr);
   }
 
@@ -136,6 +154,10 @@ class HalClientManagerForTest : public HalClientManager {
 
   static const char *getUuidTag() {
     return kJsonUuid;
+  }
+
+  static const char *getNameTag() {
+    return kJsonName;
   }
 };
 
@@ -173,6 +195,7 @@ TEST_F(HalClientManagerTest, ClientIdMappingFile) {
     Json::Value mapping;
     mapping[HalClientManagerForTest::getClientIdTag()] = systemClientId;
     mapping[HalClientManagerForTest::getUuidTag()] = kSystemServerUuid;
+    mapping[HalClientManagerForTest::getNameTag()] = kClientName;
     mappings.append(mapping);
     Json::StreamWriterBuilder factory;
     std::unique_ptr<Json::StreamWriter> const writer(factory.newStreamWriter());
@@ -186,8 +209,9 @@ TEST_F(HalClientManagerTest, ClientIdMappingFile) {
   std::shared_ptr<ContextHubCallbackForTest> callback =
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
           kSystemServerUuid);
-  EXPECT_TRUE(halClientManager->registerCallback(kSystemServerPid, callback,
-                                                 /* cookie= */ nullptr));
+  EXPECT_TRUE(
+      halClientManager->registerCallback(kSystemServerPid, callback,
+                                         /* deathRecipientCookie= */ nullptr));
 
   std::vector<HalClient> clients = halClientManager->getClients();
   const HalClient &client = clients.front();
@@ -207,8 +231,9 @@ TEST_F(HalClientManagerTest, CallbackRegistryBasic) {
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
           kSystemServerUuid);
 
-  EXPECT_TRUE(halClientManager->registerCallback(kSystemServerPid, callback,
-                                                 /* cookie= */ nullptr));
+  EXPECT_TRUE(
+      halClientManager->registerCallback(kSystemServerPid, callback,
+                                         /* deathRecipientCookie= */ nullptr));
 
   std::vector<HalClient> clients = halClientManager->getClients();
   const HalClient &client = clients.front();
@@ -231,13 +256,15 @@ TEST_F(HalClientManagerTest, CallbackRegistryTwiceFromSameClient) {
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
           kSystemServerUuid);
 
-  EXPECT_TRUE(halClientManager->registerCallback(kSystemServerPid, callbackA,
-                                                 /* cookie= */ nullptr));
+  EXPECT_TRUE(
+      halClientManager->registerCallback(kSystemServerPid, callbackA,
+                                         /* deathRecipientCookie= */ nullptr));
   EXPECT_THAT(halClientManager->getClients(), SizeIs(1));
   EXPECT_EQ(halClientManager->getClients().front().callback, callbackA);
   // Same client can override its callback
-  EXPECT_TRUE(halClientManager->registerCallback(kSystemServerPid, callbackB,
-                                                 /* cookie= */ nullptr));
+  EXPECT_TRUE(
+      halClientManager->registerCallback(kSystemServerPid, callbackB,
+                                         /* deathRecipientCookie= */ nullptr));
   EXPECT_THAT(halClientManager->getClients(), SizeIs(1));
   EXPECT_EQ(halClientManager->getClients().front().callback, callbackB);
 }
@@ -313,9 +340,9 @@ TEST_F(HalClientManagerTest, ClientCreationWithReservedClientId) {
   EXPECT_EQ(halClientManager->getNextClientId(),
             ::chre::kHostClientIdUnspecified);
   // Verify that every reserved client id is not used:
-  for (HalClient client : halClientManager->getClients()) {
+  for (const HalClient &client : halClientManager->getClients()) {
     EXPECT_EQ(reservedClientIds.find(client.clientId), reservedClientIds.end());
-  };
+  }
 }
 
 TEST_F(HalClientManagerTest, TransactionRegistryAndOverridden) {
@@ -376,9 +403,9 @@ TEST_F(HalClientManagerTest, EndpointRegistry) {
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(kVendorUuid);
 
   halClientManager->registerCallback(kSystemServerPid, systemCallback,
-                                     /* cookie= */ nullptr);
+                                     /* deathRecipientCookie= */ nullptr);
   halClientManager->registerCallback(kVendorPid, vendorCallback,
-                                     /* cookie= */ nullptr);
+                                     /* deathRecipientCookie= */ nullptr);
 
   std::vector<HalClient> clients = halClientManager->getClients();
   EXPECT_THAT(clients, SizeIs(2));
@@ -479,7 +506,7 @@ TEST_F(HalClientManagerTest, handleDeathClient) {
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
           kSystemServerUuid);
   halClientManager->registerCallback(kSystemServerPid, callback,
-                                     /* cookie= */ nullptr);
+                                     /* deathRecipientCookie= */ nullptr);
   halClientManager->registerEndpointId(kSystemServerPid, /* endpointId= */ 10);
 
   halClientManager->handleClientDeath(kSystemServerPid);
