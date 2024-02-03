@@ -51,6 +51,7 @@ filegroup {
         "host/common/time_syncer.cc",
         "host/common/config_util.cc",
         "host/common/log_message_parser.cc",
+        "host/common/bt_snoop_log_parser.cc",
         "host/hal_generic/common/permissions_util.cc",
         "host/hal_generic/common/hal_client_manager.cc",
         "host/hal_generic/common/multi_client_context_hub_base.cc",
@@ -361,7 +362,16 @@ cc_test_host {
 genrule {
     name: "chre_atoms_log.h",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --header $(genDir)/chre_atoms_log.h --module chre --namespace android,chre,Atoms --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
+    srcs: [
+        "core/chre_metrics_with_atom.proto",
+        "core/chre_metrics.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-descriptor-proto",
+    ],
+    cmd: "$(location stats-log-api-gen) --header $(out) " +
+        "--module chre " +
+        "--namespace android,chre,Atoms " +
+        "--vendor-proto $(location core/chre_metrics_with_atom.proto)",
     out: [
         "chre_atoms_log.h",
     ],
@@ -722,6 +732,7 @@ cc_library_static {
     ],
     header_libs: [
         "chre_api",
+        "chre_flatbuffers",
     ],
     defaults: [
         "chre_linux_cflags",
@@ -776,6 +787,7 @@ cc_defaults {
         "host/common/fragmented_load_transaction.cc",
         "host/common/host_protocol_host.cc",
         "host/common/log_message_parser.cc",
+        "host/common/bt_snoop_log_parser.cc",
         "host/common/socket_server.cc",
         "host/common/st_hal_lpma_handler.cc",
         "platform/shared/host_protocol_common.cc",
