@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_context_hub",
     // See: http://go/android-license-faq
     // A large-scale-change added 'default_applicable_licenses' to import
     // all of the 'license_kinds' from "system_chre_license"
@@ -30,10 +31,12 @@ java_library {
         "androidx.test.rules",
         "chre-test-utils",
         "chre_pigweed_utils",
-        "truth-prebuilt",
+        "truth",
         "guava",
         "chre_api_test_proto_java_lite",
         "pw_rpc_java_client",
+        "chre_reliable_message_test_java_proto",
+        "chre_test_common_java_proto",
     ],
 
     sdk_version: "test_current",

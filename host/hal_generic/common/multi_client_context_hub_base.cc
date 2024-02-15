@@ -15,18 +15,20 @@
  */
 
 #include "multi_client_context_hub_base.h"
+
 #include <chre/platform/shared/host_protocol_common.h>
 #include <chre_host/generated/host_messages_generated.h>
 #include <chre_host/log.h>
 #include "chre/event.h"
 #include "chre_host/config_util.h"
-#include "chre_host/file_stream.h"
 #include "chre_host/fragmented_load_transaction.h"
+#include "chre_host/hal_error.h"
 #include "chre_host/host_protocol_host.h"
 #include "permissions_util.h"
 
 namespace android::hardware::contexthub::common::implementation {
 
+using ::android::base::WriteStringToFd;
 using ::android::chre::FragmentedLoadTransaction;
 using ::android::chre::getStringFromByteVector;
 using ::ndk::ScopedAStatus;
@@ -37,12 +39,11 @@ constexpr uint32_t kDefaultHubId = 0;
 
 // timeout for calling getContextHubs(), which is synchronous
 constexpr auto kHubInfoQueryTimeout = std::chrono::seconds(5);
+// timeout for enable/disable test mode, which is synchronous
+constexpr std::chrono::duration ktestModeTimeOut = std::chrono::seconds(5);
 
-enum class HalErrorCode : int32_t {
-  OPERATION_FAILED = -1,
-  INVALID_RESULT = -2,
-  INVALID_ARGUMENT = -3,
-};
+// The transaction id for synchronously load/unload a nanoapp in test mode.
+constexpr int32_t kTestModeTransactionId{static_cast<int32_t>(0x80000000)};
 
 bool isValidContextHubId(uint32_t hubId) {
   if (hubId != kDefaultHubId) {
@@ -89,15 +90,34 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
 }
 
 // functions that help to generate ScopedAStatus from different values.
-inline ScopedAStatus fromServiceError(HalErrorCode errorCode) {
+inline ScopedAStatus fromServiceError(HalError errorCode) {
   return ScopedAStatus::fromServiceSpecificError(
       static_cast<int32_t>(errorCode));
 }
 inline ScopedAStatus fromResult(bool result) {
   return result ? ScopedAStatus::ok()
-                : fromServiceError(HalErrorCode::OPERATION_FAILED);
+                : fromServiceError(HalError::OPERATION_FAILED);
 }
 }  // anonymous namespace
+
+MultiClientContextHubBase::MultiClientContextHubBase() {
+  mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
+      AIBinder_DeathRecipient_new(onClientDied));
+  AIBinder_DeathRecipient_setOnUnlinked(
+      mDeathRecipient.get(), /*onUnlinked= */ [](void *cookie) {
+        LOGI("Callback is unlinked. Releasing the death recipient cookie.");
+        delete static_cast<HalDeathRecipientCookie *>(cookie);
+      });
+  mDeadClientUnlinker =
+      [&deathRecipient = mDeathRecipient](
+          const std::shared_ptr<IContextHubCallback> &callback,
+          void *deathRecipientCookie) {
+        return AIBinder_unlinkToDeath(callback->asBinder().get(),
+                                      deathRecipient.get(),
+                                      deathRecipientCookie) == STATUS_OK;
+      };
+  mLogger.init();
+}
 
 ScopedAStatus MultiClientContextHubBase::getContextHubs(
     std::vector<ContextHubInfo> *contextHubInfos) {
@@ -108,7 +128,7 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
     HostProtocolHost::encodeHubInfoRequest(builder);
     if (!mConnection->sendMessage(builder)) {
       LOGE("Failed to send a message to CHRE to get context hub info.");
-      return fromServiceError(HalErrorCode::OPERATION_FAILED);
+      return fromServiceError(HalError::OPERATION_FAILED);
     }
     mHubInfoCondition.wait_for(lock, kHubInfoQueryTimeout,
                                [this]() { return mContextHubInfo != nullptr; });
@@ -119,7 +139,7 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
   }
   LOGE("Unable to get a valid context hub info for PID %d",
        AIBinder_getCallingPid());
-  return fromServiceError(HalErrorCode::INVALID_RESULT);
+  return fromServiceError(HalError::INVALID_RESULT);
 }
 
 ScopedAStatus MultiClientContextHubBase::loadNanoapp(
@@ -135,20 +155,25 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary,
       mConnection->getLoadFragmentSizeBytes());
+  pid_t pid = AIBinder_getCallingPid();
   if (!mHalClientManager->registerPendingLoadTransaction(
-          std::move(transaction))) {
+          pid, std::move(transaction))) {
     return fromResult(false);
   }
-  auto clientId = mHalClientManager->getClientId();
+  auto clientId = mHalClientManager->getClientId(pid);
   auto request = mHalClientManager->getNextFragmentedLoadRequest();
 
   if (request.has_value() &&
       sendFragmentedLoadRequest(clientId, request.value())) {
+    mEventLogger.logNanoappLoad(appBinary, /* success= */ true);
     return ScopedAStatus::ok();
   }
   LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
        appBinary.nanoappId);
   mHalClientManager->resetPendingLoadTransaction();
+  // TODO(b/284481035): The result should be logged after the async response is
+  //  received.
+  mEventLogger.logNanoappLoad(appBinary, /* success= */ false);
   return fromResult(false);
 }
 
@@ -168,10 +193,13 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  if (!mHalClientManager->registerPendingUnloadTransaction(transactionId)) {
+  pid_t pid = AIBinder_getCallingPid();
+  if (transactionId != kTestModeTransactionId &&
+      !mHalClientManager->registerPendingUnloadTransaction(pid,
+                                                           transactionId)) {
     return fromResult(false);
   }
-  HalClientId clientId = mHalClientManager->getClientId();
+  HalClientId clientId = mHalClientManager->getClientId(pid);
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeUnloadNanoappRequest(
       builder, transactionId, appId, /* allowSystemNanoappUnload= */ false);
@@ -182,6 +210,9 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
   if (!result) {
     mHalClientManager->resetPendingUnloadTransaction(clientId, transactionId);
   }
+  // TODO(b/284481035): The result should be logged after the async response is
+  //  received.
+  mEventLogger.logNanoappUnload(appId, result);
   return fromResult(result);
 }
 
@@ -255,9 +286,9 @@ ScopedAStatus MultiClientContextHubBase::queryNanoapps(int32_t contextHubId) {
   }
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeNanoappListRequest(builder);
-  HostProtocolHost::mutateHostClientId(builder.GetBufferPointer(),
-                                       builder.GetSize(),
-                                       mHalClientManager->getClientId());
+  HostProtocolHost::mutateHostClientId(
+      builder.GetBufferPointer(), builder.GetSize(),
+      mHalClientManager->getClientId(AIBinder_getCallingPid()));
   return fromResult(mConnection->sendMessage(builder));
 }
 
@@ -291,12 +322,18 @@ ScopedAStatus MultiClientContextHubBase::registerCallback(
     LOGE("Callback of context hub HAL must not be null");
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  // If everything is successful cookie will be released by the callback of
-  // binder unlinking (callback overridden).
-  auto *cookie = new HalDeathRecipientCookie(this, AIBinder_getCallingPid());
-  if (!mHalClientManager->registerCallback(callback, mDeathRecipient, cookie)) {
-    LOGE("Unable to register the callback");
+  pid_t pid = AIBinder_getCallingPid();
+  auto *cookie = new HalDeathRecipientCookie(this, pid);
+  if (AIBinder_linkToDeath(callback->asBinder().get(), mDeathRecipient.get(),
+                           cookie) != STATUS_OK) {
+    LOGE("Failed to link a client binder (pid=%d) to the death recipient", pid);
     delete cookie;
+    return fromResult(false);
+  }
+  // If AIBinder_linkToDeath is successful the cookie will be released by the
+  // callback of binder unlinking (callback overridden).
+  if (!mHalClientManager->registerCallback(pid, callback, cookie)) {
+    LOGE("Unable to register a client (pid=%d) callback", pid);
     return fromResult(false);
   }
   return ScopedAStatus::ok();
@@ -316,7 +353,9 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
   HostProtocolHost::encodeNanoappMessage(
       builder, message.nanoappId, message.messageType, hostEndpointId,
       message.messageBody.data(), message.messageBody.size());
-  return fromResult(mConnection->sendMessage(builder));
+  bool success = mConnection->sendMessage(builder);
+  mEventLogger.logMessageToNanoapp(message, success);
+  return fromResult(success);
 }
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
@@ -334,14 +373,14 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
       break;
     default:
       LOGE("Unsupported host endpoint type %" PRIu32, info.type);
-      return fromServiceError(HalErrorCode::INVALID_ARGUMENT);
+      return fromServiceError(HalError::INVALID_ARGUMENT);
   }
 
   uint16_t endpointId = info.hostEndpointId;
-  if (!mHalClientManager->registerEndpointId(info.hostEndpointId) ||
-      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(
-          AIBinder_getCallingPid(), endpointId)) {
-    return fromServiceError(HalErrorCode::INVALID_ARGUMENT);
+  pid_t pid = AIBinder_getCallingPid();
+  if (!mHalClientManager->registerEndpointId(pid, info.hostEndpointId) ||
+      !mHalClientManager->mutateEndpointIdFromHostIfNeeded(pid, endpointId)) {
+    return fromServiceError(HalError::INVALID_ARGUMENT);
   }
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeHostEndpointConnected(
@@ -353,10 +392,11 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
 ScopedAStatus MultiClientContextHubBase::onHostEndpointDisconnected(
     char16_t in_hostEndpointId) {
   HostEndpointId hostEndpointId = in_hostEndpointId;
+  pid_t pid = AIBinder_getCallingPid();
   bool isSuccessful = false;
-  if (mHalClientManager->removeEndpointId(hostEndpointId) &&
-      mHalClientManager->mutateEndpointIdFromHostIfNeeded(
-          AIBinder_getCallingPid(), hostEndpointId)) {
+  if (mHalClientManager->removeEndpointId(pid, hostEndpointId) &&
+      mHalClientManager->mutateEndpointIdFromHostIfNeeded(pid,
+                                                          hostEndpointId)) {
     flatbuffers::FlatBufferBuilder builder(64);
     HostProtocolHost::encodeHostEndpointDisconnected(builder, hostEndpointId);
     isSuccessful = mConnection->sendMessage(builder);
@@ -373,9 +413,89 @@ ScopedAStatus MultiClientContextHubBase::onNanSessionStateChanged(
   return ndk::ScopedAStatus::ok();
 }
 
-ScopedAStatus MultiClientContextHubBase::setTestMode(bool /*enable*/) {
-  // To be implemented.
+ScopedAStatus MultiClientContextHubBase::setTestMode(bool enable) {
+  if (enable) {
+    return fromResult(enableTestMode());
+  }
+  disableTestMode();
   return ScopedAStatus::ok();
+}
+
+ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
+    int32_t /* contextHubId */,
+    const MessageDeliveryStatus & /* messageDeliveryStatus */) {
+  // TODO(b/312417087): Implement reliable message support - transaction status
+  return ndk::ScopedAStatus::ok();
+}
+
+bool MultiClientContextHubBase::enableTestMode() {
+  std::unique_lock<std::mutex> lock(mTestModeMutex);
+  if (mIsTestModeEnabled) {
+    return true;
+  }
+
+  // Pulling out a list of loaded nanoapps.
+  mTestModeNanoapps.reset();
+  if (!queryNanoapps(kDefaultHubId).isOk()) {
+    LOGE("Failed to get a list of loaded nanoapps to enable test mode");
+    mTestModeNanoapps.emplace();
+    return false;
+  }
+  if (!mEnableTestModeCv.wait_for(lock, ktestModeTimeOut, [&]() {
+        return mTestModeNanoapps.has_value() &&
+               mTestModeSystemNanoapps.has_value();
+      })) {
+    LOGE("Failed to get a list of loaded nanoapps within %" PRIu64
+         " seconds to enable test mode",
+         ktestModeTimeOut.count());
+    mTestModeNanoapps.emplace();
+    return false;
+  }
+
+  // Unload each nanoapp.
+  // mTestModeNanoapps tracks nanoapps that are actually unloaded. Removing an
+  // element from std::vector is O(n) but such a removal should rarely happen.
+  LOGI("Trying to unload %" PRIu64 " nanoapps to enable test mode",
+       mTestModeNanoapps->size());
+  for (auto iter = mTestModeNanoapps->begin();
+       iter != mTestModeNanoapps->end();) {
+    uint64_t appId = *iter;
+    if (!unloadNanoapp(kDefaultHubId, appId, kTestModeTransactionId).isOk()) {
+      LOGW("Failed to request to unload nanoapp 0x%" PRIx64
+           " to enable test mode",
+           appId);
+      iter = mTestModeNanoapps->erase(iter);
+      continue;
+    }
+    mTestModeSyncUnloadResult.reset();
+    mEnableTestModeCv.wait_for(lock, ktestModeTimeOut, [&]() {
+      return mTestModeSyncUnloadResult.has_value();
+    });
+    if (!*mTestModeSyncUnloadResult) {
+      LOGW("Failed to unload nanoapp 0x%" PRIx64 " to enable test mode", appId);
+      iter = mTestModeNanoapps->erase(iter);
+      continue;
+    }
+    iter++;
+  }
+  LOGI("%" PRIu64 " nanoapps are unloaded to enable test mode",
+       mTestModeNanoapps->size());
+
+  mIsTestModeEnabled = true;
+  mTestModeNanoapps.emplace();
+  return true;
+}
+
+void MultiClientContextHubBase::disableTestMode() {
+  std::unique_lock<std::mutex> lock(mTestModeMutex);
+  if (!mIsTestModeEnabled) {
+    return;
+  }
+  int numOfNanoappsLoaded =
+      mPreloadedNanoappLoader->loadPreloadedNanoapps(mTestModeSystemNanoapps);
+  LOGI("%d nanoapps are reloaded to recover from test mode",
+       numOfNanoappsLoaded);
+  mIsTestModeEnabled = false;
 }
 
 void MultiClientContextHubBase::handleMessageFromChre(
@@ -402,12 +522,41 @@ void MultiClientContextHubBase::handleMessageFromChre(
       onNanoappLoadResponse(*message.AsLoadNanoappResponse(), clientId);
       break;
     }
+    case fbs::ChreMessage::TimeSyncRequest: {
+      if (mConnection->isTimeSyncNeeded()) {
+        TimeSyncer::sendTimeSync(mConnection.get());
+      } else {
+        LOGW("Received an unexpected time sync request from CHRE.");
+      }
+      break;
+    }
     case fbs::ChreMessage::UnloadNanoappResponse: {
       onNanoappUnloadResponse(*message.AsUnloadNanoappResponse(), clientId);
       break;
     }
     case fbs::ChreMessage::NanoappMessage: {
       onNanoappMessage(*message.AsNanoappMessage());
+      break;
+    }
+    case fbs::ChreMessage::DebugDumpData: {
+      onDebugDumpData(*message.AsDebugDumpData());
+      break;
+    }
+    case fbs::ChreMessage::DebugDumpResponse: {
+      onDebugDumpComplete(*message.AsDebugDumpResponse());
+      break;
+    }
+    case fbs::ChreMessage::LogMessageV2: {
+      const chre::fbs::LogMessageV2T *logMessage = message.AsLogMessageV2();
+      const std::vector<int8_t> &buffer = logMessage->buffer;
+      auto logData = reinterpret_cast<const uint8_t *>(buffer.data());
+      uint32_t numLogsDropped = logMessage->num_logs_dropped;
+      mLogger.logV2(logData, buffer.size(), numLogsDropped);
+      break;
+    }
+    case fbs::ChreMessage::NanoappInstanceIdInfo: {
+      // TODO(b/242760291): Map nanoapp log detokenizers to instance IDs in the
+      //  log message parser.
       break;
     }
     default:
@@ -432,19 +581,59 @@ void MultiClientContextHubBase::handleHubInfoResponse(
   mContextHubInfo->chreApiMinorVersion = extractChreApiMinorVersion(version);
   mContextHubInfo->chrePatchVersion = extractChrePatchVersion(version);
   mContextHubInfo->supportedPermissions = kSupportedPermissions;
+
+  // TODO(b/312417087): Implement reliable message support
+  mContextHubInfo->supportsReliableMessages = false;
   mHubInfoCondition.notify_all();
+}
+
+void MultiClientContextHubBase::onDebugDumpData(
+    const ::chre::fbs::DebugDumpDataT &data) {
+  auto str = std::string(reinterpret_cast<const char *>(data.debug_str.data()),
+                         data.debug_str.size());
+  debugDumpAppend(str);
+}
+
+void MultiClientContextHubBase::onDebugDumpComplete(
+    const ::chre::fbs::DebugDumpResponseT &response) {
+  if (!response.success) {
+    LOGE("Dumping debug information fails");
+  }
+  if (checkDebugFd()) {
+    const std::string &dump = mEventLogger.dump();
+    writeToDebugFile(dump.c_str());
+    writeToDebugFile("\n-- End of CHRE/ASH debug info --\n");
+  }
+  debugDumpComplete();
 }
 
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
+  {
+    std::unique_lock<std::mutex> lock(mTestModeMutex);
+    if (!mTestModeNanoapps.has_value()) {
+      mTestModeNanoapps.emplace();
+      mTestModeSystemNanoapps.emplace();
+      for (const auto &nanoapp : response.nanoapps) {
+        if (nanoapp->is_system) {
+          mTestModeSystemNanoapps->push_back(nanoapp->app_id);
+        } else {
+          mTestModeNanoapps->push_back(nanoapp->app_id);
+        }
+      }
+      mEnableTestModeCv.notify_all();
+    }
+  }
+
   std::shared_ptr<IContextHubCallback> callback =
       mHalClientManager->getCallback(clientId);
   if (callback == nullptr) {
     return;
   }
+
   std::vector<NanoappInfo> appInfoList;
   for (const auto &nanoapp : response.nanoapps) {
-    if (nanoapp == nullptr || nanoapp->is_system) {
+    if (nanoapp->is_system) {
       continue;
     }
     NanoappInfo appInfo;
@@ -463,6 +652,7 @@ void MultiClientContextHubBase::onNanoappListResponse(
     appInfo.rpcServices = rpcServices;
     appInfoList.push_back(appInfo);
   }
+
   callback->handleNanoappInfo(appInfoList);
 }
 
@@ -515,6 +705,12 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
 
 void MultiClientContextHubBase::onNanoappUnloadResponse(
     const fbs::UnloadNanoappResponseT &response, HalClientId clientId) {
+  if (response.transaction_id == kTestModeTransactionId) {
+    std::unique_lock<std::mutex> lock(mTestModeMutex);
+    mTestModeSyncUnloadResult.emplace(response.success);
+    mEnableTestModeCv.notify_all();
+    return;
+  }
   if (mHalClientManager->resetPendingUnloadTransaction(
           clientId, response.transaction_id)) {
     if (auto callback = mHalClientManager->getCallback(clientId);
@@ -527,6 +723,7 @@ void MultiClientContextHubBase::onNanoappUnloadResponse(
 
 void MultiClientContextHubBase::onNanoappMessage(
     const ::chre::fbs::NanoappMessageT &message) {
+  mEventLogger.logMessageFromNanoapp(message);
   ContextHubMessage outMessage;
   outMessage.nanoappId = message.app_id;
   outMessage.hostEndPoint = message.host_endpoint;
@@ -567,11 +764,55 @@ void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
       mConnection->sendMessage(builder);
     }
   }
-  mHalClientManager->handleClientDeath(clientPid, mDeathRecipient);
+  mHalClientManager->handleClientDeath(clientPid);
 }
 
 void MultiClientContextHubBase::onChreRestarted() {
   mIsWifiAvailable.reset();
+  mEventLogger.logContextHubRestart();
   mHalClientManager->handleChreRestart();
+}
+
+binder_status_t MultiClientContextHubBase::dump(int fd,
+                                                const char ** /* args */,
+                                                uint32_t /* numArgs */) {
+  // Dump of CHRE debug data. It waits for the dump to finish before returning.
+  debugDumpStart(fd);
+
+  // Dump debug info of HalClientManager.
+  std::string dumpOfHalClientManager = mHalClientManager->debugDump();
+  if (!WriteStringToFd(dumpOfHalClientManager, fd)) {
+    LOGW("Failed to write debug dump of HalClientManager. Size: %zu.",
+         dumpOfHalClientManager.size());
+  }
+
+  // Dump the status of test mode
+  std::ostringstream testModeDump;
+  testModeDump << "\n-- HAL Test Mode Status --\n\n";
+  {
+    std::lock_guard<std::mutex> lockGuard(mTestModeMutex);
+    testModeDump << (mIsTestModeEnabled ? "Enabled" : "Disabled") << "\n";
+    if (!mTestModeNanoapps.has_value()) {
+      testModeDump << "\nError: Nanoapp list is left unset\n";
+    }
+  }
+  testModeDump << "\n-- End of HAL Test Mode Status --\n";
+  if (!WriteStringToFd(testModeDump.str(), fd)) {
+    LOGW("Failed to write test mode dump");
+  }
+
+  return STATUS_OK;
+}
+
+bool MultiClientContextHubBase::requestDebugDump() {
+  flatbuffers::FlatBufferBuilder builder;
+  HostProtocolHost::encodeDebugDumpRequest(builder);
+  return mConnection->sendMessage(builder);
+}
+
+void MultiClientContextHubBase::writeToDebugFile(const char *str) {
+  if (!WriteStringToFd(std::string(str), getDebugFd())) {
+    LOGW("Failed to write %zu bytes to debug dump fd", strlen(str));
+  }
 }
 }  // namespace android::hardware::contexthub::common::implementation

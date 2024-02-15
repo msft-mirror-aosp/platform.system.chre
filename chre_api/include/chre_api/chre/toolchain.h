@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// IWYU pragma: private, include "chre_api/chre.h"
+// IWYU pragma: friend chre/.*\.h
+
 #ifndef CHRE_TOOLCHAIN_H_
 #define CHRE_TOOLCHAIN_H_
 
@@ -28,6 +31,9 @@
 #define CHRE_DEPRECATED(message) \
   __attribute__((deprecated(message)))
 
+// Indicates that the function does not return (i.e. abort).
+#define CHRE_NO_RETURN __attribute__((noreturn))
+
 // Enable printf-style compiler warnings for mismatched format string and args
 #define CHRE_PRINTF_ATTR(formatPos, argStart) \
   __attribute__((format(printf, formatPos, argStart)))
@@ -35,15 +41,30 @@
 #define CHRE_BUILD_ERROR(message) CHRE_DO_PRAGMA(GCC error message)
 #define CHRE_DO_PRAGMA(message) _Pragma(#message)
 
+// Marks a function as malloc-like, for optimizations with the return pointer
+#define CHRE_MALLOC_ATTR __attribute__((__malloc__))
+
 #elif defined(__ICCARM__) || defined(__CC_ARM)
 // For IAR ARM and Keil MDK-ARM compilers
 
 #define CHRE_PRINTF_ATTR(formatPos, argStart)
 
+#define CHRE_DEPRECATED(message)
+
+#define CHRE_NO_RETURN
+
+#define CHRE_MALLOC_ATTR
+
 #elif defined(_MSC_VER)
 // For Microsoft Visual Studio
 
 #define CHRE_PRINTF_ATTR(formatPos, argStart)
+
+#define CHRE_DEPRECATED(message)
+
+#define CHRE_NO_RETURN
+
+#define CHRE_MALLOC_ATTR
 
 #else  // if !defined(__GNUC__) && !defined(__clang__)
 

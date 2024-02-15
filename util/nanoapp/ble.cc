@@ -20,6 +20,7 @@ namespace chre {
 
 using ble_constants::kGoogleEddystoneUuid;
 using ble_constants::kGoogleNearbyFastpairUuid;
+using ble_constants::kGoogleUuidDataLength;
 using ble_constants::kGoogleUuidMask;
 using ble_constants::kNumScanFilters;
 using ble_constants::kRssiThreshold;
@@ -42,17 +43,42 @@ bool createBleScanFilterForKnownBeacons(struct chreBleScanFilter &filter,
   if (numGenericFilters < kNumScanFilters) {
     return false;
   }
+  memset(&filter, 0, sizeof(filter));
 
   genericFilters[0] = createBleGenericFilter(
-      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kNumScanFilters,
+      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kGoogleUuidDataLength,
       kGoogleEddystoneUuid, kGoogleUuidMask);
   genericFilters[1] = createBleGenericFilter(
-      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kNumScanFilters,
+      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kGoogleUuidDataLength,
       kGoogleNearbyFastpairUuid, kGoogleUuidMask);
 
   filter.rssiThreshold = kRssiThreshold;
   filter.scanFilterCount = kNumScanFilters;
   filter.scanFilters = genericFilters;
+  return true;
+}
+
+bool createBleScanFilterForKnownBeaconsV1_9(
+    struct chreBleScanFilterV1_9 &filter, chreBleGenericFilter *genericFilters,
+    uint8_t numGenericFilters) {
+  if (numGenericFilters < kNumScanFilters) {
+    return false;
+  }
+  memset(&filter, 0, sizeof(filter));
+
+  genericFilters[0] = createBleGenericFilter(
+      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kGoogleUuidDataLength,
+      kGoogleEddystoneUuid, kGoogleUuidMask);
+  genericFilters[1] = createBleGenericFilter(
+      CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16_LE, kGoogleUuidDataLength,
+      kGoogleNearbyFastpairUuid, kGoogleUuidMask);
+
+  filter.rssiThreshold = kRssiThreshold;
+  filter.genericFilterCount = kNumScanFilters;
+  filter.genericFilters = genericFilters;
+
+  filter.broadcasterAddressFilterCount = 0;
+  filter.broadcasterAddressFilters = nullptr;
   return true;
 }
 

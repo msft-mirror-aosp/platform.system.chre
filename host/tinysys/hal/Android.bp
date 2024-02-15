@@ -14,6 +14,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_context_hub",
     // See: http://go/android-license-faq
     // A large-scale-change added 'default_applicable_licenses' to import
     // all of the 'license_kinds' from "system_chre_license"
@@ -24,6 +25,7 @@ package {
 
 cc_binary {
     name: "android.hardware.contexthub-service.tinysys",
+    cpp_std: "c++20",
     defaults: ["hidl_defaults"],
     vendor: true,
     relative_install_path: "hw",
@@ -32,7 +34,7 @@ cc_binary {
         "tinysys_chre_connection.cc",
         "tinysys_context_hub.cc",
         ":st_hal_lpma_handler",
-        ":contexthub_generic_aidl_hal_core",
+        ":contexthub_hal_core",
     ],
     include_dirs: [
         "system/chre/util/include/",
@@ -52,7 +54,7 @@ cc_binary {
     ],
     shared_libs: [
         "android.media.soundtrigger.types-V1-ndk",
-        "android.hardware.contexthub-V2-ndk",
+        "android.hardware.contexthub-V3-ndk",
         "android.hardware.soundtrigger3-V1-ndk",
         "libcutils",
         "liblog",
@@ -61,6 +63,7 @@ cc_binary {
         "libbinder_ndk",
         "libpower",
         "libjsoncpp",
+        "server_configurable_flags",
     ],
     header_libs: [
         "chre_api",
@@ -69,6 +72,7 @@ cc_binary {
     ],
     static_libs: [
         "chre_client",
+        "chre_flags_c_lib",
         "event_logger",
         "pw_varint",
         "pw_detokenizer",

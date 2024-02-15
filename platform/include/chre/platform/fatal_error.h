@@ -40,11 +40,25 @@
   do {                        \
     LOGE(fmt, ##__VA_ARGS__); \
     FATAL_ERROR_QUIT();       \
+    while (1) {               \
+      /* never return */      \
+    }                         \
   } while (0)
 
 /**
  * Fatal error on out of memory error with file and line number.
  */
 #define FATAL_ERROR_OOM() FATAL_ERROR("Out of memory")
+
+namespace chre {
+
+class Nanoapp;
+
+/**
+ * Gracefully handle nanoapp abort sequence with platform-specific actions.
+ */
+[[noreturn]] void handleNanoappAbort(Nanoapp &nanoapp);
+
+}  // namespace chre
 
 #endif  // CHRE_PLATFORM_FATAL_ERROR_H_

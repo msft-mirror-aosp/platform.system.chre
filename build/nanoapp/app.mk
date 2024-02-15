@@ -92,6 +92,11 @@ ifneq ($(CHRE_NANOAPP_USES_WWAN),)
 COMMON_CFLAGS += -DCHRE_NANOAPP_USES_WWAN
 endif
 
+ifneq ($(CHRE_NANOAPP_USES_TOKENIZED_LOGGING),)
+COMMON_CFLAGS += -DCHRE_TOKENIZED_LOGGING_ENABLED
+include $(CHRE_PREFIX)/external/pigweed/pw_tokenizer.mk
+endif
+
 # Common Compiler Flags ########################################################
 
 # Add the CHRE API to the include search path.
@@ -126,8 +131,9 @@ COMMON_CFLAGS += -DNANOAPP_UNSTABLE_ID="\"$(NANOAPP_UNSTABLE_ID)\""
 # Variant-specific Nanoapp Support Source Files ################################
 
 APP_SUPPORT_PATH = $(CHRE_PREFIX)/build/app_support
-DSO_SUPPORT_LIB_PATH = $(CHRE_PREFIX)/platform/shared/nanoapp
-DSO_SUPPORT_LIB_SRCS = $(DSO_SUPPORT_LIB_PATH)/nanoapp_support_lib_dso.cc
+SHARED_NANOAPP_LIB_PATH = $(CHRE_PREFIX)/platform/shared/nanoapp
+DSO_SUPPORT_LIB_SRCS = $(SHARED_NANOAPP_LIB_PATH)/nanoapp_support_lib_dso.cc
+STACK_CHECK_SRCS =  $(SHARED_NANOAPP_LIB_PATH)/nanoapp_stack_check.cc
 
 # Required includes for nanoapp_support_lib_dso.cc, but using a special prefix
 # directory and symlinks to effectively hide them from nanoapps
@@ -171,9 +177,6 @@ include $(CHRE_PREFIX)/std_overrides/std_overrides.mk
 include $(CHRE_PREFIX)/build/defs.mk
 include $(CHRE_PREFIX)/build/common.mk
 
-# Pigweed module includes
-include $(CHRE_PREFIX)/external/pigweed/pw_rpc.mk
-
 # CHRE API version.
 include $(CHRE_PREFIX)/chre_api/chre_api_version.mk
 
@@ -183,6 +186,7 @@ include $(CHRE_TARGET_EXTENSION)
 endif
 include $(CHRE_PREFIX)/build/variant/aosp_cm4_exynos-embos.mk
 include $(CHRE_PREFIX)/build/variant/aosp_riscv55e03_tinysys.mk
+include $(CHRE_PREFIX)/build/variant/aosp_riscv55e300_tinysys.mk
 include $(CHRE_PREFIX)/build/variant/google_arm64_android.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi-uimg.mk

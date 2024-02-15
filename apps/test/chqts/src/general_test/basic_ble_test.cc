@@ -138,6 +138,11 @@ void BasicBleTest::handleTimerEvent() {
     }
     mFlushWasCalled = true;
   } else {
+    if (chreBleFlushAsync(&gFlushCookie)) {
+      sendFatalFailureToHost(
+          "chreBleFlushAsync should return false if batching is not supported");
+    }
+
     if (!chreBleStopScanAsync()) {
       sendFatalFailureToHost("Failed to stop a BLE scan session");
     }
@@ -165,6 +170,13 @@ void BasicBleTest::handleEvent(uint32_t /* senderInstanceId */,
     case CHRE_EVENT_BLE_ADVERTISEMENT:
       handleAdvertisementEvent(
           static_cast<const chreBleAdvertisementEvent *>(eventData));
+      break;
+    case CHRE_EVENT_BLE_BATCH_COMPLETE:
+      // Ignore the event only if we support batching.
+      // Otherwise, it is an unexpected event.
+      if (!mSupportsBatching) {
+        unexpectedEvent(eventType);
+      }
       break;
     case CHRE_EVENT_TIMER:
       handleTimerEvent();

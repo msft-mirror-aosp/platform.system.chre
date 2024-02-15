@@ -20,6 +20,8 @@
 #include "chre/platform/assert.h"
 #include "chre/platform/condition_variable.h"
 #include "chre/platform/mutex.h"
+#include "chre/platform/shared/bt_snoop_log.h"
+#include "chre/platform/shared/generated/host_messages_generated.h"
 #include "chre/platform/shared/log_buffer.h"
 #include "chre/util/singleton.h"
 #include "chre_api/chre/re.h"
@@ -29,6 +31,8 @@
 #endif
 
 namespace chre {
+
+using LogType = fbs::LogType;
 
 /**
  * A log buffer manager that platform code can use to buffer logs when the host
@@ -64,14 +68,37 @@ class LogBufferManager : public LogBufferCallbackInterface {
    */
   void log(chreLogLevel logLevel, const char *formatStr, ...);
 
+  /**
+   * Similar as log() but with a log buffer and a log size argument instead
+   * of a printf-style arguments.
+   *
+   * @param logs Pointer to the buffer containing the encoded log message.
+   * @param logSize Size of the encoded logs.
+   */
   void logEncoded(chreLogLevel logLevel, const uint8_t *encodedLog,
                   size_t encodedLogSize);
+
+  /**
+   * Similar as logEncoded but specifically used for nanoapps.
+   *
+   * @param instanceId The instance ID of the nanoapp which sends the log
+   * message.
+   */
+  void logNanoappEncoded(chreLogLevel logLevel, uint16_t instanceID,
+                         const uint8_t *encodedLog, size_t encodedLogSize);
 
   /**
    * Logs message with printf-style arguments. No trailing newline is required
    * for this method. Uses va_list parameter instead of ...
    */
   void logVa(chreLogLevel logLevel, const char *formatStr, va_list args);
+
+  /**
+   * Logs BT commands and events. These logs will not be displayed on logcat.
+   * The BT events will be handled with a bt snoop log parser.
+   */
+  void logBtSnoop(BtSnoopDirection direction, const uint8_t *buffer,
+                  size_t size);
 
   /**
    * Overrides required method from LogBufferCallbackInterface.
@@ -124,7 +151,7 @@ class LogBufferManager : public LogBufferCallbackInterface {
 
   uint32_t getTimestampMs();
 
-  void bufferOverflowGuard(size_t logSize);
+  void bufferOverflowGuard(size_t logSize, LogType type);
 
   LogBuffer mPrimaryLogBuffer;
   LogBuffer mSecondaryLogBuffer;

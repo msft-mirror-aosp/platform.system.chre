@@ -19,6 +19,7 @@
 #include <endian.h>
 #include <string.h>
 
+#include "chre/util/macros.h"
 #include "chre/util/time.h"
 #include "chre_host/daemon_base.h"
 #include "chre_host/file_stream.h"
@@ -134,7 +135,19 @@ uint8_t LogMessageParser::getLogLevelFromMetadata(uint8_t metadata) {
 bool LogMessageParser::isLogMessageEncoded(uint8_t metadata) {
   // The upper nibble of the metadata denotes the encoding, as indicated
   // by the schema in host_messages.fbs.
-  return (metadata & 0xf0) != 0;
+  return (metadata & 0x10) != 0;
+}
+
+bool LogMessageParser::isBtSnoopLogMessage(uint8_t metadata) {
+  // The upper nibble of the metadata denotes the encoding, as indicated
+  // by the schema in host_messages.fbs.
+  return (metadata & 0x20) != 0;
+}
+
+bool LogMessageParser::isNanoappTokenizedLogMessage(uint8_t metadata) {
+  // The upper nibble of the metadata denotes the encoding, as indicated
+  // by the schema in host_messages.fbs.
+  return ((metadata & 0x20) != 0) && ((metadata & 0x10) != 0);
 }
 
 void LogMessageParser::log(const uint8_t *logBuffer, size_t logBufferSize) {
@@ -168,6 +181,14 @@ size_t LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
     LOGE("Null detokenizer! Cannot decode log message");
   }
   return logMessageSize;
+}
+
+size_t LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
+    const LogMessageV2 *message) {
+  // TODO(b/242760291): Implement after completing the pigweed detokenizer
+  // function.
+  UNUSED_VAR(message);
+  return 0;
 }
 
 void LogMessageParser::parseAndEmitLogMessage(const LogMessageV2 *message) {
@@ -212,8 +233,13 @@ void LogMessageParser::logV2(const uint8_t *logBuffer, size_t logBufferSize,
     auto message =
         reinterpret_cast<const LogMessageV2 *>(&logBuffer[bufferIndex]);
 
-    size_t logMessageSize;
-    if (isLogMessageEncoded(message->metadata)) {
+    size_t logMessageSize = 0;
+    if (isNanoappTokenizedLogMessage(message->metadata)) {
+      logMessageSize =
+          parseAndEmitNanoappTokenizedLogMessageAndGetSize(message);
+    } else if (isBtSnoopLogMessage(message->metadata)) {
+      logMessageSize = mBtLogParser.log(message->logMessage);
+    } else if (isLogMessageEncoded(message->metadata)) {
       logMessageSize = parseAndEmitTokenizedLogMessageAndGetSize(message);
     } else {
       size_t maxLogMessageLen =
