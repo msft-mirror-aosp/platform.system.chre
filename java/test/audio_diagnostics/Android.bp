@@ -1,4 +1,4 @@
-// Copyright (C) 2023 The Android Open Source Project
+// Copyright (C) 2024 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ package {
 }
 
 java_library {
-    name: "context-hub-chre-concurrency-test",
+    name: "context-hub-audio-diagnostics-test",
 
     srcs: ["src/**/*.java"],
 
@@ -31,6 +31,7 @@ java_library {
         "androidx.test.rules",
         "chre-test-utils",
         "chqts",
+        "chre_api_test_proto_java_lite",
     ],
 
     sdk_version: "test_current",
