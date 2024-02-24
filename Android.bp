@@ -531,7 +531,9 @@ cc_test_host {
         "pw_detokenizer",
     ],
     shared_libs: [
+        "android.frameworks.stats-V2-ndk",
         "android.hardware.contexthub-V3-ndk",
+        "chre_atoms_log",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -578,6 +580,7 @@ genrule {
 cc_library {
     name: "chre_atoms_log",
     vendor: true,
+    host_supported: true,
     generated_headers: ["chre_atoms_log.h"],
     export_generated_headers: ["chre_atoms_log.h"],
 }
