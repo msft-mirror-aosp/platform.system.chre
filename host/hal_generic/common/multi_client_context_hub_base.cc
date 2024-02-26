@@ -206,7 +206,9 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
 
   if (request.has_value() &&
       sendFragmentedLoadRequest(clientId, request.value())) {
-    mEventLogger.logNanoappLoad(appBinary, /* success= */ true);
+    mEventLogger.logNanoappLoad(appBinary.nanoappId,
+                                appBinary.customBinary.size(),
+                                appBinary.nanoappVersion, /* success= */ true);
     return ScopedAStatus::ok();
   }
   LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
@@ -214,7 +216,9 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   mHalClientManager->resetPendingLoadTransaction();
   // TODO(b/284481035): The result should be logged after the async response is
   //  received.
-  mEventLogger.logNanoappLoad(appBinary, /* success= */ false);
+  mEventLogger.logNanoappLoad(appBinary.nanoappId,
+                              appBinary.customBinary.size(),
+                              appBinary.nanoappVersion, /* success= */ false);
   return fromResult(false);
 }
 

@@ -43,13 +43,14 @@ std::string formatLocalTime(int64_t ms) {
 
 }  // namespace
 
-void EventLogger::logNanoappLoad(const NanoappBinary &app, bool success) {
+void EventLogger::logNanoappLoad(uint64_t appId, size_t appSize,
+                                 uint32_t appVersion, bool success) {
   std::lock_guard<std::mutex> lock(mQueuesMutex);
   mNanoappLoads.kick_push({
       .timestampMs = getTimeMs(),
-      .id = app.nanoappId,
-      .version = app.nanoappVersion,
-      .sizeBytes = app.customBinary.size(),
+      .id = static_cast<int64_t>(appId),
+      .version = static_cast<int32_t>(appVersion),
+      .sizeBytes = appSize,
       .success = success,
   });
 }

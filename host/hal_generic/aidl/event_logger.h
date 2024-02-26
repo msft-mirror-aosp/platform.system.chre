@@ -41,7 +41,8 @@ class EventLogger {
   /** Maximum number of message events to store. */
   static constexpr int kMaxMessageEvents = 20;
 
-  void logNanoappLoad(const NanoappBinary &app, bool success);
+  void logNanoappLoad(uint64_t appId, size_t appSize, uint32_t appVersion,
+                      bool success);
 
   void logNanoappUnload(int64_t appId, bool success);
 
