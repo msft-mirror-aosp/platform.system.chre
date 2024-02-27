@@ -44,6 +44,7 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
     private static final int DC_OFFSET_LIMIT = 15;
     private static final int RMSE_ERROR_DB = 3;
     private static final double RMSE_TARGET_DB = 22;
+    private static final double PEAK_AMP_TARGET_DBFS = 19.5;
     private static final double MAX_SIGNED_SHORT = 32767;
 
     public ContextHubAudioDiagnosticsTestExecutor(NanoAppBinary nanoapp) {
@@ -95,12 +96,16 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
         ShortBuffer chreShortBuffer = chreBuffer.asShortBuffer();
         List<Double> chreRMSE = calculateRMSE(chreShortBuffer);
         double chreRmseDb = Math.abs(chreRMSE.get(1));
+        double chrePeakAmplitudeDb = Math.abs(chreRMSE.get(2));
 
         ChreApiTestUtil.writeDataToFile(chreBuffer.array(), "audio_rmse_test_data.bin",
                 mContext);
 
         Log.i(TAG, "RMSE: " + chreRmseDb + " dB");
+        Log.i(TAG, "Peak Amplitude: " + chrePeakAmplitudeDb + " dB");
         Assert.assertEquals(RMSE_TARGET_DB, chreRmseDb, RMSE_ERROR_DB);
+        Assert.assertEquals(PEAK_AMP_TARGET_DBFS, chrePeakAmplitudeDb,
+                            RMSE_ERROR_DB);
     }
 
     /**
@@ -147,24 +152,28 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
      *
      * @param audioSamples  Buffer of 16-bit PCM audio samples.
      * @return              A list of RMSE values. The first entry will be the
-     *                      linear value and the second will be the decibel.
+     *                      linear value, the second will be the decibel, and
+     *                      the third will be the peak amplitude in decibel.
      */
     private List<Double> calculateRMSE(ShortBuffer audioSamples) throws Exception {
         double runningSquareSum = 0;
         double samplesRead = 0;
+        double peakSample = 0;
 
         // rewind the buffer to make sure we start at the beginning
         audioSamples.rewind();
         while (audioSamples.hasRemaining()) {
             short sample = audioSamples.get();
+            peakSample = Math.abs(sample) > peakSample ? Math.abs(sample) : peakSample;
             double scaledSample = sample / MAX_SIGNED_SHORT;
             runningSquareSum += scaledSample * scaledSample;
             samplesRead += 1;
         }
         double rmseLinear = Math.sqrt(runningSquareSum / samplesRead);
         double rmseDecibel = 20 * Math.log10(Math.abs(rmseLinear));
+        double peakSampleDb = 20 * Math.log10(peakSample / MAX_SIGNED_SHORT);
 
-        return List.of(rmseLinear, rmseDecibel);
+        return List.of(rmseLinear, rmseDecibel, peakSampleDb);
     }
 
     /**
