@@ -125,11 +125,22 @@ class MultiClientContextHubBase
       const ::chre::fbs::UnloadNanoappResponseT &response,
       HalClientId clientId);
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message);
+  void onMessageDeliveryStatus(
+      const ::chre::fbs::MessageDeliveryStatusT &status);
   void onDebugDumpData(const ::chre::fbs::DebugDumpDataT &data);
   void onDebugDumpComplete(
       const ::chre::fbs::DebugDumpResponseT & /* response */);
-  virtual void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
+  void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
   void handleClientDeath(pid_t pid);
+
+  /**
+   * Returns true to allow metrics to be reported to stats service.
+   *
+   * <p>Subclasses can override to turn it off.
+   */
+  virtual bool isMetricEnabled() {
+    return true;
+  }
 
   /**
    * Enables test mode by unloading all the nanoapps except the system nanoapps.
@@ -201,6 +212,9 @@ class MultiClientContextHubBase
   LogMessageParser mLogger;
 
   MetricsReporter mMetricsReporter;
+
+  // Used to map message sequence number to host endpoint ID
+  std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;
 };
 }  // namespace android::hardware::contexthub::common::implementation
 #endif  // ANDROID_HARDWARE_CONTEXTHUB_COMMON_MULTICLIENTS_HAL_BASE_H_
