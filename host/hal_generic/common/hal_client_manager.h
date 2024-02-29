@@ -317,9 +317,9 @@ class HalClientManager {
   std::string debugDump();
 
  protected:
-  /** Pseudo names used before uuid is enabled. */
   static constexpr char kSystemServerUuid[] =
       "9a17008d6bf1445a90116d21bd985b6c";
+  /** Pseudo name shared among vendor clients when uuid is unavailable. */
   static constexpr char kVendorClientUuid[] = "vendor-client";
 
   /** Keys used in chre_hal_clients.json. */
@@ -432,14 +432,20 @@ class HalClientManager {
   /** Updates the mapping file. */
   void updateClientIdMappingFile() REQUIRES(mLock);
 
-  // TODO(b/290375569): isSystemServerConnected) is a temporary solution
-  //  to get a pseudo-uuid. Remove it after flag
-  //  context_hub_callback_uuid_enabled is ramped up.
-  inline bool isSystemServerConnected() REQUIRES(mLock) {
-    Client *client = getClientByUuid(kSystemServerUuid);
-    return client != nullptr && client->pid != Client::kPidUnset;
-  }
-
+  /**
+   * Gets the uuid of a client from its callback.
+   *
+   * <p> IContextHubCallback versions before 3 lack the getUuid() API. For
+   * compatibility, the first client connecting to HAL is assumed to be the
+   * system server, and kVendorClientUuid is returned thereafter.
+   *
+   * @warning:
+   * The backward compatibility creates a race condition that a client
+   * connecting before the system server will be treated as the system server,
+   * potentially breaking endpoint mutation logic. Therefore this compatibility
+   * workaround is mainly for manually executed command-line tools used after
+   * system fully boots up.
+   */
   std::string getUuid(const std::shared_ptr<IContextHubCallback> &callback)
       REQUIRES(mLock);
 
