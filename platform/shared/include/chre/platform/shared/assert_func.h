@@ -17,6 +17,8 @@
 #ifndef PLATFORM_SHARED_INCLUDE_CHRE_PLATFORM_SHARED_ASSERT_FUNC_H
 #define PLATFORM_SHARED_INCLUDE_CHRE_PLATFORM_SHARED_ASSERT_FUNC_H
 
+#include <cstddef>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
