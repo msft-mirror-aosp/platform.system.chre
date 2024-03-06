@@ -18,6 +18,7 @@
 #define CHRE_UTIL_MEMORY_H_
 
 #include <cstddef>
+#include <type_traits>
 
 namespace chre {
 
