@@ -107,10 +107,6 @@ double floorOverride(double value) {
   return floor(value);
 }
 
-double ceilOverride(double value) {
-  return ceil(value);
-}
-
 double sinOverride(double rad) {
   return sin(rad);
 }
@@ -154,7 +150,6 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_SYMBOL(atan2Override, "atan2"),
     ADD_EXPORTED_SYMBOL(cosOverride, "cos"),
     ADD_EXPORTED_SYMBOL(floorOverride, "floor"),
-    ADD_EXPORTED_SYMBOL(ceilOverride, "ceil"),
     ADD_EXPORTED_SYMBOL(fmaxOverride, "fmax"),
     ADD_EXPORTED_SYMBOL(fminOverride, "fmin"),
     ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
