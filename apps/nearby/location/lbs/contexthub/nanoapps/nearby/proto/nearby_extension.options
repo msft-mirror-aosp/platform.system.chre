@@ -11,10 +11,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-nearby_extension.ExtConfigRequest.FilterConfig.oem_filter max_size:800
+nearby_extension.ExtConfigRequest.FilterConfig.oem_filter max_size:400
 nearby_extension.ExtConfigRequest.FilterConfig.oem_filter type:FT_INLINE
 
-nearby_extension.ExtConfigRequest.FilterConfig.hardware_filter max_count:10
+nearby_extension.ExtConfigRequest.FilterConfig.hardware_filter max_count:7
 nearby_extension.ExtConfigRequest.FilterConfig.hardware_filter type:FT_STATIC
 
 nearby_extension.ExtConfigRequest.ServiceConfig.data max_size:800
