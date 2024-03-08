@@ -792,18 +792,21 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleUnloadNanoappRequest(
   }
 }
 
-DRAM_REGION_FUNCTION void HostMessageHandlers::sendNanoappInstanceIdInfo(
-    uint16_t hostClientId, uint16_t instanceId, uint64_t appId) {
+DRAM_REGION_FUNCTION void HostLinkBase::sendNanoappTokenDatabaseInfo(
+    uint64_t appId, uint32_t tokenDatabaseOffset, size_t tokenDatabaseSize) {
   constexpr size_t kInitialBufferSize = 56;
   ChreFlatBufferBuilder builder(kInitialBufferSize);
-  HostProtocolChre::encodeNanoappInstanceIdInfo(builder, hostClientId,
-                                                instanceId, appId);
+  uint16_t instanceId;
+  EventLoopManagerSingleton::get()->getEventLoop().findNanoappInstanceIdByAppId(
+      appId, &instanceId);
+  HostProtocolChre::encodeNanoappTokenDatabaseInfo(
+      builder, instanceId, appId, tokenDatabaseOffset, tokenDatabaseSize);
 
   if (!getHostCommsManager().send(builder.GetBufferPointer(),
                                   builder.GetSize())) {
-    LOGE("Failed to send instance ID for HostClientID: %" PRIu16
-         " AppID: 0x%016" PRIx64 " InstanceID: %" PRIu16,
-         hostClientId, appId, instanceId);
+    LOGE("Failed to send nanoapp token database info for AppID: 0x%016" PRIx64
+         " InstanceID: %" PRIu16,
+         appId, instanceId);
   }
 }
 
