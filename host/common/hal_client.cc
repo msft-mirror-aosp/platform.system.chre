@@ -55,6 +55,12 @@ std::unique_ptr<HalClient> HalClient::create(
     return nullptr;
   }
 
+  // Multiclient HAL needs getUuid() added since V3 to identify each client.
+  if (callback->version < 3) {
+    LOGE("IContextHubCallback API's version must be >= 3");
+    return nullptr;
+  }
+
   auto halClient =
       std::unique_ptr<HalClient>(new HalClient(callback, contextHubId));
   HalError result = halClient->initConnection();

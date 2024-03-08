@@ -20,7 +20,6 @@
 
 #include <aidl/android/hardware/contexthub/AsyncEventType.h>
 #include <android-base/strings.h>
-#include <android_chre_flags.h>
 #include <json/json.h>
 #include <utils/SystemClock.h>
 
@@ -30,7 +29,6 @@ using ::aidl::android::hardware::contexthub::AsyncEventType;
 using ::aidl::android::hardware::contexthub::ContextHubMessage;
 using ::aidl::android::hardware::contexthub::HostEndpointInfo;
 using ::aidl::android::hardware::contexthub::IContextHubCallback;
-using ::android::chre::flags::context_hub_callback_uuid_enabled;
 
 namespace {
 using Client = HalClientManager::Client;
@@ -45,7 +43,7 @@ bool getClientMappingsFromFile(const std::string &filePath,
 bool isCallbackV3Enabled(const std::shared_ptr<IContextHubCallback> &callback) {
   int32_t callbackVersion;
   callback->getInterfaceVersion(&callbackVersion);
-  return callbackVersion >= 3 && context_hub_callback_uuid_enabled();
+  return callbackVersion >= 3;
 }
 
 std::string getName(const std::shared_ptr<IContextHubCallback> &callback) {
@@ -68,8 +66,12 @@ inline HostEndpointId mutateVendorEndpointId(const Client &client,
 std::string HalClientManager::getUuid(
     const std::shared_ptr<IContextHubCallback> &callback) {
   if (!isCallbackV3Enabled(callback)) {
-    return isSystemServerConnected() ? kVendorClientUuid : kSystemServerUuid;
+    Client *client = getClientByUuid(kSystemServerUuid);
+    bool isSystemServerConnected =
+        client != nullptr && client->pid != Client::kPidUnset;
+    return isSystemServerConnected ? kVendorClientUuid : kSystemServerUuid;
   }
+
   std::array<uint8_t, 16> uuidBytes{};
   callback->getUuid(&uuidBytes);
   std::ostringstream oStringStream;
