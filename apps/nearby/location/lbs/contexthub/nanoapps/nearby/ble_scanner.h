@@ -104,6 +104,10 @@ class BleScanner {
     is_default_generic_filter_enabled_ = false;
   }
 
+  // Returns whether the filter list contains the given filter.
+  bool ContainsFilter(const chre::DynamicVector<chreBleGenericFilter> &filters,
+                      const chreBleGenericFilter &src);
+
  private:
   // Whether BLE scan is started.
   bool is_started_ = false;
