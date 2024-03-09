@@ -18,6 +18,7 @@
 
 #include <chre.h>
 
+#include <cstring>
 #include <utility>
 
 #include "third_party/contexthub/chre/util/include/chre/util/macros.h"
@@ -182,22 +183,17 @@ void BleScanner::Start() {
   Restart();
 }
 
-static bool ContainsFilter(
+bool BleScanner::ContainsFilter(
     const chre::DynamicVector<chreBleGenericFilter> &filters,
     const chreBleGenericFilter &src) {
   bool contained = false;
   for (const auto &dst : filters) {
     if (src.type == dst.type && src.len == dst.len) {
-      for (int i = 0; i < src.len; i++) {
-        if (src.data[i] != dst.data[i]) {
-          continue;
-        }
-        if (src.dataMask[i] != dst.dataMask[i]) {
-          continue;
-        }
+      if (memcmp(src.data, dst.data, src.len) == 0 &&
+          memcmp(src.dataMask, dst.dataMask, src.len) == 0) {
+        contained = true;
+        break;
       }
-      contained = true;
-      break;
     }
   }
   return contained;
