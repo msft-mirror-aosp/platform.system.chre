@@ -35,6 +35,7 @@ enum class HalError {
   NULL_CONTEXT_HUB_FROM_BINDER = -102,
   LINK_DEATH_RECIPIENT_FAILED = -103,
   CALLBACK_REGISTRATION_FAILED = -104,
+  VERSION_TOO_LOW = -105,
 };
 
 }  // namespace android::chre

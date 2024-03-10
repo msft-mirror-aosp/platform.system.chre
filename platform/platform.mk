@@ -513,14 +513,15 @@ endif
 # Compiler flags
 
 # Variables
-TINYSYS_PLATFORM = mt6985
+TINYSYS_PLATFORM = mt6989
 
 # CHRE include paths
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
 
 TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
 TINYSYS_CFLAGS += $(MBEDTLS_CFLAGS)
