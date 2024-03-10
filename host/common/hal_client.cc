@@ -36,6 +36,9 @@ using ::ndk::ScopedAStatus;
 
 namespace {
 constexpr char kHalEnabledProperty[]{"vendor.chre.multiclient_hal.enabled"};
+
+// Multiclient HAL needs getUuid() added since V3 to identify each client.
+constexpr int kMinHalInterfaceVersion = 3;
 }  // namespace
 
 bool HalClient::isServiceAvailable() {
@@ -55,9 +58,9 @@ std::unique_ptr<HalClient> HalClient::create(
     return nullptr;
   }
 
-  // Multiclient HAL needs getUuid() added since V3 to identify each client.
-  if (callback->version < 3) {
-    LOGE("IContextHubCallback API's version must be >= 3");
+  if (callback->version < kMinHalInterfaceVersion) {
+    LOGE("Callback interface version is %" PRIi32 ". It must be >= %" PRIi32,
+         callback->version, kMinHalInterfaceVersion);
     return nullptr;
   }
 
@@ -101,6 +104,15 @@ HalError HalClient::initConnection() {
   if (mContextHub == nullptr) {
     LOGE("Got null context hub from the binder connection");
     return HalError::NULL_CONTEXT_HUB_FROM_BINDER;
+  }
+
+  // Enforce the required interface version for the service.
+  int32_t version = 0;
+  mContextHub->getInterfaceVersion(&version);
+  if (version < kMinHalInterfaceVersion) {
+    LOGE("HAL interface version is %" PRIi32 ". It must be >= %" PRIi32,
+         version, kMinHalInterfaceVersion);
+    return HalError::VERSION_TOO_LOW;
   }
 
   // Register an IContextHubCallback.
