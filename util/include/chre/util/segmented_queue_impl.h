@@ -171,7 +171,7 @@ bool SegmentedQueue<ElementType, kBlockSize>::remove(size_t index) {
 
 template <typename ElementType, size_t kBlockSize>
 size_t SegmentedQueue<ElementType, kBlockSize>::searchMatches(
-    MatchingFunction *matchFunc, size_t foundIndicesLen,
+    MatchingFunction *matchFunc, void *data, size_t foundIndicesLen,
     size_t foundIndices[]) {
   size_t foundCount = 0;
   size_t searchIndex = advanceOrWrapAround(mTail);
@@ -188,7 +188,7 @@ size_t SegmentedQueue<ElementType, kBlockSize>::searchMatches(
          foundCount != foundIndicesLen) {
     searchIndex = subtractOrWrapAround(searchIndex, 1 /* steps */);
     firstRound = false;
-    if (matchFunc(locateDataAddress(searchIndex))) {
+    if (matchFunc(locateDataAddress(searchIndex), data)) {
       foundIndices[foundCount] = searchIndex;
       ++foundCount;
     }
@@ -244,11 +244,11 @@ void SegmentedQueue<ElementType, kBlockSize>::fillGaps(
 
 template <typename ElementType, size_t kBlockSize>
 size_t SegmentedQueue<ElementType, kBlockSize>::removeMatchedFromBack(
-    MatchingFunction *matchFunc, size_t maxNumOfElementsRemoved,
+    MatchingFunction *matchFunc, void *data, size_t maxNumOfElementsRemoved,
     FreeFunction *freeFunction, void *extraDataForFreeFunction) {
   size_t removeIndex[maxNumOfElementsRemoved];
   size_t removedItemCount =
-      searchMatches(matchFunc, maxNumOfElementsRemoved, removeIndex);
+      searchMatches(matchFunc, data, maxNumOfElementsRemoved, removeIndex);
 
   if (removedItemCount != 0) {
     for (size_t i = 0; i < removedItemCount; ++i) {

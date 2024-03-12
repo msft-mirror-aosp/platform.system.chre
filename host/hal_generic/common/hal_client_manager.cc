@@ -20,7 +20,6 @@
 
 #include <aidl/android/hardware/contexthub/AsyncEventType.h>
 #include <android-base/strings.h>
-#include <android_chre_flags.h>
 #include <json/json.h>
 #include <utils/SystemClock.h>
 
@@ -30,7 +29,6 @@ using ::aidl::android::hardware::contexthub::AsyncEventType;
 using ::aidl::android::hardware::contexthub::ContextHubMessage;
 using ::aidl::android::hardware::contexthub::HostEndpointInfo;
 using ::aidl::android::hardware::contexthub::IContextHubCallback;
-using ::android::chre::flags::context_hub_callback_uuid_enabled;
 
 namespace {
 using Client = HalClientManager::Client;
@@ -45,7 +43,7 @@ bool getClientMappingsFromFile(const std::string &filePath,
 bool isCallbackV3Enabled(const std::shared_ptr<IContextHubCallback> &callback) {
   int32_t callbackVersion;
   callback->getInterfaceVersion(&callbackVersion);
-  return callbackVersion >= 3 && context_hub_callback_uuid_enabled();
+  return callbackVersion >= 3;
 }
 
 std::string getName(const std::shared_ptr<IContextHubCallback> &callback) {
@@ -56,13 +54,24 @@ std::string getName(const std::shared_ptr<IContextHubCallback> &callback) {
   callback->getName(&name);
   return name;
 }
+
+inline HostEndpointId mutateVendorEndpointId(const Client &client,
+                                             HostEndpointId endpointId) {
+  return HalClientManager::kVendorEndpointIdBitMask |
+         client.clientId << HalClientManager::kNumOfBitsForEndpointId |
+         endpointId;
+}
 }  // namespace
 
 std::string HalClientManager::getUuid(
     const std::shared_ptr<IContextHubCallback> &callback) {
   if (!isCallbackV3Enabled(callback)) {
-    return isSystemServerConnected() ? kVendorClientUuid : kSystemServerUuid;
+    Client *client = getClientByUuid(kSystemServerUuid);
+    bool isSystemServerConnected =
+        client != nullptr && client->pid != Client::kPidUnset;
+    return isSystemServerConnected ? kVendorClientUuid : kSystemServerUuid;
   }
+
   std::array<uint8_t, 16> uuidBytes{};
   callback->getUuid(&uuidBytes);
   std::ostringstream oStringStream;
@@ -443,10 +452,10 @@ bool HalClientManager::mutateEndpointIdFromHostIfNeeded(
     LOGE("Unknown HAL client with pid %d", pid);
     return false;
   }
+
   // no need to mutate client id for framework service
   if (client->uuid != kSystemServerUuid) {
-    endpointId = kVendorEndpointIdBitMask |
-                 client->clientId << kNumOfBitsForEndpointId | endpointId;
+    endpointId = mutateVendorEndpointId(*client, endpointId);
   }
   return true;
 }
@@ -581,24 +590,35 @@ void HalClientManager::updateClientIdMappingFile() {
 std::string HalClientManager::debugDump() {
   std::ostringstream result;
   result << "\n-- HAL Client Manager Debug Info --\n"
-         << "\nKnown clients, in the format of [isConnected] (uuid : name) : "
-            "Pid, ClientId, {Connected endpoint Ids}\n\n";
+         << "\nKnown clients, format:\n"
+         << "[isConnected] (uuid : name) : Pid, ClientId, {endpointIds, in "
+            "'original (mutated)' format, sorted}\n\n";
 
   // Dump states of each client.
-
   const std::lock_guard<std::mutex> lock(mLock);
 
-  std::string endpointIds;
+  std::vector<HostEndpointId> endpointIds;
   for (const auto &client : mClients) {
-    endpointIds.clear();
     for (const HostEndpointId &endpointId : client.endpointIds) {
-      endpointIds.append(std::to_string(endpointId)).append(", ");
+      endpointIds.push_back(endpointId);
+    }
+    std::sort(endpointIds.begin(), endpointIds.end());
+    std::ostringstream endpointIdsStream;
+    for (const HostEndpointId &endpointId : endpointIds) {
+      endpointIdsStream << endpointId;
+      // Only vendor endpoint ids are mutated.
+      if (client.uuid != kSystemServerUuid) {
+        endpointIdsStream << " (0x" << std::hex
+                          << mutateVendorEndpointId(client, endpointId) << ")";
+      }
+      endpointIdsStream << ", ";
     }
     bool isConnected = client.callback != nullptr;
     result << (isConnected ? "[ x ]" : "[   ]") << " (" << std::setw(32)
            << client.uuid << " : " << std::setw(17) << client.name
            << ") : " << std::setw(5) << client.pid << ", " << std::setw(2)
-           << client.clientId << ", {" << endpointIds << "}\n";
+           << client.clientId << ", {" << endpointIdsStream.str() << "}\n";
+    endpointIds.clear();
   }
 
   // Dump active transactions, if any.

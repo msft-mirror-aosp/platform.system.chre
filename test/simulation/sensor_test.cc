@@ -23,6 +23,7 @@
 #include "chre/platform/linux/pal_sensor.h"
 #include "chre/platform/log.h"
 #include "chre/util/system/napp_permissions.h"
+#include "chre_api/chre/common.h"
 #include "chre_api/chre/event.h"
 
 #include "gtest/gtest.h"
@@ -81,7 +82,7 @@ TEST_F(TestBase, SensorCanSubscribeAndUnsubscribeToDataEvents) {
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 
   Configuration config{.sensorHandle = 0,
-                       .interval = 100,
+                       .interval = CHRE_NSEC_PER_SEC,
                        .mode = CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS};
   sendEventToNanoapp(appId, CONFIGURE, config);
   waitForEvent(CONFIGURE, &success);
