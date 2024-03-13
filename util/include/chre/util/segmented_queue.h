@@ -180,8 +180,8 @@ class SegmentedQueue : public NonCopyable {
   using MatchingFunction =
       typename std::conditional<std::is_pointer<ElementType>::value ||
                                     std::is_fundamental<ElementType>::value,
-                                bool(ElementType, void *),
-                                bool(ElementType &, void *)>::type;
+                                bool(ElementType, void *, void *),
+                                bool(ElementType &, void *, void *)>::type;
 
   using FreeFunction =
       typename std::conditional<std::is_pointer<ElementType>::value ||
@@ -199,6 +199,8 @@ class SegmentedQueue : public NonCopyable {
    *                                 be removed. Should return true if this
    *                                 item needs to be removed.
    * @param data                     The data to be passed to the matchFunc.
+   * @param extraData                The extra data to be passed to the
+   * matchFunc.
    * @param maxNumOfElementsRemoved  Number of elements to remove, also the
    *                                 size of removedElements. It is not
    *                                 guaranteed that the actual number of items
@@ -218,7 +220,7 @@ class SegmentedQueue : public NonCopyable {
    *                                 a nullptr as error.
    */
   size_t removeMatchedFromBack(MatchingFunction *matchFunction, void *data,
-                               size_t maxNumOfElementsRemoved,
+                               void *extraData, size_t maxNumOfElementsRemoved,
                                FreeFunction *freeFunction = nullptr,
                                void *extraDataForFreeFunction = nullptr);
 
@@ -373,6 +375,7 @@ class SegmentedQueue : public NonCopyable {
    *                           returned. Should return true if this item need
    *                           to be returned.
    * @param data               The data to be passed to the matchFunc.
+   * @param extraData          The extra data to be passed to the matchFunc.
    * @param foundIndicesLen    Length of foundIndices indicating how many index
    *                           is targeted.
    * @param foundIndices       Indices that contains the element that matches
@@ -382,7 +385,7 @@ class SegmentedQueue : public NonCopyable {
    *                           end.
    * @return                   the number of element that matches.
    */
-  size_t searchMatches(MatchingFunction *matchFunc, void *data,
+  size_t searchMatches(MatchingFunction *matchFunc, void *data, void *extraData,
                        size_t foundIndicesLen, size_t foundIndices[]);
 
   /**

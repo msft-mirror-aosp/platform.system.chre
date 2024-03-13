@@ -118,7 +118,11 @@ class TransactionManager : public NonCopyable {
    * The callback used to determine which elements to remove
    * during a flush.
    */
-  using FlushCallback = StartCallback;
+  using FlushCallback = typename std::conditional<
+      std::is_pointer<TransactionData>::value ||
+          std::is_fundamental<TransactionData>::value,
+      bool (*)(TransactionData data, void *callbackData),
+      bool (*)(const TransactionData &data, void *callbackData)>::type;
 
   /**
    * The base wait time for a retry. This is used during the transaction retry
@@ -206,9 +210,10 @@ class TransactionManager : public NonCopyable {
    *
    * @param flushCallback The function that determines which transactions will
    * be flushed (upon return true).
+   * @param data The data to be passed to the flush callback.
    * @return The number of flushed transactions.
    */
-  uint32_t flushTransactions(FlushCallback *flushCallback);
+  size_t flushTransactions(FlushCallback flushCallback, void *data);
 
   /**
    * Starts a transaction. This function will mark the transaction as ready to
