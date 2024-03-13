@@ -105,18 +105,18 @@ bool deferCancelCallback(uint32_t timerHandle) {
 
 TransactionManager<TransactionData> gTransactionManager(
     transactionStartCallback, transactionCallback, deferCallback,
-    deferCancelCallback);
+    deferCancelCallback, /* retryWaitTime= */ Milliseconds(1));
 
 TransactionManager<TransactionData> gFaultyStartTransactionManager(
     [](const TransactionData &data) {
       return transactionStartCallback(data) &&
              *data.numTimesTransactionStarted != 1;
     },
-    transactionCallback, deferCallback, deferCancelCallback);
+    transactionCallback, deferCallback, deferCancelCallback,
+    /* retryWaitTime= */ Milliseconds(1));
 
 TEST(TransactionManager, TransactionShouldComplete) {
   gTaskManager = new TaskManager();
-  gTransactionManager.setRetryWaitTime(Milliseconds(1));
 
   bool transactionStarted1 = false;
   bool transactionStarted2 = false;
@@ -164,8 +164,6 @@ TEST(TransactionManager, TransactionShouldComplete) {
 TEST(TransactionManager, TransactionShouldCompleteOnlyOnce) {
   gTaskManager = new TaskManager();
 
-  gTransactionManager.setRetryWaitTime(Milliseconds(1));
-
   uint32_t transactionId;
   bool transactionStarted = false;
   std::unique_lock<std::mutex> lock(gMutex);
@@ -195,7 +193,6 @@ TEST(TransactionManager, TransactionShouldCompleteOnlyOnce) {
 
 TEST(TransactionManager, TransactionShouldTimeout) {
   gTaskManager = new TaskManager();
-  gTransactionManager.setRetryWaitTime(Milliseconds(1));
 
   uint32_t numTimesTransactionStarted = 0;
   uint32_t transactionId;
@@ -227,7 +224,6 @@ TEST(TransactionManager, TransactionShouldTimeout) {
 
 TEST(TransactionManager, TransactionShouldRetryWhenTransactCallbackFails) {
   gTaskManager = new TaskManager();
-  gFaultyStartTransactionManager.setRetryWaitTime(Milliseconds(1));
 
   uint32_t numTimesTransactionStarted = 0;
   const NestedDataPtr<uint32_t> kData(456);
