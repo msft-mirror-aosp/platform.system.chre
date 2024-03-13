@@ -38,6 +38,7 @@ flag {
 
 flag {
   name: "reliable_message"
+  is_exported: true
   namespace: "context_hub"
   description: "Enable the reliable message APIs"
   bug: "314081414"

@@ -58,12 +58,13 @@ class BlockingSegmentedQueue
   }
 
   size_t removeMatchedFromBack(typename Container::MatchingFunction *matchFunc,
-                               void *data, size_t maxNumOfElementsRemoved,
+                               void *data, void *extraData,
+                               size_t maxNumOfElementsRemoved,
                                typename Container::FreeFunction *freeFunction,
                                void *extraDataForFreeFunction) {
     LockGuard<Mutex> lock(BlockingQueue::mMutex);
     return Container::removeMatchedFromBack(
-        matchFunc, data, maxNumOfElementsRemoved, freeFunction,
+        matchFunc, data, extraData, maxNumOfElementsRemoved, freeFunction,
         extraDataForFreeFunction);
   }
 };
