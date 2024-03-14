@@ -28,12 +28,14 @@
 #include "chre_connection.h"
 #include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/napp_header.h"
+#include "event_logger.h"
 #include "fragmented_load_transaction.h"
 #include "hal_client_id.h"
 
 namespace android::chre {
 
 using namespace ::android::hardware::contexthub::common::implementation;
+using ::aidl::android::hardware::contexthub::EventLogger;
 
 /**
  * A class loads preloaded nanoapps.
@@ -46,8 +48,11 @@ using namespace ::android::hardware::contexthub::common::implementation;
 class PreloadedNanoappLoader {
  public:
   explicit PreloadedNanoappLoader(ChreConnection *connection,
+                                  EventLogger &eventLogger,
                                   std::string configPath)
-      : mConnection(connection), mConfigPath(std::move(configPath)) {}
+      : mConnection(connection),
+        mEventLogger(eventLogger),
+        mConfigPath(std::move(configPath)) {}
 
   ~PreloadedNanoappLoader() = default;
   /**
@@ -134,6 +139,7 @@ class PreloadedNanoappLoader {
   std::atomic_bool mIsPreloadingOngoing = false;
 
   ChreConnection *mConnection;
+  EventLogger &mEventLogger;
   std::string mConfigPath;
 };
 

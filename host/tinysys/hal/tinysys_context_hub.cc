@@ -22,7 +22,7 @@ TinysysContextHub::TinysysContextHub() {
   mHalClientManager = std::make_unique<HalClientManager>(
       mDeadClientUnlinker, kClientIdMappingFilePath);
   mPreloadedNanoappLoader = std::make_unique<PreloadedNanoappLoader>(
-      mConnection.get(), kPreloadedNanoappsConfigPath);
+      mConnection.get(), mEventLogger, kPreloadedNanoappsConfigPath);
   if (mConnection->init()) {
     mPreloadedNanoappLoader->loadPreloadedNanoapps();
   } else {

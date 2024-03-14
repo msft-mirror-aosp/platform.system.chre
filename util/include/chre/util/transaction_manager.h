@@ -125,13 +125,6 @@ class TransactionManager : public NonCopyable {
       bool (*)(const TransactionData &data, void *callbackData)>::type;
 
   /**
-   * The base wait time for a retry. This is used during the transaction retry
-   * process.
-   */
-  static constexpr chre::Nanoseconds kDefaultRetryWaitTime =
-      chre::Nanoseconds(chre::Seconds(1));
-
-  /**
    * The maximum number of retries for a transaction.
    */
   static constexpr uint16_t kMaxNumRetries = 3;
@@ -157,15 +150,18 @@ class TransactionManager : public NonCopyable {
   TransactionManager(StartCallback startCallback,
                      CompleteCallback completeCallback,
                      DeferCallback deferCallback,
-                     DeferCancelCallback deferCancelCallback)
+                     DeferCancelCallback deferCancelCallback,
+                     Nanoseconds retryWaitTime)
       : mStartCallback(startCallback),
         mCompleteCallback(completeCallback),
         mDeferCallback(deferCallback),
-        mDeferCancelCallback(deferCancelCallback) {
+        mDeferCancelCallback(deferCancelCallback),
+        mRetryWaitTime(retryWaitTime) {
     CHRE_ASSERT(startCallback != nullptr);
     CHRE_ASSERT(completeCallback != nullptr);
     CHRE_ASSERT(deferCallback != nullptr);
     CHRE_ASSERT(deferCancelCallback != nullptr);
+    CHRE_ASSERT(retryWaitTime.toRawNanoseconds() > 0);
   }
 
   ~TransactionManager() {
@@ -238,21 +234,7 @@ class TransactionManager : public NonCopyable {
    * @return The retry wait time.
    */
   Nanoseconds getRetryWaitTime() {
-    LockGuard lock(mMutex);
     return mRetryWaitTime;
-  }
-
-  /**
-   * Sets the retry time for the retry functionality. This is the amount of time
-   * between retries for a transaction.
-   *
-   * This function is safe to call in any thread.
-   *
-   * @param waitTime The retry wait time.
-   */
-  void setRetryWaitTime(Nanoseconds waitTime) {
-    LockGuard lock(mMutex);
-    mRetryWaitTime = waitTime;
   }
 
   /**
@@ -310,7 +292,7 @@ class TransactionManager : public NonCopyable {
   uint32_t mNextTransactionId = 0;
 
   //! The retry wait time.
-  Nanoseconds mRetryWaitTime = kDefaultRetryWaitTime;
+  Nanoseconds mRetryWaitTime;
 
   //! The timer handle for the timer tracking execution of processTransactions.
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;

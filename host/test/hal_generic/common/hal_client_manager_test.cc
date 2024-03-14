@@ -379,7 +379,7 @@ TEST_F(HalClientManagerTest, TransactionRegistryLoadAndUnload) {
       kSystemServerPid, callback, /* deathRecipientCookie= */ nullptr));
 
   EXPECT_TRUE(halClientManager->registerPendingUnloadTransaction(
-      kSystemServerPid, /* transactionId= */ 1));
+      kSystemServerPid, /* transactionId= */ 1, /* nanoappId= */ 2));
 
   // Load and unload transaction can't coexist because unloading a nanoapp that
   // is being loaded can cause problems.
