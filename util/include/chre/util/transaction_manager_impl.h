@@ -57,8 +57,8 @@ bool TransactionManager<TransactionData>::completeTransaction(
 }
 
 template <typename TransactionData>
-uint32_t TransactionManager<TransactionData>::flushTransactions(
-    FlushCallback *callback) {
+size_t TransactionManager<TransactionData>::flushTransactions(
+    FlushCallback callback, void *data) {
   if (callback == nullptr) {
     return 0;
   }
@@ -67,15 +67,15 @@ uint32_t TransactionManager<TransactionData>::flushTransactions(
 
   deferProcessTransactions(this, /* timerFired= */ false);
   return mTransactions.removeMatchedFromBack(
-      [](Transaction &transaction, void *data) {
-        FlushCallback *callback = static_cast<FlushCallback *>(data);
+      [](Transaction &transaction, void *data, void *extraData) {
+        FlushCallback callback = reinterpret_cast<FlushCallback>(data);
         if (callback == nullptr) {
           return false;
         }
 
-        return callback(transaction.data);
+        return callback(transaction.data, extraData);
       },
-      callback, mTransactions.size());
+      reinterpret_cast<void *>(callback), data, mTransactions.size());
 }
 
 template <typename TransactionData>

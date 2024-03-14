@@ -84,11 +84,13 @@ bool populateNanoappInfo(const Nanoapp *app, struct chreNanoappInfo *info) {
 #ifndef CHRE_STATIC_EVENT_LOOP
 /**
  * @return true if a event is a low priority event.
- * Note: data is needed here to match the matching function
- * signature. data is not used here, but is used in other
- * applications of SegmentedQueue::removeMatchedFromBack.
+ * Note: data and extraData are needed here to match the
+ * matching function signature. Both are not used here, but
+ * are used in other applications of
+ * SegmentedQueue::removeMatchedFromBack.
  */
-bool isLowPriorityEvent(Event *event, void * /* data */) {
+bool isLowPriorityEvent(Event *event, void * /* data */,
+                        void * /* extraData */) {
   CHRE_ASSERT_NOT_NULL(event);
   return event->isLowPriority;
 }
@@ -279,9 +281,10 @@ bool EventLoop::removeLowPriorityEventsFromBack(size_t removeNum) {
     return true;
   }
 
-  size_t numRemovedEvent = mEvents.removeMatchedFromBack(
-      isLowPriorityEvent, /* data= */ nullptr, removeNum,
-      deallocateFromMemoryPool, &mEventPool);
+  size_t numRemovedEvent =
+      mEvents.removeMatchedFromBack(isLowPriorityEvent, /* data= */ nullptr,
+                                    /* extraData= */ nullptr, removeNum,
+                                    deallocateFromMemoryPool, &mEventPool);
   if (numRemovedEvent == 0 || numRemovedEvent == SIZE_MAX) {
     LOGW("Cannot remove any low priority event");
   } else {
