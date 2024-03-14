@@ -125,10 +125,13 @@ bool PreloadedNanoappLoader::loadNanoapp(const NanoAppBinaryHeader *appHeader,
   // Build the target API version from major and minor.
   uint32_t targetApiVersion = (appHeader->targetChreApiMajorVersion << 24) |
                               (appHeader->targetChreApiMinorVersion << 16);
-  return sendFragmentedLoadAndWaitForEachResponse(
+  bool success = sendFragmentedLoadAndWaitForEachResponse(
       appHeader->appId, appHeader->appVersion, appHeader->flags,
       targetApiVersion, nanoappBuffer.data(), nanoappBuffer.size(),
       transactionId);
+  mEventLogger.logNanoappLoad(appHeader->appId, nanoappBuffer.size(),
+                              appHeader->appVersion, success);
+  return success;
 }
 
 bool PreloadedNanoappLoader::sendFragmentedLoadAndWaitForEachResponse(

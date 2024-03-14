@@ -40,7 +40,7 @@ using ::ndk::ScopedAStatus;
 /**
  * The base class of multiclient HAL.
  *
- * A subclass should initiate mConnection, mHalClientManager and
+ * <p>A subclass should initiate mConnection, mHalClientManager and
  * mPreloadedNanoappLoader in its constructor.
  */
 class MultiClientContextHubBase
@@ -54,7 +54,7 @@ class MultiClientContextHubBase
 
   MultiClientContextHubBase();
 
-  // functions implementing IContextHub
+  // Functions implementing IContextHub.
   ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *contextHubInfos) override;
   ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -84,12 +84,12 @@ class MultiClientContextHubBase
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
 
-  // The callback function implementing ChreConnectionCallback
+  // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
 
-  // The functions for dumping debug information
+  // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
   bool requestDebugDump() override;
   void writeToDebugFile(const char *str) override;
