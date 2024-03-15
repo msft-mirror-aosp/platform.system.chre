@@ -276,8 +276,9 @@ HalClientManager::getNextFragmentedLoadRequest() {
   return request;
 }
 
-bool HalClientManager::registerPendingUnloadTransaction(
-    pid_t pid, uint32_t transactionId) {
+bool HalClientManager::registerPendingUnloadTransaction(pid_t pid,
+                                                        uint32_t transactionId,
+                                                        int64_t nanoappId) {
   const std::lock_guard<std::mutex> lock(mLock);
   const Client *client = getClientByProcessId(pid);
   if (client == nullptr) {
@@ -289,7 +290,7 @@ bool HalClientManager::registerPendingUnloadTransaction(
   }
   mPendingUnloadTransaction.emplace(
       client->clientId, transactionId,
-      /* registeredTimeMs= */ android::elapsedRealtime());
+      /* registeredTimeMs= */ android::elapsedRealtime(), nanoappId);
   return true;
 }
 
@@ -500,8 +501,10 @@ HalClientManager::HalClientManager(
   updateNextClientId();
 }
 
-bool HalClientManager::isPendingLoadTransactionMatched(
+std::optional<HalClientManager::PendingLoadNanoappInfo>
+HalClientManager::getNanoappInfoFromPendingLoadTransaction(
     HalClientId clientId, uint32_t transactionId, uint32_t currentFragmentId) {
+  const std::lock_guard<std::mutex> lock(mLock);
   bool success =
       isPendingTransactionMatched(clientId, transactionId,
                                   mPendingLoadTransaction) &&
@@ -521,8 +524,10 @@ bool HalClientManager::isPendingLoadTransactionMatched(
            " fragment %" PRIu32 " doesn't match any pending transaction.",
            clientId, transactionId, currentFragmentId);
     }
+    return std::nullopt;
   }
-  return success;
+  return std::make_optional<PendingLoadNanoappInfo>(
+      mPendingLoadTransaction->getNanoappInfo());
 }
 
 void HalClientManager::resetPendingLoadTransaction() {
@@ -530,23 +535,24 @@ void HalClientManager::resetPendingLoadTransaction() {
   mPendingLoadTransaction.reset();
 }
 
-bool HalClientManager::resetPendingUnloadTransaction(HalClientId clientId,
-                                                     uint32_t transactionId) {
+std::optional<int64_t> HalClientManager::resetPendingUnloadTransaction(
+    HalClientId clientId, uint32_t transactionId) {
   const std::lock_guard<std::mutex> lock(mLock);
   // Only clear a pending transaction when the client id and the transaction id
   // are both matched
   if (isPendingTransactionMatched(clientId, transactionId,
                                   mPendingUnloadTransaction)) {
-    LOGI("Clears out the pending unload transaction: client id %" PRIu16
-         ", transaction id %" PRIu32,
-         clientId, transactionId);
+    int64_t nanoappId = mPendingUnloadTransaction->nanoappId;
+    LOGI("Clears out the pending unload transaction for nanoapp 0x%" PRIx64
+         ": client id %" PRIu16 ", transaction id %" PRIu32,
+         nanoappId, clientId, transactionId);
     mPendingUnloadTransaction.reset();
-    return true;
+    return nanoappId;
   }
   LOGW("Client %" PRIu16 " doesn't have a pending unload transaction %" PRIu32
        ". Skip resetting",
        clientId, transactionId);
-  return false;
+  return std::nullopt;
 }
 
 void HalClientManager::handleChreRestart() {

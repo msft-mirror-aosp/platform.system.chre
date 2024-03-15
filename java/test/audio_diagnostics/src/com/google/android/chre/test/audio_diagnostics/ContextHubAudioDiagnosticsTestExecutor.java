@@ -17,6 +17,9 @@
 package com.google.android.chre.test.audiodiagnostics;
 
 import android.hardware.location.NanoAppBinary;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.util.Log;
 
 import com.google.android.chre.test.chqts.ContextHubChreApiTestExecutor;
@@ -28,6 +31,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
 import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import dev.chre.rpc.proto.ChreApiTest;
 
@@ -145,6 +150,86 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
 
         Log.i(TAG, "DC Offset: " + runningSampleAvg);
         Assert.assertTrue(runningSampleAvg < DC_OFFSET_LIMIT);
+    }
+
+    /**
+     * Runs the audio concurrency test. Makes sure AP and CHRE concurrent audio
+     * have the same RMSE.
+     */
+    public void runAudioDiagnosticsConcurrencyTest() throws Exception {
+        // Set up recording from AP.
+        // Hold the mic for 2 seconds
+        int samplingRateHz = 16000; // 16 KHz
+        int durationSeconds = 2;
+        int minBufferSize = AudioRecord.getMinBufferSize(
+                samplingRateHz, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        int size = Math.max(minBufferSize, samplingRateHz * durationSeconds * 2);
+        AudioRecord record = new AudioRecord(
+                MediaRecorder.AudioSource.MIC, samplingRateHz,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size);
+        Assert.assertTrue("AudioRecord could not be initialized.",
+                record.getState() == AudioRecord.STATE_INITIALIZED);
+
+        // Set up recording from CHRE.
+        enableChreAudio(/* skipPop= */ true);
+
+        // Start async process of collecting the CHRE audio event
+        // Allow double the time to time out in case AP audio recording cuts off
+        // CHRE event delivery
+        Future<List<ChreApiTest.GeneralEventsMessage>> audioEventsFuture =
+                new ChreApiTestUtil().gatherEvents(getRpcClient(),
+                                                   CHRE_EVENT_AUDIO_DATA,
+                                                   GATHER_SINGLE_AUDIO_EVENT,
+                                                   AUDIO_DATA_TIMEOUT_NS * 2);
+        // Start synchronous AP recording
+        record.startRecording();
+        // Collect the audio events from the async call
+        List<ChreApiTest.GeneralEventsMessage> audioEvents =
+                audioEventsFuture.get(2 * AUDIO_DATA_TIMEOUT_NS,
+                                      TimeUnit.NANOSECONDS);
+
+        // Process the collected events into one CHRE audio data event.
+        ChreApiTest.ChreAudioDataEvent audioEvent =
+                new ChreApiTestUtil().processAudioDataEvents(audioEvents);
+        Assert.assertNotNull(audioEvent);
+        Assert.assertEquals(audioEvent.getStatus(), true);
+
+        // disable & release both CHRE and AP recording
+        disableChreAudio();
+
+        byte[] apBuf = new byte[size];
+        record.read(apBuf, /* offsetInBytes= */ 0, size);
+        record.release();
+
+        // calculate CHRE's audio RMSE
+        ByteBuffer chreBuffer = ByteBuffer.allocate(audioEvent.getSamples().size());
+        chreBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        audioEvent.getSamples().copyTo(chreBuffer);
+        chreBuffer.rewind();
+        ShortBuffer chreShortBuffer = chreBuffer.asShortBuffer();
+        List<Double> chreRMSE = calculateRMSE(chreShortBuffer);
+
+        // calculate AP's audio RMSE
+        ByteBuffer apBuffer = ByteBuffer.allocate(size);
+        apBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        apBuffer.put(apBuf);
+        apBuffer.rewind();
+        ShortBuffer apShortBuffer = apBuffer.asShortBuffer();
+        List<Double> apRMSE = calculateRMSE(apShortBuffer);
+
+        ChreApiTestUtil.writeDataToFile(chreBuffer.array(),
+                                        "audio_concurrency_chre_test_data.bin",
+                                        mContext);
+        ChreApiTestUtil.writeDataToFile(apBuf,
+                                        "audio_concurrency_ap_test_data.bin",
+                                        mContext);
+
+        Log.i(TAG, "CHRE RMSE: " + chreRMSE.get(1) + " dB");
+        Log.i(TAG, "AP RMSE: " + apRMSE.get(1) + " dB");
+
+        Assert.assertEquals(RMSE_TARGET_DB,
+                            Math.abs(chreRMSE.get(1)),
+                            RMSE_ERROR_DB);
     }
 
     /**

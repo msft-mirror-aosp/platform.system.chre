@@ -430,7 +430,7 @@ void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
     mSynchronousLoadUnloadSuccess = success;
     mSynchronousLoadUnloadCondVar.notify_all();
   } else {
-    std::lock_guard<std::mutex> lock(mCallbackMutex);
+    std::lock_guard<std::mutex> callbackLock(mCallbackMutex);
     if (mCallback != nullptr) {
       mCallback->handleTransactionResult(transactionId, success);
     }
@@ -630,7 +630,9 @@ bool ContextHub::loadNanoappInternal(const NanoappBinary &appBinary,
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary);
   bool success = mConnection.loadNanoapp(transaction);
-  mEventLogger.logNanoappLoad(appBinary, success);
+  mEventLogger.logNanoappLoad(appBinary.nanoappId,
+                              appBinary.customBinary.size(),
+                              appBinary.nanoappVersion, success);
   return success;
 }
 

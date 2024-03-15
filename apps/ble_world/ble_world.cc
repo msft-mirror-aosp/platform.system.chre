@@ -14,21 +14,37 @@
  * limitations under the License.
  */
 #include <inttypes.h>
+#include <cstdint>
 
 #include "chre/util/nanoapp/ble.h"
 #include "chre/util/nanoapp/log.h"
 #include "chre/util/time.h"
 #include "chre_api/chre.h"
 
+#define BLE_FILTER_TYPE_SERVICE_DATA 0
+#define BLE_FILTER_TYPE_MANUFACTURER_DATA 1
+
 /**
  * @file
  *
- * This nanoapp is designed to continually start and stop BLE scans and verify
- * that the expected data is delivered. BLE_WORLD_ENABLE_BATCHING can be defined
- * to test batching and flushing if the nanoapp has the
- * CHRE_BLE_CAPABILITIES_SCAN_RESULT_BATCHING capability. This will configure
- * the BLE scans with a batch window and periodically make flush requests to get
- * batched BLE scan result events.
+ * This nanoapp is designed to verify the functionality of CHRE's BLE APIs.
+ * After confirming whether the platform has the expected capabilities, It tests
+ * scan functionality by continually starting and stopping scan requests and
+ * decoding scan results to be verified manually via the logs. It tests read
+ * RSSI functionality by continually requesting to read RSSI from a hard coded
+ * connection handle.
+ *
+ * The BLE scanning test can be configured to test batching and flushing by
+ * defining BLE_WORLD_ENABLE_BATCHING. If the platform supports the
+ * CHRE_BLE_CAPABILITIES_SCAN_RESULT_BATCHING capability, this flag will modify
+ * the BLE scan request to use a batch window and periodically make flush
+ * requests to get batched BLE scan result events.
+ *
+ * The BLE scanning test can also be configured by filter type. By default, the
+ * test will filter by service data, but it can be modified to filter by
+ * manufacturer data by setting the BLE_FILTER_TYPE flag to
+ * BLE_FILTER_TYPE_MANUFACTURER_DATA. It is recommended to use an app that can
+ * create advertisers corresponding to the filters to do the tests.
  */
 
 #ifdef CHRE_NANOAPP_INTERNAL
@@ -36,9 +52,13 @@ namespace chre {
 namespace {
 #endif  // CHRE_NANOAPP_INTERNAL
 
+using chre::ble_constants::kNumManufacturerDataFilters;
 using chre::ble_constants::kNumScanFilters;
 
-constexpr int8_t kDataTypeServiceData = 0x16;
+constexpr uint8_t kDataTypeServiceData = 0x16;
+constexpr uint8_t kDataTypeManufacturerData = 0xFF;
+constexpr uint8_t kUuidLengthInBytes = 2;
+constexpr uint32_t kScanCookie = 10;
 
 #ifdef BLE_WORLD_ENABLE_BATCHING
 //! A timer handle to request the BLE flush.
@@ -65,13 +85,39 @@ uint16_t gReadRssiConnectionHandle = 0x40;
 //! The period at which to read RSSI of kConnectionHandle.
 uint64_t gReadRssiPeriodNs = 3 * chre::kOneSecondInNanoseconds;
 
+bool isScanningSupported(uint32_t capabilities, uint32_t filterCapabilities) {
+  if ((capabilities & CHRE_BLE_CAPABILITIES_SCAN) == 0) {
+    LOGE("BLE scan is not supported");
+    return false;
+  }
+#if BLE_FILTER_TYPE == BLE_FILTER_TYPE_MANUFACTURER_DATA
+  if ((filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_MANUFACTURER_DATA) ==
+      0) {
+    LOGE("BLE manufacturer data filters are not supported");
+    return false;
+  }
+#else
+  if ((filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA) == 0) {
+    LOGE("BLE service data filters are not supported");
+    return false;
+  }
+#endif
+  return true;
+}
+
 bool enableBleScans() {
-  struct chreBleScanFilter filter;
+  struct chreBleScanFilterV1_9 filter;
+#if BLE_FILTER_TYPE == BLE_FILTER_TYPE_MANUFACTURER_DATA
+  chreBleGenericFilter genericFilters[kNumManufacturerDataFilters];
+  chre::createBleManufacturerDataFilter(kNumManufacturerDataFilters,
+                                        genericFilters, filter);
+#else
   chreBleGenericFilter genericFilters[kNumScanFilters];
-  chre::createBleScanFilterForKnownBeacons(filter, genericFilters,
-                                           kNumScanFilters);
-  return chreBleStartScanAsync(CHRE_BLE_SCAN_MODE_BACKGROUND,
-                               gBleBatchDurationMs, &filter);
+  chre::createBleScanFilterForKnownBeaconsV1_9(filter, genericFilters,
+                                               kNumScanFilters);
+#endif
+  return chreBleStartScanAsyncV1_9(CHRE_BLE_SCAN_MODE_BACKGROUND,
+                                   gBleBatchDurationMs, &filter, &kScanCookie);
 }
 
 bool disableBleScans() {
@@ -81,6 +127,7 @@ bool disableBleScans() {
 bool nanoappStart() {
   LOGI("BLE world from version 0x%08" PRIx32, chreGetVersion());
   uint32_t capabilities = chreBleGetCapabilities();
+  uint32_t filterCapabilities = chreBleGetFilterCapabilities();
   LOGI("Got BLE capabilities 0x%" PRIx32, capabilities);
 #ifdef BLE_WORLD_ENABLE_BATCHING
   bool batchingAvailable =
@@ -92,8 +139,9 @@ bool nanoappStart() {
     LOGI("BLE batching enabled");
   }
 #endif  // BLE_WORLD_ENABLE_BATCHING
-  bool success = enableBleScans();
-  if (!success) {
+  if (!isScanningSupported(capabilities, filterCapabilities)) {
+    LOGE("BLE scanning is not supported");
+  } else if (!enableBleScans()) {
     LOGE("Failed to send BLE start scan request");
   } else {
     gEnableDisableTimerHandle =
@@ -129,22 +177,35 @@ bool nanoappStart() {
   return true;
 }
 
+uint16_t getUuidInLittleEndian(const uint8_t data[kUuidLengthInBytes]) {
+  return static_cast<uint16_t>(data[0] + (data[1] << 8));
+}
+
 void parseAdData(const uint8_t *data, uint16_t size) {
   for (uint16_t i = 0; i < size;) {
     // First byte has the dvertisement data length.
-    uint16_t ad_data_length = data[i];
+    uint16_t adDataLength = data[i];
     // Early termination with zero length advertisement.
-    if (ad_data_length == 0) break;
-    // Second byte has advertisement data type.
-    // Only retrieves service data for Nearby.
-    if (data[++i] == kDataTypeServiceData) {
-      // First two bytes of the service data are service data UUID in little
-      // endian.
-      uint16_t uuid = static_cast<uint16_t>(data[i + 1] + (data[i + 2] << 8));
-      LOGD("Service Data UUID: %" PRIx16, uuid);
+    if (adDataLength == 0) break;
+    // Log 2 byte UUIDs for service data or manufacturer data AD types.
+    if (adDataLength < kUuidLengthInBytes) {
+      continue;
+    }
+    uint8_t adDataType = data[++i];
+    switch (adDataType) {
+      case kDataTypeServiceData:
+        LOGD("Service Data UUID: %" PRIx16,
+             getUuidInLittleEndian(&data[i + 1]));
+        break;
+      case kDataTypeManufacturerData:
+        LOGD("Manufacturer Data UUID: %" PRIx16,
+             getUuidInLittleEndian(&data[i + 1]));
+        break;
+      default:
+        break;
     }
     // Moves to next advertisement.
-    i += ad_data_length;
+    i += adDataLength;
   }
 }
 
