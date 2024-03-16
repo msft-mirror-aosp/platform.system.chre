@@ -60,7 +60,7 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
      * Runs the audio enable/disable test.
      */
     public void runChreAudioEnableDisableTest() throws Exception {
-        enableChreAudio(/* skipPop= */ true);
+        enableChreAudio();
 
         ChreApiTest.ChreAudioDataEvent audioEvent =
                 new ChreApiTestUtil().gatherAudioDataEvent(
@@ -80,7 +80,7 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
      * Runs the audio RMSE test.
      */
     public void runAudioDiagnosticsRmseTest() throws Exception {
-        enableChreAudio(/* skipPop= */ true);
+        enableChreAudio();
 
         ChreApiTest.ChreAudioDataEvent audioEvent =
                 new ChreApiTestUtil().gatherAudioDataEvent(
@@ -119,7 +119,7 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
     public void runAudioDiagnosticsDcOffsetTest() throws Exception {
         long runningSampleAvg = 0;
         long samplesRead = 0;
-        enableChreAudio(/* skipPop= */ true);
+        enableChreAudio();
 
         ChreApiTest.ChreAudioDataEvent audioEvent =
                 new ChreApiTestUtil().gatherAudioDataEvent(
@@ -171,7 +171,7 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
                 record.getState() == AudioRecord.STATE_INITIALIZED);
 
         // Set up recording from CHRE.
-        enableChreAudio(/* skipPop= */ true);
+        enableChreAudio();
 
         // Start async process of collecting the CHRE audio event
         // Allow double the time to time out in case AP audio recording cuts off
@@ -288,22 +288,6 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
 
         Assert.assertNotNull(audioEnableresponse);
         Assert.assertTrue(audioEnableresponse.getStatus());
-    }
-
-    /**
-     * Enables CHRE audio for the first audio source found.
-     * Asserts that the RPC call comes back successfully.
-     *
-     * @param skipPop   Boolean to skip the first two seconds of audio
-     *                  collection after enable (avoids the 'pop' sound)
-     */
-    private void enableChreAudio(boolean skipPop) throws Exception {
-        enableChreAudio();
-        if (skipPop) {
-            // TODO(b/245958247): When this is fixed there should be no need to
-            //                    skip the first data packet.
-            Thread.sleep(2000);
-        }
     }
 
     /**
