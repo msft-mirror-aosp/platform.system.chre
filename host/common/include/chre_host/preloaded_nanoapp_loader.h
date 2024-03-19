@@ -98,9 +98,6 @@ class PreloadedNanoappLoader {
     size_t fragmentId;
   };
 
-  /** Timeout value of waiting for the response of a fragmented load */
-  static constexpr auto kTimeoutInMs = std::chrono::milliseconds(2000);
-
   /**
    * Loads a preloaded nanoapp.
    *
