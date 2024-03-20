@@ -21,6 +21,7 @@
 #include "chre_host/file_stream.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/log.h"
+#include "chre_host/nanoapp_load_listener.h"
 #include "hal_client_id.h"
 
 namespace android::chre {
@@ -107,6 +108,10 @@ int PreloadedNanoappLoader::loadPreloadedNanoapps(
     // load the binary
     if (loadNanoapp(header, nanoappFilename, i)) {
       numOfNanoappsLoaded++;
+    } else {
+      if (mNanoappLoadListener != nullptr) {
+        mNanoappLoadListener->onNanoappLoadFailed(header->appId);
+      }
     }
   }
   mIsPreloadingOngoing.store(false);
@@ -117,19 +122,22 @@ bool PreloadedNanoappLoader::loadNanoapp(const NanoAppBinaryHeader *appHeader,
                                          const std::string &nanoappFileName,
                                          uint32_t transactionId) {
   // parse the binary
-  std::vector<uint8_t> nanoappBuffer;
-  if (!readFileContents(nanoappFileName.c_str(), nanoappBuffer)) {
+  auto nanoappBuffer = std::make_shared<std::vector<uint8_t>>();
+  if (!readFileContents(nanoappFileName.c_str(), *nanoappBuffer)) {
     LOGE("Unable to read %s.", nanoappFileName.c_str());
     return false;
+  }
+  if (mNanoappLoadListener != nullptr) {
+    mNanoappLoadListener->onNanoappLoadStarted(appHeader->appId, nanoappBuffer);
   }
   // Build the target API version from major and minor.
   uint32_t targetApiVersion = (appHeader->targetChreApiMajorVersion << 24) |
                               (appHeader->targetChreApiMinorVersion << 16);
   bool success = sendFragmentedLoadAndWaitForEachResponse(
       appHeader->appId, appHeader->appVersion, appHeader->flags,
-      targetApiVersion, nanoappBuffer.data(), nanoappBuffer.size(),
+      targetApiVersion, nanoappBuffer->data(), nanoappBuffer->size(),
       transactionId);
-  mEventLogger.logNanoappLoad(appHeader->appId, nanoappBuffer.size(),
+  mEventLogger.logNanoappLoad(appHeader->appId, nanoappBuffer->size(),
                               appHeader->appVersion, success);
   return success;
 }

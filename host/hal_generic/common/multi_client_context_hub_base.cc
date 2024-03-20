@@ -50,6 +50,12 @@ constexpr std::chrono::duration ktestModeTimeOut = std::chrono::seconds(5);
 // The transaction id for synchronously load/unload a nanoapp in test mode.
 constexpr int32_t kTestModeTransactionId{static_cast<int32_t>(0x80000000)};
 
+// Allow build-time override.
+#ifndef CHRE_NANOAPP_IMAGE_HEADER_SIZE
+#define CHRE_NANOAPP_IMAGE_HEADER_SIZE (0x1000)
+#endif
+constexpr size_t kNanoappImageHeaderSize = CHRE_NANOAPP_IMAGE_HEADER_SIZE;
+
 bool isValidContextHubId(uint32_t hubId) {
   if (hubId != kDefaultHubId) {
     LOGE("Invalid context hub ID %" PRId32, hubId);
@@ -156,7 +162,7 @@ MultiClientContextHubBase::MultiClientContextHubBase() {
                                       deathRecipient.get(),
                                       deathRecipientCookie) == STATUS_OK;
       };
-  mLogger.init();
+  mLogger.init(kNanoappImageHeaderSize);
 }
 
 ScopedAStatus MultiClientContextHubBase::getContextHubs(
@@ -637,8 +643,10 @@ void MultiClientContextHubBase::handleMessageFromChre(
       break;
     }
     case fbs::ChreMessage::NanoappTokenDatabaseInfo: {
-      // TODO(b/242760291): Map nanoapp log detokenizers to instance IDs in the
-      //  log message parser.
+      const auto *info = message.AsNanoappTokenDatabaseInfo();
+      mLogger.addNanoappDetokenizer(info->app_id, info->instance_id,
+                                    info->database_offset_bytes,
+                                    info->database_size_bytes);
       break;
     }
     default:
@@ -814,6 +822,8 @@ void MultiClientContextHubBase::onNanoappUnloadResponse(
                                         /* in_success= */ response.success);
     }
   }
+  // TODO(b/242760291): Remove the nanoapp log detokenizer associated with this
+  // nanoapp.
 }
 
 void MultiClientContextHubBase::onNanoappMessage(

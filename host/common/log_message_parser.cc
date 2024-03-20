@@ -26,6 +26,10 @@
 #include "chre_host/log.h"
 #include "include/chre_host/log_message_parser.h"
 
+#include "pw_result/result.h"
+#include "pw_span/span.h"
+#include "pw_tokenizer/detokenize.h"
+
 using chre::kOneMillisecondInNanoseconds;
 using chre::kOneSecondInMilliseconds;
 
@@ -38,6 +42,16 @@ constexpr bool kVerboseLoggingEnabled = true;
 #else
 constexpr bool kVerboseLoggingEnabled = false;
 #endif
+
+//! Offset in bytes between the address and real start of a nanoapp binary.
+constexpr size_t kImageHeaderSize = 0x1000;
+//! The number of bytes in a tokenized log entry in addition to the log payload.
+//! The value indicate the size of the uint8_t logSize field.
+constexpr size_t kSystemTokenizedLogOffset = 1;
+//! The number of bytes in a nanoapp tokenized log entry in addition to the log
+//! payload. The value accounts for the size of the uint8_t logSize field and
+//! the uint16_t instanceId field.
+constexpr size_t kNanoappTokenizedLogOffset = 3;
 }  // anonymous namespace
 
 LogMessageParser::LogMessageParser()
@@ -64,8 +78,9 @@ std::unique_ptr<Detokenizer> LogMessageParser::logDetokenizerInit() {
   return std::unique_ptr<Detokenizer>(nullptr);
 }
 
-void LogMessageParser::init() {
-  mDetokenizer = logDetokenizerInit();
+void LogMessageParser::init(size_t nanoappImageHeaderSize) {
+  mSystemDetokenizer = logDetokenizerInit();
+  mNanoappImageHeaderSize = nanoappImageHeaderSize;
 }
 
 void LogMessageParser::dump(const uint8_t *buffer, size_t size) {
@@ -167,17 +182,19 @@ void LogMessageParser::log(const uint8_t *logBuffer, size_t logBufferSize) {
 size_t LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
     const LogMessageV2 *message) {
   size_t logMessageSize = 0;
-  auto detokenizer = mDetokenizer.get();
+  auto detokenizer = mSystemDetokenizer.get();
   if (detokenizer != nullptr) {
-    auto *encodedLog = const_cast<EncodedLog *>(
-        reinterpret_cast<const EncodedLog *>(message->logMessage));
+    auto *encodedLog =
+        reinterpret_cast<const EncodedLog *>(message->logMessage);
     DetokenizedString detokenizedString =
         detokenizer->Detokenize(encodedLog->data, encodedLog->size);
     std::string decodedString = detokenizedString.BestStringWithErrors();
     emitLogMessage(getLogLevelFromMetadata(message->metadata),
                    le32toh(message->timestampMillis), decodedString.c_str());
-    logMessageSize = encodedLog->size + sizeof(struct EncodedLog);
+    logMessageSize = encodedLog->size + kSystemTokenizedLogOffset;
   } else {
+    // TODO(b/327515992): Stop decoding and emitting system log messages if
+    // detokenizer is null .
     LOGE("Null detokenizer! Cannot decode log message");
   }
   return logMessageSize;
@@ -185,10 +202,23 @@ size_t LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
 
 size_t LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
     const LogMessageV2 *message) {
-  // TODO(b/242760291): Implement after completing the pigweed detokenizer
-  // function.
-  UNUSED_VAR(message);
-  return 0;
+  auto *tokenizedLog =
+      reinterpret_cast<const NanoappTokenizedLog *>(message->logMessage);
+  auto detokenizerIter = mNanoappDetokenizers.find(tokenizedLog->instanceId);
+  if (detokenizerIter == mNanoappDetokenizers.end()) {
+    LOGE(
+        "Unable to find nanoapp log detokenizer associated with instance ID: "
+        "%" PRIu16,
+        tokenizedLog->instanceId);
+  } else {
+    auto detokenizer = detokenizerIter->second.detokenizer.get();
+    DetokenizedString detokenizedString =
+        detokenizer->Detokenize(tokenizedLog->data, tokenizedLog->size);
+    std::string decodedString = detokenizedString.BestStringWithErrors();
+    emitLogMessage(getLogLevelFromMetadata(message->metadata),
+                   le32toh(message->timestampMillis), decodedString.c_str());
+  }
+  return tokenizedLog->size + kNanoappTokenizedLogOffset;
 }
 
 void LogMessageParser::parseAndEmitLogMessage(const LogMessageV2 *message) {
@@ -255,6 +285,81 @@ void LogMessageParser::logV2(const uint8_t *logBuffer, size_t logBufferSize,
     }
     bufferIndex += sizeof(LogMessageV2) + logMessageSize;
   }
+}
+
+void LogMessageParser::addNanoappDetokenizer(uint64_t appId,
+                                             uint16_t instanceId,
+                                             uint64_t databaseOffset,
+                                             size_t databaseSize) {
+  auto appBinaryIter = mNanoappAppIdToBinary.find(appId);
+  if (appBinaryIter == mNanoappAppIdToBinary.end()) {
+    LOGE("Unable to find nanoapp binary with app ID 0x%016" PRIx64, appId);
+  } else if (checkTokenDatabaseOverflow(databaseOffset, databaseSize,
+                                        appBinaryIter->second->size())) {
+    LOGE(
+        "Token database fails memory bounds check for nanoapp with app ID "
+        "0x%016" PRIx64 ". Token database offset received: %" PRIu32
+        "; size received: %zu; Size of the appBinary: %zu.",
+        appId, databaseOffset, databaseSize, appBinaryIter->second->size());
+  } else {
+    const uint8_t *tokenDatabaseBinaryStart =
+        appBinaryIter->second->data() + kImageHeaderSize + databaseOffset;
+
+    pw::span<const uint8_t> tokenEntries(tokenDatabaseBinaryStart,
+                                         databaseSize);
+    pw::Result<Detokenizer> nanoappDetokenizer =
+        pw::tokenizer::Detokenizer::FromElfSection(tokenEntries);
+
+    // Clear out any stale detokenizer instance and clean up memory.
+    appBinaryIter->second.reset();
+    removeNanoappDetokenizerAndBinary(appId);
+
+    if (nanoappDetokenizer.ok()) {
+      NanoappDetokenizer detokenizer;
+      detokenizer.appId = appId;
+      detokenizer.detokenizer =
+          std::make_unique<Detokenizer>(std::move(*nanoappDetokenizer));
+      mNanoappDetokenizers[instanceId] = std::move(detokenizer);
+    } else {
+      LOGE("Unable to parse log detokenizer for app with ID: 0x%016" PRIx64,
+           appId);
+    }
+  }
+}
+
+void LogMessageParser::removeNanoappDetokenizerAndBinary(uint64_t appId) {
+  for (const auto &item : mNanoappDetokenizers) {
+    if (item.second.appId == appId) {
+      mNanoappDetokenizers.erase(item.first);
+    }
+  }
+  mNanoappAppIdToBinary.erase(appId);
+}
+
+void LogMessageParser::resetNanoappDetokenizerState() {
+  mNanoappDetokenizers.clear();
+  mNanoappAppIdToBinary.clear();
+}
+
+void LogMessageParser::onNanoappLoadStarted(
+    uint64_t appId, std::shared_ptr<const std::vector<uint8_t>> nanoappBinary) {
+  mNanoappAppIdToBinary[appId] = nanoappBinary;
+}
+
+void LogMessageParser::onNanoappLoadFailed(uint64_t appId) {
+  removeNanoappDetokenizerAndBinary(appId);
+}
+
+void LogMessageParser::onNanoappUnloaded(uint64_t appId) {
+  removeNanoappDetokenizerAndBinary(appId);
+}
+
+bool LogMessageParser::checkTokenDatabaseOverflow(uint32_t databaseOffset,
+                                                  size_t databaseSize,
+                                                  size_t binarySize) {
+  return databaseOffset > binarySize || databaseSize > binarySize ||
+         databaseOffset + databaseSize > binarySize ||
+         databaseOffset + databaseSize < databaseOffset;
 }
 
 }  // namespace chre
