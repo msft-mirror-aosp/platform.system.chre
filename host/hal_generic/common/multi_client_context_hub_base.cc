@@ -198,6 +198,9 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
+  auto nanoappBuffer =
+      std::make_shared<std::vector<uint8_t>>(appBinary.customBinary);
+  mLogger.onNanoappLoadStarted(appBinary.nanoappId, nanoappBuffer);
   auto transaction = std::make_unique<FragmentedLoadTransaction>(
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary,
@@ -217,6 +220,7 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
        appBinary.nanoappId);
   mHalClientManager->resetPendingLoadTransaction();
+  mLogger.onNanoappLoadFailed(appBinary.nanoappId);
   return fromResult(false);
 }
 
@@ -791,6 +795,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
          " fragment %" PRIu32 " failed",
          clientId, response.transaction_id, response.fragment_id);
     mHalClientManager->resetPendingLoadTransaction();
+    mLogger.onNanoappLoadFailed(nanoappInfo->appId);
   }
 
   mEventLogger.logNanoappLoad(nanoappInfo->appId, nanoappInfo->appSize,
