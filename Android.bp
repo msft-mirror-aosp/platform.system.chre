@@ -528,6 +528,7 @@ cc_test_host {
         "chre_host_common",
         "event_logger",
         "libgmock",
+        "pw_detokenizer",
     ],
     shared_libs: [
         "libbase",
