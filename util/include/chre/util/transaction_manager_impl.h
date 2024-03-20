@@ -47,7 +47,7 @@ bool TransactionManager<TransactionData>::completeTransaction(
       } else {
         transaction.errorCode = errorCode;
       }
-      deferProcessTransactions(this, /* timerFired= */ false);
+      deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
       return true;
     }
   }
@@ -65,7 +65,7 @@ size_t TransactionManager<TransactionData>::flushTransactions(
 
   LockGuard lock(mMutex);
 
-  deferProcessTransactions(this, /* timerFired= */ false);
+  deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
   return mTransactions.removeMatchedFromBack(
       [](Transaction &transaction, void *innerData, void *extraData) {
         FlushCallback innerCallback =
@@ -113,7 +113,7 @@ bool TransactionManager<TransactionData>::startTransaction(
 
   mTransactions.push_back(transaction);
 
-  deferProcessTransactions(this, /* timerFired= */ false);
+  deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
   return true;
 }
 
@@ -197,8 +197,9 @@ void TransactionManager<TransactionData>::processTransactions(bool timerFired) {
 
   Nanoseconds waitTime = nextExecutionTime - SystemTime::getMonotonicTime();
   if (waitTime.toRawNanoseconds() > 0) {
-    mDeferCallback(TransactionManager<TransactionData>::onTimerFired, this,
-                   /* extraData= */ nullptr, waitTime, &mTimerHandle);
+    mDeferCallback(TransactionManager<TransactionData>::onTimerFired,
+                   /* data= */ this, /* extraData= */ nullptr,
+                   waitTime, &mTimerHandle);
     CHRE_ASSERT(mTimerHandle != CHRE_TIMER_INVALID);
   }
 }
