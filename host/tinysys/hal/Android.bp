@@ -72,8 +72,8 @@ cc_binary {
     ],
     header_libs: [
         "chre_api",
-        "pw_span_headers",
-        "pw_polyfill_headers",
+        "pw_span",
+        "pw_polyfill",
     ],
     static_libs: [
         "chre_client",
