@@ -37,9 +37,9 @@ TaskManager::~TaskManager() {
   {
     std::lock_guard<std::mutex> lock(mMutex);
     mContinueRunningThread = false;
-    mConditionVariable.notify_all();
   }
 
+  mConditionVariable.notify_all();
   if (mThread.joinable()) {
     mThread.join();
   }
@@ -48,26 +48,27 @@ TaskManager::~TaskManager() {
 std::optional<uint32_t> TaskManager::addTask(
     const Task::TaskFunction &func, std::chrono::nanoseconds intervalOrDelay,
     bool isOneShot) {
-  std::lock_guard<std::mutex> lock(mMutex);
   bool success = false;
-
   uint32_t returnId;
-  if (!mContinueRunningThread) {
-    LOGW("Execution thread is shutting down. Cannot add a task.");
-  } else {
-    // select the next ID
-    assert(mCurrentId < std::numeric_limits<uint32_t>::max());
-    returnId = mCurrentId++;
-    Task task(func, intervalOrDelay, returnId, isOneShot);
-    success = mQueue.push(task);
+  {
+    std::lock_guard<std::mutex> lock(mMutex);
+
+    if (!mContinueRunningThread) {
+      LOGW("Execution thread is shutting down. Cannot add a task.");
+    } else {
+      // select the next ID
+      assert(mCurrentId < std::numeric_limits<uint32_t>::max());
+      returnId = mCurrentId++;
+      Task task(func, intervalOrDelay, returnId, isOneShot);
+      success = mQueue.push(task);
+    }
   }
 
   if (success) {
     mConditionVariable.notify_all();
     return returnId;
-  } else {
-    return std::optional<uint32_t>();
   }
+  return std::optional<uint32_t>();
 }
 
 bool TaskManager::cancelTask(uint32_t taskId) {

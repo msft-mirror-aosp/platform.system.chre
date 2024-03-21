@@ -26,7 +26,10 @@
 #include <utility>
 
 #include "chre_connection.h"
+
 #include "chre_host/generated/host_messages_generated.h"
+#include "chre_host/log_message_parser.h"
+#include "chre_host/nanoapp_load_listener.h"
 #include "chre_host/napp_header.h"
 #include "event_logger.h"
 #include "fragmented_load_transaction.h"
@@ -49,10 +52,12 @@ class PreloadedNanoappLoader {
  public:
   explicit PreloadedNanoappLoader(ChreConnection *connection,
                                   EventLogger &eventLogger,
-                                  std::string configPath)
+                                  std::string configPath,
+                                  INanoappLoadListener *nanoappLoadListener)
       : mConnection(connection),
         mEventLogger(eventLogger),
-        mConfigPath(std::move(configPath)) {}
+        mConfigPath(std::move(configPath)),
+        mNanoappLoadListener(nanoappLoadListener) {}
 
   ~PreloadedNanoappLoader() = default;
   /**
@@ -141,6 +146,8 @@ class PreloadedNanoappLoader {
   ChreConnection *mConnection;
   EventLogger &mEventLogger;
   std::string mConfigPath;
+
+  INanoappLoadListener *mNanoappLoadListener;
 };
 
 }  // namespace android::chre

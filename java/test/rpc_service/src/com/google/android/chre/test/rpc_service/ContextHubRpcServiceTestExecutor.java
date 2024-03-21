@@ -73,7 +73,8 @@ public class ContextHubRpcServiceTestExecutor extends ContextHubClientCallback {
         mNanoAppId = mNanoAppBinary.getNanoAppId();
 
         mEchoService = new Service("pw.rpc.EchoService",
-                Service.unaryMethod("Echo", Echo.EchoMessage.class, Echo.EchoMessage.class));
+                Service.unaryMethod("Echo", Echo.EchoMessage.parser(),
+                                    Echo.EchoMessage.parser()));
     }
 
     @Override
