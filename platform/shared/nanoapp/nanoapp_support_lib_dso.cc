@@ -23,7 +23,6 @@
 
 #include <algorithm>
 
-#include "chre/util/nanoapp/log.h"
 #include "chre_api/chre.h"
 #include "chre_nsl_internal/platform/shared/debug_dump.h"
 #include "chre_nsl_internal/util/macros.h"
@@ -320,7 +319,7 @@ bool chreBleStartScanAsync(chreBleScanMode mode, uint32_t reportDelayMs,
   auto genericFilters = static_cast<chreBleGenericFilter *>(
       chreHeapAlloc(sizeof(chreBleGenericFilter) * filter->scanFilterCount));
   if (genericFilters == nullptr) {
-    LOG_OOM();
+    chreLog(CHRE_LOG_ERROR, "Alloc failure in chreBleStartScanAsync NSL");
     return false;
   }
   memcpy(genericFilters, filter->scanFilters,
@@ -333,7 +332,7 @@ bool chreBleStartScanAsync(chreBleScanMode mode, uint32_t reportDelayMs,
   chreHeapFree(const_cast<chreBleGenericFilter *>(convertedFilter.scanFilters));
   return success;
 }
-#endif /* CRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_8 */
+#endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_8 */
 
 #if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_9
 WEAK_SYMBOL
