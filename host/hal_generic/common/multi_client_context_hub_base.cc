@@ -768,6 +768,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
     return;
   }
 
+  bool success = response.success;
   if (response.success) {
     auto nextFragmentedRequest =
         mHalClientManager->getNextFragmentedLoadRequest();
@@ -779,10 +780,13 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
            ": (transaction: %" PRIu32 ", fragment %zu)",
            clientId, nextFragmentedRequest->transactionId,
            nextFragmentedRequest->fragmentId);
-      sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value());
-      return;
+      if (sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value())) {
+        return;
+      }
+      success = false;
     }
-  } else {
+  }
+  if (!success) {
     LOGE("Loading nanoapp fragment for client %" PRIu16 " transaction %" PRIu32
          " fragment %" PRIu32 " failed",
          clientId, response.transaction_id, response.fragment_id);
@@ -790,7 +794,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
   }
 
   mEventLogger.logNanoappLoad(nanoappInfo->appId, nanoappInfo->appSize,
-                              nanoappInfo->appVersion, response.success);
+                              nanoappInfo->appVersion, success);
 
   // At this moment the current pending transaction should either have no more
   // fragment to send or the response indicates its last nanoapp fragment fails
@@ -798,7 +802,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
   if (auto callback = mHalClientManager->getCallback(clientId);
       callback != nullptr) {
     callback->handleTransactionResult(response.transaction_id,
-                                      /* in_success= */ response.success);
+                                      /* in_success= */ success);
   }
 }
 
