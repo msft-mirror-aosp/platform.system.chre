@@ -67,13 +67,14 @@ size_t TransactionManager<TransactionData>::flushTransactions(
 
   deferProcessTransactions(this, /* timerFired= */ false);
   return mTransactions.removeMatchedFromBack(
-      [](Transaction &transaction, void *data, void *extraData) {
-        FlushCallback callback = reinterpret_cast<FlushCallback>(data);
-        if (callback == nullptr) {
+      [](Transaction &transaction, void *innerData, void *extraData) {
+        FlushCallback innerCallback =
+            reinterpret_cast<FlushCallback>(innerData);
+        if (innerCallback == nullptr) {
           return false;
         }
 
-        return callback(transaction.data, extraData);
+        return innerCallback(transaction.data, extraData);
       },
       reinterpret_cast<void *>(callback), data, mTransactions.size());
 }
@@ -120,8 +121,9 @@ template <typename TransactionData>
 void TransactionManager<TransactionData>::deferProcessTransactions(
     void *data, bool timerFired) {
   bool status = mDeferCallback(
-      [](uint16_t /* type */, void *data, void *extraData) {
-        auto transactionManagerPtr = static_cast<TransactionManager *>(data);
+      [](uint16_t /* type */, void *innerData, void *extraData) {
+        auto transactionManagerPtr =
+            static_cast<TransactionManager *>(innerData);
         if (transactionManagerPtr == nullptr) {
           LOGE("Could not get transaction manager to process transactions");
           return;
