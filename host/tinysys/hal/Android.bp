@@ -72,15 +72,15 @@ cc_binary {
     ],
     header_libs: [
         "chre_api",
-        "pw_span",
-        "pw_polyfill",
     ],
     static_libs: [
         "chre_client",
         "chre_flags_c_lib",
         "event_logger",
-        "pw_varint",
         "pw_detokenizer",
+        "pw_polyfill",
+        "pw_span",
+        "pw_varint",
     ],
     vintf_fragments: ["android.hardware.contexthub-service.tinysys.xml"],
 }
