@@ -271,10 +271,9 @@ void PlatformNanoappBase::sendTokenDatabaseInfo() {
   uint32_t databaseOffset = 0;
   size_t databaseSize = 0;
 
-  if (loader->getTokenDatabaseSectionInfo(&databaseOffset, &databaseSize)) {
-    HostLinkBase::sendNanoappTokenDatabaseInfo(mExpectedAppId, databaseOffset,
-                                               databaseSize);
-  }
+  loader->getTokenDatabaseSectionInfo(&databaseOffset, &databaseSize);
+  HostLinkBase::sendNanoappTokenDatabaseInfo(mExpectedAppId, databaseOffset,
+                                             databaseSize);
 }
 
 bool PlatformNanoappBase::openNanoapp() {
