@@ -198,6 +198,9 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
+  auto nanoappBuffer =
+      std::make_shared<std::vector<uint8_t>>(appBinary.customBinary);
+  mLogger.onNanoappLoadStarted(appBinary.nanoappId, nanoappBuffer);
   auto transaction = std::make_unique<FragmentedLoadTransaction>(
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary,
@@ -217,6 +220,7 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
        appBinary.nanoappId);
   mHalClientManager->resetPendingLoadTransaction();
+  mLogger.onNanoappLoadFailed(appBinary.nanoappId);
   return fromResult(false);
 }
 
@@ -768,6 +772,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
     return;
   }
 
+  bool success = response.success;
   if (response.success) {
     auto nextFragmentedRequest =
         mHalClientManager->getNextFragmentedLoadRequest();
@@ -779,18 +784,22 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
            ": (transaction: %" PRIu32 ", fragment %zu)",
            clientId, nextFragmentedRequest->transactionId,
            nextFragmentedRequest->fragmentId);
-      sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value());
-      return;
+      if (sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value())) {
+        return;
+      }
+      success = false;
     }
-  } else {
+  }
+  if (!success) {
     LOGE("Loading nanoapp fragment for client %" PRIu16 " transaction %" PRIu32
          " fragment %" PRIu32 " failed",
          clientId, response.transaction_id, response.fragment_id);
     mHalClientManager->resetPendingLoadTransaction();
+    mLogger.onNanoappLoadFailed(nanoappInfo->appId);
   }
 
   mEventLogger.logNanoappLoad(nanoappInfo->appId, nanoappInfo->appSize,
-                              nanoappInfo->appVersion, response.success);
+                              nanoappInfo->appVersion, success);
 
   // At this moment the current pending transaction should either have no more
   // fragment to send or the response indicates its last nanoapp fragment fails
@@ -798,7 +807,7 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
   if (auto callback = mHalClientManager->getCallback(clientId);
       callback != nullptr) {
     callback->handleTransactionResult(response.transaction_id,
-                                      /* in_success= */ response.success);
+                                      /* in_success= */ success);
   }
 }
 
