@@ -52,6 +52,9 @@ constexpr size_t kSystemTokenizedLogOffset = 1;
 //! payload. The value accounts for the size of the uint8_t logSize field and
 //! the uint16_t instanceId field.
 constexpr size_t kNanoappTokenizedLogOffset = 3;
+//! This value is used to indicate that a nanoapp does not have a token database
+//! section.
+constexpr uint32_t kInvalidTokenDatabaseSize = 0;
 }  // anonymous namespace
 
 LogMessageParser::LogMessageParser()
@@ -294,6 +297,9 @@ void LogMessageParser::addNanoappDetokenizer(uint64_t appId,
   auto appBinaryIter = mNanoappAppIdToBinary.find(appId);
   if (appBinaryIter == mNanoappAppIdToBinary.end()) {
     LOGE("Unable to find nanoapp binary with app ID 0x%016" PRIx64, appId);
+  } else if (databaseSize == kInvalidTokenDatabaseSize) {
+    // Remove and free the nanoapp binary.
+    mNanoappAppIdToBinary.erase(appId);
   } else if (checkTokenDatabaseOverflow(databaseOffset, databaseSize,
                                         appBinaryIter->second->size())) {
     LOGE(
@@ -343,7 +349,12 @@ void LogMessageParser::resetNanoappDetokenizerState() {
 
 void LogMessageParser::onNanoappLoadStarted(
     uint64_t appId, std::shared_ptr<const std::vector<uint8_t>> nanoappBinary) {
+#ifdef CHRE_NANOAPP_TOKENIZED_LOGGING_ENABLED
   mNanoappAppIdToBinary[appId] = nanoappBinary;
+#else
+  UNUSED_VAR(appId);
+  UNUSED_VAR(nanoappBinary);
+#endif  // CHRE_NANOAPP_TOKENIZED_LOGGING_ENABLED
 }
 
 void LogMessageParser::onNanoappLoadFailed(uint64_t appId) {
