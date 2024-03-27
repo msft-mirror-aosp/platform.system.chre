@@ -162,9 +162,10 @@ void TransactionManager<TransactionData>::processTransactions(bool timerFired) {
         (transaction.nextRetryTime <= now &&
          transaction.numCompletedStartCalls >= kMaxNumRetries + 1) ||
         transaction.errorCode.has_value()) {
-      uint8_t errorCode = transaction.errorCode.has_value()
-                              ? *transaction.errorCode
-                              : CHRE_ERROR_TIMEOUT;
+      uint8_t errorCode = CHRE_ERROR_TIMEOUT;
+      if (transaction.errorCode.has_value()) {
+        errorCode = *transaction.errorCode;
+      }
 
       bool status = mCompleteCallback(transaction.data, errorCode);
       if (status) {
