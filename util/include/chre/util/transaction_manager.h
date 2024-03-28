@@ -78,7 +78,7 @@ class TransactionManager : public NonCopyable {
       typename std::conditional<std::is_pointer<TransactionData>::value ||
                                     std::is_fundamental<TransactionData>::value,
                                 bool (*)(TransactionData data),
-                                bool (*)(const TransactionData &data)>::type;
+                                bool (*)(TransactionData &data)>::type;
 
   /**
    * The type of function used to defer a callback. See DeferCallback.
