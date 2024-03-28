@@ -635,11 +635,7 @@ void MultiClientContextHubBase::handleMessageFromChre(
       break;
     }
     case fbs::ChreMessage::LogMessageV2: {
-      const chre::fbs::LogMessageV2T *logMessage = message.AsLogMessageV2();
-      const std::vector<int8_t> &buffer = logMessage->buffer;
-      auto logData = reinterpret_cast<const uint8_t *>(buffer.data());
-      uint32_t numLogsDropped = logMessage->num_logs_dropped;
-      mLogger.logV2(logData, buffer.size(), numLogsDropped);
+      handleLogMessageV2(*message.AsLogMessageV2());
       break;
     }
     case fbs::ChreMessage::MetricLog: {
@@ -974,6 +970,14 @@ void MultiClientContextHubBase::writeToDebugFile(const char *str) {
   if (!WriteStringToFd(std::string(str), getDebugFd())) {
     LOGW("Failed to write %zu bytes to debug dump fd", strlen(str));
   }
+}
+
+void MultiClientContextHubBase::handleLogMessageV2(
+    const ::chre::fbs::LogMessageV2T &logMessage) {
+  const std::vector<int8_t> &logBuffer = logMessage.buffer;
+  auto logData = reinterpret_cast<const uint8_t *>(logBuffer.data());
+  uint32_t numLogsDropped = logMessage.num_logs_dropped;
+  mLogger.logV2(logData, logBuffer.size(), numLogsDropped);
 }
 
 void MultiClientContextHubBase::onMetricLog(

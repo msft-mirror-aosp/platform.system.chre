@@ -132,6 +132,7 @@ class MultiClientContextHubBase
       const ::chre::fbs::DebugDumpResponseT & /* response */);
   void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
   void handleClientDeath(pid_t pid);
+  void handleLogMessageV2(const ::chre::fbs::LogMessageV2T &logMessage);
 
   /**
    * Returns true to allow metrics to be reported to stats service.
