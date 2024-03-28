@@ -183,6 +183,10 @@ bool FilterExtension::Encode(
     report_proto.timestamp = report.timestamp;
     report_proto.has_event_type_and_data_status = true;
     report_proto.event_type_and_data_status = report.eventTypeAndDataStatus;
+    report_proto.has_address_type = true;
+    report_proto.address_type =
+        static_cast<nearby_extension_ChreBleAdvertisingReport_AddressType>(
+            report.addressType);
     report_proto.has_address = true;
     for (size_t i = 0; i < 6; i++) {
       report_proto.address[i] = report.address[i];
@@ -233,6 +237,10 @@ bool FilterExtension::EncodeAdvReport(chreBleAdvertisingReport &report,
       static_cast<uint64_t>(chreGetEstimatedHostTimeOffset());
   report_proto.has_event_type_and_data_status = true;
   report_proto.event_type_and_data_status = report.eventTypeAndDataStatus;
+  report_proto.has_address_type = true;
+  report_proto.address_type =
+      static_cast<nearby_extension_ChreBleAdvertisingReport_AddressType>(
+          report.addressType);
   report_proto.has_address = true;
   for (size_t i = 0; i < 6; i++) {
     report_proto.address[i] = report.address[i];
