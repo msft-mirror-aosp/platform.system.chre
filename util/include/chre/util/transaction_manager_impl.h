@@ -160,7 +160,7 @@ void TransactionManager<TransactionData>::processTransactions(bool timerFired) {
     Transaction &transaction = mTransactions[i];
     if (transaction.timeoutTime <= now ||
         (transaction.nextRetryTime <= now &&
-         transaction.numCompletedStartCalls >= kMaxNumRetries + 1) ||
+         transaction.numCompletedStartCalls >= mMaxNumRetries + 1) ||
         transaction.errorCode.has_value()) {
       uint8_t errorCode = CHRE_ERROR_TIMEOUT;
       if (transaction.errorCode.has_value()) {

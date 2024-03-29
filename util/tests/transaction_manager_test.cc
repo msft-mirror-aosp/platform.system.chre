@@ -29,6 +29,8 @@
 namespace chre {
 namespace {
 
+constexpr uint16_t kMaxNumRetries = 3;
+
 class TransactionManagerTest;
 
 struct TransactionData {
@@ -103,7 +105,7 @@ class TransactionManagerTest : public testing::Test {
   }
 
   std::unique_ptr<TransactionManager<TransactionData>> getTransactionManager(
-      bool doFaultyStart) {
+      bool doFaultyStart, uint16_t maxNumRetries = kMaxNumRetries) {
     return std::make_unique<TransactionManager<TransactionData>>(
         doFaultyStart
             ? [](TransactionData &data) {
@@ -119,7 +121,8 @@ class TransactionManagerTest : public testing::Test {
         },
         TransactionManagerTest::deferCallback,
         TransactionManagerTest::deferCancelCallback,
-        /* retryWaitTime= */ Milliseconds(1));
+        /* retryWaitTime= */ Milliseconds(1),
+        maxNumRetries);
   }
 
  protected:
@@ -232,11 +235,9 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
       },
       /* timeout= */ Milliseconds(10), &transactionId));
   mCondVar.wait(lock, [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted ==
-           TransactionManager<TransactionData>::kMaxNumRetries + 1;
+    return numTimesTransactionStarted == kMaxNumRetries + 1;
   });
-  EXPECT_EQ(numTimesTransactionStarted,
-            TransactionManager<TransactionData>::kMaxNumRetries + 1);
+  EXPECT_EQ(numTimesTransactionStarted, kMaxNumRetries + 1);
 
   mTransactionCallbackCalled = false;
   mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
@@ -276,6 +277,36 @@ TEST_F(TransactionManagerTest,
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
+  TaskManagerSingleton::get()->flushTasks();
+}
+
+TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ false, /* maxNumRetries= */ 0);
+
+  uint32_t numTimesTransactionStarted = 0;
+  uint32_t transactionId;
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = nullptr,
+          .numTimesTransactionStarted = &numTimesTransactionStarted,
+          .data = 456,
+      },
+      /* timeout= */ Milliseconds(10), &transactionId));
+  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
+    return numTimesTransactionStarted == 1;
+  });
+  EXPECT_EQ(numTimesTransactionStarted, 1);
+
+  mTransactionCallbackCalled = false;
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 456);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
+  EXPECT_EQ(numTimesTransactionStarted, 1);  // No retries - only called once
   TaskManagerSingleton::get()->flushTasks();
 }
 
