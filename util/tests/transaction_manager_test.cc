@@ -47,7 +47,7 @@ TaskManager *gTaskManager = nullptr;
 std::mutex gMutex;
 std::condition_variable gCondVar;
 
-bool transactionStartCallback(const TransactionData &data) {
+bool transactionStartCallback(TransactionData &data) {
   {
     std::lock_guard<std::mutex> lock(gMutex);
 
@@ -108,7 +108,7 @@ TransactionManager<TransactionData> gTransactionManager(
     deferCancelCallback, /* retryWaitTime= */ Milliseconds(1));
 
 TransactionManager<TransactionData> gFaultyStartTransactionManager(
-    [](const TransactionData &data) {
+    [](TransactionData &data) {
       return transactionStartCallback(data) &&
              *data.numTimesTransactionStarted != 1;
     },
