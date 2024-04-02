@@ -32,10 +32,11 @@ TaskManager::TaskManager()
 }
 
 TaskManager::~TaskManager() {
-  flushTasks();
-
   {
     std::lock_guard<std::mutex> lock(mMutex);
+    while (!mQueue.empty()) {
+      mQueue.pop();
+    }
     mContinueRunningThread = false;
   }
 

@@ -18,7 +18,6 @@
 #define CHRE_UTIL_MEMORY_POOL_H_
 
 #include <cstddef>
-#include <type_traits>
 
 #include "chre/util/non_copyable.h"
 #include "chre/util/raw_storage.h"
@@ -49,6 +48,17 @@ namespace chre {
 template <typename ElementType, size_t kSize>
 class MemoryPool : public NonCopyable {
  public:
+  /**
+   * Function used to decide if an element in the pool matches a certain
+   * condition.
+   *
+   * @param element The element.
+   * @param data The data passed to the find function.
+   * @see find.
+   * @return true if the element matched, false otherwise.
+   */
+  using MatchingFunction = bool(ElementType *element, void *data);
+
   /**
    * Constructs a MemoryPool and initializes the initial conditions of the
    * allocator.
@@ -91,6 +101,17 @@ class MemoryPool : public NonCopyable {
   bool containsAddress(ElementType *element);
 
   /**
+   * Searches the active blocks in the memory pool, calling
+   * the matchingFunction. The first element such that
+   * matchingFunction returns true is returned, else nullptr.
+   *
+   * @param matchingFunction The function to match.
+   * @param data The data passed to matchingFunction.
+   * @return the first matching element or nullptr if not found.
+   */
+  ElementType *find(MatchingFunction *matchingFunction, void *data);
+
+  /**
    * @return the number of unused blocks in this memory pool.
    */
   size_t getFreeBlockCount() const;
@@ -120,6 +141,14 @@ class MemoryPool : public NonCopyable {
     size_t mNextFreeBlockIndex;
   };
 
+  //! The number of bits in a uint32_t.
+  static constexpr size_t kBitSizeOfUInt32 = sizeof(uint32_t) * 8;
+
+  //! the number of active tracker blocks - one bit per element.
+  static constexpr uint32_t kNumActiveTrackerBlocks =
+      kSize % kBitSizeOfUInt32 == 0 ? kSize / kBitSizeOfUInt32
+                                    : (kSize / kBitSizeOfUInt32) + 1;
+
   /**
    * Obtains a pointer to the underlying storage for the memory pool blocks.
    *
@@ -138,6 +167,15 @@ class MemoryPool : public NonCopyable {
    */
   bool getBlockIndex(ElementType *element, size_t *indexOutput);
 
+  /**
+   * Sets the bit inside the active tracker blocks to 1 if isActive
+   * is true, else 0.
+   *
+   * @param blockIndex The index of the block inside the storage.
+   * @param isActive If the block should be marked active.
+   */
+  void setBlockActiveStatus(size_t blockIndex, bool isActive);
+
   //! Storage for memory pool blocks.
   RawStorage<MemoryPoolBlock, kSize> mBlocks;
 
@@ -146,6 +184,9 @@ class MemoryPool : public NonCopyable {
 
   //! The number of free slots available.
   size_t mFreeBlockCount = kSize;
+
+  //! Used to track the active blocks using one bit per block.
+  uint32_t mActiveTrackerBlocks[kNumActiveTrackerBlocks];
 };
 
 }  // namespace chre

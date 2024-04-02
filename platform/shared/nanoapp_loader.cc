@@ -60,6 +60,12 @@ void deleteOpOverride(void* /* ptr */, unsigned int size) {
   FATAL_ERROR("Nanoapp: delete(void *, unsigned int) override : sz = %u", size);
 }
 
+#ifdef __clang__
+void deleteOp2Override(void*) {
+  FATAL_ERROR("Nanoapp: delete(void *)");
+}
+#endif
+
 int atexitInternal(struct AtExitCallback &cb) {
   if (gCurrentlyLoadingNanoapp == nullptr) {
     CHRE_ASSERT_LOG(false,
@@ -190,6 +196,9 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_SYMBOL(cxaAtexitOverride, "__cxa_atexit"),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOpOverride, "_ZdlPvj"),
+#ifdef __clang__
+    ADD_EXPORTED_SYMBOL(deleteOp2Override, "_ZdlPv"),
+#endif
     ADD_EXPORTED_C_SYMBOL(dlsym),
     ADD_EXPORTED_C_SYMBOL(isgraph),
     ADD_EXPORTED_C_SYMBOL(memcmp),
@@ -784,7 +793,7 @@ void NanoappLoader::callTerminatorArray() {
   }
 }
 
-bool NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
+void NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
                                                 size_t *size) {
   // Find token database.
   SectionHeader *pwTokenTableHeader = getSectionHeader(kTokenTableName);
@@ -792,12 +801,15 @@ bool NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
     if (pwTokenTableHeader->sh_size != 0) {
       *size = pwTokenTableHeader->sh_size;
       *offset = pwTokenTableHeader->sh_offset;
-      return true;
     } else {
       LOGE("Found empty token database");
+      *size = 0;
+      *offset = 0;
     }
+  } else {
+    *size = 0;
+    *offset = 0;
   }
-  return false;
 }
 
 }  // namespace chre

@@ -29,6 +29,13 @@ template <typename ElementType, size_t kSize>
 class SynchronizedMemoryPool : public NonCopyable {
  public:
   /**
+   * Function used to decide if an element in the pool matches a certain
+   * condition.
+   */
+  using MatchingFunction =
+      typename MemoryPool<ElementType, kSize>::MatchingFunction;
+
+  /**
    * Allocates space for an object, constructs it and returns the pointer to
    * that object. This method is thread-safe and a lock will be acquired
    * upon entry to this method.
@@ -50,6 +57,19 @@ class SynchronizedMemoryPool : public NonCopyable {
    *        allocate() function.
    */
   void deallocate(ElementType *element);
+
+  /**
+   * Searches the active blocks in the memory pool, calling
+   * the matchingFunction. The first element such that
+   * matchingFunction returns true is returned, else nullptr.
+   * This method is thread-safe and a lock will be acquired
+   * upon entry to this method.
+   *
+   * @param matchingFunction The function to match.
+   * @param data The data passed to matchingFunction.
+   * @return the first matching element or nullptr if not found.
+   */
+  ElementType *find(MatchingFunction *matchingFunction, void *data);
 
   /**
    * @return the number of unused blocks in this memory pool.

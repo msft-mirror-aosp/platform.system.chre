@@ -29,7 +29,12 @@
 namespace chre {
 namespace {
 
+constexpr uint16_t kMaxNumRetries = 3;
+
+class TransactionManagerTest;
+
 struct TransactionData {
+  TransactionManagerTest *test;
   bool *transactionStarted;
   uint32_t *numTimesTransactionStarted;
   uint32_t data;
@@ -40,218 +45,269 @@ struct TransactionCompleted {
   uint8_t errorCode;
 };
 
-bool gTransactionCallbackCalled = false;
-TransactionCompleted gTransactionCompleted;
-TaskManager *gTaskManager = nullptr;
+class TransactionManagerTest : public testing::Test {
+ public:
+  bool transactionStartCallback(TransactionData &data, bool doFaultyStart) {
+    {
+      std::lock_guard<std::mutex> lock(mMutex);
 
-std::mutex gMutex;
-std::condition_variable gCondVar;
-
-bool transactionStartCallback(const TransactionData &data) {
-  {
-    std::lock_guard<std::mutex> lock(gMutex);
-
-    if (data.transactionStarted != nullptr) {
-      *data.transactionStarted = true;
+      if (data.transactionStarted != nullptr) {
+        *data.transactionStarted = true;
+      }
+      if (data.numTimesTransactionStarted != nullptr) {
+        ++(*data.numTimesTransactionStarted);
+      }
     }
-    if (data.numTimesTransactionStarted != nullptr) {
-      ++(*data.numTimesTransactionStarted);
+
+    mCondVar.notify_all();
+    return !doFaultyStart || *data.numTimesTransactionStarted != 1;
+  }
+
+  bool transactionCallback(const TransactionData &data, uint8_t errorCode) {
+    {
+      std::lock_guard<std::mutex> lock(mMutex);
+
+      EXPECT_FALSE(mTransactionCallbackCalled);
+      mTransactionCallbackCalled = true;
+      mTransactionCompleted.data = data;
+      mTransactionCompleted.errorCode = errorCode;
     }
+
+    mCondVar.notify_all();
+    return true;
   }
 
-  gCondVar.notify_all();
-  return true;
-}
+  static bool deferCallback(
+      TransactionManager<TransactionData>::DeferCallbackFunction func,
+      void *data, void *extraData, Nanoseconds delay,
+      uint32_t *outTimerHandle) {
+    if (func == nullptr) {
+      return false;
+    }
 
-bool transactionCallback(const TransactionData &data, uint8_t errorCode) {
-  {
-    std::lock_guard<std::mutex> lock(gMutex);
+    std::optional<uint32_t> taskId = TaskManagerSingleton::get()->addTask(
+        [func, data, extraData]() { func(/* type= */ 0, data, extraData); },
+        std::chrono::nanoseconds(delay.toRawNanoseconds()),
+        /* isOneShot= */ true);
 
-    EXPECT_FALSE(gTransactionCallbackCalled);
-    gTransactionCallbackCalled = true;
-    gTransactionCompleted.data = data;
-    gTransactionCompleted.errorCode = errorCode;
+    if (!taskId.has_value()) {
+      return false;
+    }
+
+    if (outTimerHandle != nullptr) {
+      *outTimerHandle = *taskId;
+    }
+    return true;
   }
 
-  gCondVar.notify_all();
-  return true;
-}
-
-bool deferCallback(
-    TransactionManager<TransactionData>::DeferCallbackFunction func, void *data,
-    void *extraData, Nanoseconds delay, uint32_t *outTimerHandle) {
-  if (func == nullptr || gTaskManager == nullptr) {
-    return false;
+  static bool deferCancelCallback(uint32_t timerHandle) {
+    return TaskManagerSingleton::get()->cancelTask(timerHandle);
   }
 
-  std::optional<uint32_t> taskId = gTaskManager->addTask(
-      [func, data, extraData]() { func(/* type= */ 0, data, extraData); },
-      std::chrono::nanoseconds(delay.toRawNanoseconds()),
-      /* isOneShot= */ true);
-
-  if (!taskId.has_value()) {
-    return false;
+  std::unique_ptr<TransactionManager<TransactionData>> getTransactionManager(
+      bool doFaultyStart, uint16_t maxNumRetries = kMaxNumRetries) {
+    return std::make_unique<TransactionManager<TransactionData>>(
+        doFaultyStart
+            ? [](TransactionData &data) {
+              return data.test != nullptr && data.test->transactionStartCallback(data,
+                  /* doFaultyStart= */ true);
+            }
+            : [](TransactionData &data) {
+              return data.test != nullptr && data.test->transactionStartCallback(data,
+                  /* doFaultyStart= */ false);
+            },
+        [](const TransactionData &data, uint8_t errorCode) {
+          return data.test != nullptr && data.test->transactionCallback(data, errorCode);
+        },
+        TransactionManagerTest::deferCallback,
+        TransactionManagerTest::deferCancelCallback,
+        /* retryWaitTime= */ Milliseconds(1),
+        maxNumRetries);
   }
 
-  if (outTimerHandle != nullptr) {
-    *outTimerHandle = *taskId;
+ protected:
+  void SetUp() override {
+    TaskManagerSingleton::init();
   }
-  return true;
-}
 
-bool deferCancelCallback(uint32_t timerHandle) {
-  return gTaskManager != nullptr && gTaskManager->cancelTask(timerHandle);
-}
+  void TearDown() override {}
 
-TransactionManager<TransactionData> gTransactionManager(
-    transactionStartCallback, transactionCallback, deferCallback,
-    deferCancelCallback, /* retryWaitTime= */ Milliseconds(1));
+  std::mutex mMutex;
+  std::condition_variable mCondVar;
+  bool mTransactionCallbackCalled = false;
+  TransactionCompleted mTransactionCompleted;
+};
 
-TransactionManager<TransactionData> gFaultyStartTransactionManager(
-    [](const TransactionData &data) {
-      return transactionStartCallback(data) &&
-             *data.numTimesTransactionStarted != 1;
-    },
-    transactionCallback, deferCallback, deferCancelCallback,
-    /* retryWaitTime= */ Milliseconds(1));
-
-TEST(TransactionManager, TransactionShouldComplete) {
-  gTaskManager = new TaskManager();
+TEST_F(TransactionManagerTest, TransactionShouldComplete) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ false);
 
   bool transactionStarted1 = false;
   bool transactionStarted2 = false;
   uint32_t transactionId1;
   uint32_t transactionId2;
-  std::unique_lock<std::mutex> lock(gMutex);
-  EXPECT_TRUE(gTransactionManager.startTransaction(
+  EXPECT_TRUE(transactionManager->startTransaction(
       {
+          .test = this,
           .transactionStarted = &transactionStarted1,
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
       /* timeout= */ Nanoseconds(0), &transactionId1));
-  gCondVar.wait(lock, [&transactionStarted1]() { return transactionStarted1; });
+  mCondVar.wait(lock, [&transactionStarted1]() { return transactionStarted1; });
   EXPECT_TRUE(transactionStarted1);
 
-  EXPECT_TRUE(gTransactionManager.startTransaction(
+  EXPECT_TRUE(transactionManager->startTransaction(
       {
+          .test = this,
           .transactionStarted = &transactionStarted2,
           .numTimesTransactionStarted = nullptr,
           .data = 2,
       },
       /* timeout= */ Nanoseconds(0), &transactionId2));
-  gCondVar.wait(lock, [&transactionStarted2]() { return transactionStarted2; });
+  mCondVar.wait(lock, [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
 
-  gTransactionCallbackCalled = false;
-  EXPECT_TRUE(gTransactionManager.completeTransaction(
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->completeTransaction(
       transactionId2, CHRE_ERROR_INVALID_ARGUMENT));
-  gCondVar.wait(lock);
-  EXPECT_EQ(gTransactionCompleted.data.data, 2);
-  EXPECT_EQ(gTransactionCompleted.errorCode, CHRE_ERROR_INVALID_ARGUMENT);
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 2);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_INVALID_ARGUMENT);
 
-  gTransactionCallbackCalled = false;
+  mTransactionCallbackCalled = false;
   EXPECT_TRUE(
-      gTransactionManager.completeTransaction(transactionId1, CHRE_ERROR_NONE));
-  gCondVar.wait(lock);
-  EXPECT_EQ(gTransactionCompleted.data.data, 1);
-  EXPECT_EQ(gTransactionCompleted.errorCode, CHRE_ERROR_NONE);
-
-  delete gTaskManager;
-  gTaskManager = nullptr;
+      transactionManager->completeTransaction(transactionId1, CHRE_ERROR_NONE));
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 1);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
+  TaskManagerSingleton::get()->flushTasks();
 }
 
-TEST(TransactionManager, TransactionShouldCompleteOnlyOnce) {
-  gTaskManager = new TaskManager();
+TEST_F(TransactionManagerTest, TransactionShouldCompleteOnlyOnce) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ false);
 
   uint32_t transactionId;
   bool transactionStarted = false;
-  std::unique_lock<std::mutex> lock(gMutex);
-  EXPECT_TRUE(gTransactionManager.startTransaction(
+  EXPECT_TRUE(transactionManager->startTransaction(
       {
+          .test = this,
           .transactionStarted = &transactionStarted,
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
       /* timeout= */ Nanoseconds(0), &transactionId));
-  gCondVar.wait(lock, [&transactionStarted]() { return transactionStarted; });
+  mCondVar.wait(lock, [&transactionStarted]() { return transactionStarted; });
   EXPECT_TRUE(transactionStarted);
 
-  gTransactionCallbackCalled = false;
-  EXPECT_TRUE(gTransactionManager.completeTransaction(
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->completeTransaction(
       transactionId, CHRE_ERROR_INVALID_ARGUMENT));
-  gCondVar.wait(lock);
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
 
-  gTransactionCallbackCalled = false;
-  EXPECT_FALSE(gTransactionManager.completeTransaction(
+  mTransactionCallbackCalled = false;
+  EXPECT_FALSE(transactionManager->completeTransaction(
       transactionId, CHRE_ERROR_INVALID_ARGUMENT));
-  EXPECT_FALSE(gTransactionCallbackCalled);
-
-  delete gTaskManager;
-  gTaskManager = nullptr;
+  EXPECT_FALSE(mTransactionCallbackCalled);
+  TaskManagerSingleton::get()->flushTasks();
 }
 
-TEST(TransactionManager, TransactionShouldTimeout) {
-  gTaskManager = new TaskManager();
+TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ false);
 
   uint32_t numTimesTransactionStarted = 0;
   uint32_t transactionId;
-  gTransactionCallbackCalled = false;
-  std::unique_lock<std::mutex> lock(gMutex);
-  EXPECT_TRUE(gTransactionManager.startTransaction(
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->startTransaction(
       {
+          .test = this,
           .transactionStarted = nullptr,
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = 456,
       },
       /* timeout= */ Milliseconds(10), &transactionId));
-  gCondVar.wait(lock, [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted ==
-           TransactionManager<TransactionData>::kMaxNumRetries + 1;
+  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
+    return numTimesTransactionStarted == kMaxNumRetries + 1;
   });
-  EXPECT_EQ(numTimesTransactionStarted,
-            TransactionManager<TransactionData>::kMaxNumRetries + 1);
+  EXPECT_EQ(numTimesTransactionStarted, kMaxNumRetries + 1);
 
-  gTransactionCallbackCalled = false;
-  gCondVar.wait(lock);
-  EXPECT_EQ(gTransactionCompleted.data.data, 456);
-  EXPECT_EQ(gTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
-  EXPECT_TRUE(gTransactionCallbackCalled);
-
-  delete gTaskManager;
-  gTaskManager = nullptr;
+  mTransactionCallbackCalled = false;
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 456);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
+  TaskManagerSingleton::get()->flushTasks();
 }
 
-TEST(TransactionManager, TransactionShouldRetryWhenTransactCallbackFails) {
-  gTaskManager = new TaskManager();
+TEST_F(TransactionManagerTest,
+       TransactionShouldRetryWhenTransactCallbackFails) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ true);
 
   uint32_t numTimesTransactionStarted = 0;
   const NestedDataPtr<uint32_t> kData(456);
   uint32_t transactionId;
-  std::unique_lock<std::mutex> lock(gMutex);
-  gTransactionCallbackCalled = false;
-  EXPECT_TRUE(gFaultyStartTransactionManager.startTransaction(
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->startTransaction(
       {
+          .test = this,
           .transactionStarted = nullptr,
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = kData,
       },
       /* timeout= */ Milliseconds(10), &transactionId));
-  gCondVar.wait(lock, [&numTimesTransactionStarted]() {
+  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
     return numTimesTransactionStarted == 2;
   });
   EXPECT_EQ(numTimesTransactionStarted, 2);
 
-  gTransactionCallbackCalled = false;
-  EXPECT_TRUE(gFaultyStartTransactionManager.completeTransaction(
-      transactionId, CHRE_ERROR_NONE));
-  gCondVar.wait(lock);
-  EXPECT_EQ(gTransactionCompleted.data.data, 456);
-  EXPECT_EQ(gTransactionCompleted.errorCode, CHRE_ERROR_NONE);
-  EXPECT_TRUE(gTransactionCallbackCalled);
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(
+      transactionManager->completeTransaction(transactionId, CHRE_ERROR_NONE));
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 456);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
+  TaskManagerSingleton::get()->flushTasks();
+}
 
-  delete gTaskManager;
-  gTaskManager = nullptr;
+TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+      getTransactionManager(/* doFaultyStart= */ false, /* maxNumRetries= */ 0);
+
+  uint32_t numTimesTransactionStarted = 0;
+  uint32_t transactionId;
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(transactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = nullptr,
+          .numTimesTransactionStarted = &numTimesTransactionStarted,
+          .data = 456,
+      },
+      /* timeout= */ Milliseconds(10), &transactionId));
+  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
+    return numTimesTransactionStarted == 1;
+  });
+  EXPECT_EQ(numTimesTransactionStarted, 1);
+
+  mTransactionCallbackCalled = false;
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 456);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
+  EXPECT_EQ(numTimesTransactionStarted, 1);  // No retries - only called once
+  TaskManagerSingleton::get()->flushTasks();
 }
 
 }  // namespace
