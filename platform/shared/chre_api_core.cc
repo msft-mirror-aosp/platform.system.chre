@@ -143,6 +143,13 @@ DLL_EXPORT bool chreSendReliableMessageAsync(
                            hostEndpoint, messagePermissions, freeCallback,
                            /*isReliable=*/true, cookie);
 #else
+  UNUSED_VAR(message);
+  UNUSED_VAR(messageSize);
+  UNUSED_VAR(messageType);
+  UNUSED_VAR(hostEndpoint);
+  UNUSED_VAR(messagePermissions);
+  UNUSED_VAR(freeCallback);
+  UNUSED_VAR(cookie);
   return false;
 #endif
 }
