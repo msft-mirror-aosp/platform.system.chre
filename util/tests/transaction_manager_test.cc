@@ -15,7 +15,9 @@
  */
 
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 
@@ -30,6 +32,7 @@ namespace chre {
 namespace {
 
 constexpr uint16_t kMaxNumRetries = 3;
+constexpr size_t kMaxTransactions = 32;
 
 class TransactionManagerTest;
 
@@ -78,7 +81,7 @@ class TransactionManagerTest : public testing::Test {
   }
 
   static bool deferCallback(
-      TransactionManager<TransactionData>::DeferCallbackFunction func,
+      TransactionManager<TransactionData, kMaxTransactions>::DeferCallbackFunction func,
       void *data, void *extraData, Nanoseconds delay,
       uint32_t *outTimerHandle) {
     if (func == nullptr) {
@@ -104,9 +107,9 @@ class TransactionManagerTest : public testing::Test {
     return TaskManagerSingleton::get()->cancelTask(timerHandle);
   }
 
-  std::unique_ptr<TransactionManager<TransactionData>> getTransactionManager(
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> getTransactionManager(
       bool doFaultyStart, uint16_t maxNumRetries = kMaxNumRetries) {
-    return std::make_unique<TransactionManager<TransactionData>>(
+    return std::make_unique<TransactionManager<TransactionData, kMaxTransactions>>(
         doFaultyStart
             ? [](TransactionData &data) {
               return data.test != nullptr && data.test->transactionStartCallback(data,
@@ -140,7 +143,7 @@ class TransactionManagerTest : public testing::Test {
 
 TEST_F(TransactionManagerTest, TransactionShouldComplete) {
   std::unique_lock<std::mutex> lock(mMutex);
-  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> transactionManager =
       getTransactionManager(/* doFaultyStart= */ false);
 
   bool transactionStarted1 = false;
@@ -189,7 +192,7 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
 
 TEST_F(TransactionManagerTest, TransactionShouldCompleteOnlyOnce) {
   std::unique_lock<std::mutex> lock(mMutex);
-  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> transactionManager =
       getTransactionManager(/* doFaultyStart= */ false);
 
   uint32_t transactionId;
@@ -220,7 +223,7 @@ TEST_F(TransactionManagerTest, TransactionShouldCompleteOnlyOnce) {
 
 TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
   std::unique_lock<std::mutex> lock(mMutex);
-  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> transactionManager =
       getTransactionManager(/* doFaultyStart= */ false);
 
   uint32_t numTimesTransactionStarted = 0;
@@ -250,7 +253,7 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
 TEST_F(TransactionManagerTest,
        TransactionShouldRetryWhenTransactCallbackFails) {
   std::unique_lock<std::mutex> lock(mMutex);
-  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> transactionManager =
       getTransactionManager(/* doFaultyStart= */ true);
 
   uint32_t numTimesTransactionStarted = 0;
@@ -282,7 +285,7 @@ TEST_F(TransactionManagerTest,
 
 TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
   std::unique_lock<std::mutex> lock(mMutex);
-  std::unique_ptr<TransactionManager<TransactionData>> transactionManager =
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>> transactionManager =
       getTransactionManager(/* doFaultyStart= */ false, /* maxNumRetries= */ 0);
 
   uint32_t numTimesTransactionStarted = 0;
