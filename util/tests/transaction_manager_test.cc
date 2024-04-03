@@ -314,5 +314,57 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
   TaskManagerSingleton::get()->flushTasks();
 }
 
+TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  std::unique_ptr<TransactionManager<TransactionData, kMaxTransactions>>
+      transactionManager = getTransactionManager(/* doFaultyStart= */ false);
+
+  bool transactionStarted1 = false;
+  bool transactionStarted2 = false;
+  uint32_t transactionId1;
+  uint32_t transactionId2;
+  EXPECT_TRUE(transactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = &transactionStarted1,
+          .numTimesTransactionStarted = nullptr,
+          .data = 1,
+      },
+      /* timeout= */ Nanoseconds(0), &transactionId1));
+  mCondVar.wait(lock, [&transactionStarted1]() { return transactionStarted1; });
+  EXPECT_TRUE(transactionStarted1);
+
+  EXPECT_TRUE(transactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = &transactionStarted2,
+          .numTimesTransactionStarted = nullptr,
+          .data = 2,
+      },
+      /* timeout= */ Nanoseconds(0), &transactionId2));
+  mCondVar.wait(lock, [&transactionStarted2]() { return transactionStarted2; });
+  EXPECT_TRUE(transactionStarted2);
+
+  EXPECT_EQ(transactionManager->flushTransactions(
+                [](const TransactionData &data, void *callbackData) {
+                  NestedDataPtr<uint32_t> magicNum(callbackData);
+                  return magicNum == 456 && data.data == 2;
+                },
+                NestedDataPtr<uint32_t>(456)),
+            1);
+
+  EXPECT_FALSE(transactionManager->completeTransaction(
+      transactionId2, CHRE_ERROR_INVALID_ARGUMENT));
+
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(
+      transactionManager->completeTransaction(transactionId1, CHRE_ERROR_NONE));
+  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 1);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
+  TaskManagerSingleton::get()->flushTasks();
+}
+
 }  // namespace
 }  // namespace chre
