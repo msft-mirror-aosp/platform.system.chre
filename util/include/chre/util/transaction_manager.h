@@ -17,15 +17,15 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_H_
 
-#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
 #include "chre/platform/mutex.h"
-#include "chre/util/array_queue.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/nested_data_ptr.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
+#include "chre/util/segmented_queue.h"
 #include "chre/util/time.h"
 
 namespace chre {
@@ -48,9 +48,8 @@ namespace chre {
  * 5. TransactionManager will call the complete callback with the data.
  *
  * @param TransactionData The data passed to the start and complete callbacks.
- * @param kMaxTransactions The maximum number of pending transactions.
  */
-template <typename TransactionData, size_t kMaxTransactions>
+template <typename TransactionData>
 class TransactionManager : public NonCopyable {
  public:
   /**
@@ -243,6 +242,12 @@ class TransactionManager : public NonCopyable {
   void deferProcessTransactions(void *data, bool timerFired);
 
  private:
+  //! Size of a single block for the transaction queue.
+  static constexpr size_t kTransactionQueueBlockSize = 64;
+
+  //! Number of blocks for the transaction queue.
+  static constexpr size_t kTransactionQueueNumBlocks = 5;
+
   //! Stores transaction-related data.
   struct Transaction {
     uint32_t id;
@@ -292,7 +297,8 @@ class TransactionManager : public NonCopyable {
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
-  ArrayQueue<Transaction, kMaxTransactions> mTransactions;
+  SegmentedQueue<Transaction, kTransactionQueueBlockSize> mTransactions{
+      kTransactionQueueNumBlocks};
 };
 
 }  // namespace chre
