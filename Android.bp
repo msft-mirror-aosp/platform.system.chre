@@ -1063,16 +1063,14 @@ cc_binary {
     ],
     static_libs: [
         "pw_detokenizer",
+        "pw_polyfill",
+        "pw_span",
         "pw_varint",
     ],
     shared_libs: [
         "libhidlbase",
         "libpower",
         "android.hardware.soundtrigger@2.0",
-    ],
-    header_libs: [
-        "pw_span",
-        "pw_polyfill",
     ],
     init_rc: ["host/exynos/chre_daemon_exynos.rc"],
 }
