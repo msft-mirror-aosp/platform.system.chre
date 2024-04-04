@@ -98,7 +98,8 @@ bool HostLink::sendMessage(const MessageToHost *message) {
         builder, message->appId, message->toHostData.messageType,
         message->toHostData.hostEndpoint, message->message.data(),
         message->message.size(), message->toHostData.appPermissions,
-        message->toHostData.messagePermissions, message->toHostData.wokeHost);
+        message->toHostData.messagePermissions, message->toHostData.wokeHost,
+        message->isReliable, message->messageSequenceNumber);
     success = (send(builder.GetBufferPointer(), builder.GetSize()) == 0);
 
     // Only invoke on success as returning false from this method will cause
@@ -114,15 +115,19 @@ bool HostLink::sendMessage(const MessageToHost *message) {
   return success;
 }
 
+bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
+                                         uint8_t /* errorCode */) {
+  return false;
+}
+
 // TODO(b/239096709): HostMessageHandlers member function implementations are
 // expected to be (mostly) identical for any platform that uses flatbuffers
 // to encode messages - refactor the host link to merge the multiple copies
 // we currently have.
-void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
-                                               uint32_t messageType,
-                                               uint16_t hostEndpoint,
-                                               const void * /* messageData */,
-                                               size_t messageDataLen) {
+void HostMessageHandlers::handleNanoappMessage(
+    uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
+    const void * /* messageData */, size_t messageDataLen,
+    bool /* isReliable */, uint32_t /* messageSequenceNumber */) {
   LOGD("Parsed nanoapp message from host: app ID 0x%016" PRIx64
        ", endpoint "
        "0x%" PRIx16 ", msgType %" PRIu32 ", payload size %zu",
@@ -130,6 +135,9 @@ void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
 
   // TODO(b/230134803): Implement this.
 }
+
+void HostMessageHandlers::handleMessageDeliveryStatus(
+    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
 
 void HostMessageHandlers::handleHubInfoRequest(uint16_t /* hostClientId */) {
   // TODO(b/230134803): Implement this.

@@ -238,7 +238,7 @@ bool EventLoop::unloadNanoapp(uint16_t instanceId,
         // there are no messages pending delivery to the host)
         EventLoopManagerSingleton::get()
             ->getHostCommsManager()
-            .flushMessagesSentByNanoapp(mNanoapps[i]->getAppId());
+            .flushNanoappMessagesAndTransactions(mNanoapps[i]->getAppId());
 
         // Mark that this nanoapp is stopping early, so it can't send events or
         // messages during the nanoapp event queue flush

@@ -32,7 +32,53 @@ using ::chre::EventLoop;
 using ::chre::EventLoopManager;
 using ::chre::EventLoopManagerSingleton;
 using ::chre::handleNanoappAbort;
+using ::chre::HostCommsManager;
 using ::chre::Nanoapp;
+
+namespace {
+
+/**
+ * Sends a message to the host.
+ *
+ * @param nanoapp The nanoapp sending the message.
+ * @param message A pointer to the message buffer.
+ * @param messageSize The size of the message.
+ * @param hostEndpoint The host endpoint to send the message to.
+ * @param messagePermissions Bitmasked CHRE_MESSAGE_PERMISSION_...
+ * @param freeCallback The callback that will be invoked to free the message
+ *        buffer.
+ * @param isReliable Whether to send a reliable message.
+ * @param cookie The cookie used when reporting reliable message status. It is
+ *        only used for reliable messages.
+ * @return Whether the message was accepted for transmission.
+ */
+bool sendMessageToHost(Nanoapp *nanoapp, void *message, size_t messageSize,
+                       uint32_t messageType, uint16_t hostEndpoint,
+                       uint32_t messagePermissions,
+                       chreMessageFreeFunction *freeCallback, bool isReliable,
+                       const void *cookie) {
+  const EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
+  if (eventLoop.currentNanoappIsStopping()) {
+    LOGW("Rejecting message to host from app instance %" PRIu16
+         " because it's stopping",
+         nanoapp->getInstanceId());
+    return false;
+  }
+
+  HostCommsManager &hostCommsManager =
+      EventLoopManagerSingleton::get()->getHostCommsManager();
+  bool success = hostCommsManager.sendMessageToHostFromNanoapp(
+      nanoapp, message, messageSize, messageType, hostEndpoint,
+      messagePermissions, freeCallback, isReliable, cookie);
+
+  if (!success && freeCallback != nullptr) {
+    freeCallback(message, messageSize);
+  }
+
+  return success;
+}
+
+}  // namespace
 
 DLL_EXPORT void chreAbort(uint32_t /* abortCode */) {
   Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
@@ -82,34 +128,30 @@ DLL_EXPORT bool chreSendMessageWithPermissions(
     uint16_t hostEndpoint, uint32_t messagePermissions,
     chreMessageFreeFunction *freeCallback) {
   Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
-
-  bool success = false;
-  const EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
-  if (eventLoop.currentNanoappIsStopping()) {
-    LOGW("Rejecting message to host from app instance %" PRIu16
-         " because it's stopping",
-         nanoapp->getInstanceId());
-  } else {
-    auto &hostCommsManager =
-        EventLoopManagerSingleton::get()->getHostCommsManager();
-    success = hostCommsManager.sendMessageToHostFromNanoapp(
-        nanoapp, message, messageSize, messageType, hostEndpoint,
-        messagePermissions, freeCallback);
-  }
-
-  if (!success && freeCallback != nullptr) {
-    freeCallback(message, messageSize);
-  }
-
-  return success;
+  return sendMessageToHost(nanoapp, message, messageSize, messageType,
+                           hostEndpoint, messagePermissions, freeCallback,
+                           /*isReliable=*/false, /*cookie=*/nullptr);
 }
 
 DLL_EXPORT bool chreSendReliableMessageAsync(
-    void * /* message */, size_t /* messageSize */, uint32_t /* messageType */,
-    uint16_t /* hostEndpoint */, uint32_t /* messagePermissions */,
-    chreMessageFreeFunction * /* freeCallback */, const void * /* cookie */) {
-  // TODO(b/312417087): Implement support for reliable messages
+    void *message, size_t messageSize, uint32_t messageType,
+    uint16_t hostEndpoint, uint32_t messagePermissions,
+    chreMessageFreeFunction *freeCallback, const void *cookie) {
+#ifdef CHRE_SUPPORTS_RELIABLE_MESSAGES
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  return sendMessageToHost(nanoapp, message, messageSize, messageType,
+                           hostEndpoint, messagePermissions, freeCallback,
+                           /*isReliable=*/true, cookie);
+#else
+  UNUSED_VAR(message);
+  UNUSED_VAR(messageSize);
+  UNUSED_VAR(messageType);
+  UNUSED_VAR(hostEndpoint);
+  UNUSED_VAR(messagePermissions);
+  UNUSED_VAR(freeCallback);
+  UNUSED_VAR(cookie);
   return false;
+#endif
 }
 
 DLL_EXPORT bool chreSendMessageToHostEndpoint(
