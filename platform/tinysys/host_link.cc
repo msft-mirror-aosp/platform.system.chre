@@ -29,6 +29,7 @@
 #include "chre/platform/system_timer.h"
 #include "chre/util/flatbuffers/helpers.h"
 #include "chre/util/nested_data_ptr.h"
+#include "chre_api/chre.h"
 
 #include "dma_api.h"
 #include "ipi.h"
@@ -213,14 +214,16 @@ DRAM_REGION_FUNCTION int generateHubInfoResponse(uint16_t hostClientId) {
   constexpr float kStoppedPower = 0;
   constexpr float kSleepPower = 1;
   constexpr float kPeakPower = 15;
+  bool supportsReliableMessages =
+      IS_BIT_SET(chreGetCapabilities(), CHRE_CAPABILITIES_RELIABLE_MESSAGES);
 
   // Note that this may execute prior to EventLoopManager::lateInit() completing
   ChreFlatBufferBuilder builder(kInitialBufferSize);
   HostProtocolChre::encodeHubInfoResponse(
       builder, kHubName, kVendor, kToolchain, kLegacyPlatformVersion,
       kLegacyToolchainVersion, kPeakMips, kStoppedPower, kSleepPower,
-      kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
-      chreGetVersion(), hostClientId);
+      kPeakPower, chreGetMessageToHostMaxSize(), chreGetPlatformId(),
+      chreGetVersion(), hostClientId, supportsReliableMessages);
 
   return HostLinkBase::send(builder.GetBufferPointer(), builder.GetSize());
 }
@@ -668,21 +671,31 @@ DRAM_REGION_FUNCTION bool HostLink::sendMessage(HostMessage const *message) {
   return success;
 }
 
+bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
+                                         uint8_t /* errorCode */) {
+  return false;
+}
+
 // TODO(b/285219398): HostMessageHandlers member function implementations are
 // expected to be (mostly) identical for any platform that uses flatbuffers
 // to encode messages - refactor the host link to merge the multiple copies
 // we currently have.
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
-    const void *messageData, size_t messageDataLen) {
+    const void *messageData, size_t messageDataLen, bool isReliable,
+    uint32_t messageSequenceNumber) {
   LOGV("Parsed nanoapp message from host: app ID 0x%016" PRIx64
        ", endpoint "
        "0x%" PRIx16 ", msgType %" PRIu32 ", payload size %zu",
        appId, hostEndpoint, messageType, messageDataLen);
 
   getHostCommsManager().sendMessageToNanoappFromHost(
-      appId, messageType, hostEndpoint, messageData, messageDataLen);
+      appId, messageType, hostEndpoint, messageData, messageDataLen, isReliable,
+      messageSequenceNumber);
 }
+
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
+    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
     uint16_t hostClientId) {
