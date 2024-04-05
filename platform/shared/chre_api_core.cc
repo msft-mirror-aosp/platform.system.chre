@@ -137,7 +137,7 @@ DLL_EXPORT bool chreSendReliableMessageAsync(
     void *message, size_t messageSize, uint32_t messageType,
     uint16_t hostEndpoint, uint32_t messagePermissions,
     chreMessageFreeFunction *freeCallback, const void *cookie) {
-#ifdef CHRE_SUPPORTS_RELIABLE_MESSAGES
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return sendMessageToHost(nanoapp, message, messageSize, messageType,
                            hostEndpoint, messagePermissions, freeCallback,

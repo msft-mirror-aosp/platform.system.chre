@@ -831,7 +831,7 @@ bool chreSendMessageWithPermissions(void *message, size_t messageSize,
  *                        (a timeout).
  *
  * This is an optional feature, and this function will always return
- * false if CHRE_SUPPORTS_RELIABLE_MESSAGES is not indicated by
+ * false if CHRE_CAPABILITIES_RELIABLE_MESSAGES is not indicated by
  * chreGetCapabilities().
  *
  * @see chreSendMessageWithPermissions
