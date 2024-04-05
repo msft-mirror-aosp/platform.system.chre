@@ -46,6 +46,9 @@ namespace chre {
  * 4. Call completeTransaction with the ID.
  * 5. TransactionManager will call the complete callback with the data.
  *
+ * Ensure the thread processing the deferred callbacks is completed before the
+ * destruction of the TransactionManager.
+ *
  * @param TransactionData The data passed to the start and complete callbacks.
  * @param kMaxTransactions The maximum number of pending transactions.
  */
@@ -165,11 +168,6 @@ class TransactionManager : public NonCopyable {
 
   ~TransactionManager() {
     LockGuard lock(mMutex);
-
-    while (!mTransactions.empty()) {
-      mTransactions.pop();
-    }
-
     if (mTimerHandle != CHRE_TIMER_INVALID) {
       mDeferCancelCallback(mTimerHandle);
       mTimerHandle = CHRE_TIMER_INVALID;
