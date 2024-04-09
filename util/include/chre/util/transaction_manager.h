@@ -136,8 +136,11 @@ class TransactionManager : public NonCopyable {
       return;
     }
 
-    transactionManagerPtr->deferProcessTransactions(data,
-                                                    /* timerFired= */ true);
+    {
+      LockGuard lock(transactionManagerPtr->mMutex);
+      transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
+    }
+    transactionManagerPtr->deferProcessTransactions(data);
   }
 
   TransactionManager() = delete;
@@ -237,9 +240,8 @@ class TransactionManager : public NonCopyable {
    * Defers processing transactions in the event loop thread.
    *
    * @param data The pointer to the TransactionManager.
-   * @param timerFired If the timer fired.
    */
-  void deferProcessTransactions(void *data, bool timerFired);
+  void deferProcessTransactions(void *data);
 
  private:
   //! Size of a single block for the transaction queue.
@@ -264,10 +266,8 @@ class TransactionManager : public NonCopyable {
    * need to be retried next. This function is called in the event loop thread
    * and will defer a call to itself at the next time needed to processes the
    * next transaction.
-   *
-   * @param timerFired If the timer fired.
    */
-  void processTransactions(bool timerFired);
+  void processTransactions();
 
   //! The start callback.
   StartCallback mStartCallback;
