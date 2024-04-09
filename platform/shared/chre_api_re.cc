@@ -29,7 +29,7 @@ using chre::EventLoopManagerSingleton;
 DLL_EXPORT uint32_t chreGetCapabilities() {
   uint32_t capabilities = CHRE_CAPABILITIES_NONE;
 
-#ifdef CHRE_SUPPORTS_RELIABLE_MESSAGES
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   capabilities |= CHRE_CAPABILITIES_RELIABLE_MESSAGES;
 #endif
 
@@ -37,12 +37,12 @@ DLL_EXPORT uint32_t chreGetCapabilities() {
 }
 
 DLL_EXPORT uint32_t chreGetMessageToHostMaxSize() {
-#ifdef CHRE_SUPPORTS_RELIABLE_MESSAGES
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
 #ifndef CHRE_LARGE_PAYLOAD_MAX_SIZE
   static_assert(false,
                 "CHRE_LARGE_PAYLOAD_MAX_SIZE must be defined if "
-                "CHRE_SUPPORTS_RELIABLE_MESSAGES is enabled");
+                "CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED is enabled");
 #else
   static_assert(CHRE_LARGE_PAYLOAD_MAX_SIZE >= CHRE_MESSAGE_TO_HOST_MAX_SIZE,
                 "CHRE_LARGE_PAYLOAD_MAX_SIZE must be greater than or equal to "
@@ -50,7 +50,7 @@ DLL_EXPORT uint32_t chreGetMessageToHostMaxSize() {
 
   static_assert(CHRE_LARGE_PAYLOAD_MAX_SIZE >= 32000,
                 "CHRE_LARGE_PAYLOAD_MAX_SIZE must be greater than or equal to "
-                "32000 when CHRE_SUPPORTS_RELIABLE_MESSAGES is enabled");
+                "32000 when CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED is enabled");
   return CHRE_LARGE_PAYLOAD_MAX_SIZE;
 #endif
 

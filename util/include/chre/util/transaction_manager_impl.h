@@ -47,7 +47,7 @@ bool TransactionManager<TransactionData>::completeTransaction(
       } else {
         transaction.errorCode = errorCode;
       }
-      deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
+      deferProcessTransactions(/* data= */ this);
       return true;
     }
   }
@@ -65,7 +65,7 @@ size_t TransactionManager<TransactionData>::flushTransactions(
 
   LockGuard lock(mMutex);
 
-  deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
+  deferProcessTransactions(/* data= */ this);
   return mTransactions.removeMatchedFromBack(
       [](Transaction &transaction, void *innerData, void *extraData) {
         FlushCallback innerCallback =
@@ -113,15 +113,15 @@ bool TransactionManager<TransactionData>::startTransaction(
 
   mTransactions.push_back(transaction);
 
-  deferProcessTransactions(/* data= */ this, /* timerFired= */ false);
+  deferProcessTransactions(/* data= */ this);
   return true;
 }
 
 template <typename TransactionData>
 void TransactionManager<TransactionData>::deferProcessTransactions(
-    void *data, bool timerFired) {
+    void *data) {
   bool status = mDeferCallback(
-      [](uint16_t /* type */, void *innerData, void *extraData) {
+      [](uint16_t /* type */, void *innerData, void * /* extraData */) {
         auto transactionManagerPtr =
             static_cast<TransactionManager *>(innerData);
         if (transactionManagerPtr == nullptr) {
@@ -129,10 +129,10 @@ void TransactionManager<TransactionData>::deferProcessTransactions(
           return;
         }
 
-        NestedDataPtr<bool> timerFiredFromExtraData(extraData);
-        transactionManagerPtr->processTransactions(timerFiredFromExtraData);
+        transactionManagerPtr->processTransactions();
       },
-      data, NestedDataPtr<bool>(timerFired),
+      data,
+      /* extraData= */ nullptr,
       /* delay= */ Nanoseconds(0),
       /* outTimerHandle= */ nullptr);
 
@@ -142,13 +142,13 @@ void TransactionManager<TransactionData>::deferProcessTransactions(
 }
 
 template <typename TransactionData>
-void TransactionManager<TransactionData>::processTransactions(bool timerFired) {
+void TransactionManager<TransactionData>::processTransactions() {
   LockGuard lock(mMutex);
 
-  if (!timerFired && mTimerHandle != CHRE_TIMER_INVALID) {
-    mDeferCancelCallback(mTimerHandle);
+  if (mTimerHandle != CHRE_TIMER_INVALID) {
+    CHRE_ASSERT(mDeferCancelCallback(mTimerHandle));
+    mTimerHandle = CHRE_TIMER_INVALID;
   }
-  mTimerHandle = CHRE_TIMER_INVALID;
 
   if (mTransactions.size() == 0) {
     return;
