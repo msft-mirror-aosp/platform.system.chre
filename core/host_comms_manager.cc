@@ -253,7 +253,8 @@ MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
 }
 
 bool HostCommsManager::deferCallback(
-    TransactionManager<MessageTransactionData>::DeferCallbackFunction func,
+    TransactionManager<MessageTransactionData,
+                       kMaxOutstandingMessages>::DeferCallbackFunction func,
     void *data, void *extraData, Nanoseconds delay, uint32_t *outTimerHandle) {
   if (delay.toRawNanoseconds() == 0) {
     CHRE_ASSERT(outTimerHandle == nullptr);
