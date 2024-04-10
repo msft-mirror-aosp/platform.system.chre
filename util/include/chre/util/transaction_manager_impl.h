@@ -34,8 +34,8 @@ namespace chre {
 using ::chre::Nanoseconds;
 using ::chre::Seconds;
 
-template <typename TransactionData>
-bool TransactionManager<TransactionData>::completeTransaction(
+template <typename TransactionData, size_t kMaxTransactions>
+bool TransactionManager<TransactionData, kMaxTransactions>::completeTransaction(
     uint32_t transactionId, uint8_t errorCode) {
   LockGuard lock(mMutex);
 
@@ -47,7 +47,7 @@ bool TransactionManager<TransactionData>::completeTransaction(
       } else {
         transaction.errorCode = errorCode;
       }
-      deferProcessTransactions(/* data= */ this);
+      deferProcessTransactions();
       return true;
     }
   }
@@ -56,8 +56,8 @@ bool TransactionManager<TransactionData>::completeTransaction(
   return false;
 }
 
-template <typename TransactionData>
-size_t TransactionManager<TransactionData>::flushTransactions(
+template <typename TransactionData, size_t kMaxTransactions>
+size_t TransactionManager<TransactionData, kMaxTransactions>::flushTransactions(
     FlushCallback callback, void *data) {
   if (callback == nullptr) {
     return 0;
@@ -65,22 +65,21 @@ size_t TransactionManager<TransactionData>::flushTransactions(
 
   LockGuard lock(mMutex);
 
-  deferProcessTransactions(/* data= */ this);
-  return mTransactions.removeMatchedFromBack(
-      [](Transaction &transaction, void *innerData, void *extraData) {
-        FlushCallback innerCallback =
-            reinterpret_cast<FlushCallback>(innerData);
-        if (innerCallback == nullptr) {
-          return false;
-        }
-
-        return innerCallback(transaction.data, extraData);
-      },
-      reinterpret_cast<void *>(callback), data, mTransactions.size());
+  deferProcessTransactions();
+  size_t numFlushed = 0;
+  for (size_t i = 0; i < mTransactions.size();) {
+    if (callback(mTransactions[i].data, data)) {
+      mTransactions.remove(i);
+      ++numFlushed;
+    } else {
+      ++i;
+    }
+  }
+  return numFlushed;
 }
 
-template <typename TransactionData>
-bool TransactionManager<TransactionData>::startTransaction(
+template <typename TransactionData, size_t kMaxTransactions>
+bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
     const TransactionData &data, Nanoseconds timeout, uint32_t *id) {
   CHRE_ASSERT(id != nullptr);
 
@@ -111,19 +110,18 @@ bool TransactionManager<TransactionData>::startTransaction(
       .errorCode = Optional<uint8_t>(),
   };
 
-  mTransactions.push_back(transaction);
+  mTransactions.push(transaction);
 
-  deferProcessTransactions(/* data= */ this);
+  deferProcessTransactions();
   return true;
 }
 
-template <typename TransactionData>
-void TransactionManager<TransactionData>::deferProcessTransactions(
-    void *data) {
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData,
+                        kMaxTransactions>::deferProcessTransactions() {
   bool status = mDeferCallback(
-      [](uint16_t /* type */, void *innerData, void * /* extraData */) {
-        auto transactionManagerPtr =
-            static_cast<TransactionManager *>(innerData);
+      [](uint16_t /* type */, void *data, void * /* extraData */) {
+        auto transactionManagerPtr = static_cast<TransactionManager *>(data);
         if (transactionManagerPtr == nullptr) {
           LOGE("Could not get transaction manager to process transactions");
           return;
@@ -131,7 +129,7 @@ void TransactionManager<TransactionData>::deferProcessTransactions(
 
         transactionManagerPtr->processTransactions();
       },
-      data,
+      this,
       /* extraData= */ nullptr,
       /* delay= */ Nanoseconds(0),
       /* outTimerHandle= */ nullptr);
@@ -141,8 +139,9 @@ void TransactionManager<TransactionData>::deferProcessTransactions(
   }
 }
 
-template <typename TransactionData>
-void TransactionManager<TransactionData>::processTransactions() {
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData,
+                        kMaxTransactions>::processTransactions() {
   LockGuard lock(mMutex);
 
   if (mTimerHandle != CHRE_TIMER_INVALID) {
@@ -150,7 +149,7 @@ void TransactionManager<TransactionData>::processTransactions() {
     mTimerHandle = CHRE_TIMER_INVALID;
   }
 
-  if (mTransactions.size() == 0) {
+  if (mTransactions.empty()) {
     return;
   }
 
@@ -198,9 +197,9 @@ void TransactionManager<TransactionData>::processTransactions() {
 
   Nanoseconds waitTime = nextExecutionTime - SystemTime::getMonotonicTime();
   if (waitTime.toRawNanoseconds() > 0) {
-    mDeferCallback(TransactionManager<TransactionData>::onTimerFired,
-                   /* data= */ this, /* extraData= */ nullptr,
-                   waitTime, &mTimerHandle);
+    mDeferCallback(
+        TransactionManager<TransactionData, kMaxTransactions>::onTimerFired,
+        /* data= */ this, /* extraData= */ nullptr, waitTime, &mTimerHandle);
     CHRE_ASSERT(mTimerHandle != CHRE_TIMER_INVALID);
   }
 }

@@ -21,11 +21,10 @@
 #include <type_traits>
 
 #include "chre/platform/mutex.h"
+#include "chre/util/array_queue.h"
 #include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
-#include "chre/util/segmented_queue.h"
 #include "chre/util/time.h"
 
 namespace chre {
@@ -47,9 +46,13 @@ namespace chre {
  * 4. Call completeTransaction with the ID.
  * 5. TransactionManager will call the complete callback with the data.
  *
+ * Ensure the thread processing the deferred callbacks is completed before the
+ * destruction of the TransactionManager.
+ *
  * @param TransactionData The data passed to the start and complete callbacks.
+ * @param kMaxTransactions The maximum number of pending transactions.
  */
-template <typename TransactionData>
+template <typename TransactionData, size_t kMaxTransactions>
 class TransactionManager : public NonCopyable {
  public:
   /**
@@ -140,7 +143,7 @@ class TransactionManager : public NonCopyable {
       LockGuard lock(transactionManagerPtr->mMutex);
       transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
     }
-    transactionManagerPtr->deferProcessTransactions(data);
+    transactionManagerPtr->processTransactions();
   }
 
   TransactionManager() = delete;
@@ -165,11 +168,6 @@ class TransactionManager : public NonCopyable {
 
   ~TransactionManager() {
     LockGuard lock(mMutex);
-
-    while (!mTransactions.empty()) {
-      mTransactions.pop();
-    }
-
     if (mTimerHandle != CHRE_TIMER_INVALID) {
       mDeferCancelCallback(mTimerHandle);
       mTimerHandle = CHRE_TIMER_INVALID;
@@ -227,29 +225,7 @@ class TransactionManager : public NonCopyable {
   bool startTransaction(const TransactionData &data, Nanoseconds timeout,
                         uint32_t *id);
 
-  /**
-   * Returns the retry wait time.
-   *
-   * @return The retry wait time.
-   */
-  Nanoseconds getRetryWaitTime() {
-    return mRetryWaitTime;
-  }
-
-  /**
-   * Defers processing transactions in the event loop thread.
-   *
-   * @param data The pointer to the TransactionManager.
-   */
-  void deferProcessTransactions(void *data);
-
  private:
-  //! Size of a single block for the transaction queue.
-  static constexpr size_t kTransactionQueueBlockSize = 64;
-
-  //! Number of blocks for the transaction queue.
-  static constexpr size_t kTransactionQueueNumBlocks = 5;
-
   //! Stores transaction-related data.
   struct Transaction {
     uint32_t id;
@@ -259,6 +235,11 @@ class TransactionManager : public NonCopyable {
     uint16_t numCompletedStartCalls;
     Optional<uint8_t> errorCode;
   };
+
+  /**
+   * Defers processing transactions in the defer callback thread.
+   */
+  void deferProcessTransactions();
 
   /**
    * Processes transactions. This function will call the start callback and
@@ -297,8 +278,7 @@ class TransactionManager : public NonCopyable {
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
-  SegmentedQueue<Transaction, kTransactionQueueBlockSize> mTransactions{
-      kTransactionQueueNumBlocks};
+  ArrayQueue<Transaction, kMaxTransactions> mTransactions;
 };
 
 }  // namespace chre
