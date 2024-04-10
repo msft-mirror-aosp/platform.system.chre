@@ -121,6 +121,8 @@ bool NanoappLoader::resolveGot() {
   size_t nRelocs = relocSize / sizeof(ElfRel);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
 
+  bool success = true;
+
   for (size_t i = 0; i < nRelocs; ++i) {
     ElfRel *curr = &reloc[i];
     int relocType = ELFW_R_TYPE(curr->r_info);
@@ -133,9 +135,9 @@ bool NanoappLoader::resolveGot() {
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
         if (resolved == nullptr) {
-          LOGV("Failed to resolve symbol(%zu) at offset 0x%x", i,
+          LOGE("Failed to resolve symbol(%zu) at offset 0x%x", i,
                curr->r_offset);
-          return false;
+          success = false;
         }
         *addr = reinterpret_cast<ElfAddr>(resolved);
         break;
@@ -144,10 +146,10 @@ bool NanoappLoader::resolveGot() {
       default:
         LOGE("Unsupported relocation type: %u for symbol %s", relocType,
              getDataName(getDynamicSymbol(ELFW_R_SYM(curr->r_info))));
-        return false;
+        success = false;
     }
   }
-  return true;
+  return success;
 }
 
 }  // namespace chre
