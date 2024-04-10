@@ -265,7 +265,8 @@ class HostCommsManager : public HostLink {
 
   //! @see TransactionManager::DeferCallback
   static bool deferCallback(
-      TransactionManager<MessageTransactionData>::DeferCallbackFunction func,
+      TransactionManager<MessageTransactionData,
+                         kMaxOutstandingMessages>::DeferCallbackFunction func,
       void *data, void *extraData, Nanoseconds delay, uint32_t *outTimerHandle);
 
   /**
@@ -383,7 +384,8 @@ class HostCommsManager : public HostLink {
   SynchronizedMemoryPool<HostMessage, kMaxOutstandingMessages> mMessagePool;
 
   //! The transaction manager for reliable messages.
-  TransactionManager<MessageTransactionData> mTransactionManager;
+  TransactionManager<MessageTransactionData, kMaxOutstandingMessages>
+      mTransactionManager;
 };
 
 }  // namespace chre
