@@ -19,7 +19,7 @@
 
 #include <utility>
 
-#include "chre/platform/assert.h"
+#include "chre/util/container_support.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/fixed_size_vector.h"
 
