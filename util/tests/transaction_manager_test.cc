@@ -92,6 +92,9 @@ class TransactionManagerTest : public testing::Test {
     auto iter = sMap.find(
         testing::UnitTest::GetInstance()->current_test_info()->name());
     if (iter == sMap.end()) {
+      if (outTimerHandle != nullptr) {
+        *outTimerHandle = 0xDEADBEEF;
+      }
       return true;  // Test is ending - no need to defer callback
     }
 
@@ -151,9 +154,11 @@ class TransactionManagerTest : public testing::Test {
   }
 
   void SetUp() override {
-    std::lock_guard<std::mutex> lock(sMapMutex);
-    sMap.insert_or_assign(
-        testing::UnitTest::GetInstance()->current_test_info()->name(), this);
+    {
+      std::lock_guard<std::mutex> lock(sMapMutex);
+      sMap.insert_or_assign(
+          testing::UnitTest::GetInstance()->current_test_info()->name(), this);
+    }
 
     mTransactionManager = getTransactionManager(/* doFaultyStart= */ false);
     mFaultyStartTransactionManager =
@@ -166,8 +171,11 @@ class TransactionManagerTest : public testing::Test {
   }
 
   void TearDown() override {
-    std::lock_guard<std::mutex> lock(sMapMutex);
-    sMap.erase(testing::UnitTest::GetInstance()->current_test_info()->name());
+    {
+      std::lock_guard<std::mutex> lock(sMapMutex);
+      sMap.erase(testing::UnitTest::GetInstance()->current_test_info()->name());
+    }
+
     mTaskManager.reset();
     mZeroRetriesTransactionManager.reset();
     mFaultyStartTransactionManager.reset();
