@@ -34,10 +34,12 @@ namespace chre {
 
 namespace {
 
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 //! @see TransactionManager::DeferCancelCallback
 bool deferCancelCallback(uint32_t timerHandle) {
   return EventLoopManagerSingleton::get()->cancelDelayedCallback(timerHandle);
 }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
 /**
  * Checks if the message can be send from the nanoapp to the host.
@@ -75,15 +77,23 @@ bool shouldAcceptMessageToHostFromNanoapp(Nanoapp *nanoapp, void *messageData,
 }  // namespace
 
 HostCommsManager::HostCommsManager()
-    : mIsNanoappBlamedForWakeup(false),
-      mTransactionManager(sendMessageWithTransactionData,
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+    : mTransactionManager(sendMessageWithTransactionData,
                           onMessageDeliveryStatus, deferCallback,
                           deferCancelCallback, kReliableMessageRetryWaitTime,
-                          /* maxNumRetries= */ 0) {}
+                          /* maxNumRetries= */ 0)
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+    {}
 
 bool HostCommsManager::completeTransaction(uint32_t transactionId,
                                            uint8_t errorCode) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   return mTransactionManager.completeTransaction(transactionId, errorCode);
+#else
+  UNUSED_VAR(transactionId);
+  UNUSED_VAR(errorCode);
+  return false;
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 void HostCommsManager::flushNanoappMessagesAndTransactions(uint64_t appId) {
@@ -164,6 +174,7 @@ bool HostCommsManager::sendMessageToHostFromNanoapp(
 
   bool success;
   if (isReliable) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
     MessageTransactionData data = {
         .messageSequenceNumberPtr = &msgToHost->messageSequenceNumber,
         .messageSequenceNumber = static_cast<uint32_t>(-1),
@@ -172,6 +183,10 @@ bool HostCommsManager::sendMessageToHostFromNanoapp(
     };
     success = mTransactionManager.startTransaction(
         data, kReliableMessageTimeout, &msgToHost->messageSequenceNumber);
+#else
+    UNUSED_VAR(cookie);
+    success = false;
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   } else {
     success = doSendMessageToHostFromNanoapp(nanoapp, msgToHost);
   }
@@ -329,6 +344,7 @@ HostMessage *HostCommsManager::findMessageByMessageSequenceNumber(
 }
 
 size_t HostCommsManager::flushNanoappTransactions(uint16_t nanoappInstanceId) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   return mTransactionManager.flushTransactions(
       [](const MessageTransactionData &data, void *callbackData) {
         NestedDataPtr<uint16_t> innerNanoappInstanceId(callbackData);
@@ -347,6 +363,10 @@ size_t HostCommsManager::flushNanoappTransactions(uint16_t nanoappInstanceId) {
         return false;
       },
       NestedDataPtr<uint16_t>(nanoappInstanceId));
+#else
+  UNUSED_VAR(nanoappInstanceId);
+  return 0;
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 void HostCommsManager::freeMessageToHost(MessageToHost *msgToHost) {

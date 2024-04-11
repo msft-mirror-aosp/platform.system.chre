@@ -35,6 +35,7 @@
 #include "chpp/log.h"
 #include "chpp/macros.h"
 #include "chpp/memory.h"
+#include "chpp/time.h"
 #include "chre/pal/wifi.h"
 #include "chre_api/chre/wifi.h"
 
@@ -640,6 +641,13 @@ static void chppWifiScanEventNotification(
         chre->referenceTime -
         (uint64_t)chppTimesyncGetOffset(gWifiClientContext.client.appContext,
                                         CHPP_WIFI_MAX_TIMESYNC_AGE_NS);
+    uint64_t currentTime = chppGetCurrentTimeNs();
+    if (correctedTime > currentTime) {
+      CHPP_LOGD("WiFi scan time overcorrected %" PRIu64 " current %" PRIu64,
+                correctedTime / CHPP_NSEC_PER_MSEC,
+                currentTime / CHPP_NSEC_PER_MSEC);
+      correctedTime = currentTime;
+    }
     CHPP_LOGD("WiFi scan time corrected from %" PRIu64 "to %" PRIu64,
               chre->referenceTime / CHPP_NSEC_PER_MSEC,
               correctedTime / CHPP_NSEC_PER_MSEC);

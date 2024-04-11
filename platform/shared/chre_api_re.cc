@@ -31,7 +31,7 @@ DLL_EXPORT uint32_t chreGetCapabilities() {
 
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   capabilities |= CHRE_CAPABILITIES_RELIABLE_MESSAGES;
-#endif
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
   return capabilities;
 }
@@ -52,11 +52,11 @@ DLL_EXPORT uint32_t chreGetMessageToHostMaxSize() {
                 "CHRE_LARGE_PAYLOAD_MAX_SIZE must be greater than or equal to "
                 "32000 when CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED is enabled");
   return CHRE_LARGE_PAYLOAD_MAX_SIZE;
-#endif
+#endif  // CHRE_LARGE_PAYLOAD_MAX_SIZE
 
 #else
   return CHRE_MESSAGE_TO_HOST_MAX_SIZE;
-#endif
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 DLL_EXPORT uint64_t chreGetTime() {

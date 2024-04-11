@@ -375,7 +375,7 @@ class HostCommsManager : public HostLink {
   //! Ensures that we do not blame more than once per host wakeup. This is
   //! checked before calling host blame to make sure it is set once. The power
   //! control managers then reset back to false on host suspend.
-  AtomicBool mIsNanoappBlamedForWakeup;
+  AtomicBool mIsNanoappBlamedForWakeup{false};
 
   //! Memory pool used to allocate message metadata (but not the contents of the
   //! messages themselves). Must be synchronized as the same HostCommsManager
@@ -383,9 +383,11 @@ class HostCommsManager : public HostLink {
   //! messages directly in onMessageToHostComplete.
   SynchronizedMemoryPool<HostMessage, kMaxOutstandingMessages> mMessagePool;
 
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   //! The transaction manager for reliable messages.
   TransactionManager<MessageTransactionData, kMaxOutstandingMessages>
       mTransactionManager;
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 };
 
 }  // namespace chre
