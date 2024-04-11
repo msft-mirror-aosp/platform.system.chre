@@ -62,7 +62,9 @@ class TransactionManager : public NonCopyable {
  public:
   /**
    * Type of the callback called on transaction completion. This callback is
-   * called  in the event loop thread.
+   * called in the defer callback thread.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    *
    * @param data The data for the transaction.
    * @param errorCode The error code passed to completeTransaction.
@@ -77,7 +79,9 @@ class TransactionManager : public NonCopyable {
   /**
    * Type of the callback called to start the transaction. This is the action
    * that will be repeated on a retry of the transaction. This callback is
-   * called in the event loop thread.
+   * called in the defer callback thread.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    *
    * @param data The data for the transaction.
    * @return whether the callback succeeded.
@@ -102,6 +106,8 @@ class TransactionManager : public NonCopyable {
    * Type of the callback used to defer the call of func with data and extraData
    * after waiting for delay. extraData is ignored if delay > 0 ns.
    *
+   * This callback cannot call any of the TransactionManager methods.
+   *
    * @param func The function to call when the callback is executed.
    * @param data The data to pass to the function.
    * @param extraData The extra data to pass to the function.
@@ -117,6 +123,8 @@ class TransactionManager : public NonCopyable {
    * Type of the callback used to cancel a defer call made using the
    * DeferCallback.
    *
+   * This callback cannot call any of the TransactionManager methods.
+   *
    * @param timerHandle the timer handle returned using the DeferCallback.
    * @return whether the callback was successfully cancelled.
    */
@@ -125,6 +133,8 @@ class TransactionManager : public NonCopyable {
   /**
    * The callback used to determine which elements to remove
    * during a flush.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    */
   using FlushCallback = typename std::conditional<
       std::is_pointer<TransactionData>::value ||
@@ -144,10 +154,7 @@ class TransactionManager : public NonCopyable {
       return;
     }
 
-    {
-      LockGuard<Mutex> lock(transactionManagerPtr->mMutex);
-      transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
-    }
+    transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
     transactionManagerPtr->processTransactions();
   }
 
@@ -169,14 +176,6 @@ class TransactionManager : public NonCopyable {
     CHRE_ASSERT(deferCallback != nullptr);
     CHRE_ASSERT(deferCancelCallback != nullptr);
     CHRE_ASSERT(retryWaitTime.toRawNanoseconds() > 0);
-  }
-
-  ~TransactionManager() {
-    LockGuard<Mutex> lock(mMutex);
-    if (mTimerHandle != CHRE_TIMER_INVALID) {
-      mDeferCancelCallback(mTimerHandle);
-      mTimerHandle = CHRE_TIMER_INVALID;
-    }
   }
 
   /**
@@ -249,23 +248,23 @@ class TransactionManager : public NonCopyable {
   /**
    * Processes transactions. This function will call the start callback and
    * complete callback where appropriate and keep track of which transactions
-   * need to be retried next. This function is called in the event loop thread
-   * and will defer a call to itself at the next time needed to processes the
-   * next transaction.
+   * need to be retried next. This function is called in the defer callback
+   * thread and will defer a call to itself at the next time needed to processes
+   * the next transaction.
    */
   void processTransactions();
 
   //! The start callback.
-  StartCallback mStartCallback;
+  const StartCallback mStartCallback;
 
   //! The complete callback.
-  CompleteCallback mCompleteCallback;
+  const CompleteCallback mCompleteCallback;
 
   //! The defer callback.
-  DeferCallback mDeferCallback;
+  const DeferCallback mDeferCallback;
 
   //! The defer cancel callback.
-  DeferCancelCallback mDeferCancelCallback;
+  const DeferCancelCallback mDeferCancelCallback;
 
   //! The mutex protecting mTransactions and mTimerHandle.
   Mutex mMutex;
@@ -274,12 +273,13 @@ class TransactionManager : public NonCopyable {
   uint32_t mNextTransactionId = 0;
 
   //! The retry wait time.
-  Nanoseconds mRetryWaitTime;
+  const Nanoseconds mRetryWaitTime;
 
   //! The maximum number of retries for a transaction.
-  uint16_t mMaxNumRetries;
+  const uint16_t mMaxNumRetries;
 
   //! The timer handle for the timer tracking execution of processTransactions.
+  //! Can only be modified in the defer callback thread.
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
