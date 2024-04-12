@@ -151,7 +151,7 @@ DLL_EXPORT bool chreSendReliableMessageAsync(
   UNUSED_VAR(freeCallback);
   UNUSED_VAR(cookie);
   return false;
-#endif
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 DLL_EXPORT bool chreSendMessageToHostEndpoint(
