@@ -675,6 +675,7 @@ NanoappLoader::ElfSym *NanoappLoader::getDynamicSymbol(
     return reinterpret_cast<ElfSym *>(
         &mDynamicSymbolTablePtr[posInSymbolTable * sizeof(ElfSym)]);
   }
+  LOGE("Symbol index %zu is out of bound %zu", posInSymbolTable, numElements);
   return nullptr;
 }
 
