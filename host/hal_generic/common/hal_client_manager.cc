@@ -359,12 +359,13 @@ bool HalClientManager::registerEndpointId(pid_t pid,
     return false;
   }
   if (client->endpointIds.find(endpointId) != client->endpointIds.end()) {
-    LOGW("The endpoint %" PRIu16 " is already connected.", endpointId);
-    return false;
+    LOGW("Client %" PRIu16 "'s endpoint id %" PRIu16 " is already registered",
+         endpointId, client->clientId);
+  } else {
+    client->endpointIds.insert(endpointId);
+    LOGI("Client %" PRIu16 " registers endpoint id %" PRIu16, client->clientId,
+         endpointId);
   }
-  client->endpointIds.insert(endpointId);
-  LOGI("Endpoint id %" PRIu16 " is connected to client %" PRIu16, endpointId,
-       client->clientId);
   return true;
 }
 
