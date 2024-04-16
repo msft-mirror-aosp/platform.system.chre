@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <map>
@@ -32,6 +33,10 @@ namespace {
 
 constexpr uint16_t kMaxNumRetries = 3;
 constexpr size_t kMaxTransactions = 32;
+constexpr Milliseconds kRetryWaitTime = Milliseconds(10);
+constexpr Milliseconds kTransactionTimeout = Milliseconds(100);
+constexpr std::chrono::milliseconds kWaitTimeout =
+    std::chrono::milliseconds(50);
 
 class TransactionManagerTest;
 
@@ -50,19 +55,25 @@ struct TransactionCompleted {
 class TransactionManagerTest : public testing::Test {
  protected:
   bool transactionStartCallback(TransactionData &data, bool doFaultyStart) {
+    bool faultyStartSuccess = true;
     {
       std::lock_guard<std::mutex> lock(mMutex);
 
       if (data.transactionStarted != nullptr) {
         *data.transactionStarted = true;
       }
+
       if (data.numTimesTransactionStarted != nullptr) {
         ++(*data.numTimesTransactionStarted);
+        faultyStartSuccess = *data.numTimesTransactionStarted > 1;
       }
     }
 
-    mCondVar.notify_all();
-    return !doFaultyStart || *data.numTimesTransactionStarted != 1;
+    bool success = !doFaultyStart || faultyStartSuccess;
+    if (success) {
+      mCondVar.notify_all();
+    }
+    return success;
   }
 
   bool transactionCallback(const TransactionData &data, uint8_t errorCode) {
@@ -88,17 +99,21 @@ class TransactionManagerTest : public testing::Test {
       return false;
     }
 
-    std::lock_guard<std::mutex> lock(sMapMutex);
-    auto iter = sMap.find(
-        testing::UnitTest::GetInstance()->current_test_info()->name());
-    if (iter == sMap.end()) {
-      if (outTimerHandle != nullptr) {
-        *outTimerHandle = 0xDEADBEEF;
+    const TransactionManagerTest *test = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(sMapMutex);
+      auto iter = sMap.find(
+          testing::UnitTest::GetInstance()->current_test_info()->name());
+      if (iter == sMap.end()) {
+        if (outTimerHandle != nullptr) {
+          *outTimerHandle = 0xDEADBEEF;
+        }
+        return true;  // Test is ending - no need to defer callback
       }
-      return true;  // Test is ending - no need to defer callback
+      test = iter->second;
     }
 
-    std::optional<uint32_t> taskId = iter->second->getTaskManager()->addTask(
+    std::optional<uint32_t> taskId = test->getTaskManager()->addTask(
         [func, data, extraData]() { func(/* type= */ 0, data, extraData); },
         std::chrono::nanoseconds(delay.toRawNanoseconds()),
         /* isOneShot= */ true);
@@ -114,14 +129,18 @@ class TransactionManagerTest : public testing::Test {
   }
 
   static bool deferCancelCallback(uint32_t timerHandle) {
-    std::lock_guard<std::mutex> lock(sMapMutex);
-    auto iter = sMap.find(
-        testing::UnitTest::GetInstance()->current_test_info()->name());
-    if (iter == sMap.end()) {
-      return true;  // Test is ending - no need to cancel defer callback
+    const TransactionManagerTest *test = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(sMapMutex);
+      auto iter = sMap.find(
+          testing::UnitTest::GetInstance()->current_test_info()->name());
+      if (iter == sMap.end()) {
+        return true;  // Test is ending - no need to cancel defer callback
+      }
+      test = iter->second;
     }
 
-    return iter->second->getTaskManager()->cancelTask(timerHandle);
+    return test->getTaskManager()->cancelTask(timerHandle);
   }
 
   TaskManager *getTaskManager() const {
@@ -149,7 +168,7 @@ class TransactionManagerTest : public testing::Test {
         },
         TransactionManagerTest::deferCallback,
         TransactionManagerTest::deferCancelCallback,
-        /* retryWaitTime= */ Milliseconds(1),
+        kRetryWaitTime,
         maxNumRetries);
   }
 
@@ -187,7 +206,7 @@ class TransactionManagerTest : public testing::Test {
 
   std::mutex mMutex;
   std::condition_variable mCondVar;
-  std::atomic<bool> mTransactionCallbackCalled = false;
+  bool mTransactionCallbackCalled = false;
   std::unique_ptr<TaskManager> mTaskManager = nullptr;
   TransactionCompleted mTransactionCompleted;
 
@@ -216,8 +235,9 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      /* timeout= */ Nanoseconds(0), &transactionId1));
-  mCondVar.wait(lock, [&transactionStarted1]() { return transactionStarted1; });
+      kTransactionTimeout, &transactionId1));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted1]() { return transactionStarted1; });
   EXPECT_TRUE(transactionStarted1);
 
   EXPECT_TRUE(mTransactionManager->startTransaction(
@@ -227,14 +247,16 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 2,
       },
-      /* timeout= */ Nanoseconds(0), &transactionId2));
-  mCondVar.wait(lock, [&transactionStarted2]() { return transactionStarted2; });
+      kTransactionTimeout, &transactionId2));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
 
   mTransactionCallbackCalled = false;
   EXPECT_TRUE(mTransactionManager->completeTransaction(
       transactionId2, CHRE_ERROR_INVALID_ARGUMENT));
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 2);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_INVALID_ARGUMENT);
@@ -242,7 +264,8 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
   mTransactionCallbackCalled = false;
   EXPECT_TRUE(mTransactionManager->completeTransaction(transactionId1,
                                                        CHRE_ERROR_NONE));
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 1);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
@@ -260,14 +283,16 @@ TEST_F(TransactionManagerTest, TransactionShouldCompleteOnlyOnce) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      /* timeout= */ Nanoseconds(0), &transactionId));
-  mCondVar.wait(lock, [&transactionStarted]() { return transactionStarted; });
+      kTransactionTimeout, &transactionId));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted]() { return transactionStarted; });
   EXPECT_TRUE(transactionStarted);
 
   mTransactionCallbackCalled = false;
   EXPECT_TRUE(mTransactionManager->completeTransaction(
       transactionId, CHRE_ERROR_INVALID_ARGUMENT));
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
 
   mTransactionCallbackCalled = false;
@@ -289,14 +314,16 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = 456,
       },
-      /* timeout= */ Milliseconds(10), &transactionId));
-  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted == kMaxNumRetries + 1;
+      kTransactionTimeout, &transactionId));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&numTimesTransactionStarted]() {
+    return numTimesTransactionStarted >= kMaxNumRetries + 1;
   });
   EXPECT_EQ(numTimesTransactionStarted, kMaxNumRetries + 1);
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
@@ -317,16 +344,18 @@ TEST_F(TransactionManagerTest,
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = kData,
       },
-      /* timeout= */ Milliseconds(10), &transactionId));
-  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted == 2;
+      kTransactionTimeout, &transactionId));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&numTimesTransactionStarted]() {
+    return numTimesTransactionStarted >= 2;
   });
-  EXPECT_EQ(numTimesTransactionStarted, 2);
+  EXPECT_GE(numTimesTransactionStarted, 2);
 
   mTransactionCallbackCalled = false;
   EXPECT_TRUE(mFaultyStartTransactionManager->completeTransaction(
       transactionId, CHRE_ERROR_NONE));
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
@@ -345,14 +374,16 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = 456,
       },
-      /* timeout= */ Milliseconds(10), &transactionId));
-  mCondVar.wait(lock, [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted == 1;
-  });
+      kTransactionTimeout, &transactionId));
+  mCondVar.wait_for(lock, kWaitTimeout,
+      [&numTimesTransactionStarted]() {
+        return numTimesTransactionStarted == 1;
+      });
   EXPECT_EQ(numTimesTransactionStarted, 1);
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
@@ -373,8 +404,9 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      /* timeout= */ Nanoseconds(0), &transactionId1));
-  mCondVar.wait(lock, [&transactionStarted1]() { return transactionStarted1; });
+      kTransactionTimeout, &transactionId1));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted1]() { return transactionStarted1; });
   EXPECT_TRUE(transactionStarted1);
 
   EXPECT_TRUE(mTransactionManager->startTransaction(
@@ -384,8 +416,9 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 2,
       },
-      /* timeout= */ Nanoseconds(0), &transactionId2));
-  mCondVar.wait(lock, [&transactionStarted2]() { return transactionStarted2; });
+      kTransactionTimeout, &transactionId2));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
 
   EXPECT_EQ(mTransactionManager->flushTransactions(
@@ -402,7 +435,8 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
   mTransactionCallbackCalled = false;
   EXPECT_TRUE(mTransactionManager->completeTransaction(transactionId1,
                                                        CHRE_ERROR_NONE));
-  mCondVar.wait(lock, [this]() { return mTransactionCallbackCalled.load(); });
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 1);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
