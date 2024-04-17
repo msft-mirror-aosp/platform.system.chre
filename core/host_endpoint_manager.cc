@@ -38,7 +38,7 @@ void HostEndpointManager::hostNotificationCallback(uint16_t type, void *data,
                                                    void *extraData) {
   uint16_t hostEndpointId = NestedDataPtr<uint16_t>(data);
 
-  SystemCallbackType callbackType = static_cast<SystemCallbackType>(type);
+  auto callbackType = static_cast<SystemCallbackType>(type);
   if (callbackType == SystemCallbackType::HostEndpointDisconnected) {
     size_t index;
     if (isHostEndpointConnected(hostEndpointId, &index)) {
@@ -59,7 +59,7 @@ void HostEndpointManager::hostNotificationCallback(uint16_t type, void *data,
             eventType, eventData, freeEventDataCallback, kBroadcastInstanceId);
       }
     } else {
-      LOGW("Got disconnected event for nonexistent host endpoint ID %" PRIu16,
+      LOGW("Got disconnected event for nonexistent host endpoint ID 0x%" PRIx16,
            hostEndpointId);
     }
   } else {
@@ -69,7 +69,7 @@ void HostEndpointManager::hostNotificationCallback(uint16_t type, void *data,
     if (!isHostEndpointConnected(hostEndpointId, &index)) {
       mHostEndpoints.push_back(*info);
     } else {
-      LOGW("Got connected event for already existing host endpoint ID %" PRIu16,
+      LOGW("Got connected event for an existing host endpoint ID 0x%" PRIx16,
            hostEndpointId);
     }
   }

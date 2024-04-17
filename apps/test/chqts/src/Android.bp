@@ -47,8 +47,8 @@ cc_test_host {
 
     cppflags: [
         "-Wall",
-        "-Wextra",
         "-Werror",
+        "-Wextra",
 
         "-DINTERNAL_TESTING",
     ],

@@ -57,35 +57,35 @@ cc_defaults {
         "system/chre/util/include",
     ],
     cflags: [
-        "-Wall",
-        "-Werror",
-        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000", // Needed to import CHRE APIs.
         "-DCHRE_HAL_SOCKET_METRICS_ENABLED",
         "-DCHRE_IS_HOST_BUILD",
+        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000", // Needed to import CHRE APIs.
+        "-Wall",
+        "-Werror",
     ],
     header_libs: [
         "chre_api",
     ],
     shared_libs: [
         "android.frameworks.stats-V2-ndk",
+        "android.hardware.contexthub-V3-ndk",
+        "chre_atoms_log",
+        "chre_metrics_reporter",
+        "chremetrics-cpp",
+        "libbase",
+        "libbinder_ndk",
         "libcutils",
         "libjsoncpp",
         "liblog",
         "libprotobuf-cpp-lite",
         "libutils",
-        "libbase",
-        "libbinder_ndk",
-        "android.hardware.contexthub-V3-ndk",
-        "chremetrics-cpp",
-        "chre_atoms_log",
-        "chre_metrics_reporter",
         "server_configurable_flags",
     ],
     static_libs: [
         "chre_client",
         "chre_config_util",
-        "event_logger",
         "chre_flags_c_lib",
+        "event_logger",
     ],
 }
 

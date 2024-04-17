@@ -140,7 +140,7 @@ class TransactionManager : public NonCopyable {
     }
 
     {
-      LockGuard lock(transactionManagerPtr->mMutex);
+      LockGuard<Mutex> lock(transactionManagerPtr->mMutex);
       transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
     }
     transactionManagerPtr->processTransactions();
@@ -167,7 +167,7 @@ class TransactionManager : public NonCopyable {
   }
 
   ~TransactionManager() {
-    LockGuard lock(mMutex);
+    LockGuard<Mutex> lock(mMutex);
     if (mTimerHandle != CHRE_TIMER_INVALID) {
       mDeferCancelCallback(mTimerHandle);
       mTimerHandle = CHRE_TIMER_INVALID;

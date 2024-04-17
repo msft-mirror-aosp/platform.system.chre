@@ -28,11 +28,11 @@ java_library {
     srcs: ["src/**/*.java"],
 
     static_libs: [
-        "chre-test-utils",
         "androidx.test.rules",
+        "chre-test-utils",
+        "chre_test_common_java_proto",
         "chrecrossvalidation_sensor_java_proto",
         "chrecrossvalidation_wifi_java_proto",
-        "chre_test_common_java_proto",
         "guava",
     ],
 
