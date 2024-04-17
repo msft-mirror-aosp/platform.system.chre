@@ -107,13 +107,13 @@ cc_library {
         "host/common/include",
     ],
     srcs: [
-        "host/common/metrics_reporter.cc",
         "host/common/log.cc",
+        "host/common/metrics_reporter.cc",
     ],
     shared_libs: [
         "android.frameworks.stats-V2-ndk",
-        "chremetrics-cpp",
         "chre_atoms_log",
+        "chremetrics-cpp",
         "libbinder_ndk",
         "libcutils",
         "liblog",
@@ -224,9 +224,9 @@ cc_binary {
     name: "chre_power_test_client",
     vendor: true,
     local_include_dirs: [
+        "apps/power_test/common/include",
         "chre_api/include/chre_api",
         "util/include",
-        "apps/power_test/common/include",
     ],
     srcs: [
         "host/common/test/power_test/chre_power_test_client.cc",
@@ -253,8 +253,8 @@ cc_binary {
     vendor: true,
     cpp_std: "c++20",
     local_include_dirs: [
-        "host/common/include",
         "chre_api/include",
+        "host/common/include",
     ],
     srcs: [
         "host/common/chre_aidl_hal_client.cc",
@@ -273,10 +273,10 @@ cc_binary {
         "chre_client",
     ],
     cflags: [
+        "-DLOG_TAG=\"CHRE.HAL.CLIENT\"",
         "-Wall",
         "-Werror",
         "-fexceptions",
-        "-DLOG_TAG=\"CHRE.HAL.CLIENT\"",
     ],
 }
 
@@ -312,11 +312,11 @@ cc_library_headers {
         "-Werror",
     ],
     shared_libs: [
-        "libcutils",
-        "liblog",
-        "libhidlbase",
-        "libutils",
         "android.hardware.contexthub@1.0",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
     ],
     static_libs: ["chre_client"],
 }
@@ -335,17 +335,17 @@ cc_library_shared {
         "-Werror",
     ],
     header_libs: [
-        "android.hardware.contexthub@1.X-shared-impl",
         "android.hardware.contexthub@1.X-common-utils",
+        "android.hardware.contexthub@1.X-shared-impl",
     ],
     shared_libs: [
-        "libcutils",
-        "liblog",
-        "libhidlbase",
-        "libutils",
         "android.hardware.contexthub@1.0",
         "android.hardware.contexthub@1.1",
         "android.hardware.contexthub@1.2",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
     ],
     static_libs: ["chre_client"],
 }
@@ -364,25 +364,25 @@ cc_library_static {
         "-Werror",
     ],
     export_header_lib_headers: [
-        "android.hardware.contexthub@1.X-shared-impl",
         "android.hardware.contexthub@1.X-common-utils",
+        "android.hardware.contexthub@1.X-shared-impl",
     ],
     export_static_lib_headers: [
         "chre_client",
     ],
     export_include_dirs: ["host/hal_generic/V1_1/"],
     header_libs: [
-        "android.hardware.contexthub@1.X-shared-impl",
         "android.hardware.contexthub@1.X-common-utils",
+        "android.hardware.contexthub@1.X-shared-impl",
     ],
     shared_libs: [
-        "libcutils",
-        "liblog",
-        "libhidlbase",
-        "libutils",
         "android.hardware.contexthub@1.0",
         "android.hardware.contexthub@1.1",
         "android.hardware.contexthub@1.2",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
     ],
     static_libs: ["chre_client"],
 }
@@ -401,13 +401,13 @@ cc_binary {
         "-Werror",
     ],
     shared_libs: [
-        "libcutils",
-        "liblog",
-        "libhidlbase",
-        "libutils",
         "android.hardware.contexthub@1.0",
         "android.hardware.contexthub@1.1",
         "android.hardware.contexthub@1.2",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
     ],
     static_libs: [
         "android.hardware.contexthub@1.1-common-impl",
@@ -434,17 +434,17 @@ cc_binary {
         "-Werror",
     ],
     header_libs: [
-        "android.hardware.contexthub@1.X-shared-impl",
         "android.hardware.contexthub@1.X-common-utils",
+        "android.hardware.contexthub@1.X-shared-impl",
     ],
     shared_libs: [
-        "libcutils",
-        "liblog",
-        "libhidlbase",
-        "libutils",
         "android.hardware.contexthub@1.0",
         "android.hardware.contexthub@1.1",
         "android.hardware.contexthub@1.2",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
     ],
     static_libs: ["chre_client"],
     vintf_fragments: ["host/hal_generic/V1_2/android.hardware.contexthub@1.2-generic.xml"],
@@ -458,10 +458,10 @@ cc_library_static {
         "host/hal_generic/aidl/event_logger.cc",
     ],
     local_include_dirs: [
-        "util/include",
         "host/common/include",
         "platform/android/include",
         "platform/include",
+        "util/include",
     ],
     shared_libs: [
         "android.hardware.contexthub-V3-ndk",
@@ -473,10 +473,10 @@ cc_library_static {
         "chre_flatbuffers",
     ],
     cflags: [
-        "-Wall",
-        "-Werror",
         "-DCHRE_IS_HOST_BUILD",
         "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
+        "-Wall",
+        "-Werror",
     ],
 }
 
@@ -489,8 +489,8 @@ cc_library_static {
         "host/common/log.cc",
     ],
     local_include_dirs: [
-        "util/include",
         "host/common/include",
+        "util/include",
     ],
     shared_libs: [
         "libcutils",
@@ -498,9 +498,9 @@ cc_library_static {
         "libutils",
     ],
     cflags: [
+        "-DCHRE_IS_HOST_BUILD",
         "-Wall",
         "-Werror",
-        "-DCHRE_IS_HOST_BUILD",
     ],
 }
 
@@ -508,19 +508,19 @@ cc_test_host {
     name: "hal_unit_tests",
     vendor: true,
     srcs: [
-        "host/test/**/*_test.cc",
-        "host/hal_generic/common/hal_client_manager.cc",
         "host/common/fragmented_load_transaction.cc",
         "host/common/hal_client.cc",
+        "host/hal_generic/common/hal_client_manager.cc",
+        "host/test/**/*_test.cc",
     ],
     local_include_dirs: [
         "host/common/include",
-        "host/hal_generic/common/",
-        "util/include/",
         "host/hal_generic/aidl/",
+        "host/hal_generic/common/",
         "platform/android/include",
         "platform/include",
         "platform/shared/include/",
+        "util/include/",
     ],
     static_libs: [
         "android.hardware.contexthub-V3-ndk",
@@ -531,26 +531,26 @@ cc_test_host {
         "pw_detokenizer",
     ],
     shared_libs: [
-        "libbase",
-        "libcutils",
-        "libutils",
         "android.hardware.contexthub-V3-ndk",
-        "liblog",
-        "libjsoncpp",
+        "libbase",
         "libbinder_ndk",
+        "libcutils",
+        "libjsoncpp",
+        "liblog",
+        "libutils",
         "server_configurable_flags",
     ],
     header_libs: [
-        "chre_flatbuffers",
         "chre_api",
+        "chre_flatbuffers",
     ],
     defaults: [
         "chre_linux_cflags",
     ],
     cflags: [
+        "-DCHRE_IS_HOST_BUILD",
         "-Wall",
         "-Werror",
-        "-DCHRE_IS_HOST_BUILD",
     ],
     test_options: {
         unit_test: true,
@@ -561,10 +561,10 @@ genrule {
     name: "chre_atoms_log.h",
     tools: ["stats-log-api-gen"],
     srcs: [
-        "core/chre_metrics_with_atom.proto",
-        "core/chre_metrics.proto",
-        ":libstats_atom_options_protos",
         ":libprotobuf-internal-descriptor-proto",
+        ":libstats_atom_options_protos",
+        "core/chre_metrics.proto",
+        "core/chre_metrics_with_atom.proto",
     ],
     cmd: "$(location stats-log-api-gen) --header $(out) " +
         "--module chre " +
@@ -598,8 +598,8 @@ cc_library_headers {
     name: "chre_api",
     vendor: true,
     export_include_dirs: [
-        "chre_api/include/chre_api",
         "chre_api/include",
+        "chre_api/include/chre_api",
     ],
     host_supported: true,
 }
@@ -641,7 +641,6 @@ cc_library_static {
     name: "chre_pal_linux",
     vendor: true,
     srcs: [
-        "platform/shared/pal_system_api.cc",
         "platform/linux/assert.cc",
         "platform/linux/fatal_error.cc",
         "platform/linux/memory.cc",
@@ -653,20 +652,21 @@ cc_library_static {
         "platform/linux/system_time.cc",
         "platform/linux/task_util/task.cc",
         "platform/linux/task_util/task_manager.cc",
+        "platform/shared/pal_system_api.cc",
         "util/dynamic_vector_base.cc",
     ],
     export_include_dirs: [
-        "platform/shared/include",
         "platform/include",
         "platform/linux/include",
+        "platform/shared/include",
         "util/include",
     ],
     header_libs: [
         "chre_pal",
     ],
     static_libs: [
-        "libgtest",
         "libgmock",
+        "libgtest",
     ],
     defaults: [
         "chre_linux_cflags",
@@ -684,8 +684,8 @@ cc_test_host {
         "pal/util/tests/**/*.cc",
         "pal/util/wifi_pal_convert.c",
         "pal/util/wifi_scan_cache.c",
-        "platform/tests/**/*.cc",
         "platform/linux/tests/**/*.cc",
+        "platform/tests/**/*.cc",
         "util/tests/**/*.cc",
     ],
     exclude_srcs: [
@@ -706,11 +706,11 @@ cc_test_host {
         "util/include",
     ],
     cflags: [
-        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
-        "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
         "-DCHRE_ASSERTIONS_ENABLED=true",
         "-DCHRE_BLE_SUPPORT_ENABLED=true",
         "-DCHRE_FILENAME=__FILE__",
+        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
+        "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
         "-DGTEST",
     ],
     header_libs: [
@@ -730,9 +730,9 @@ cc_test_host {
 cc_defaults {
     name: "pw_rpc_cflags_chre",
     cflags: [
-        "-DPW_RPC_USE_GLOBAL_MUTEX=0",
         "-DPW_RPC_COMPLETION_REQUEST_CALLBACK",
         "-DPW_RPC_DYNAMIC_ALLOCATION",
+        "-DPW_RPC_USE_GLOBAL_MUTEX=0",
     ],
 }
 
@@ -771,12 +771,12 @@ cc_library_static {
         "pw_rpc_nanopb_defaults",
     ],
     static_libs: [
-        "pw_rpc_raw_chre",
         "pw_rpc_chre",
+        "pw_rpc_raw_chre",
     ],
     export_static_lib_headers: [
-        "pw_rpc_raw_chre",
         "pw_rpc_chre",
+        "pw_rpc_raw_chre",
     ],
     host_supported: true,
     vendor_available: true,
@@ -834,9 +834,9 @@ cc_test_host {
     isolated: false,
     test_suites: ["general-tests"],
     srcs: [
+        "test/simulation/*_test.cc",
         "test/simulation/test_base.cc",
         "test/simulation/test_util.cc",
-        "test/simulation/*_test.cc",
     ],
     generated_sources: [
         "rpc_test_proto_source",
@@ -846,8 +846,8 @@ cc_test_host {
         "rpc_test_rpc_header",
     ],
     local_include_dirs: [
-        "test/simulation/inc",
         "platform/shared",
+        "test/simulation/inc",
     ],
     static_libs: [
         "chre_linux",
@@ -869,25 +869,25 @@ cc_library_static {
     vendor: true,
     srcs: [
         "core/audio_request_manager.cc",
+        "core/ble_request.cc",
         "core/ble_request_manager.cc",
         "core/ble_request_multiplexer.cc",
-        "core/ble_request.cc",
         "core/debug_dump_manager.cc",
-        "core/event_loop_manager.cc",
-        "core/event_loop.cc",
-        "core/event_ref_queue.cc",
         "core/event.cc",
+        "core/event_loop.cc",
+        "core/event_loop_manager.cc",
+        "core/event_ref_queue.cc",
         "core/gnss_manager.cc",
         "core/host_comms_manager.cc",
         "core/host_endpoint_manager.cc",
         "core/init.cc",
         "core/nanoapp.cc",
+        "core/sensor.cc",
+        "core/sensor_request.cc",
         "core/sensor_request_manager.cc",
         "core/sensor_request_multiplexer.cc",
-        "core/sensor_request.cc",
-        "core/sensor_type_helpers.cc",
         "core/sensor_type.cc",
-        "core/sensor.cc",
+        "core/sensor_type_helpers.cc",
         "core/settings.cc",
         "core/system_health_monitor.cc",
         "core/timer_pool.cc",
@@ -897,8 +897,8 @@ cc_library_static {
         "platform/linux/context.cc",
         "platform/linux/fatal_error.cc",
         "platform/linux/host_link.cc",
-        "platform/linux/memory_manager.cc",
         "platform/linux/memory.cc",
+        "platform/linux/memory_manager.cc",
         "platform/linux/pal_audio.cc",
         "platform/linux/pal_ble.cc",
         "platform/linux/pal_gnss.cc",
@@ -930,11 +930,11 @@ cc_library_static {
         "platform/shared/platform_ble.cc",
         "platform/shared/platform_gnss.cc",
         "platform/shared/platform_wifi.cc",
+        "platform/shared/sensor_pal/platform_sensor.cc",
+        "platform/shared/sensor_pal/platform_sensor_manager.cc",
+        "platform/shared/sensor_pal/platform_sensor_type_helpers.cc",
         "platform/shared/system_time.cc",
         "platform/shared/version.cc",
-        "platform/shared/sensor_pal/platform_sensor.cc",
-        "platform/shared/sensor_pal/platform_sensor_type_helpers.cc",
-        "platform/shared/sensor_pal/platform_sensor_manager.cc",
         "util/**/*.cc",
     ],
     exclude_srcs: [
@@ -946,11 +946,11 @@ cc_library_static {
         "core/include",
         "pal/include",
         "pal/util/include",
-        "platform/shared/audio_pal/include",
+        "platform/include",
         "platform/linux/include",
+        "platform/shared/audio_pal/include",
         "platform/shared/include",
         "platform/shared/sensor_pal/include",
-        "platform/include",
         "util/include",
     ],
     header_libs: [
@@ -962,8 +962,8 @@ cc_library_static {
         "pw_rpc_cflags_chre",
     ],
     static_libs: [
-        "libgtest",
         "libgmock",
+        "libgtest",
         "pw_rpc_chre",
     ],
     host_supported: true,
@@ -972,24 +972,24 @@ cc_library_static {
 cc_defaults {
     name: "chre_linux_cflags",
     cflags: [
+        "-DCHRE_ASSERTIONS_ENABLED=true",
+        "-DCHRE_AUDIO_SUPPORT_ENABLED",
+        "-DCHRE_BLE_READ_RSSI_SUPPORT_ENABLED",
+        "-DCHRE_BLE_SUPPORT_ENABLED",
+        "-DCHRE_FILENAME=__FILE__",
+        "-DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_1",
+        "-DCHRE_GNSS_SUPPORT_ENABLED",
+        "-DCHRE_LARGE_PAYLOAD_MAX_SIZE=32000",
         "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
         "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
-        "-DCHRE_ASSERTIONS_ENABLED=true",
-        "-DCHRE_FILENAME=__FILE__",
-        "-DGTEST",
-        "-DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_1",
-        "-DCHRE_AUDIO_SUPPORT_ENABLED",
-        "-DCHRE_BLE_SUPPORT_ENABLED",
-        "-DCHRE_GNSS_SUPPORT_ENABLED",
-        "-DCHRE_SENSORS_SUPPORT_ENABLED",
-        "-DCHRE_WIFI_SUPPORT_ENABLED",
-        "-DCHRE_WIFI_NAN_SUPPORT_ENABLED",
-        "-DCHRE_TEST_WIFI_SCAN_RESULT_TIMEOUT_NS=300000000",
-        "-DCHRE_TEST_WIFI_RANGING_RESULT_TIMEOUT_NS=300000000",
-        "-DCHRE_TEST_ASYNC_RESULT_TIMEOUT_NS=300000000",
-        "-DCHRE_BLE_READ_RSSI_SUPPORT_ENABLED",
         "-DCHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED",
-        "-DCHRE_LARGE_PAYLOAD_MAX_SIZE=32000",
+        "-DCHRE_SENSORS_SUPPORT_ENABLED",
+        "-DCHRE_TEST_ASYNC_RESULT_TIMEOUT_NS=300000000",
+        "-DCHRE_TEST_WIFI_RANGING_RESULT_TIMEOUT_NS=300000000",
+        "-DCHRE_TEST_WIFI_SCAN_RESULT_TIMEOUT_NS=300000000",
+        "-DCHRE_WIFI_NAN_SUPPORT_ENABLED",
+        "-DCHRE_WIFI_SUPPORT_ENABLED",
+        "-DGTEST",
         "-Wextra-semi",
     ],
 }
@@ -1007,25 +1007,25 @@ cc_defaults {
         "util/include",
     ],
     srcs: [
+        "host/common/bt_snoop_log_parser.cc",
         "host/common/daemon_base.cc",
         "host/common/fbs_daemon_base.cc",
         "host/common/file_stream.cc",
         "host/common/fragmented_load_transaction.cc",
         "host/common/host_protocol_host.cc",
         "host/common/log_message_parser.cc",
-        "host/common/bt_snoop_log_parser.cc",
         "host/common/socket_server.cc",
         "host/common/st_hal_lpma_handler.cc",
         "platform/shared/host_protocol_common.cc",
     ],
     shared_libs: [
+        "chre_metrics_reporter",
         "libbase",
         "libbinder_ndk",
         "libcutils",
         "libjsoncpp",
-        "libutils",
         "liblog",
-        "chre_metrics_reporter",
+        "libutils",
         "server_configurable_flags",
     ],
     static_libs: [
@@ -1070,9 +1070,9 @@ cc_binary {
         "pw_varint",
     ],
     shared_libs: [
+        "android.hardware.soundtrigger@2.0",
         "libhidlbase",
         "libpower",
-        "android.hardware.soundtrigger@2.0",
     ],
     init_rc: ["host/exynos/chre_daemon_exynos.rc"],
 }
@@ -1085,8 +1085,8 @@ java_library_static {
         include_dirs: ["external/protobuf/src"],
     },
     srcs: [
-        "apps/test/common/chre_api_test/rpc/chre_api_test.proto",
         ":libprotobuf-internal-protos",
+        "apps/test/common/chre_api_test/rpc/chre_api_test.proto",
     ],
     sdk_version: "current",
 }

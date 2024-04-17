@@ -37,7 +37,7 @@ using ::chre::Seconds;
 template <typename TransactionData, size_t kMaxTransactions>
 bool TransactionManager<TransactionData, kMaxTransactions>::completeTransaction(
     uint32_t transactionId, uint8_t errorCode) {
-  LockGuard lock(mMutex);
+  LockGuard<Mutex> lock(mMutex);
 
   for (size_t i = 0; i < mTransactions.size(); ++i) {
     Transaction &transaction = mTransactions[i];
@@ -63,7 +63,7 @@ size_t TransactionManager<TransactionData, kMaxTransactions>::flushTransactions(
     return 0;
   }
 
-  LockGuard lock(mMutex);
+  LockGuard<Mutex> lock(mMutex);
 
   deferProcessTransactions();
   size_t numFlushed = 0;
@@ -83,7 +83,7 @@ bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
     const TransactionData &data, Nanoseconds timeout, uint32_t *id) {
   CHRE_ASSERT(id != nullptr);
 
-  LockGuard lock(mMutex);
+  LockGuard<Mutex> lock(mMutex);
 
   if (timeout.toRawNanoseconds() != 0 && timeout <= mRetryWaitTime) {
     LOGE("Timeout: %" PRIu64 "ns is <= retry wait time: %" PRIu64 "ns",
@@ -142,7 +142,7 @@ void TransactionManager<TransactionData,
 template <typename TransactionData, size_t kMaxTransactions>
 void TransactionManager<TransactionData,
                         kMaxTransactions>::processTransactions() {
-  LockGuard lock(mMutex);
+  LockGuard<Mutex> lock(mMutex);
 
   if (mTimerHandle != CHRE_TIMER_INVALID) {
     CHRE_ASSERT(mDeferCancelCallback(mTimerHandle));
