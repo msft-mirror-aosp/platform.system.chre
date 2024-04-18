@@ -889,6 +889,10 @@ void chppTimestampOutgoingRequest(struct ChppAppState *appState,
   CHPP_ASSERT(msgType == CHPP_MESSAGE_TYPE_CLIENT_REQUEST ||
               msgType == CHPP_MESSAGE_TYPE_SERVICE_REQUEST);
 
+  // Hold the mutex to avoid concurrent read of a partially modified outReqState
+  // structure by the RX thread
+  chppMutexLock(&appState->transportContext->mutex);
+
   if (outReqState->requestState == CHPP_REQUEST_STATE_REQUEST_SENT) {
     CHPP_LOGE("Dupe req ID=%" PRIu8 " existing ID=%" PRIu8 " from t=%" PRIu64,
               requestHeader->transaction, outReqState->transaction,
@@ -915,6 +919,8 @@ void chppTimestampOutgoingRequest(struct ChppAppState *appState,
     *nextRequestTimeoutNs =
         MIN(*nextRequestTimeoutNs, outReqState->responseTimeNs);
   }
+
+  chppMutexUnlock(&appState->transportContext->mutex);
 
   CHPP_LOGD("Timestamp req ID=%" PRIu8 " at t=%" PRIu64 " timeout=%" PRIu64
             " (requested=%" PRIu64 "), next timeout=%" PRIu64,
