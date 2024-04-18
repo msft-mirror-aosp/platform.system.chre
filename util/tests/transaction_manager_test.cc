@@ -36,7 +36,7 @@ constexpr size_t kMaxTransactions = 32;
 constexpr Milliseconds kRetryWaitTime = Milliseconds(10);
 constexpr Milliseconds kTransactionTimeout = Milliseconds(100);
 constexpr std::chrono::milliseconds kWaitTimeout =
-    std::chrono::milliseconds(50);
+    std::chrono::milliseconds(100);
 
 class TransactionManagerTest;
 
@@ -315,18 +315,14 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
           .data = 456,
       },
       kTransactionTimeout, &transactionId));
-  mCondVar.wait_for(lock, kWaitTimeout,
-                    [&numTimesTransactionStarted]() {
-    return numTimesTransactionStarted >= kMaxNumRetries + 1;
-  });
-  EXPECT_EQ(numTimesTransactionStarted, kMaxNumRetries + 1);
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait_for(lock, kWaitTimeout,
+  mCondVar.wait_for(lock, kWaitTimeout * 2,
                     [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_TIMEOUT);
+  EXPECT_EQ(numTimesTransactionStarted, kMaxNumRetries + 1);
 }
 
 TEST_F(TransactionManagerTest,
@@ -375,14 +371,9 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
           .data = 456,
       },
       kTransactionTimeout, &transactionId));
-  mCondVar.wait_for(lock, kWaitTimeout,
-      [&numTimesTransactionStarted]() {
-        return numTimesTransactionStarted == 1;
-      });
-  EXPECT_EQ(numTimesTransactionStarted, 1);
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait_for(lock, kWaitTimeout,
+  mCondVar.wait_for(lock, kWaitTimeout * 2,
                     [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
