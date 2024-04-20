@@ -58,18 +58,18 @@ bool sendMessageToHost(Nanoapp *nanoapp, void *message, size_t messageSize,
                        chreMessageFreeFunction *freeCallback, bool isReliable,
                        const void *cookie) {
   const EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
+  bool success = false;
   if (eventLoop.currentNanoappIsStopping()) {
     LOGW("Rejecting message to host from app instance %" PRIu16
          " because it's stopping",
          nanoapp->getInstanceId());
-    return false;
+  } else {
+    HostCommsManager &hostCommsManager =
+        EventLoopManagerSingleton::get()->getHostCommsManager();
+    success = hostCommsManager.sendMessageToHostFromNanoapp(
+        nanoapp, message, messageSize, messageType, hostEndpoint,
+        messagePermissions, freeCallback, isReliable, cookie);
   }
-
-  HostCommsManager &hostCommsManager =
-      EventLoopManagerSingleton::get()->getHostCommsManager();
-  bool success = hostCommsManager.sendMessageToHostFromNanoapp(
-      nanoapp, message, messageSize, messageType, hostEndpoint,
-      messagePermissions, freeCallback, isReliable, cookie);
 
   if (!success && freeCallback != nullptr) {
     freeCallback(message, messageSize);
