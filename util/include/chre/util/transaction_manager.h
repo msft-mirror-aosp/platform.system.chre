@@ -42,9 +42,14 @@ namespace chre {
  * Typical usage:
  * 1. Start a transaction. Get the ID back.
  * 2. TransactionManager will run start callback with the data.
- * 3. TransactionManager will retry if needed.
+ * 3. If the start callback fails or if the transaction is not completed,
+ *    TransactionManager will call the start callback again after the retry
+ *    wait time.
  * 4. Call completeTransaction with the ID.
  * 5. TransactionManager will call the complete callback with the data.
+ *
+ * If completeTransaction is not called before the timeout, the transaction
+ * will be completed with a CHRE_ERROR_TIMEOUT.
  *
  * Ensure the thread processing the deferred callbacks is completed before the
  * destruction of the TransactionManager.
