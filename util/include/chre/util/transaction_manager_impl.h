@@ -37,23 +37,30 @@ using ::chre::Seconds;
 template <typename TransactionData, size_t kMaxTransactions>
 bool TransactionManager<TransactionData, kMaxTransactions>::completeTransaction(
     uint32_t transactionId, uint8_t errorCode) {
-  LockGuard<Mutex> lock(mMutex);
+  bool success = false;
 
-  for (size_t i = 0; i < mTransactions.size(); ++i) {
-    Transaction &transaction = mTransactions[i];
-    if (transaction.id == transactionId) {
-      if (errorCode == CHRE_ERROR_TRANSIENT) {
-        transaction.nextRetryTime = Nanoseconds(0);
-      } else {
-        transaction.errorCode = errorCode;
+  {
+    LockGuard<Mutex> lock(mMutex);
+    for (size_t i = 0; i < mTransactions.size(); ++i) {
+      Transaction &transaction = mTransactions[i];
+      if (transaction.id == transactionId) {
+        if (errorCode == CHRE_ERROR_TRANSIENT) {
+          transaction.nextRetryTime = Nanoseconds(0);
+        } else {
+          transaction.errorCode = errorCode;
+        }
+        success = true;
+        break;
       }
-      deferProcessTransactions();
-      return true;
     }
   }
 
-  LOGE("Unable to complete transaction with ID: %" PRIu32, transactionId);
-  return false;
+  if (success) {
+    deferProcessTransactions();
+  } else {
+    LOGE("Unable to complete transaction with ID: %" PRIu32, transactionId);
+  }
+  return success;
 }
 
 template <typename TransactionData, size_t kMaxTransactions>
@@ -63,9 +70,9 @@ size_t TransactionManager<TransactionData, kMaxTransactions>::flushTransactions(
     return 0;
   }
 
-  LockGuard<Mutex> lock(mMutex);
-
   deferProcessTransactions();
+
+  LockGuard<Mutex> lock(mMutex);
   size_t numFlushed = 0;
   for (size_t i = 0; i < mTransactions.size();) {
     if (callback(mTransactions[i].data, data)) {
@@ -83,34 +90,35 @@ bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
     const TransactionData &data, Nanoseconds timeout, uint32_t *id) {
   CHRE_ASSERT(id != nullptr);
 
-  LockGuard<Mutex> lock(mMutex);
-
   if (timeout.toRawNanoseconds() != 0 && timeout <= mRetryWaitTime) {
     LOGE("Timeout: %" PRIu64 "ns is <= retry wait time: %" PRIu64 "ns",
          timeout.toRawNanoseconds(), mRetryWaitTime.toRawNanoseconds());
     return false;
   }
 
-  if (mTransactions.full()) {
-    LOGE("The transaction queue is full");
-    return false;
+  {
+    LockGuard<Mutex> lock(mMutex);
+    if (mTransactions.full()) {
+      LOGE("The transaction queue is full");
+      return false;
+    }
+
+    uint32_t transactionId = mNextTransactionId++;
+    *id = transactionId;
+
+    Transaction transaction{
+        .id = transactionId,
+        .data = data,
+        .nextRetryTime = Nanoseconds(0),
+        .timeoutTime = timeout.toRawNanoseconds() == 0
+                           ? Nanoseconds(UINT64_MAX)
+                           : SystemTime::getMonotonicTime() + timeout,
+        .numCompletedStartCalls = 0,
+        .errorCode = Optional<uint8_t>(),
+    };
+
+    mTransactions.push(transaction);
   }
-
-  uint32_t transactionId = mNextTransactionId++;
-  *id = transactionId;
-
-  Transaction transaction{
-      .id = transactionId,
-      .data = data,
-      .nextRetryTime = Nanoseconds(0),
-      .timeoutTime = timeout.toRawNanoseconds() == 0
-                         ? Nanoseconds(UINT64_MAX)
-                         : SystemTime::getMonotonicTime() + timeout,
-      .numCompletedStartCalls = 0,
-      .errorCode = Optional<uint8_t>(),
-  };
-
-  mTransactions.push(transaction);
 
   deferProcessTransactions();
   return true;
@@ -142,56 +150,58 @@ void TransactionManager<TransactionData,
 template <typename TransactionData, size_t kMaxTransactions>
 void TransactionManager<TransactionData,
                         kMaxTransactions>::processTransactions() {
-  LockGuard<Mutex> lock(mMutex);
-
   if (mTimerHandle != CHRE_TIMER_INVALID) {
     CHRE_ASSERT(mDeferCancelCallback(mTimerHandle));
     mTimerHandle = CHRE_TIMER_INVALID;
   }
 
-  if (mTransactions.empty()) {
-    return;
-  }
-
   Nanoseconds now = SystemTime::getMonotonicTime();
   Nanoseconds nextExecutionTime(UINT64_MAX);
-  for (size_t i = 0; i < mTransactions.size();) {
-    Transaction &transaction = mTransactions[i];
-    if (transaction.timeoutTime <= now ||
-        (transaction.nextRetryTime <= now &&
-         transaction.numCompletedStartCalls >= mMaxNumRetries + 1) ||
-        transaction.errorCode.has_value()) {
-      uint8_t errorCode = CHRE_ERROR_TIMEOUT;
-      if (transaction.errorCode.has_value()) {
-        errorCode = *transaction.errorCode;
-      }
 
-      bool status = mCompleteCallback(transaction.data, errorCode);
-      if (status) {
-        LOGI("Transaction %" PRIu32 " completed with error code: %" PRIu8,
-             transaction.id, errorCode);
-      } else {
-        LOGE("Could not complete transaction %" PRIu32, transaction.id);
-      }
+  {
+    LockGuard<Mutex> lock(mMutex);
+    if (mTransactions.empty()) {
+      return;
+    }
 
-      mTransactions.remove(i);
-    } else {
-      if (transaction.nextRetryTime <= now) {
-        bool status = mStartCallback(transaction.data);
-        if (status) {
-          LOGI("Transaction %" PRIu32 " started", transaction.id);
-        } else {
-          LOGE("Could not start transaction %" PRIu32, transaction.id);
+    for (size_t i = 0; i < mTransactions.size();) {
+      Transaction &transaction = mTransactions[i];
+      if (transaction.timeoutTime <= now ||
+          (transaction.nextRetryTime <= now &&
+           transaction.numCompletedStartCalls >= mMaxNumRetries + 1) ||
+          transaction.errorCode.has_value()) {
+        uint8_t errorCode = CHRE_ERROR_TIMEOUT;
+        if (transaction.errorCode.has_value()) {
+          errorCode = *transaction.errorCode;
         }
 
-        ++transaction.numCompletedStartCalls;
-        transaction.nextRetryTime = now + mRetryWaitTime;
-      }
+        bool status = mCompleteCallback(transaction.data, errorCode);
+        if (status) {
+          LOGI("Transaction %" PRIu32 " completed with error code: %" PRIu8,
+               transaction.id, errorCode);
+        } else {
+          LOGE("Could not complete transaction %" PRIu32, transaction.id);
+        }
 
-      nextExecutionTime = std::min(
-          nextExecutionTime,
-          std::min(transaction.nextRetryTime, transaction.timeoutTime));
-      ++i;
+        mTransactions.remove(i);
+      } else {
+        if (transaction.nextRetryTime <= now) {
+          bool status = mStartCallback(transaction.data);
+          if (status) {
+            LOGI("Transaction %" PRIu32 " started", transaction.id);
+          } else {
+            LOGE("Could not start transaction %" PRIu32, transaction.id);
+          }
+
+          ++transaction.numCompletedStartCalls;
+          transaction.nextRetryTime = now + mRetryWaitTime;
+        }
+
+        nextExecutionTime = std::min(
+            nextExecutionTime,
+            std::min(transaction.nextRetryTime, transaction.timeoutTime));
+        ++i;
+      }
     }
   }
 
