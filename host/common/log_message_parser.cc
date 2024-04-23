@@ -296,7 +296,10 @@ void LogMessageParser::addNanoappDetokenizer(uint64_t appId,
                                              size_t databaseSize) {
   auto appBinaryIter = mNanoappAppIdToBinary.find(appId);
   if (appBinaryIter == mNanoappAppIdToBinary.end()) {
-    LOGE("Unable to find nanoapp binary with app ID 0x%016" PRIx64, appId);
+    LOGE(
+        "Binary not in cache, can't extract log token database for app ID "
+        "0x%016" PRIx64,
+        appId);
   } else if (databaseSize == kInvalidTokenDatabaseSize) {
     // Remove and free the nanoapp binary.
     mNanoappAppIdToBinary.erase(appId);

@@ -425,7 +425,7 @@ bool SegmentedQueue<ElementType, kBlockSize>::prepareForPush() {
 
 template <typename ElementType, size_t kBlockSize>
 void SegmentedQueue<ElementType, kBlockSize>::clear() {
-  if (!std::is_trivially_destructible<ElementType>::value) {
+  if constexpr (!std::is_trivially_destructible<ElementType>::value) {
     while (!empty()) {
       pop_front();
     }
