@@ -234,11 +234,10 @@ void Manager::handleMessageFromHost(uint32_t senderInstanceId,
       }
     }
   }
-
   if (!success) {
     test_shared::sendTestResultToHost(
         hostData->hostEndpoint, chre_settings_test_MessageType_TEST_RESULT,
-        false /* success */);
+        false /* success */, false /* abortOnFailure */);
   }
 }
 
@@ -671,8 +670,9 @@ void Manager::handleBleAsyncResult(const chreAsyncResult *result) {
 }
 
 void Manager::sendTestResult(uint16_t hostEndpointId, bool success) {
-  test_shared::sendTestResultToHost(
-      hostEndpointId, chre_settings_test_MessageType_TEST_RESULT, success);
+  test_shared::sendTestResultToHost(hostEndpointId,
+                                    chre_settings_test_MessageType_TEST_RESULT,
+                                    success, false /* abortOnFailure */);
   mTestSession.reset();
   mCachedRangingTarget.reset();
 }

@@ -74,9 +74,9 @@ void sendTestResultWithMsgToHost(uint16_t hostEndpointId, uint32_t messageType,
 }
 
 void sendTestResultToHost(uint16_t hostEndpointId, uint32_t messageType,
-                          bool success) {
+                          bool success, bool abortOnFailure) {
   sendTestResultWithMsgToHost(hostEndpointId, messageType, success,
-                              nullptr /* errMessage */);
+                              nullptr /* errMessage */, abortOnFailure);
 }
 
 void sendEmptyMessageToHost(uint16_t hostEndpointId, uint32_t messageType) {
