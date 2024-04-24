@@ -154,8 +154,9 @@ void TransactionManager<TransactionData,
 template <typename TransactionData, size_t kMaxTransactions>
 uint32_t TransactionManager<TransactionData,
                         kMaxTransactions>::generatePseudoRandomId() {
-  uint64_t data = SystemTime::getMonotonicTime().toRawNanoseconds() +
-      SystemTime::getEstimatedHostTimeOffset();
+  uint64_t data =
+      SystemTime::getMonotonicTime().toRawNanoseconds() +
+      static_cast<uint64_t>(SystemTime::getEstimatedHostTimeOffset());
   uint32_t hash = fnv1a32Hash(reinterpret_cast<const uint8_t*>(&data),
                               sizeof(uint64_t));
 
