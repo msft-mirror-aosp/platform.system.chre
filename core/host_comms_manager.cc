@@ -24,9 +24,8 @@
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
-#include "chre/util/lock_guard.h"
 #include "chre/util/macros.h"
-#include "chre/util/optional.h"
+#include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/event_callbacks.h"
 #include "chre_api/chre.h"
 

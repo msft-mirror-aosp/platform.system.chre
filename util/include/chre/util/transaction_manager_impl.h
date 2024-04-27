@@ -17,16 +17,12 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 
-#include <inttypes.h>
 #include <algorithm>
-#include <cmath>
+#include <inttypes.h>
 
-#include "chre/platform/assert.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/hash.h"
 #include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
-#include "chre/util/time.h"
 #include "chre/util/transaction_manager.h"
 #include "chre_api/chre.h"
 
