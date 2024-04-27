@@ -324,6 +324,13 @@ void AppManager::SendFilterResultToHost(
          kFilterResultsBufSize);
     return;
   }
+  size_t encoded_size = 0;
+  if (!pb_get_encoded_size(&encoded_size, nearby_BleFilterResult_fields,
+                           &filter_result)) {
+    LOGE("Failed to get encoded size for BleFilterResult");
+    return;
+  }
+  LOGD("BleFilterResult encoded size %zu", encoded_size);
   auto stream = pb_ostream_from_buffer(static_cast<pb_byte_t *>(msg_buf),
                                        kFilterResultsBufSize);
   size_t msg_size = 0;

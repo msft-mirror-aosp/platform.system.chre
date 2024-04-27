@@ -134,7 +134,7 @@ class AppManager {
   // It seems possible to compute a message size with repeated field by
   // rehearsing the encoding without actually storing in memory. Explore to
   // enhance nanopb API to extend pb_get_encoded_size for repeated fields.
-  static constexpr size_t kFilterResultsBufSize = 300;
+  static constexpr size_t kFilterResultsBufSize = 400;
   // Default value for Fast Pair cache to expire.
   static constexpr uint64_t kFpFilterResultExpireTimeNanoSec =
 #ifdef USE_SHORT_FP_CACHE_TO
