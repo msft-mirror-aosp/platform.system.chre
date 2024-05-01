@@ -17,15 +17,12 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 
-#include <inttypes.h>
 #include <algorithm>
-#include <cmath>
+#include <inttypes.h>
 
-#include "chre/platform/assert.h"
 #include "chre/platform/system_time.h"
+#include "chre/util/hash.h"
 #include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
-#include "chre/util/time.h"
 #include "chre/util/transaction_manager.h"
 #include "chre_api/chre.h"
 
@@ -103,7 +100,10 @@ bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
       return false;
     }
 
-    uint32_t transactionId = mNextTransactionId++;
+    if (!mNextTransactionId.has_value()) {
+      mNextTransactionId = generatePseudoRandomId();
+    }
+    uint32_t transactionId = (mNextTransactionId.value())++;
     *id = transactionId;
 
     Transaction transaction{
@@ -145,6 +145,25 @@ void TransactionManager<TransactionData,
   if (!status) {
     LOGE("Could not defer callback to process transactions");
   }
+}
+
+template <typename TransactionData, size_t kMaxTransactions>
+uint32_t TransactionManager<TransactionData,
+                        kMaxTransactions>::generatePseudoRandomId() {
+  uint64_t data =
+      SystemTime::getMonotonicTime().toRawNanoseconds() +
+      static_cast<uint64_t>(SystemTime::getEstimatedHostTimeOffset());
+  uint32_t hash = fnv1a32Hash(reinterpret_cast<const uint8_t*>(&data),
+                              sizeof(uint64_t));
+
+  // We mix the top 2 bits back into the middle of the hash to provide a value
+  // that leaves a gap of at least ~1 billion sequence numbers before
+  // overflowing a signed int32 (as used on the Java side).
+  constexpr uint32_t kMask = 0xC0000000;
+  constexpr uint32_t kShiftAmount = 17;
+  uint32_t extraBits = hash & kMask;
+  hash ^= extraBits >> kShiftAmount;
+  return hash & ~kMask;
 }
 
 template <typename TransactionData, size_t kMaxTransactions>

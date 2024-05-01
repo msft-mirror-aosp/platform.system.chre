@@ -22,7 +22,6 @@
 
 #include "chre/platform/mutex.h"
 #include "chre/util/array_queue.h"
-#include "chre/util/lock_guard.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
 #include "chre/util/time.h"
@@ -246,6 +245,13 @@ class TransactionManager : public NonCopyable {
   void deferProcessTransactions();
 
   /**
+   * Generates a pseudo random ID for a transaction in the range of
+   * [0, 2^30 - 1].
+   * @return The generated ID.
+   */
+  uint32_t generatePseudoRandomId();
+
+  /**
    * Processes transactions. This function will call the start callback and
    * complete callback where appropriate and keep track of which transactions
    * need to be retried next. This function is called in the defer callback
@@ -270,7 +276,7 @@ class TransactionManager : public NonCopyable {
   Mutex mMutex;
 
   //! The next ID for use when creating a transaction.
-  uint32_t mNextTransactionId = 0;
+  Optional<uint32_t> mNextTransactionId;
 
   //! The retry wait time.
   const Nanoseconds mRetryWaitTime;
