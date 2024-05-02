@@ -799,7 +799,7 @@ void connectToHal() {
     gCallback = ContextHubCallback::make<ContextHubCallback>();
   }
   std::unique_ptr<HalClient> halClient = HalClient::create(gCallback);
-  if (halClient == nullptr) {
+  if (halClient == nullptr || !halClient->connect()) {
     LOGE("Failed to init the connection to HAL.");
     return;
   }
