@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <fstream>
 #include <memory>
+#include <optional>
 
 #include "chre/platform/shared/bt_snoop_log.h"
 
@@ -32,8 +33,12 @@ class BtSnoopLogParser {
    * Add a BT event to the snoop log file.
    *
    * @param buffer Pointer to the buffer that contains the BT snoop log.
+   * @param maxLogMessageLen The max size allowed for the bt snoop log payload.
+   * @return Size of the bt snoop log payload, std::nullopt if the message
+   * format is invalid. Note that the size includes the 2 bytes header that
+   * includes the bt packet direction and size.
    */
-  size_t log(const char *buffer);
+  std::optional<size_t> log(const char *buffer, size_t maxLogMessageLen);
 
  private:
   enum class PacketType : uint8_t {

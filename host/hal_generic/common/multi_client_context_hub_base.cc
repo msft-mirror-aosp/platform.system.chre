@@ -35,6 +35,7 @@ namespace android::hardware::contexthub::common::implementation {
 using ::android::base::WriteStringToFd;
 using ::android::chre::FragmentedLoadTransaction;
 using ::android::chre::getStringFromByteVector;
+using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
 using ::android::chre::flags::reliable_message_implementation;
 using ::ndk::ScopedAStatus;
 namespace fbs = ::chre::fbs;
@@ -210,17 +211,26 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
           pid, std::move(transaction))) {
     return fromResult(false);
   }
-  auto clientId = mHalClientManager->getClientId(pid);
-  auto request = mHalClientManager->getNextFragmentedLoadRequest();
-  if (request.has_value() &&
-      sendFragmentedLoadRequest(clientId, request.value())) {
-    return ScopedAStatus::ok();
+
+  HalClientId clientId = mHalClientManager->getClientId(pid);
+  std::optional<chre::FragmentedLoadRequest> request =
+      mHalClientManager->getNextFragmentedLoadRequest();
+  if (!request.has_value()) {
+    return fromResult(false);
   }
 
+  if (sendFragmentedLoadRequest(clientId, request.value())) {
+    return ScopedAStatus::ok();
+  }
   LOGE("Failed to send the first load request for nanoapp 0x%" PRIx64,
        appBinary.nanoappId);
   mHalClientManager->resetPendingLoadTransaction();
   mLogger.onNanoappLoadFailed(appBinary.nanoappId);
+  if (mMetricsReporter != nullptr) {
+    mMetricsReporter->logNanoappLoadFailed(
+        appBinary.nanoappId, ChreHalNanoappLoadFailed::Type::TYPE_DYNAMIC,
+        ChreHalNanoappLoadFailed::Reason::REASON_CONNECTION_ERROR);
+  }
   return fromResult(false);
 }
 
@@ -769,8 +779,9 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
   }
 
   bool success = response.success;
+  auto failureReason = ChreHalNanoappLoadFailed::Reason::REASON_ERROR_GENERIC;
   if (response.success) {
-    auto nextFragmentedRequest =
+    std::optional<chre::FragmentedLoadRequest> nextFragmentedRequest =
         mHalClientManager->getNextFragmentedLoadRequest();
     if (nextFragmentedRequest.has_value()) {
       // nextFragmentedRequest will only have a value if the pending transaction
@@ -783,23 +794,28 @@ void MultiClientContextHubBase::onNanoappLoadResponse(
       if (sendFragmentedLoadRequest(clientId, nextFragmentedRequest.value())) {
         return;
       }
+      failureReason = ChreHalNanoappLoadFailed::Reason::REASON_CONNECTION_ERROR;
       success = false;
     }
   }
+
+  // At this moment the current pending transaction should either have no more
+  // fragment to send or the response indicates its last nanoapp fragment fails
+  // to get loaded.
   if (!success) {
     LOGE("Loading nanoapp fragment for client %" PRIu16 " transaction %" PRIu32
          " fragment %" PRIu32 " failed",
          clientId, response.transaction_id, response.fragment_id);
     mHalClientManager->resetPendingLoadTransaction();
     mLogger.onNanoappLoadFailed(nanoappInfo->appId);
+    if (mMetricsReporter != nullptr) {
+      mMetricsReporter->logNanoappLoadFailed(
+          nanoappInfo->appId, ChreHalNanoappLoadFailed::Type::TYPE_DYNAMIC,
+          failureReason);
+    }
   }
-
   mEventLogger.logNanoappLoad(nanoappInfo->appId, nanoappInfo->appSize,
                               nanoappInfo->appVersion, success);
-
-  // At this moment the current pending transaction should either have no more
-  // fragment to send or the response indicates its last nanoapp fragment fails
-  // to get loaded.
   if (auto callback = mHalClientManager->getCallback(clientId);
       callback != nullptr) {
     callback->handleTransactionResult(response.transaction_id,
@@ -863,8 +879,8 @@ void MultiClientContextHubBase::onNanoappMessage(
     callback->handleContextHubMessage(outMessage, messageContentPerms);
   }
 
-  if (isMetricEnabled() && message.woke_host) {
-    mMetricsReporter.logApWakeupOccurred(message.app_id);
+  if (mMetricsReporter != nullptr && message.woke_host) {
+    mMetricsReporter->logApWakeupOccurred(message.app_id);
   }
 }
 
@@ -982,7 +998,7 @@ void MultiClientContextHubBase::handleLogMessageV2(
 
 void MultiClientContextHubBase::onMetricLog(
     const ::chre::fbs::MetricLogT &metricMessage) {
-  if (!isMetricEnabled()) {
+  if (mMetricsReporter == nullptr) {
     return;
   }
 
@@ -999,7 +1015,7 @@ void MultiClientContextHubBase::onMetricLog(
       }
       auto pal = static_cast<ChrePalOpenFailed::ChrePalType>(metric.pal());
       auto type = static_cast<ChrePalOpenFailed::Type>(metric.type());
-      if (!mMetricsReporter.logPalOpenFailed(pal, type)) {
+      if (!mMetricsReporter->logPalOpenFailed(pal, type)) {
         LOGE("Could not log the PAL open failed metric");
       }
       return;
@@ -1009,7 +1025,7 @@ void MultiClientContextHubBase::onMetricLog(
       if (!metric.ParseFromArray(encodedMetric.data(), metricSize)) {
         break;
       }
-      if (!mMetricsReporter.logEventQueueSnapshotReported(
+      if (!mMetricsReporter->logEventQueueSnapshotReported(
               metric.snapshot_chre_get_time_ms(), metric.max_event_queue_size(),
               metric.mean_event_queue_size(), metric.num_dropped_events())) {
         LOGE("Could not log the event queue snapshot metric");

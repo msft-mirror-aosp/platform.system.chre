@@ -230,9 +230,13 @@ class HalClientManager {
    * Gets the next FragmentedLoadRequest from PendingLoadTransaction if it's
    * available.
    *
+   * This function assumes mPendingLoadTransaction has a valid value. So either
+   * registerPendingLoadTransaction or getNanoappInfoFromPendingLoadTransaction
+   * should be called to make sure this precondition is satisfied before calling
+   * this function.
+   *
    * @return an optional FragmentedLoadRequest, std::nullopt if unavailable.
    */
-
   std::optional<chre::FragmentedLoadRequest> getNextFragmentedLoadRequest();
 
   /**

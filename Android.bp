@@ -531,7 +531,9 @@ cc_test_host {
         "pw_detokenizer",
     ],
     shared_libs: [
+        "android.frameworks.stats-V2-ndk",
         "android.hardware.contexthub-V3-ndk",
+        "chre_atoms_log",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -578,6 +580,7 @@ genrule {
 cc_library {
     name: "chre_atoms_log",
     vendor: true,
+    host_supported: true,
     generated_headers: ["chre_atoms_log.h"],
     export_generated_headers: ["chre_atoms_log.h"],
 }
@@ -715,6 +718,7 @@ cc_test_host {
     ],
     header_libs: [
         "chre_flatbuffers",
+        "libbase_headers",
     ],
     static_libs: [
         "chre_linux",
@@ -845,6 +849,9 @@ cc_test_host {
         "rpc_test_proto_header",
         "rpc_test_rpc_header",
     ],
+    header_libs: [
+        "libbase_headers",
+    ],
     local_include_dirs: [
         "platform/shared",
         "test/simulation/inc",
@@ -956,6 +963,7 @@ cc_library_static {
     header_libs: [
         "chre_api",
         "chre_flatbuffers",
+        "libbase_headers",
     ],
     defaults: [
         "chre_linux_cflags",

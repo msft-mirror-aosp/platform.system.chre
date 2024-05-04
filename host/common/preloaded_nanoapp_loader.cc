@@ -31,8 +31,9 @@ namespace {
 /** Timeout value of waiting for the response of a loading fragment. */
 constexpr auto kTimeoutInMs = std::chrono::milliseconds(2000);
 
-using android::chre::readFileContents;
-using android::hardware::contexthub::common::implementation::kHalId;
+using ::android::chre::readFileContents;
+using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
+using ::android::hardware::contexthub::common::implementation::kHalId;
 
 bool getNanoappHeaderFromFile(const char *headerFileName,
                               std::vector<uint8_t> &headerBuffer) {
@@ -109,7 +110,7 @@ int PreloadedNanoappLoader::loadPreloadedNanoapps(
       continue;
     }
     // load the binary
-    if (loadNanoapp(header, nanoappFilename, i)) {
+    if (loadNanoapp(header, nanoappFilename, /* transactionId= */ i)) {
       numOfNanoappsLoaded++;
     } else {
       LOGE("Failed to load nanoapp 0x%" PRIx64 " in preloaded nanoapp loader",
@@ -168,25 +169,32 @@ bool PreloadedNanoappLoader::sendFragmentedLoadAndWaitForEachResponse(
 
 bool PreloadedNanoappLoader::waitAndVerifyFuture(
     std::future<bool> &future, const FragmentedLoadRequest &request) {
+  bool success = false;
+  auto failureReason =
+      ChreHalNanoappLoadFailed::Reason::REASON_CONNECTION_ERROR;
   if (!future.valid()) {
     LOGE("Failed to send out the fragmented load fragment");
-    return false;
-  }
-  if (future.wait_for(kTimeoutInMs) != std::future_status::ready) {
+  } else if (future.wait_for(kTimeoutInMs) != std::future_status::ready) {
     LOGE(
         "Waiting for response of fragment %zu transaction %d times out "
         "after %lld ms",
         request.fragmentId, request.transactionId, kTimeoutInMs.count());
-    return false;
-  }
-  if (!future.get()) {
+  } else if (!future.get()) {
     LOGE(
         "Received a failure result for loading fragment %zu of "
         "transaction %d",
         request.fragmentId, request.transactionId);
-    return false;
+    failureReason = ChreHalNanoappLoadFailed::Reason::REASON_ERROR_GENERIC;
+  } else {
+    success = true;
   }
-  return true;
+
+  if (!success && mMetricsReporter != nullptr) {
+    mMetricsReporter->logNanoappLoadFailed(
+        request.appId, ChreHalNanoappLoadFailed::Type::TYPE_PRELOADED,
+        failureReason);
+  }
+  return success;
 }
 
 bool PreloadedNanoappLoader::verifyFragmentLoadResponse(
@@ -194,7 +202,6 @@ bool PreloadedNanoappLoader::verifyFragmentLoadResponse(
   if (!response.success) {
     LOGE("Loading nanoapp binary fragment %d of transaction %u failed.",
          response.fragment_id, response.transaction_id);
-    // TODO(b/247124878): Report metrics.
     return false;
   }
   if (mPreloadedNanoappPendingTransaction.fragmentId != response.fragment_id) {

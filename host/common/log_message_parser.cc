@@ -18,6 +18,7 @@
 
 #include <endian.h>
 #include <string.h>
+#include <optional>
 
 #include "chre/util/macros.h"
 #include "chre/util/time.h"
@@ -32,6 +33,7 @@
 
 using chre::kOneMillisecondInNanoseconds;
 using chre::kOneSecondInMilliseconds;
+using chre::fbs::LogType;
 
 namespace android {
 namespace chre {
@@ -45,6 +47,9 @@ constexpr bool kVerboseLoggingEnabled = false;
 
 //! Offset in bytes between the address and real start of a nanoapp binary.
 constexpr size_t kImageHeaderSize = 0x1000;
+//! The number of bytes in a string log entry in addition to the log payload.
+//! The value indicate the size of the null terminator.
+constexpr size_t kStringLogOverhead = 1;
 //! The number of bytes in a tokenized log entry in addition to the log payload.
 //! The value indicate the size of the uint8_t logSize field.
 constexpr size_t kSystemTokenizedLogOffset = 1;
@@ -150,24 +155,6 @@ uint8_t LogMessageParser::getLogLevelFromMetadata(uint8_t metadata) {
   return metadata & 0xf;
 }
 
-bool LogMessageParser::isLogMessageEncoded(uint8_t metadata) {
-  // The upper nibble of the metadata denotes the encoding, as indicated
-  // by the schema in host_messages.fbs.
-  return (metadata & 0x10) != 0;
-}
-
-bool LogMessageParser::isBtSnoopLogMessage(uint8_t metadata) {
-  // The upper nibble of the metadata denotes the encoding, as indicated
-  // by the schema in host_messages.fbs.
-  return (metadata & 0x20) != 0;
-}
-
-bool LogMessageParser::isNanoappTokenizedLogMessage(uint8_t metadata) {
-  // The upper nibble of the metadata denotes the encoding, as indicated
-  // by the schema in host_messages.fbs.
-  return ((metadata & 0x20) != 0) && ((metadata & 0x10) != 0);
-}
-
 void LogMessageParser::log(const uint8_t *logBuffer, size_t logBufferSize) {
   size_t bufferIndex = 0;
   while (bufferIndex < logBufferSize) {
@@ -182,19 +169,21 @@ void LogMessageParser::log(const uint8_t *logBuffer, size_t logBufferSize) {
   }
 }
 
-size_t LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
-    const LogMessageV2 *message) {
-  size_t logMessageSize = 0;
+std::optional<size_t>
+LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
+    const LogMessageV2 *message, size_t maxLogMessageLen) {
   auto detokenizer = mSystemDetokenizer.get();
-  if (detokenizer != nullptr) {
-    auto *encodedLog =
-        reinterpret_cast<const EncodedLog *>(message->logMessage);
+  auto *encodedLog = reinterpret_cast<const EncodedLog *>(message->logMessage);
+  size_t logMessageSize = encodedLog->size + kSystemTokenizedLogOffset;
+  if (logMessageSize > maxLogMessageLen) {
+    LOGE("Dropping log due to log message size exceeds the end of log buffer");
+    return std::nullopt;
+  } else if (detokenizer != nullptr) {
     DetokenizedString detokenizedString =
         detokenizer->Detokenize(encodedLog->data, encodedLog->size);
     std::string decodedString = detokenizedString.BestStringWithErrors();
     emitLogMessage(getLogLevelFromMetadata(message->metadata),
                    le32toh(message->timestampMillis), decodedString.c_str());
-    logMessageSize = encodedLog->size + kSystemTokenizedLogOffset;
   } else {
     // TODO(b/327515992): Stop decoding and emitting system log messages if
     // detokenizer is null .
@@ -203,16 +192,22 @@ size_t LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
   return logMessageSize;
 }
 
-size_t LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
-    const LogMessageV2 *message) {
+std::optional<size_t>
+LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
+    const LogMessageV2 *message, size_t maxLogMessageLen) {
   auto *tokenizedLog =
       reinterpret_cast<const NanoappTokenizedLog *>(message->logMessage);
   auto detokenizerIter = mNanoappDetokenizers.find(tokenizedLog->instanceId);
+  size_t logMessageSize = tokenizedLog->size + kNanoappTokenizedLogOffset;
   if (detokenizerIter == mNanoappDetokenizers.end()) {
     LOGE(
         "Unable to find nanoapp log detokenizer associated with instance ID: "
         "%" PRIu16,
         tokenizedLog->instanceId);
+    return std::nullopt;
+  } else if (logMessageSize > maxLogMessageLen) {
+    LOGE("Dropping log due to log message size exceeds the end of log buffer");
+    logMessageSize = maxLogMessageLen;
   } else {
     auto detokenizer = detokenizerIter->second.detokenizer.get();
     DetokenizedString detokenizedString =
@@ -221,12 +216,20 @@ size_t LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
     emitLogMessage(getLogLevelFromMetadata(message->metadata),
                    le32toh(message->timestampMillis), decodedString.c_str());
   }
-  return tokenizedLog->size + kNanoappTokenizedLogOffset;
+  return logMessageSize;
 }
 
-void LogMessageParser::parseAndEmitLogMessage(const LogMessageV2 *message) {
+std::optional<size_t> LogMessageParser::parseAndEmitStringLogMessageAndGetSize(
+    const LogMessageV2 *message, size_t maxLogMessageLen) {
+  maxLogMessageLen = maxLogMessageLen - kStringLogOverhead;
+  size_t logMessageSize = strnlen(message->logMessage, maxLogMessageLen);
+  if (message->logMessage[logMessageSize] != '\0') {
+    LOGE("Dropping string log due to invalid buffer structure");
+    return std::nullopt;
+  }
   emitLogMessage(getLogLevelFromMetadata(message->metadata),
                  le32toh(message->timestampMillis), message->logMessage);
+  return logMessageSize + kStringLogOverhead;
 }
 
 void LogMessageParser::updateAndPrintDroppedLogs(uint32_t numLogsDropped) {
@@ -256,37 +259,47 @@ void LogMessageParser::emitLogMessage(uint8_t level, uint32_t timestampMillis,
 
 void LogMessageParser::logV2(const uint8_t *logBuffer, size_t logBufferSize,
                              uint32_t numLogsDropped) {
-  // Size of the struct with an empty string.
-  constexpr size_t kMinLogMessageV2Size = sizeof(LogMessageV2) + 1;
+  constexpr size_t kLogHeaderSize = sizeof(LogMessageV2);
 
   updateAndPrintDroppedLogs(numLogsDropped);
 
+  std::optional<size_t> logMessageSize = std::nullopt;
   size_t bufferIndex = 0;
-  while (bufferIndex + kMinLogMessageV2Size <= logBufferSize) {
-    auto message =
-        reinterpret_cast<const LogMessageV2 *>(&logBuffer[bufferIndex]);
+  const LogMessageV2 *message = nullptr;
+  size_t maxLogMessageLen = 0;
+  while (bufferIndex + kLogHeaderSize <= logBufferSize) {
+    message = reinterpret_cast<const LogMessageV2 *>(&logBuffer[bufferIndex]);
+    maxLogMessageLen = (logBufferSize - bufferIndex) - kLogHeaderSize;
+    logMessageSize = std::nullopt;
 
-    size_t logMessageSize = 0;
-    if (isNanoappTokenizedLogMessage(message->metadata)) {
-      logMessageSize =
-          parseAndEmitNanoappTokenizedLogMessageAndGetSize(message);
-    } else if (isBtSnoopLogMessage(message->metadata)) {
-      logMessageSize = mBtLogParser.log(message->logMessage);
-    } else if (isLogMessageEncoded(message->metadata)) {
-      logMessageSize = parseAndEmitTokenizedLogMessageAndGetSize(message);
-    } else {
-      size_t maxLogMessageLen =
-          (logBufferSize - bufferIndex) - kMinLogMessageV2Size;
-      size_t logMessageLen = strnlen(message->logMessage, maxLogMessageLen);
-      if (message->logMessage[logMessageLen] != '\0') {
-        LOGE("Dropping log due to invalid buffer structure");
+    switch (extractLogType(message)) {
+      // TODO(b/336467722): Rename the log types in fbs.
+      case LogType::STRING:
+        logMessageSize =
+            parseAndEmitStringLogMessageAndGetSize(message, maxLogMessageLen);
         break;
-      }
-      parseAndEmitLogMessage(message);
-      // Account for the terminating '\0'
-      logMessageSize = logMessageLen + 1;
+      case LogType::TOKENIZED:
+        logMessageSize = parseAndEmitTokenizedLogMessageAndGetSize(
+            message, maxLogMessageLen);
+        break;
+      case LogType::BLUETOOTH:
+        logMessageSize =
+            mBtLogParser.log(message->logMessage, maxLogMessageLen);
+        break;
+      case LogType::NANOAPP_TOKENIZED:
+        logMessageSize = parseAndEmitNanoappTokenizedLogMessageAndGetSize(
+            message, maxLogMessageLen);
+        break;
+      default:
+        LOGE("Unexpected log type 0x%" PRIx8,
+             (message->metadata & kLogTypeMask) >> kLogTypeBitOffset);
+        break;
     }
-    bufferIndex += sizeof(LogMessageV2) + logMessageSize;
+    if (!logMessageSize.has_value()) {
+      LOGE("Log message at offset %zu is corrupted, aborting...", bufferIndex);
+      return;
+    }
+    bufferIndex += kLogHeaderSize + logMessageSize.value();
   }
 }
 
