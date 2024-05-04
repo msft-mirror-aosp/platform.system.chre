@@ -29,6 +29,7 @@
 
 #include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/log_message_parser.h"
+#include "chre_host/metrics_reporter.h"
 #include "chre_host/nanoapp_load_listener.h"
 #include "chre_host/napp_header.h"
 #include "event_logger.h"
@@ -52,10 +53,12 @@ class PreloadedNanoappLoader {
  public:
   explicit PreloadedNanoappLoader(ChreConnection *connection,
                                   EventLogger &eventLogger,
+                                  MetricsReporter *metricsReporter,
                                   std::string configPath,
                                   INanoappLoadListener *nanoappLoadListener)
       : mConnection(connection),
         mEventLogger(eventLogger),
+        mMetricsReporter(metricsReporter),
         mConfigPath(std::move(configPath)),
         mNanoappLoadListener(nanoappLoadListener) {}
 
@@ -123,8 +126,8 @@ class PreloadedNanoappLoader {
       ::android::chre::FragmentedLoadRequest &request);
 
   /** Verifies the future returned by sendFragmentedLoadRequest(). */
-  [[nodiscard]] static bool waitAndVerifyFuture(
-      std::future<bool> &future, const FragmentedLoadRequest &request);
+  [[nodiscard]] bool waitAndVerifyFuture(std::future<bool> &future,
+                                         const FragmentedLoadRequest &request);
 
   /** Verifies the response of a loading request. */
   [[nodiscard]] bool verifyFragmentLoadResponse(
@@ -142,6 +145,7 @@ class PreloadedNanoappLoader {
 
   ChreConnection *mConnection;
   EventLogger &mEventLogger;
+  MetricsReporter *mMetricsReporter;
   std::string mConfigPath;
 
   INanoappLoadListener *mNanoappLoadListener;
