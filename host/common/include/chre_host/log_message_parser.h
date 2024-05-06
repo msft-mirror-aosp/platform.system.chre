@@ -20,14 +20,17 @@
 #include <endian.h>
 #include <cinttypes>
 #include <memory>
+#include <optional>
 #include "chre/util/time.h"
 #include "chre_host/bt_snoop_log_parser.h"
+#include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/nanoapp_load_listener.h"
 
 #include <android/log.h>
 
 #include "pw_tokenizer/detokenize.h"
 
+using chre::fbs::LogType;
 using pw::tokenizer::DetokenizedString;
 using pw::tokenizer::Detokenizer;
 
@@ -110,6 +113,10 @@ class LogMessageParser : public INanoappLoadListener {
  private:
   static constexpr char kHubLogFormatStr[] = "@ %3" PRIu32 ".%03" PRIu32 ": %s";
 
+  // Constants used to extract the log type from log metadata.
+  static constexpr uint8_t kLogTypeMask = 0xF0;
+  static constexpr uint8_t kLogTypeBitOffset = 4;
+
   enum LogLevel : uint8_t {
     ERROR = 1,
     WARNING = 2,
@@ -189,29 +196,35 @@ class LogMessageParser : public INanoappLoadListener {
   void updateAndPrintDroppedLogs(uint32_t numLogsDropped);
 
   //! Method for parsing unencoded (string) log messages.
-  void parseAndEmitLogMessage(const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitStringLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   /**
    * Parses and emits an encoded log message while also returning the size of
    * the parsed message for buffer index bookkeeping.
    *
-   * @return Size of the encoded log message payload. Note that the size
-   * includes the 1 byte header that we use for encoded log messages to track
-   * message size.
+   * @param message Buffer containing the log metadata and log payload.
+   * @param maxLogMessageLen The max size allowed for the log payload.
+   * @return Size of the encoded log message payload, std::nullopt if the
+   * message format is invalid. Note that the size includes the 1 byte header
+   * that we use for encoded log messages to track message size.
    */
-  size_t parseAndEmitTokenizedLogMessageAndGetSize(const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitTokenizedLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   /**
    * Similar to parseAndEmitTokenizedLogMessageAndGetSize, but used for encoded
    * log message from nanoapps.
    *
-   * @return Size of the encoded log message payload. Note that the size
-   * includes the 1 byte header that we use for encoded log messages to track
-   * message size, and the 2 byte instance ID that the host uses to find the
-   * correct detokenizer.
+   * @param message Buffer containing the log metadata and log payload.
+   * @param maxLogMessageLen The max size allowed for the log payload.
+   * @return Size of the encoded log message payload, std::nullopt if the
+   * message format is invalid. Note that the size includes the 1 byte header
+   * that we use for encoded log messages to track message size, and the 2 byte
+   * instance ID that the host uses to find the correct detokenizer.
    */
-  size_t parseAndEmitNanoappTokenizedLogMessageAndGetSize(
-      const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitNanoappTokenizedLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   void emitLogMessage(uint8_t level, uint32_t timestampMillis,
                       const char *logMessage);
@@ -283,6 +296,14 @@ class LogMessageParser : public INanoappLoadListener {
    */
   bool checkTokenDatabaseOverflow(uint32_t databaseOffset, size_t databaseSize,
                                   size_t binarySize);
+
+  /*
+   * Helper function that returns the log type of a log message.
+   */
+  LogType extractLogType(const LogMessageV2 *message) {
+    return static_cast<LogType>((message->metadata & kLogTypeMask) >>
+                                kLogTypeBitOffset);
+  }
 };
 
 }  // namespace chre
