@@ -70,7 +70,6 @@ cc_defaults {
         "android.frameworks.stats-V2-ndk",
         "android.hardware.contexthub-V3-ndk",
         "chre_atoms_log",
-        "chre_metrics_reporter",
         "chremetrics-cpp",
         "libbase",
         "libbinder_ndk",
@@ -85,6 +84,7 @@ cc_defaults {
         "chre_client",
         "chre_config_util",
         "chre_flags_c_lib",
+        "chre_metrics_reporter",
         "event_logger",
     ],
 }
