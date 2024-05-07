@@ -26,8 +26,6 @@
 #include "chre/util/optional.h"
 #include "chre/util/time.h"
 
-#include <android-base/thread_annotations.h>
-
 namespace chre {
 
 /**
@@ -278,7 +276,7 @@ class TransactionManager : public NonCopyable {
   Mutex mMutex;
 
   //! The next ID for use when creating a transaction.
-  Optional<uint32_t> mNextTransactionId GUARDED_BY(mMutex);
+  Optional<uint32_t> mNextTransactionId;
 
   //! The retry wait time.
   const Nanoseconds mRetryWaitTime;
@@ -287,12 +285,11 @@ class TransactionManager : public NonCopyable {
   const uint16_t mMaxNumRetries;
 
   //! The timer handle for the timer tracking execution of processTransactions.
-  //! This is not guarded by mMutex because it is only modified in the defer
-  //! callback thread.
+  //! Can only be modified in the defer callback thread.
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
-  ArrayQueue<Transaction, kMaxTransactions> mTransactions GUARDED_BY(mMutex);
+  ArrayQueue<Transaction, kMaxTransactions> mTransactions;
 };
 
 }  // namespace chre

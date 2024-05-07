@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <memory>
 #include <shared_mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -72,6 +73,20 @@ class HalClient {
  public:
   static constexpr int32_t kDefaultContextHubId = 0;
 
+  /** Callback interface for a background connection. */
+  class BackgroundConnectionCallback {
+   public:
+    /**
+     * This function is called when the connection to CHRE HAL is finished.
+     *
+     * @param isConnected indicates whether CHRE HAL is successfully connected.
+     */
+    virtual void onInitialization(bool isConnected) = 0;
+    virtual ~BackgroundConnectionCallback() = default;
+  };
+
+  ~HalClient();
+
   /**
    * Create a HalClient unique pointer used to communicate with CHRE HAL.
    *
@@ -97,6 +112,19 @@ class HalClient {
   bool isConnected() {
     std::lock_guard<std::shared_mutex> lock(mConnectionLock);
     return mContextHub != nullptr;
+  }
+
+  /** Connects to CHRE HAL synchronously. */
+  bool connect() {
+    return initConnection() == HalError::SUCCESS;
+  }
+
+  /** Connects to CHRE HAL in background. */
+  void connectInBackground(BackgroundConnectionCallback &callback) {
+    std::lock_guard<std::mutex> lock(mBackgroundConnectionThreadsLock);
+    mBackgroundConnectionThreads.emplace_back([&]() {
+      callback.onInitialization(initConnection() == HalError::SUCCESS);
+    });
   }
 
   ScopedAStatus queryNanoapps() {
@@ -240,6 +268,10 @@ class HalClient {
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
 
   std::shared_ptr<HalClientCallback> mCallback;
+
+  // Lock guarding background connection threads.
+  std::mutex mBackgroundConnectionThreadsLock;
+  std::vector<std::thread> mBackgroundConnectionThreads;
 };
 
 }  // namespace android::chre

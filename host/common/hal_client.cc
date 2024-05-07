@@ -64,14 +64,7 @@ std::unique_ptr<HalClient> HalClient::create(
     return nullptr;
   }
 
-  auto halClient =
-      std::unique_ptr<HalClient>(new HalClient(callback, contextHubId));
-  HalError result = halClient->initConnection();
-  if (result != HalError::SUCCESS) {
-    LOGE("Failed to create a hal client. Error code: %" PRIi32, result);
-    return nullptr;
-  }
-  return halClient;
+  return std::unique_ptr<HalClient>(new HalClient(callback, contextHubId));
 }
 
 HalError HalClient::initConnection() {
@@ -112,6 +105,7 @@ HalError HalClient::initConnection() {
   if (version < kMinHalInterfaceVersion) {
     LOGE("HAL interface version is %" PRIi32 ". It must be >= %" PRIi32,
          version, kMinHalInterfaceVersion);
+    mContextHub = nullptr;
     return HalError::VERSION_TOO_LOW;
   }
 
@@ -120,6 +114,10 @@ HalError HalClient::initConnection() {
       mContextHub->registerCallback(kDefaultContextHubId, mCallback);
   if (!status.isOk()) {
     LOGE("Unable to register callback: %s", status.getDescription().c_str());
+    // At this moment it's guaranteed that mCallback is not null and
+    // kDefaultContextHubId is valid. So if the registerCallback() still fails
+    // it's a hard failure and CHRE HAL is treated as disconnected.
+    mContextHub = nullptr;
     return HalError::CALLBACK_REGISTRATION_FAILED;
   }
   LOGI("Successfully connected to HAL");
@@ -212,6 +210,15 @@ void HalClient::tryReconnectEndpoints(HalClient *halClient) {
       halClient->mConnectedEndpoints.erase(endpointId);
     } else {
       LOGI("Reconnected endpoint %" PRIu16 " to CHRE HAL", endpointId);
+    }
+  }
+}
+
+HalClient::~HalClient() {
+  std::lock_guard<std::mutex> lock(mBackgroundConnectionThreadsLock);
+  for (std::thread &thread : mBackgroundConnectionThreads) {
+    if (thread.joinable()) {
+      thread.join();
     }
   }
 }
