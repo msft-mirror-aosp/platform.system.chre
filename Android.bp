@@ -101,7 +101,7 @@ cc_library_static {
     ],
 }
 
-cc_library {
+cc_library_static {
     name: "chre_metrics_reporter",
     export_include_dirs: [
         "host/common/include",
@@ -1022,7 +1022,6 @@ cc_defaults {
         "platform/shared/host_protocol_common.cc",
     ],
     shared_libs: [
-        "chre_metrics_reporter",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -1034,6 +1033,7 @@ cc_defaults {
     static_libs: [
         "chre_config_util",
         "chre_flags_c_lib",
+        "chre_metrics_reporter",
     ],
 }
 
