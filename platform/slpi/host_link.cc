@@ -786,7 +786,7 @@ void HostMessageHandlers::handleNanoappMessage(
 }
 
 void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
 
 void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
   // We generate the response in the context of chre_slpi_get_message_to_host

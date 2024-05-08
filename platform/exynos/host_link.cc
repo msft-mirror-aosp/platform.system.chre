@@ -137,7 +137,7 @@ void HostMessageHandlers::handleNanoappMessage(
 }
 
 void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
 
 void HostMessageHandlers::handleHubInfoRequest(uint16_t /* hostClientId */) {
   // TODO(b/230134803): Implement this.
