@@ -102,8 +102,7 @@ class TransactionManagerTest : public testing::Test {
     const TransactionManagerTest *test = nullptr;
     {
       std::lock_guard<std::mutex> lock(sMapMutex);
-      auto iter = sMap.find(
-          testing::UnitTest::GetInstance()->current_test_info()->name());
+      auto iter = sMap.find(getTestName());
       if (iter == sMap.end()) {
         if (outTimerHandle != nullptr) {
           *outTimerHandle = 0xDEADBEEF;
@@ -132,8 +131,7 @@ class TransactionManagerTest : public testing::Test {
     const TransactionManagerTest *test = nullptr;
     {
       std::lock_guard<std::mutex> lock(sMapMutex);
-      auto iter = sMap.find(
-          testing::UnitTest::GetInstance()->current_test_info()->name());
+      auto iter = sMap.find(getTestName());
       if (iter == sMap.end()) {
         return true;  // Test is ending - no need to cancel defer callback
       }
@@ -143,7 +141,20 @@ class TransactionManagerTest : public testing::Test {
     return test->getTaskManager()->cancelTask(timerHandle);
   }
 
+  static std::string getTestName() {
+    std::string testName;
+    auto instance = testing::UnitTest::GetInstance();
+    if (instance != nullptr) {
+      auto testInfo = instance->current_test_info();
+      if (testInfo != nullptr) {
+        testName = testInfo->name();
+      }
+    }
+    return testName;
+  }
+
   TaskManager *getTaskManager() const {
+    EXPECT_NE(mTaskManager.get(), nullptr);
     return mTaskManager.get();
   }
 
@@ -175,8 +186,9 @@ class TransactionManagerTest : public testing::Test {
   void SetUp() override {
     {
       std::lock_guard<std::mutex> lock(sMapMutex);
-      sMap.insert_or_assign(
-          testing::UnitTest::GetInstance()->current_test_info()->name(), this);
+      std::string testName = getTestName();
+      ASSERT_FALSE(testName.empty());
+      sMap.insert_or_assign(testName, this);
     }
 
     mTransactionManager = getTransactionManager(/* doFaultyStart= */ false);
@@ -192,7 +204,9 @@ class TransactionManagerTest : public testing::Test {
   void TearDown() override {
     {
       std::lock_guard<std::mutex> lock(sMapMutex);
-      sMap.erase(testing::UnitTest::GetInstance()->current_test_info()->name());
+      std::string testName = getTestName();
+      ASSERT_FALSE(testName.empty());
+      sMap.erase(testName);
     }
 
     mTaskManager.reset();
