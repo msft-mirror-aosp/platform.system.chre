@@ -699,7 +699,7 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
 }
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
     uint16_t hostClientId) {
