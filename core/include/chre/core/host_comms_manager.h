@@ -88,7 +88,7 @@ struct HostMessage : public NonCopyable {
   //! Source/destination nanoapp ID
   uint64_t appId;
 
-  //! Used. to report reliable message status back to the sender.
+  //! Used to report reliable message status back to the sender.
   uint32_t messageSequenceNumber;
 
   //! Application-defined message data
