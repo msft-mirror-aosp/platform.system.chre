@@ -534,13 +534,13 @@ void changeSetting(const std::string &setting, bool enabled) {
 }
 
 void enableTestModeOnContextHub() {
-  auto status = getContextHub()->setTestMode(true);
+  auto status = getContextHub()->setTestMode(/* enable= */ true);
   verifyStatus(/* operation= */ "enabling test mode", status);
   std::cout << "Test mode is enabled" << std::endl;
 }
 
 void disableTestModeOnContextHub() {
-  auto status = getContextHub()->setTestMode(false);
+  auto status = getContextHub()->setTestMode(/* enable= */false);
   verifyStatus(/* operation= */ "disabling test mode", status);
   std::cout << "Test mode is disabled" << std::endl;
 }
