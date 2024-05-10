@@ -23,7 +23,7 @@
 #include <thread>
 
 #include "chre/core/event_loop_manager.h"
-#include "chre/core/host_notifications.h"
+#include "chre/core/host_endpoint_manager.h"
 #include "chre/platform/log.h"
 #include "chre_api/chre/event.h"
 #include "test_event_queue.h"
@@ -36,6 +36,11 @@ namespace {
 //! The host endpoint ID to use for this test.
 constexpr uint16_t kHostEndpointId = 123;
 
+//! Helper function to get Host Endpoint Manager from Event Loop Manager
+HostEndpointManager &getHostEndpointManager() {
+  return EventLoopManagerSingleton::get()->getHostEndpointManager();
+}
+
 /**
  * Verifies basic functionality of chreConfigureHostEndpointNotifications.
  */
@@ -47,31 +52,31 @@ TEST_F(TestBase, HostEndpointDisconnectedTest) {
     uint16_t endpointId;
   };
 
-  struct App : public TestNanoapp {
-    void (*handleEvent)(uint32_t, uint16_t, const void *) =
-        [](uint32_t, uint16_t eventType, const void *eventData) {
-          switch (eventType) {
-            case CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION: {
-              auto notification =
-                  *(struct chreHostEndpointNotification *)eventData;
-              TestEventQueueSingleton::get()->pushEvent(
-                  CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION, notification);
-            } break;
+  class App : public TestNanoapp {
+   public:
+    void handleEvent(uint32_t, uint16_t eventType,
+                     const void *eventData) override {
+      switch (eventType) {
+        case CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION: {
+          auto notification = *(struct chreHostEndpointNotification *)eventData;
+          TestEventQueueSingleton::get()->pushEvent(
+              CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION, notification);
+        } break;
 
-            case CHRE_EVENT_TEST_EVENT: {
-              auto event = static_cast<const TestEvent *>(eventData);
-              switch (event->type) {
-                case SETUP_NOTIFICATION: {
-                  auto config = static_cast<const Config *>(event->data);
-                  const bool success = chreConfigureHostEndpointNotifications(
-                      config->endpointId, config->enable);
-                  TestEventQueueSingleton::get()->pushEvent(SETUP_NOTIFICATION,
-                                                            success);
-                }
-              }
+        case CHRE_EVENT_TEST_EVENT: {
+          auto event = static_cast<const TestEvent *>(eventData);
+          switch (event->type) {
+            case SETUP_NOTIFICATION: {
+              auto config = static_cast<const Config *>(event->data);
+              const bool success = chreConfigureHostEndpointNotifications(
+                  config->endpointId, config->enable);
+              TestEventQueueSingleton::get()->pushEvent(SETUP_NOTIFICATION,
+                                                        success);
             }
           }
-        };
+        }
+      }
+    }
   };
 
   struct chreHostEndpointInfo info;
@@ -81,18 +86,20 @@ TEST_F(TestBase, HostEndpointDisconnectedTest) {
   strcpy(&info.endpointName[0], "Test endpoint name");
   info.isTagValid = true;
   strcpy(&info.endpointTag[0], "Test tag");
-  postHostEndpointConnected(info);
+  getHostEndpointManager().postHostEndpointConnected(info);
 
-  auto app = loadNanoapp<App>();
+  uint64_t appId = loadNanoapp(MakeUnique<App>());
+
   Config config = {.enable = true, .endpointId = kHostEndpointId};
 
-  sendEventToNanoapp(app, SETUP_NOTIFICATION, config);
+  sendEventToNanoapp(appId, SETUP_NOTIFICATION, config);
   bool success;
   waitForEvent(SETUP_NOTIFICATION, &success);
   EXPECT_TRUE(success);
 
   struct chreHostEndpointInfo retrievedInfo;
-  ASSERT_TRUE(getHostEndpointInfo(kHostEndpointId, &retrievedInfo));
+  ASSERT_TRUE(getHostEndpointManager().getHostEndpointInfo(kHostEndpointId,
+                                                           &retrievedInfo));
   ASSERT_EQ(retrievedInfo.hostEndpointId, info.hostEndpointId);
   ASSERT_EQ(retrievedInfo.hostEndpointType, info.hostEndpointType);
   ASSERT_EQ(retrievedInfo.isNameValid, info.isNameValid);
@@ -101,8 +108,7 @@ TEST_F(TestBase, HostEndpointDisconnectedTest) {
   ASSERT_EQ(strcmp(&retrievedInfo.endpointTag[0], &info.endpointTag[0]), 0);
 
   struct chreHostEndpointNotification notification;
-
-  postHostEndpointDisconnected(kHostEndpointId);
+  getHostEndpointManager().postHostEndpointDisconnected(kHostEndpointId);
   waitForEvent(CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION, &notification);
 
   ASSERT_EQ(notification.hostEndpointId, kHostEndpointId);
@@ -110,12 +116,15 @@ TEST_F(TestBase, HostEndpointDisconnectedTest) {
             HOST_ENDPOINT_NOTIFICATION_TYPE_DISCONNECT);
   ASSERT_EQ(notification.reserved, 0);
 
-  ASSERT_FALSE(getHostEndpointInfo(kHostEndpointId, &retrievedInfo));
+  ASSERT_FALSE(EventLoopManagerSingleton::get()
+                   ->getHostEndpointManager()
+                   .getHostEndpointInfo(kHostEndpointId, &retrievedInfo));
 }
 
 TEST_F(TestBase, HostEndpointNotRegisteredTest) {
   struct chreHostEndpointInfo retrievedInfo;
-  ASSERT_FALSE(getHostEndpointInfo(kHostEndpointId, &retrievedInfo));
+  ASSERT_FALSE(getHostEndpointManager().getHostEndpointInfo(kHostEndpointId,
+                                                            &retrievedInfo));
 }
 
 TEST_F(TestBase, HostEndpointDisconnectedTwiceTest) {
@@ -124,11 +133,11 @@ TEST_F(TestBase, HostEndpointDisconnectedTwiceTest) {
   info.hostEndpointType = CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK;
   info.isNameValid = false;
   info.isTagValid = false;
-  postHostEndpointConnected(info);
+  getHostEndpointManager().postHostEndpointConnected(info);
 
-  postHostEndpointDisconnected(kHostEndpointId);
+  getHostEndpointManager().postHostEndpointDisconnected(kHostEndpointId);
   // The second invocation should be a silent no-op.
-  postHostEndpointDisconnected(kHostEndpointId);
+  getHostEndpointManager().postHostEndpointDisconnected(kHostEndpointId);
 }
 
 }  // anonymous namespace

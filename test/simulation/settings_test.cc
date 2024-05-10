@@ -35,8 +35,8 @@ namespace chre {
 
 namespace {
 
-int8_t gExpectedLocationSettingState = CHRE_USER_SETTING_STATE_DISABLED;
-int8_t gExpectedWifiSettingState = CHRE_USER_SETTING_STATE_DISABLED;
+int8_t gExpectedLocationSettingState;
+int8_t gExpectedWifiSettingState;
 
 bool start() {
   bool success = chreGnssLocationSessionStartAsync(50, 50, nullptr);
@@ -120,6 +120,9 @@ void startTestNanoapp() {
   constexpr uint32_t kAppPerms =
       NanoappPermissions::CHRE_PERMS_GNSS | NanoappPermissions::CHRE_PERMS_WIFI;
 
+  gExpectedLocationSettingState = CHRE_USER_SETTING_STATE_DISABLED;
+  gExpectedWifiSettingState = CHRE_USER_SETTING_STATE_DISABLED;
+
   UniquePtr<Nanoapp> nanoapp = createStaticNanoapp(
       "Test nanoapp", kAppId, kAppVersion, kAppPerms, start, handleEvent, end);
   EventLoopManagerSingleton::get()->deferCallback(
@@ -189,9 +192,9 @@ TEST_F(TestBase, WifiSettingsTest) {
   waitForEvent(CHRE_EVENT_WIFI_NAN_SESSION_TERMINATED);
   waitForEvent(CHRE_EVENT_SETTING_CHANGED_WIFI_AVAILABLE);
 
+  gExpectedWifiSettingState = CHRE_USER_SETTING_STATE_ENABLED;
   EventLoopManagerSingleton::get()->getSettingManager().postSettingChange(
       Setting::WIFI_AVAILABLE, true /* enabled */);
-  gExpectedWifiSettingState = CHRE_USER_SETTING_STATE_ENABLED;
   waitForEvent(CHRE_EVENT_SETTING_CHANGED_WIFI_AVAILABLE);
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   ASSERT_TRUE(

@@ -41,9 +41,30 @@ extern "C" {
 #define CHRE_PAL_BLE_API_V1_6 CHRE_PAL_CREATE_API_VERSION(1, 6)
 
 /**
+ * Introduced alongside CHRE API v1.8, adds readRssi() API.
+ */
+#define CHRE_PAL_BLE_API_V1_8 CHRE_PAL_CREATE_API_VERSION(1, 8)
+
+/**
+ * Introduced alongside CHRE API v1.8, adds flush() API.
+ */
+#define CHRE_PAL_BLE_API_V1_9 CHRE_PAL_CREATE_API_VERSION(1, 9)
+
+/**
+ * Introduced alongside CHRE API v1.9, add broadcaster address filter.
+ */
+#define CHRE_PAL_BLE_API_V1_10 CHRE_PAL_CREATE_API_VERSION(1, 10)
+
+/**
  * The version of the CHRE BLE PAL defined in this header file.
  */
-#define CHRE_PAL_BLE_API_CURRENT_VERSION CHRE_PAL_BLE_API_V1_6
+#define CHRE_PAL_BLE_API_CURRENT_VERSION CHRE_PAL_BLE_API_V1_10
+
+/**
+ * The maximum amount of time allowed to elapse between the call to
+ * readRssi() and when the readRssiCallback() is invoked.
+ */
+#define CHRE_PAL_BLE_READ_RSSI_COMPLETE_TIMEOUT_NS (2 * CHRE_NSEC_PER_SEC)
 
 struct chrePalBleCallbacks {
   /**
@@ -94,6 +115,45 @@ struct chrePalBleCallbacks {
    * @see releaseAdvertisingEvent
    */
   void (*advertisingEventCallback)(struct chreBleAdvertisementEvent *event);
+
+  /**
+   * Callback used to pass completed BLE readRssi events up to CHRE, which hands
+   * it back to the (single) requesting client.
+   *
+   * @param errorCode An error code from enum chreError, with CHRE_ERROR_NONE
+   *        indicating a successful response.
+   * @param handle Connection handle upon which the RSSI was read.
+   * @param rssi The RSSI of the latest packet read upon this connection
+   *        (-128 to 20).
+   *
+   * @see chrePalBleApi.readRssi
+   *
+   * @since v1.8
+   */
+  void (*readRssiCallback)(uint8_t errorCode, uint16_t handle, int8_t rssi);
+
+  /**
+   * Callback used to inform CHRE of a completed flush event.
+   *
+   * @param errorCode An error code from enum chreError, with CHRE_ERROR_NONE
+   *        indicating a successful response.
+   *
+   * @see chrePalBleApi.flush
+   *
+   * @since v1.9
+   */
+  void (*flushCallback)(uint8_t errorCode);
+
+  /**
+   * Sends a BT snoop log to the CHRE daemon.
+   *
+   * @param isTxToBtController True if the direction of the BT snoop log is Tx
+   * to BT controller. False then RX from BT controller is assumed.
+   * @param buffer a byte buffer containing the encoded log message.
+   * @param size size of the bt log message buffer.
+   */
+  void (*handleBtSnoopLog)(bool isTxToBtController, const uint8_t *buffer,
+                           size_t size);
 };
 
 struct chrePalBleApi {
@@ -164,7 +224,7 @@ struct chrePalBleApi {
    * @see chreBleStartScanAsync()
    */
   bool (*startScan)(enum chreBleScanMode mode, uint32_t reportDelayMs,
-                    const struct chreBleScanFilter *filter);
+                    const struct chreBleScanFilterV1_9 *filter);
   /**
    * Stops Bluetooth LE (BLE) scanning.
    *
@@ -177,7 +237,7 @@ struct chrePalBleApi {
    *
    * @see chreBleStopScanAsync()
    */
-  bool (*stopScan)();
+  bool (*stopScan)(void);
 
   /**
    * Invoked when the core CHRE system no longer needs a BLE advertising event
@@ -186,6 +246,36 @@ struct chrePalBleApi {
    * @param event Event data to release
    */
   void (*releaseAdvertisingEvent)(struct chreBleAdvertisementEvent *event);
+
+  /**
+   * Reads the RSSI on a given LE-ACL connection handle.
+   *
+   * Only one call to this method may be outstanding until the
+   * readRssiCallback() is invoked. The readRssiCallback() is guaranteed to be
+   * invoked exactly one within CHRE_PAL_BLE_READ_RSSI_COMPLETE_TIMEOUT_NS of
+   * readRssi() being invoked.
+   *
+   * @param connectionHandle The LE-ACL handle upon which the RSSI is to be
+   * read.
+   *
+   * @return true if the request was accepted, in which case a subsequent call
+   *         to readRssiCallback() will be used to indicate the result of the
+   *         operation.
+   *
+   * @since v1.8
+   */
+  bool (*readRssi)(uint16_t connectionHandle);
+
+  /**
+   * Initiates a flush operation where all batched advertisement events will be
+   * immediately processed.
+   *
+   * @return true if the request was accepted, in which case a subsequent call
+   * to flushCallback() will be used to indicate the result of the operation.
+   *
+   * @since v1.9
+   */
+  bool (*flush)();
 };
 
 /**

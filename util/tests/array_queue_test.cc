@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2016 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "chre/util/array_queue.h"
 #include "gtest/gtest.h"
 
@@ -87,6 +103,15 @@ TEST(ArrayQueueTest, SimplePushPopBackPush) {
   EXPECT_EQ(5, q[0]);
   EXPECT_EQ(6, q[1]);
   EXPECT_EQ(7, q[2]);
+
+  q.pop_back();
+
+  EXPECT_EQ(5, q[0]);
+  EXPECT_EQ(6, q[1]);
+
+  q.pop();
+
+  EXPECT_EQ(6, q[0]);
 }
 
 TEST(ArrayQueueTest, TestSize) {
@@ -176,12 +201,19 @@ TEST(ArrayQueueTest, TestFront) {
 TEST(ArrayQueueTest, TestBack) {
   ArrayQueue<int, 3> q;
   q.push(1);
-  EXPECT_EQ(1, q.back());
-  q.pop();
+  EXPECT_EQ(1, q.back());  // 1 x x
   q.push(2);
-  EXPECT_EQ(2, q.back());
+  EXPECT_EQ(2, q.back());  // 1 2 x
+  q.pop();
+  EXPECT_EQ(2, q.back());  // x 2 x
   q.push(3);
-  EXPECT_EQ(3, q.back());
+  EXPECT_EQ(3, q.back());  // x 2 3
+  q.push(4);
+  EXPECT_EQ(4, q.back());  // 4 2 3 (forward wrap-around)
+  q.pop_back();
+  EXPECT_EQ(3, q.back());  // x 2 3 (backwards wrap-around)
+  q.pop();
+  EXPECT_EQ(3, q.back());  // x x 3
 }
 
 TEST(ArrayQueueDeathTest, InvalidSubscript) {
@@ -251,15 +283,9 @@ TEST(ArrayQueueTest, ElementsDestructedWhenQueueDestructed) {
       q.push(e);
       q[i].setValue(i);
     }
-
-    q.~ArrayQueue();
-
-    for (size_t i = 0; i < 3; ++i) {
-      EXPECT_EQ(1, destructor_count[i]);
-    }
   }
 
-  // Check destructor count.
+  // q should now be destroyed - check destructor count.
   for (size_t i = 0; i < 3; ++i) {
     EXPECT_EQ(1, destructor_count[i]);
   }

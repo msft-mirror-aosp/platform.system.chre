@@ -99,12 +99,28 @@ class HostProtocolHost : public ::chre::HostProtocolCommon {
                                     IChreMessageHandlers &handlers);
 
   /**
+   * Encodes a message requesting pulse from CHRE
+   *
+   * @param builder A newly constructed FlatBufferBuilder that will be used to
+   *        construct the message
+   */
+  static void encodePulseRequest(flatbuffers::FlatBufferBuilder &builder);
+
+  /**
    * Encodes a message requesting hub information from CHRE
    *
    * @param builder A newly constructed FlatBufferBuilder that will be used to
    *        construct the message
    */
   static void encodeHubInfoRequest(flatbuffers::FlatBufferBuilder &builder);
+
+  /**
+   * Encodes a message sending boot debug configuration to CHRE
+   *
+   * @param builder A newly constructed FlatBufferBuilder that will be used to
+   *        construct the message
+   */
+  static void encodeDebugConfiguration(flatbuffers::FlatBufferBuilder &builder);
 
   /**
    * Encodes a message requesting to load a nanoapp specified by the included

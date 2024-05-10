@@ -20,12 +20,12 @@
 #include <cinttypes>
 #include <cstdint>
 
-#include <chre.h>
 #include <pb_common.h>
 #include <pb_decode.h>
 #include <pb_encode.h>
 
 #include "chre/util/singleton.h"
+#include "chre_api/chre.h"
 
 #include "chre_cross_validation_wifi.nanopb.h"
 #include "chre_test_common.nanopb.h"
@@ -84,22 +84,6 @@ class Manager {
   bool mChreDataCollectionDone = false;
 
   /**
-   * This is the fraction of the number of results in the greater set of
-   * scan results between the AP and CHRE that the lesser set can differ by.
-   * Increasing this value will increase the relative amount that AP and CHRE
-   * results sizes can differ by.
-   *
-   * Ex: AP_results_size = 8
-   *     CHRE_results_size = 7
-   *     kMaxDiffNumResultsFraction = 0.25
-   *
-   *     CHRE_results_size is valid because it is >= 8 - 8 * 0.25 = 6
-   */
-  // TODO(b/185026344): Perfect this number. Consider using an abolute
-  // difference instead of a percentage difference also.
-  static constexpr float kMaxDiffNumResultsFraction = 0.25f;
-
-  /**
    * Handle a message from the host.
    * @param senderInstanceId The instance id of the sender.
    * @param data The message from the host's data.
@@ -133,15 +117,6 @@ class Manager {
   chre_cross_validation_wifi_WifiCapabilities makeWifiCapabilitiesMessage(
       uint32_t capabilitiesFromChre);
 
-  /**
-   * Encode the proto message and send to host.
-   *
-   * @param message The proto message struct pointer.
-   * @param fields The fields descriptor of the proto message to encode.
-   * @param messageType The message type of the message.
-   */
-  void encodeAndSendMessageToHost(const void *message, const pb_field_t *fields,
-                                  uint32_t messageType);
   /**
    * Handle a wifi scan result data message sent from AP.
    *

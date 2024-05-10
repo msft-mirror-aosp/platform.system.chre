@@ -24,6 +24,7 @@
 #include "chre/platform/fatal_error.h"
 #include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/debug_dump.h"
+#include "chre/util/system/event_callbacks.h"
 
 namespace chre {
 
@@ -309,10 +310,9 @@ void GnssSession::handleReportEvent(void *event) {
   };
 
   SystemCallbackType type;
-  if (!getCallbackType(kReportEventType, &type)) {
+  if (!getCallbackType(kReportEventType, &type) ||
+      !EventLoopManagerSingleton::get()->deferCallback(type, event, callback)) {
     freeReportEventCallback(kReportEventType, event);
-  } else {
-    EventLoopManagerSingleton::get()->deferCallback(type, event, callback);
   }
 }
 
@@ -613,8 +613,6 @@ void GnssSession::postAsyncResultEventFatal(uint16_t instanceId, bool success,
 void GnssSession::handleStatusChangeSync(bool enabled, uint8_t errorCode) {
   bool success = (errorCode == CHRE_ERROR_NONE);
 
-  CHRE_ASSERT_LOG(asyncResponsePending(),
-                  "handleStatusChangeSync called with no transitions");
   if (mInternalRequestPending) {
     // Silently handle internal requests from CHRE, since they are not pushed
     // to the mStateTransitions queue.
@@ -635,6 +633,10 @@ void GnssSession::handleStatusChangeSync(bool enabled, uint8_t errorCode) {
         stateTransition.nanoappInstanceId, success, stateTransition.enable,
         stateTransition.minInterval, errorCode, stateTransition.cookie);
     mStateTransitions.pop();
+  } else {
+    // TODO(b/296222493): change this back to an assert once issue resolved
+    LOGE("GnssSession::handleStatusChangeSync called with no transitions");
+    return;
   }
 
   // If a previous setting change or resync event is pending process, do that

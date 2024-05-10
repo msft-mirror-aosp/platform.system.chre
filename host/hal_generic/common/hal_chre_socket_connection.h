@@ -26,8 +26,9 @@
 
 #ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
 #include <aidl/android/frameworks/stats/IStats.h>
-#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
+
+#include "chre_host/metrics_reporter.h"
+#endif  //  CHRE_HAL_SOCKET_METRICS_ENABLED
 
 namespace android {
 namespace hardware {
@@ -99,9 +100,11 @@ class HalChreSocketConnection {
 
   bool getContextHubs(::chre::fbs::HubInfoResponseT *response);
 
-  bool sendMessageToHub(long nanoappId, uint32_t messageType,
+  bool sendMessageToHub(uint64_t nanoappId, uint32_t messageType,
                         uint16_t hostEndpointId, const unsigned char *payload,
                         size_t payloadLength);
+
+  bool sendDebugConfiguration();
 
   bool loadNanoapp(chre::FragmentedLoadTransaction &transaction);
 
@@ -119,6 +122,15 @@ class HalChreSocketConnection {
                                const std::string &attribution_tag);
 
   bool onHostEndpointDisconnected(uint16_t hostEndpointId);
+
+  /**
+   * Returns true if there exists a pending load transaction; false otherwise.
+   *
+   * @return true                     there exists a pending load transaction.
+   * @return false                    there does not exist a pending load
+   * transaction.
+   */
+  bool isLoadTransactionPending();
 
  private:
   class SocketCallbacks : public ::android::chre::SocketClient::ICallbacks,
@@ -172,6 +184,10 @@ class HalChreSocketConnection {
   std::optional<chre::FragmentedLoadTransaction> mPendingLoadTransaction;
   std::mutex mPendingLoadTransactionMutex;
 
+#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
+  android::chre::MetricsReporter mMetricsReporter;
+#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
+
   /**
    * Checks to see if a load response matches the currently pending
    * fragmented load transaction. mPendingLoadTransactionMutex must
@@ -196,14 +212,17 @@ class HalChreSocketConnection {
   bool sendFragmentedLoadNanoAppRequest(
       chre::FragmentedLoadTransaction &transaction);
 
+#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
+  // TODO(b/298459533): Remove this when the flag_log_nanoapp_load_metrics flag
+  // is cleaned up
   /**
    * Create and report CHRE vendor atom and send it to stats_client
    *
    * @param atom the vendor atom to be reported
    */
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
   void reportMetric(const aidl::android::frameworks::stats::VendorAtom atom);
 #endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
+  // TODO(b/298459533): Remove end
 };
 
 }  // namespace implementation

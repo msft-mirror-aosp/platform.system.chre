@@ -21,6 +21,7 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/init.h"
 #include "chre/platform/linux/platform_log.h"
+#include "chre/platform/linux/task_util/task_manager.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 #include "inc/test_util.h"
@@ -43,6 +44,7 @@ namespace chre {
  * this test.
  */
 void TestBase::SetUp() {
+  TaskManagerSingleton::init();
   TestEventQueueSingleton::init();
   chre::PlatformLogSingleton::init();
   chre::init();
@@ -72,7 +74,9 @@ void TestBase::TearDown() {
   chre::deinit();
   chre::PlatformLogSingleton::deinit();
   TestEventQueueSingleton::deinit();
+  TaskManagerSingleton::deinit();
   deleteNanoappInfos();
+  unregisterAllTestNanoapps();
 }
 
 TEST_F(TestBase, CanLoadAndStartSingleNanoapp) {
@@ -113,6 +117,36 @@ TEST_F(TestBase, CanLoadAndStartMultipleNanoapps) {
                   .findNanoappInstanceIdByAppId(kAppId2, &id2));
 
   EXPECT_NE(id1, id2);
+}
+
+TEST_F(TestBase, methods) {
+  CREATE_CHRE_TEST_EVENT(SOME_EVENT, 0);
+
+  class App : public TestNanoapp {
+   public:
+    explicit App(TestNanoappInfo info) : TestNanoapp(info) {}
+    bool start() override {
+      LOGE("start");
+      mTest = 0xc0ffee;
+      return true;
+    }
+
+    void handleEvent(uint32_t /*senderInstanceId*/, uint16_t /*eventType*/,
+                     const void * /**eventData*/) override {
+      LOGE("handleEvent %" PRIx16, mTest);
+    }
+
+    void end() override {
+      LOGE("end");
+    }
+
+   protected:
+    uint32_t mTest = 0;
+  };
+
+  uint64_t appId = loadNanoapp(MakeUnique<App>(TestNanoappInfo{.id = 0x456}));
+
+  sendEventToNanoapp(appId, SOME_EVENT);
 }
 
 // Explicitly instantiate the TestEventQueueSingleton to reduce codesize.

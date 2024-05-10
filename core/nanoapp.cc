@@ -20,11 +20,13 @@
 #include "chre/platform/assert.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
+#include "chre/platform/tracing.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre_api/chre/gnss.h"
 #include "chre_api/chre/version.h"
 
 #include <algorithm>
+#include <cstdint>
 
 #if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_5
 #define CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
@@ -34,9 +36,22 @@ namespace chre {
 
 constexpr size_t Nanoapp::kMaxSizeWakeupBuckets;
 
-Nanoapp::Nanoapp() {
+Nanoapp::Nanoapp()
+    : Nanoapp(EventLoopManagerSingleton::get()->getNextInstanceId()) {}
+
+Nanoapp::Nanoapp(uint16_t instanceId) {
   // Push first bucket onto wakeup bucket queue
-  cycleWakeupBuckets(1);
+  cycleWakeupBuckets(SystemTime::getMonotonicTime());
+  mInstanceId = instanceId;
+}
+
+bool Nanoapp::start() {
+  // TODO(b/294116163): update trace with nanoapp instance id and nanoapp name
+  CHRE_TRACE_INSTANT("Nanoapp start");
+  mIsInNanoappStart = true;
+  bool success = PlatformNanoapp::start();
+  mIsInNanoappStart = false;
+  return success;
 }
 
 bool Nanoapp::isRegisteredForBroadcastEvent(const Event *event) const {
@@ -123,26 +138,50 @@ void Nanoapp::configureUserSettingEvent(uint8_t setting, bool enable) {
 }
 
 void Nanoapp::processEvent(Event *event) {
+  Nanoseconds eventStartTime = SystemTime::getMonotonicTime();
+  // TODO(b/294116163): update trace with event type and nanoapp name so it can
+  //                    be differentiated from other events
+  CHRE_TRACE_START("Handle event", "nanoapp", getInstanceId());
   if (event->eventType == CHRE_EVENT_GNSS_DATA) {
     handleGnssMeasurementDataEvent(event);
   } else {
     handleEvent(event->senderInstanceId, event->eventType, event->eventData);
   }
+  // TODO(b/294116163): update trace with nanoapp name
+  CHRE_TRACE_END("Handle event", "nanoapp", getInstanceId());
+  Nanoseconds eventProcessTime =
+      SystemTime::getMonotonicTime() - eventStartTime;
+  uint64_t eventTimeMs = Milliseconds(eventProcessTime).getMilliseconds();
+  if (Milliseconds(eventProcessTime) >= Milliseconds(100)) {
+    LOGE("Nanoapp 0x%" PRIx64 " took %" PRIu64
+         " ms to process event type 0x%" PRIx16,
+         getAppId(), eventTimeMs, event->eventType);
+  }
+  mEventProcessTime.addValue(eventTimeMs);
+  mEventProcessTimeSinceBoot += eventTimeMs;
+  mWakeupBuckets.back().eventProcessTime += eventTimeMs;
 }
 
 void Nanoapp::blameHostWakeup() {
-  if (mWakeupBuckets.back() < UINT16_MAX) ++mWakeupBuckets.back();
+  if (mWakeupBuckets.back().wakeupCount < UINT16_MAX) {
+    ++mWakeupBuckets.back().wakeupCount;
+  }
   if (mNumWakeupsSinceBoot < UINT32_MAX) ++mNumWakeupsSinceBoot;
 }
 
-void Nanoapp::cycleWakeupBuckets(size_t numBuckets) {
-  numBuckets = std::min(numBuckets, kMaxSizeWakeupBuckets);
-  for (size_t i = 0; i < numBuckets; ++i) {
-    if (mWakeupBuckets.full()) {
-      mWakeupBuckets.erase(0);
-    }
-    mWakeupBuckets.push_back(0);
+void Nanoapp::blameHostMessageSent() {
+  if (mWakeupBuckets.back().hostMessageCount < UINT16_MAX) {
+    ++mWakeupBuckets.back().hostMessageCount;
   }
+  if (mNumMessagesSentSinceBoot < UINT32_MAX) ++mNumMessagesSentSinceBoot;
+}
+
+void Nanoapp::cycleWakeupBuckets(Nanoseconds timestamp) {
+  if (mWakeupBuckets.full()) {
+    mWakeupBuckets.erase(0);
+  }
+  mWakeupBuckets.push_back(
+      BucketedStats(0, 0, 0, timestamp.toRawNanoseconds()));
 }
 
 void Nanoapp::logStateToBuffer(DebugDumpWrapper &debugDump) const {
@@ -150,23 +189,134 @@ void Nanoapp::logStateToBuffer(DebugDumpWrapper &debugDump) const {
                   getAppId());
   PlatformNanoapp::logStateToBuffer(debugDump);
   debugDump.print(" v%" PRIu32 ".%" PRIu32 ".%" PRIu32 " tgtAPI=%" PRIu32
-                  ".%" PRIu32 " curAlloc=%zu peakAlloc=%zu",
+                  ".%" PRIu32 "\n",
                   CHRE_EXTRACT_MAJOR_VERSION(getAppVersion()),
                   CHRE_EXTRACT_MINOR_VERSION(getAppVersion()),
                   CHRE_EXTRACT_PATCH_VERSION(getAppVersion()),
                   CHRE_EXTRACT_MAJOR_VERSION(getTargetApiVersion()),
-                  CHRE_EXTRACT_MINOR_VERSION(getTargetApiVersion()),
-                  getTotalAllocatedBytes(), getPeakAllocatedBytes());
-  debugDump.print(" hostWakeups=[ cur->");
-  // Get buckets latest -> earliest except last one
-  for (size_t i = mWakeupBuckets.size() - 1; i > 0; --i) {
-    debugDump.print("%" PRIu16 ", ", mWakeupBuckets[i]);
-  }
-  // Earliest bucket gets no comma
-  debugDump.print("%" PRIu16 " ]", mWakeupBuckets.front());
+                  CHRE_EXTRACT_MINOR_VERSION(getTargetApiVersion()));
+}
 
-  // Print total wakeups since boot
-  debugDump.print(" totWakeups=%" PRIu32 " ]\n", mNumWakeupsSinceBoot);
+void Nanoapp::logMemAndComputeHeader(DebugDumpWrapper &debugDump) const {
+  // Print table header
+  // Nanoapp column sized to accommodate largest known name
+  debugDump.print("\n%10sNanoapp%9s| Mem Alloc (Bytes) |%7sEvent Time (Ms)\n",
+                  "", "", "");
+  debugDump.print("%26s| Current |     Max |    Mean |     Max |   Total\n",
+                  "");
+}
+
+void Nanoapp::logMemAndComputeEntry(DebugDumpWrapper &debugDump) const {
+  debugDump.print("%*s |", 25, getAppName());
+  debugDump.print(" %*zu |", 7, getTotalAllocatedBytes());
+  debugDump.print(" %*zu |", 7, getPeakAllocatedBytes());
+  debugDump.print(" %*" PRIu64 " |", 7, mEventProcessTime.getMean());
+  debugDump.print(" %*" PRIu64 " |", 7, mEventProcessTime.getMax());
+  debugDump.print(" %*" PRIu64 "\n", 7, mEventProcessTimeSinceBoot);
+}
+
+void Nanoapp::logMessageHistoryHeader(DebugDumpWrapper &debugDump) const {
+  // Print time ranges for buckets
+  Nanoseconds now = SystemTime::getMonotonicTime();
+  uint64_t currentTimeMins = 0;
+  uint64_t nextTimeMins = 0;
+  uint64_t nanosecondsSince = 0;
+  char bucketLabel = 'A';
+
+  char bucketTags[kMaxSizeWakeupBuckets][4];
+  for (int32_t i = kMaxSizeWakeupBuckets - 1; i >= 0; --i) {
+    bucketTags[i][0] = '[';
+    bucketTags[i][1] = bucketLabel++;
+    bucketTags[i][2] = ']';
+    bucketTags[i][3] = '\0';
+  }
+
+  debugDump.print(
+      "\nHistogram stat buckets cover the following time ranges:\n");
+
+  for (int32_t i = kMaxSizeWakeupBuckets - 1;
+       i > static_cast<int32_t>(mWakeupBuckets.size() - 1); --i) {
+    debugDump.print(" Bucket%s: N/A (unused)\n", bucketTags[i]);
+  }
+
+  for (int32_t i = static_cast<int32_t>(mWakeupBuckets.size() - 1); i >= 0;
+       --i) {
+    size_t idx = static_cast<size_t>(i);
+    nanosecondsSince =
+        now.toRawNanoseconds() - mWakeupBuckets[idx].creationTimestamp;
+    currentTimeMins = (nanosecondsSince / kOneMinuteInNanoseconds);
+
+    debugDump.print(" Bucket%s:", bucketTags[idx]);
+    debugDump.print(" %*" PRIu64 "", 3, nextTimeMins);
+    debugDump.print(" - %*" PRIu64 " mins ago\n", 3, currentTimeMins);
+    nextTimeMins = currentTimeMins;
+  }
+
+  int wuHistColWidth = 2 + (4 * kMaxSizeWakeupBuckets);
+  int messageHistColWidth = 2 + (4 * kMaxSizeWakeupBuckets);
+  int eventHistColWidth = 2 + (7 * kMaxSizeWakeupBuckets);
+
+  // Print table header
+  debugDump.print("\n%*s|", 26, " Nanoapp ");
+  debugDump.print("%*s|", 11, " Total w/u ");
+  debugDump.print("%*s|", wuHistColWidth, " Wakeup Histogram ");
+  debugDump.print("%*s|", 12, " Total Msgs ");
+  debugDump.print("%*s|", messageHistColWidth, " Message Histogram ");
+  debugDump.print("%*s|", 12, " Event Time ");
+  debugDump.print("%*s", eventHistColWidth, " Event Time Histogram (ms) ");
+
+  debugDump.print("\n%26s|%11s|", "", "");
+  for (int32_t i = kMaxSizeWakeupBuckets - 1; i >= 0; --i) {
+    debugDump.print(" %*s", 3, bucketTags[i]);
+  }
+  debugDump.print("  |%*s|", 12, "");
+  for (int32_t i = kMaxSizeWakeupBuckets - 1; i >= 0; --i) {
+    debugDump.print(" %*s", 3, bucketTags[i]);
+  }
+  debugDump.print("  |%*s|", 12, "");
+  for (int32_t i = kMaxSizeWakeupBuckets - 1; i >= 0; --i) {
+    debugDump.print(" %*s", 7, bucketTags[i]);
+  }
+  debugDump.print("\n");
+}
+
+void Nanoapp::logMessageHistoryEntry(DebugDumpWrapper &debugDump) const {
+  debugDump.print("%*s |", 25, getAppName());
+
+  // Print wakeupCount and histogram
+  debugDump.print(" %*" PRIu32 " | ", 9, mNumWakeupsSinceBoot);
+  for (size_t i = kMaxSizeWakeupBuckets - 1; i > 0; --i) {
+    if (i >= mWakeupBuckets.size()) {
+      debugDump.print(" --,");
+    } else {
+      debugDump.print(" %*" PRIu16 ",", 2, mWakeupBuckets[i].wakeupCount);
+    }
+  }
+  debugDump.print(" %*" PRIu16 "  |", 2, mWakeupBuckets.front().wakeupCount);
+
+  // Print hostMessage count and histogram
+  debugDump.print(" %*" PRIu32 " | ", 10, mNumMessagesSentSinceBoot);
+  for (size_t i = kMaxSizeWakeupBuckets - 1; i > 0; --i) {
+    if (i >= mWakeupBuckets.size()) {
+      debugDump.print(" --,");
+    } else {
+      debugDump.print(" %*" PRIu16 ",", 2, mWakeupBuckets[i].hostMessageCount);
+    }
+  }
+  debugDump.print(" %*" PRIu16 "  |", 2,
+                  mWakeupBuckets.front().hostMessageCount);
+
+  // Print eventProcessingTime count and histogram
+  debugDump.print(" %*" PRIu64 " | ", 10, mEventProcessTimeSinceBoot);
+  for (size_t i = kMaxSizeWakeupBuckets - 1; i > 0; --i) {
+    if (i >= mWakeupBuckets.size()) {
+      debugDump.print("     --,");
+    } else {
+      debugDump.print(" %*" PRIu64 ",", 6, mWakeupBuckets[i].eventProcessTime);
+    }
+  }
+  debugDump.print(" %*" PRIu64 "\n", 6,
+                  mWakeupBuckets.front().eventProcessTime);
 }
 
 bool Nanoapp::permitPermissionUse(uint32_t permission) const {
@@ -221,13 +371,43 @@ bool Nanoapp::configureHostEndpointNotifications(uint16_t hostEndpointId,
 
 bool Nanoapp::publishRpcServices(struct chreNanoappRpcService *services,
                                  size_t numServices) {
-  // TODO(b/204426460): Validate this code is only called from nanoappStart().
+  if (!mIsInNanoappStart) {
+    LOGE("publishRpcServices must be called from nanoappStart");
+    return false;
+  }
+
+  const size_t startSize = mRpcServices.size();
+  const size_t endSize = startSize + numServices;
+  if (endSize > kMaxRpcServices) {
+    return false;
+  }
+
+  mRpcServices.reserve(endSize);
+
   bool success = true;
+
   for (size_t i = 0; i < numServices; i++) {
     if (!mRpcServices.push_back(services[i])) {
       LOG_OOM();
       success = false;
+      break;
     }
+  }
+
+  if (success && mRpcServices.size() > 1) {
+    for (size_t i = 0; i < mRpcServices.size() - 1; i++) {
+      for (size_t j = i + 1; j < mRpcServices.size(); j++) {
+        if (mRpcServices[i].id == mRpcServices[j].id) {
+          LOGE("Service id = 0x%016" PRIx64 " can only be published once",
+               mRpcServices[i].id);
+          success = false;
+        }
+      }
+    }
+  }
+
+  if (!success) {
+    mRpcServices.resize(startSize);
   }
 
   return success;

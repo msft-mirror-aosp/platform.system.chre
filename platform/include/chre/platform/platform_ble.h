@@ -69,7 +69,7 @@ class PlatformBle : public PlatformBleBase {
    * @return true if scan was successfully enabled.
    */
   bool startScanAsync(chreBleScanMode mode, uint32_t reportDelayMs,
-                      const struct chreBleScanFilter *filter);
+                      const struct chreBleScanFilterV1_9 *filter);
 
   /**
    * End a BLE scan asynchronously. The result is delivered through a
@@ -86,6 +86,36 @@ class PlatformBle : public PlatformBleBase {
    * @param event the event to release.
    */
   void releaseAdvertisingEvent(struct chreBleAdvertisementEvent *event);
+
+  /**
+   * Reads the RSSI on a given LE-ACL connection handle.
+   *
+   * Only one call to this method may be outstanding until the
+   * readRssiCallback() is invoked. The readRssiCallback() is guaranteed to be
+   * invoked exactly once within CHRE_PAL_BLE_READ_RSSI_COMPLETE_TIMEOUT_NS of
+   * readRssi() being invoked.
+   *
+   * @param connectionHandle The LE-ACL handle upon which the RSSI is to be
+   * read.
+   *
+   * @return true if the request was accepted, in which case a subsequent call
+   *         to readRssiCallback() will be used to indicate the result of the
+   *         operation.
+   *
+   * @since v1.8
+   */
+  bool readRssiAsync(uint16_t connectionHandle);
+
+  /**
+   * Initiates a flush operation where all batched advertisement events will be
+   * immediately processed.
+   *
+   * @return true if the request was accepted, in which case a subsequent call
+   * to flushCallback() will be used to indicate the result of the operation.
+   *
+   * @since v1.9
+   */
+  bool flushAsync();
 };
 
 }  // namespace chre

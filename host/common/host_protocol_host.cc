@@ -102,6 +102,15 @@ void HostProtocolHost::encodeHubInfoRequest(FlatBufferBuilder &builder) {
   finalize(builder, fbs::ChreMessage::HubInfoRequest, request.Union());
 }
 
+void HostProtocolHost::encodeDebugConfiguration(FlatBufferBuilder &builder) {
+#ifdef CHRE_HEALTH_MONITOR_CHECK_CRASH
+  auto request = fbs::CreateDebugConfiguration(builder, true);
+#else
+  auto request = fbs::CreateDebugConfiguration(builder, false);
+#endif  // CHRE_HEALTH_MONITOR_CHECK_CRASH
+  finalize(builder, fbs::ChreMessage::DebugConfiguration, request.Union());
+}
+
 void HostProtocolHost::encodeFragmentedLoadNanoappRequest(
     flatbuffers::FlatBufferBuilder &builder,
     const FragmentedLoadRequest &request, bool respondBeforeStart) {
@@ -239,6 +248,11 @@ void HostProtocolHost::encodeNanconfigurationUpdate(
     flatbuffers::FlatBufferBuilder &builder, bool nanEnabled) {
   auto message = fbs::CreateNanConfigurationUpdate(builder, nanEnabled);
   finalize(builder, fbs::ChreMessage::NanConfigurationUpdate, message.Union());
+}
+
+void HostProtocolHost::encodePulseRequest(FlatBufferBuilder &builder) {
+  auto message = fbs::CreatePulseRequest(builder);
+  finalize(builder, fbs::ChreMessage::PulseRequest, message.Union());
 }
 
 }  // namespace chre
