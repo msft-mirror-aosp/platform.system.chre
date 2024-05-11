@@ -459,7 +459,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   if (msgToHost->toHostData.nanoappFreeFunction == nullptr) {
     mMessagePool.deallocate(msgToHost);
   } else if (inEventLoopThread()) {
-    // If we're already within the event pool context, it is safe to call the
+    // If we're already within the event loop context, it is safe to call the
     // free callback synchronously.
     EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
         msgToHost);
