@@ -30,6 +30,7 @@ ReportingMode SensorTypeHelpers::getReportingMode(uint8_t sensorType) {
   switch (sensorType) {
     case CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT:
     case CHRE_SENSOR_TYPE_STATIONARY_DETECT:
+    case CHRE_SENSOR_TYPE_SIGNIFICANT_MOTION:
       return ReportingMode::OneShot;
     case CHRE_SENSOR_TYPE_LIGHT:
     case CHRE_SENSOR_TYPE_PROXIMITY:
@@ -115,6 +116,7 @@ size_t SensorTypeHelpers::getLastEventSize(uint8_t sensorType) {
       case CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT:
       case CHRE_SENSOR_TYPE_STATIONARY_DETECT:
       case CHRE_SENSOR_TYPE_STEP_DETECT:
+      case CHRE_SENSOR_TYPE_SIGNIFICANT_MOTION:
         return sizeof(chreSensorOccurrenceData);
       case CHRE_SENSOR_TYPE_PROXIMITY:
         return sizeof(chreSensorByteData);
@@ -153,6 +155,8 @@ const char *SensorTypeHelpers::getSensorTypeName(uint8_t sensorType) {
       return "Light";
     case CHRE_SENSOR_TYPE_PROXIMITY:
       return "Proximity";
+    case CHRE_SENSOR_TYPE_SIGNIFICANT_MOTION:
+      return "Significant Motion";
     case CHRE_SENSOR_TYPE_STEP_DETECT:
       return "Step Detect";
     case CHRE_SENSOR_TYPE_STEP_COUNTER:
