@@ -80,7 +80,7 @@ HostCommsManager::HostCommsManager()
     : mTransactionManager(sendMessageWithTransactionData,
                           onMessageDeliveryStatus, deferCallback,
                           deferCancelCallback, kReliableMessageRetryWaitTime,
-                          /* maxNumRetries= */ 0)
+                          kReliableMessageNumRetries)
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
     {}
 
