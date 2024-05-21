@@ -180,6 +180,7 @@ class TransactionManagerTest : public testing::Test {
         TransactionManagerTest::deferCallback,
         TransactionManagerTest::deferCancelCallback,
         kRetryWaitTime,
+        kTransactionTimeout,
         maxNumRetries);
   }
 
@@ -249,7 +250,7 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      kTransactionTimeout, &transactionId1));
+      /* cookie= */ 1, &transactionId1));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&transactionStarted1]() { return transactionStarted1; });
   EXPECT_TRUE(transactionStarted1);
@@ -261,7 +262,7 @@ TEST_F(TransactionManagerTest, TransactionShouldComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 2,
       },
-      kTransactionTimeout, &transactionId2));
+      /* cookie= */ 2, &transactionId2));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
@@ -297,7 +298,7 @@ TEST_F(TransactionManagerTest, TransactionShouldCompleteOnlyOnce) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      kTransactionTimeout, &transactionId));
+      /* cookie= */ 1, &transactionId));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&transactionStarted]() { return transactionStarted; });
   EXPECT_TRUE(transactionStarted);
@@ -328,7 +329,7 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = 456,
       },
-      kTransactionTimeout, &transactionId));
+      /* cookie= */ 1, &transactionId));
 
   mTransactionCallbackCalled = false;
   mCondVar.wait_for(lock, kWaitTimeout * 2,
@@ -354,7 +355,7 @@ TEST_F(TransactionManagerTest,
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = kData,
       },
-      kTransactionTimeout, &transactionId));
+      /* cookie= */ 1, &transactionId));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&numTimesTransactionStarted]() {
     return numTimesTransactionStarted >= 2;
@@ -384,7 +385,7 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
           .numTimesTransactionStarted = &numTimesTransactionStarted,
           .data = 456,
       },
-      kTransactionTimeout, &transactionId));
+      /* cookie= */ 1, &transactionId));
 
   mTransactionCallbackCalled = false;
   mCondVar.wait_for(lock, kWaitTimeout * 2,
@@ -409,7 +410,7 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 1,
       },
-      kTransactionTimeout, &transactionId1));
+      /* cookie= */ 1, &transactionId1));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&transactionStarted1]() { return transactionStarted1; });
   EXPECT_TRUE(transactionStarted1);
@@ -421,7 +422,7 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
           .numTimesTransactionStarted = nullptr,
           .data = 2,
       },
-      kTransactionTimeout, &transactionId2));
+      /* cookie= */ 2, &transactionId2));
   mCondVar.wait_for(lock, kWaitTimeout,
                     [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
@@ -444,6 +445,57 @@ TEST_F(TransactionManagerTest, FlushedTransactionShouldNotComplete) {
                     [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 1);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
+}
+
+TEST_F(TransactionManagerTest, TransactionShouldWaitSameCookie) {
+  std::unique_lock<std::mutex> lock(mMutex);
+
+  bool transactionStarted1 = false;
+  bool transactionStarted2 = false;
+  uint32_t transactionId1;
+  uint32_t transactionId2;
+  EXPECT_TRUE(mTransactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = &transactionStarted1,
+          .numTimesTransactionStarted = nullptr,
+          .data = 1,
+      },
+      /* cookie= */ 0xCAFE, &transactionId1));
+  EXPECT_TRUE(mTransactionManager->startTransaction(
+      {
+          .test = this,
+          .transactionStarted = &transactionStarted2,
+          .numTimesTransactionStarted = nullptr,
+          .data = 2,
+      },
+      /* cookie= */ 0xCAFE, &transactionId2));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted1]() { return transactionStarted1; });
+  EXPECT_TRUE(transactionStarted1);
+  EXPECT_FALSE(transactionStarted2);
+
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(mTransactionManager->completeTransaction(
+      transactionId1, CHRE_ERROR_INVALID_ARGUMENT));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 1);
+  EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_INVALID_ARGUMENT);
+
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [&transactionStarted2]() { return transactionStarted2; });
+  EXPECT_TRUE(transactionStarted2);
+
+  mTransactionCallbackCalled = false;
+  EXPECT_TRUE(mTransactionManager->completeTransaction(transactionId2,
+                                                       CHRE_ERROR_NONE));
+  mCondVar.wait_for(lock, kWaitTimeout,
+                    [this]() { return mTransactionCallbackCalled; });
+  EXPECT_TRUE(mTransactionCallbackCalled);
+  EXPECT_EQ(mTransactionCompleted.data.data, 2);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_NONE);
 }
 

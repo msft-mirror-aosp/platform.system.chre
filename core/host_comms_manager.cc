@@ -80,9 +80,10 @@ HostCommsManager::HostCommsManager()
     : mTransactionManager(sendMessageWithTransactionData,
                           onMessageDeliveryStatus, deferCallback,
                           deferCancelCallback, kReliableMessageRetryWaitTime,
-                          kReliableMessageNumRetries)
+                          kReliableMessageTimeout, kReliableMessageNumRetries)
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    {}
+{
+}
 
 bool HostCommsManager::completeTransaction(uint32_t transactionId,
                                            uint8_t errorCode) {
@@ -181,7 +182,7 @@ bool HostCommsManager::sendMessageToHostFromNanoapp(
         .cookie = cookie,
     };
     success = mTransactionManager.startTransaction(
-        data, kReliableMessageTimeout, &msgToHost->messageSequenceNumber);
+        data, nanoapp->getInstanceId(), &msgToHost->messageSequenceNumber);
 #else
     UNUSED_VAR(cookie);
     success = false;
