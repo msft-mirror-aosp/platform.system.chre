@@ -187,6 +187,17 @@ extern "C" {
 #define CHRE_SENSOR_TYPE_STEP_COUNTER UINT8_C(0x18)
 
 /**
+ * Significant motion detection.
+ *
+ * Generates: CHRE_EVENT_SENSOR_SIGNIFICANT_MOTION_DATA
+ *
+ * This is a one-shot sensor.
+ *
+ * @since v1.10
+ */
+#define CHRE_SENSOR_TYPE_SIGNIFICANT_MOTION  UINT8_C(0x1C)
+
+/**
  * Hinge angle sensor.
  *
  * Generates: CHRE_EVENT_SENSOR_HINGE_ANGLE_DATA
@@ -396,8 +407,9 @@ struct chreSensorThreeAxisData {
  * don't need to know anything else.
  *
  * Used by: CHRE_EVENT_SENSOR_INSTANT_MOTION_DETECT_DATA,
- *     CHRE_EVENT_SENSOR_STATIONARY_DETECT_DATA, and
- *     CHRE_EVENT_SENSOR_STEP_DETECT_DATA.
+ *     CHRE_EVENT_SENSOR_STATIONARY_DETECT_DATA,
+ *     CHRE_EVENT_SENSOR_STEP_DETECT_DATA, and
+ *     CHRE_EVENT_SENSOR_SIGNIFICANT_MOTION_DATA.
  */
 struct chreSensorOccurrenceData {
     struct chreSensorDataHeader header;
