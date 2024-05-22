@@ -26,8 +26,6 @@
 #include "chre/util/optional.h"
 #include "chre/util/time.h"
 
-#include <android-base/thread_annotations.h>
-
 namespace chre {
 
 /**
@@ -165,18 +163,22 @@ class TransactionManager : public NonCopyable {
                      CompleteCallback completeCallback,
                      DeferCallback deferCallback,
                      DeferCancelCallback deferCancelCallback,
-                     Nanoseconds retryWaitTime, uint16_t maxNumRetries = 3)
-      : mStartCallback(startCallback),
-        mCompleteCallback(completeCallback),
-        mDeferCallback(deferCallback),
-        mDeferCancelCallback(deferCancelCallback),
-        mRetryWaitTime(retryWaitTime),
-        mMaxNumRetries(maxNumRetries) {
+                     Nanoseconds retryWaitTime, Nanoseconds timeout,
+                     uint16_t maxNumRetries = 3)
+      : kStartCallback(startCallback),
+        kCompleteCallback(completeCallback),
+        kDeferCallback(deferCallback),
+        kDeferCancelCallback(deferCancelCallback),
+        kRetryWaitTime(retryWaitTime),
+        kTimeout(timeout),
+        kMaxNumRetries(maxNumRetries) {
     CHRE_ASSERT(startCallback != nullptr);
     CHRE_ASSERT(completeCallback != nullptr);
     CHRE_ASSERT(deferCallback != nullptr);
     CHRE_ASSERT(deferCancelCallback != nullptr);
     CHRE_ASSERT(retryWaitTime.toRawNanoseconds() > 0);
+    CHRE_ASSERT(timeout.toRawNanoseconds() == 0 ||
+                timeout.toRawNanoseconds() > retryWaitTime.toRawNanoseconds());
   }
 
   /**
@@ -215,19 +217,24 @@ class TransactionManager : public NonCopyable {
 
   /**
    * Starts a transaction. This function will mark the transaction as ready to
-   * execute the StartCallback and processes transactions.
+   * execute the StartCallback and processes transactions. The StartCallback
+   * will be called only when there are no other pending transactions for the
+   * unique cookie.
+   *
+   * The transaction will complete with a CHRE_ERROR_TIMEOUT if
+   * completeTransaction has not been called before the timeout. The timeout
+   * is calculated from the time the StartCallback is called.
    *
    * This function is safe to call in any thread.
    *
    * @param data The transaction data and callbacks used to run the transaction.
-   * @param timeout The transaction timeout. The transaction will complete with
-   *        a CHRE_ERROR_TIMEOUT if completeTransaction has not been called
-   *        before the timeout. This must be greater than the retry time.
+   * @param cookie The cookie used to ensure only one transaction will be
+   *        started and pending for a given cookie.
    * @param id A pointer to the transaction ID that will be populated when
    *        startTransaction succeed. It must not be null.
    * @return Whether the transaction was started successfully.
    */
-  bool startTransaction(const TransactionData &data, Nanoseconds timeout,
+  bool startTransaction(const TransactionData &data, uint16_t cookie,
                         uint32_t *id);
 
  private:
@@ -237,6 +244,7 @@ class TransactionManager : public NonCopyable {
     TransactionData data;
     Nanoseconds nextRetryTime;
     Nanoseconds timeoutTime;
+    uint16_t cookie;
     uint16_t numCompletedStartCalls;
     Optional<uint8_t> errorCode;
   };
@@ -245,6 +253,25 @@ class TransactionManager : public NonCopyable {
    * Defers processing transactions in the defer callback thread.
    */
   void deferProcessTransactions();
+
+  /**
+   * Calls the complete callback for a transaction if needed. Also updates the
+   * transaction state. Assumes the caller holds the mutex.
+   *
+   * @param transaction The transaction.
+   */
+  void doCompleteTransactionLocked(Transaction &transaction);
+
+  /**
+   * Calls the start callback for a transaction if needed. Also updates the
+   * transaction state. Assumes the caller holds the mutex.
+   *
+   * @param transaction The transaction.
+   * @param i The index of the transaction in mTransactions.
+   * @param now The current time.
+   */
+  void doStartTransactionLocked(Transaction &transaction, size_t i,
+                                Nanoseconds now);
 
   /**
    * Generates a pseudo random ID for a transaction in the range of
@@ -263,36 +290,38 @@ class TransactionManager : public NonCopyable {
   void processTransactions();
 
   //! The start callback.
-  const StartCallback mStartCallback;
+  const StartCallback kStartCallback;
 
   //! The complete callback.
-  const CompleteCallback mCompleteCallback;
+  const CompleteCallback kCompleteCallback;
 
   //! The defer callback.
-  const DeferCallback mDeferCallback;
+  const DeferCallback kDeferCallback;
 
   //! The defer cancel callback.
-  const DeferCancelCallback mDeferCancelCallback;
+  const DeferCancelCallback kDeferCancelCallback;
+
+  //! The retry wait time.
+  const Nanoseconds kRetryWaitTime;
+
+  //! The timeout for a transaction.
+  const Nanoseconds kTimeout;
+
+  //! The maximum number of retries for a transaction.
+  const uint16_t kMaxNumRetries;
 
   //! The mutex protecting mTransactions and mTimerHandle.
   Mutex mMutex;
 
   //! The next ID for use when creating a transaction.
-  Optional<uint32_t> mNextTransactionId GUARDED_BY(mMutex);
-
-  //! The retry wait time.
-  const Nanoseconds mRetryWaitTime;
-
-  //! The maximum number of retries for a transaction.
-  const uint16_t mMaxNumRetries;
+  Optional<uint32_t> mNextTransactionId;
 
   //! The timer handle for the timer tracking execution of processTransactions.
-  //! This is not guarded by mMutex because it is only modified in the defer
-  //! callback thread.
+  //! Can only be modified in the defer callback thread.
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
-  ArrayQueue<Transaction, kMaxTransactions> mTransactions GUARDED_BY(mMutex);
+  ArrayQueue<Transaction, kMaxTransactions> mTransactions;
 };
 
 }  // namespace chre

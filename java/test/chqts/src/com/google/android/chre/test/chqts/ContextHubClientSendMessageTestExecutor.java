@@ -54,6 +54,7 @@ public class ContextHubClientSendMessageTestExecutor {
     private static final String TAG = "ContextHubClientSendMessageExecutor";
     private static final int MESSAGE_TYPE =
             ContextHubTestConstants.MessageType.SERVICE_MESSAGE.asInt();
+    private static final int MAX_MESSAGE_SIZE = 4000;
     private final Random mRandom = new Random();
     private final NanoAppBinary mNanoAppBinary;
     private final ContextHubInfo mContextHubInfo;
@@ -80,8 +81,9 @@ public class ContextHubClientSendMessageTestExecutor {
 
     /** Generates a {@link NanoAppMessage} with randomized message body. */
     private NanoAppMessage createNanoAppMessage() {
-        int maxMessageLength = mContextHubInfo.getMaxPacketLengthBytes();
-        byte[] payload = new byte[maxMessageLength];
+        int messageLength = Math.min(MAX_MESSAGE_SIZE,
+                mContextHubInfo.getMaxPacketLengthBytes());
+        byte[] payload = new byte[messageLength];
         mRandom.nextBytes(payload);
         Log.d(TAG, "Created a nanoapp message: " + Base64.getEncoder().encodeToString(payload));
         return NanoAppMessage.createMessageToNanoApp(

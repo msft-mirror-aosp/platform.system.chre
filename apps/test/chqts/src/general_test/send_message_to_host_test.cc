@@ -89,7 +89,6 @@ extern bool gUseNycMessageHack;
 uint8_t SendMessageToHostTest::sSmallMessageData[kSmallMessageTestCount]
                                                 [kSmallMessageSize];
 void *SendMessageToHostTest::sLargeMessageData[2];
-constexpr uint32_t SendMessageToHostTest::kLargeSizes[2];
 
 bool SendMessageToHostTest::sInMethod = false;
 uint32_t SendMessageToHostTest::sFinishedBitmask = 0;
@@ -181,7 +180,10 @@ void SendMessageToHostTest::largeMessageCallback(void *message,
   } else {
     sendFatalFailureToHost("largeMessageCallback given bad message");
   }
-  if (messageSize != kLargeSizes[index]) {
+
+  size_t expectedMessageSize = index == 0 ? chreGetMessageToHostMaxSize() + 1
+                                          : chreGetMessageToHostMaxSize();
+  if (messageSize != expectedMessageSize) {
     sendFatalFailureToHost("largeMessageCallback given incorrect messageSize");
   }
   const uint8_t *msg = static_cast<const uint8_t *>(message);
@@ -217,11 +219,13 @@ void SendMessageToHostTest::prepTestMemory() {
                           sizeof(sSmallMessageData));
 
   for (size_t i = 0; i < 2; i++) {
-    sLargeMessageData[i] = chreHeapAlloc(kLargeSizes[i]);
+    size_t messageSize = i == 0 ? chreGetMessageToHostMaxSize() + 1
+                                : chreGetMessageToHostMaxSize();
+    sLargeMessageData[i] = chreHeapAlloc(messageSize);
     if (sLargeMessageData[i] == nullptr) {
       sendFatalFailureToHost("Insufficient heap memory for test");
     }
-    nanoapp_testing::memset(sLargeMessageData[i], kDataByte, kLargeSizes[i]);
+    nanoapp_testing::memset(sLargeMessageData[i], kDataByte, messageSize);
   }
 }
 
@@ -229,7 +233,7 @@ void SendMessageToHostTest::sendMessageMaxSize() {
   // Our focus here is just sending this data; we're not trying to
   // test anything.  So we use the helper function.
   uint32_t maxSize = nanoapp_testing::hostToLittleEndian(
-      static_cast<uint32_t>(CHRE_MESSAGE_TO_HOST_MAX_SIZE));
+      static_cast<uint32_t>(chreGetMessageToHostMaxSize()));
   // TODO(b/32114261): We intentionally don't have a namespace using
   //     declaration for sendMessageToHost because it's generally
   //     incorrect to use while we're working around this bug.  When the
@@ -260,7 +264,7 @@ bool SendMessageToHostTest::sendMessageToHost(
   return success;
 }
 
-SendMessageToHostTest::SendMessageToHostTest() : Test(CHRE_API_VERSION_1_0) {}
+SendMessageToHostTest::SendMessageToHostTest() : Test(CHRE_API_VERSION_1_10) {}
 
 void SendMessageToHostTest::setUp(uint32_t messageSize,
                                   const void * /* message */) {
@@ -318,14 +322,14 @@ void SendMessageToHostTest::setUp(uint32_t messageSize,
   markSuccess(5);
 
   // stage: 6
-  if (sendMessageToHost(sLargeMessageData[0], kLargeSizes[0],
+  if (sendMessageToHost(sLargeMessageData[0], chreGetMessageToHostMaxSize() + 1,
                         kUntestedMessageType, largeMessageCallback)) {
     sendFatalFailureToHost(
         "Oversized data to chreSendMessageToHost claimed success");
   }
 
   // stage: 7
-  if (!sendMessageToHost(sLargeMessageData[1], kLargeSizes[1],
+  if (!sendMessageToHost(sLargeMessageData[1], chreGetMessageToHostMaxSize(),
                          kUntestedMessageType, largeMessageCallback)) {
     sendFatalFailureToHost("Failed chreSendMessageToHost stage 7");
   }

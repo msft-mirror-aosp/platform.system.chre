@@ -88,7 +88,7 @@ struct HostMessage : public NonCopyable {
   //! Source/destination nanoapp ID
   uint64_t appId;
 
-  //! Used. to report reliable message status back to the sender.
+  //! Used to report reliable message status back to the sender.
   uint32_t messageSequenceNumber;
 
   //! Application-defined message data
@@ -236,10 +236,12 @@ class HostCommsManager : public HostLink {
     const void *cookie;
   };
 
+  //! The maximum number of retries for a reliable message.
+  static constexpr uint16_t kReliableMessageNumRetries = 3;
+
   //! The retry wait time for reliable messages.
-  // TODO(b/312417087): Change to 350 ms when retries are enabled.
   static constexpr Milliseconds kReliableMessageRetryWaitTime =
-      Milliseconds(999);
+      Milliseconds(250);
 
   //! The timeout to receive an acknowledgment for a reliable message.
   static constexpr Seconds kReliableMessageTimeout = Seconds(1);

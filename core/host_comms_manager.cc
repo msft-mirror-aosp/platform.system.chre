@@ -80,9 +80,10 @@ HostCommsManager::HostCommsManager()
     : mTransactionManager(sendMessageWithTransactionData,
                           onMessageDeliveryStatus, deferCallback,
                           deferCancelCallback, kReliableMessageRetryWaitTime,
-                          /* maxNumRetries= */ 0)
+                          kReliableMessageTimeout, kReliableMessageNumRetries)
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    {}
+{
+}
 
 bool HostCommsManager::completeTransaction(uint32_t transactionId,
                                            uint8_t errorCode) {
@@ -181,7 +182,7 @@ bool HostCommsManager::sendMessageToHostFromNanoapp(
         .cookie = cookie,
     };
     success = mTransactionManager.startTransaction(
-        data, kReliableMessageTimeout, &msgToHost->messageSequenceNumber);
+        data, nanoapp->getInstanceId(), &msgToHost->messageSequenceNumber);
 #else
     UNUSED_VAR(cookie);
     success = false;
@@ -459,7 +460,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   if (msgToHost->toHostData.nanoappFreeFunction == nullptr) {
     mMessagePool.deallocate(msgToHost);
   } else if (inEventLoopThread()) {
-    // If we're already within the event pool context, it is safe to call the
+    // If we're already within the event loop context, it is safe to call the
     // free callback synchronously.
     EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
         msgToHost);

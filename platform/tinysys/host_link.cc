@@ -76,9 +76,13 @@ struct UnloadNanoappCallbackData {
   bool allowSystemNanoappUnload;
 };
 
-uint32_t gChreIpiRecvData[2];
-uint32_t gChreIpiAckToHost[2];  // SCP reply ack data (AP to SCP)
-int gChreIpiAckFromHost[2];     // SCP get ack data from AP (SCP to AP)
+SRAM_REGION_BSS uint32_t gChreIpiRecvData[2];
+
+// SCP reply ack data (AP to SCP)
+SRAM_REGION_BSS uint32_t gChreIpiAckToHost[2];
+
+// SCP get ack data from AP (SCP to AP)
+SRAM_REGION_BSS int gChreIpiAckFromHost[2];
 
 void *gChreSubregionRecvAddr;
 size_t gChreSubregionRecvSize;
@@ -695,7 +699,7 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
 }
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageDeliveryStatus */, uint8_t /* errorCode */) {}
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
     uint16_t hostClientId) {
