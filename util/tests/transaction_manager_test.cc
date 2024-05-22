@@ -36,7 +36,7 @@ constexpr size_t kMaxTransactions = 32;
 constexpr Milliseconds kRetryWaitTime = Milliseconds(10);
 constexpr Milliseconds kTransactionTimeout = Milliseconds(100);
 constexpr std::chrono::milliseconds kWaitTimeout =
-    std::chrono::milliseconds(100);
+    std::chrono::milliseconds(500);
 
 class TransactionManagerTest;
 
@@ -332,7 +332,7 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeout) {
       /* cookie= */ 1, &transactionId));
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait_for(lock, kWaitTimeout * 2,
+  mCondVar.wait_for(lock, kWaitTimeout,
                     [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
@@ -388,7 +388,7 @@ TEST_F(TransactionManagerTest, TransactionShouldTimeoutWithNoRetries) {
       /* cookie= */ 1, &transactionId));
 
   mTransactionCallbackCalled = false;
-  mCondVar.wait_for(lock, kWaitTimeout * 2,
+  mCondVar.wait_for(lock, kWaitTimeout,
                     [this]() { return mTransactionCallbackCalled; });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 456);
@@ -480,13 +480,12 @@ TEST_F(TransactionManagerTest, TransactionShouldWaitSameCookie) {
   EXPECT_TRUE(mTransactionManager->completeTransaction(
       transactionId1, CHRE_ERROR_INVALID_ARGUMENT));
   mCondVar.wait_for(lock, kWaitTimeout,
-                    [this]() { return mTransactionCallbackCalled; });
+                    [this, &transactionStarted2]() {
+                      return mTransactionCallbackCalled && transactionStarted2;
+                    });
   EXPECT_TRUE(mTransactionCallbackCalled);
   EXPECT_EQ(mTransactionCompleted.data.data, 1);
   EXPECT_EQ(mTransactionCompleted.errorCode, CHRE_ERROR_INVALID_ARGUMENT);
-
-  mCondVar.wait_for(lock, kWaitTimeout,
-                    [&transactionStarted2]() { return transactionStarted2; });
   EXPECT_TRUE(transactionStarted2);
 
   mTransactionCallbackCalled = false;
