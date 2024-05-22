@@ -85,6 +85,16 @@ extern "C" {
     (CHRE_EVENT_SENSOR_DATA_EVENT_BASE + CHRE_SENSOR_TYPE_STATIONARY_DETECT)
 
 /**
+ * nanoappHandleEvent argument: struct struct chreSensorOccurrenceData
+ *
+ * Since this is a one-shot sensor, after this event is delivered to the
+ * nanoapp, the sensor automatically goes into DONE mode.  Sensors of this
+ * type must be configured with a ONE_SHOT mode.
+ */
+#define CHRE_EVENT_SENSOR_SIGNIFICANT_MOTION_DATA \
+    (CHRE_EVENT_SENSOR_DATA_EVENT_BASE + CHRE_SENSOR_TYPE_SIGNIFICANT_MOTION)
+
+/**
  * nanoappHandleEvent argument: struct chreSensorThreeAxisData
  *
  * The data can be interpreted using the 'x', 'y', and 'z' fields within
