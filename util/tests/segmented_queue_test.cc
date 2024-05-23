@@ -427,6 +427,35 @@ TEST(SegmentedQueue, RemoveMatchesWithFreeCallback) {
   EXPECT_EQ(segmentedQueue.front(), 1);
 }
 
+TEST(SegmentedQueue, RemoveALotOFMatchItems) {
+  constexpr uint8_t kBlockSize = 10;
+  constexpr uint8_t kMaxBlockCount = 3;
+  constexpr uint8_t kTargetRemoveNumber = 13;
+  SegmentedQueue<uint8_t, kBlockSize> segmentedQueue(kMaxBlockCount);
+
+  for (uint32_t index = 0; index < kBlockSize * kMaxBlockCount; index++) {
+    EXPECT_TRUE(segmentedQueue.push_back(index));
+  }
+
+  EXPECT_EQ(13, segmentedQueue.removeMatchedFromBack(
+                    [](uint8_t element, void * /*data*/, void * /*extraData*/) {
+                      return element % 2 == 0;
+                    },
+                    /* data= */ nullptr,
+                    /* extraData= */ nullptr, kTargetRemoveNumber));
+
+  EXPECT_EQ(segmentedQueue.size(),
+            kBlockSize * kMaxBlockCount - kTargetRemoveNumber);
+  for (size_t i = 0; i < segmentedQueue.size(); ++i) {
+    if (i <= 3) {
+      // Special case since this part of the queue should be untouched.
+      EXPECT_EQ(segmentedQueue[i], i);
+    } else {
+      EXPECT_EQ(segmentedQueue[i], 2 * (i - 4) + 5);
+    }
+  }
+}
+
 TEST(SegmentedQueue, PseudoRandomStressTest) {
   // This test uses std::deque as reference implementation to make sure
   // that chre::SegmentedQueue is functioning correctly.

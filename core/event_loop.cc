@@ -455,6 +455,9 @@ bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
   if (event != nullptr) {
     success = mEvents.push(event);
   }
+  if (!success) {
+    LOG_OOM();
+  }
 
   return success;
 }
