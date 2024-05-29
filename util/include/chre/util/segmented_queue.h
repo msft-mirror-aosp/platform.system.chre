@@ -200,15 +200,13 @@ class SegmentedQueue : public NonCopyable {
    *                                 item needs to be removed.
    * @param data                     The data to be passed to the matchFunc.
    * @param extraData                The extra data to be passed to the
-   * matchFunc.
+   *                                 matchFunc.
    * @param maxNumOfElementsRemoved  Number of elements to remove, also the
    *                                 size of removedElements. It is not
    *                                 guaranteed that the actual number of items
    *                                 removed will equal to this parameter since
    *                                 it will depend on the number of items that
    *                                 matches the condition.
-   * @param removedElements          Stores the pointers that has been
-   *                                 removed. This cannot be a nullptr.
    * @param freeFunction             Function to execute before the matched item
    *                                 is removed. If not supplied, the destructor
    *                                 of the element will be invoked.
