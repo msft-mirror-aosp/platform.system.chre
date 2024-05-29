@@ -22,7 +22,6 @@
 #include "chre/core/timer_pool.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/mutex.h"
-#include "chre/platform/platform_nanoapp.h"
 #include "chre/platform/power_control_manager.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/dynamic_vector.h"
