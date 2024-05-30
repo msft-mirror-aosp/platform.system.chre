@@ -24,7 +24,6 @@
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
 #include "chre/platform/fatal_error.h"
-#include "chre/platform/log.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/conditional_lock_guard.h"
 #include "chre/util/lock_guard.h"
