@@ -82,6 +82,12 @@ class TaskManager : public NonCopyable {
    */
   void flushTasks();
 
+  /**
+   * Stops the task manager by flushing all tasks and stopping the thread.
+   * This call is blocking.
+   */
+  void flushAndStop();
+
  private:
   /**
    * The run function for the execution thread.

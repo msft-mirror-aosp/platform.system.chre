@@ -131,4 +131,42 @@ TEST(TaskManager, TasksCanBeFlushedEvenIfNotCancelled) {
   EXPECT_GE(counter, numTasks + taskRepeatTimesMax);
 }
 
+TEST(TaskManager, StopTaskCanBeCalledMultipleTimes) {
+  uint32_t counter = 0;
+  std::mutex mutex;
+  std::condition_variable condVar;
+  chre::TaskManager taskManager;
+
+  constexpr uint32_t numTasks = 50;
+  auto incrementFunc = [&mutex, &condVar, &counter]() {
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      ++counter;
+    }
+
+    condVar.notify_all();
+  };
+  for (uint32_t i = 0; i < numTasks; ++i) {
+    std::optional<uint32_t> taskId =
+        taskManager.addTask(incrementFunc,
+                            /* intervalOrDelay */ std::chrono::nanoseconds(0));
+    EXPECT_TRUE(taskId.has_value());
+  }
+
+  std::unique_lock<std::mutex> lock(mutex);
+  condVar.wait(lock, [&counter]() { return counter >= numTasks; });
+  EXPECT_EQ(counter, numTasks);
+
+  taskManager.flushAndStop();
+  taskManager.flushAndStop();
+  taskManager.flushAndStop();
+}
+
+TEST(TaskManager, StopTaskCanBeCalledOnNewTaskManager) {
+  chre::TaskManager taskManager;
+  taskManager.flushAndStop();
+  taskManager.flushAndStop();
+  taskManager.flushAndStop();
+}
+
 }  // namespace
