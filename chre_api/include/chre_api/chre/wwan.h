@@ -552,8 +552,8 @@ uint32_t chreWwanGetCapabilities(void);
  * implementation is expected to return a successful asynchronous result with an
  * empty cell info list.
  *
- * @param cookie An opaque value that will be included in the chreAsyncResult
- *        sent in relation to this request.
+ * @param cookie An opaque value that will be included in the
+ *               chreWwanCellInfoResult sent in relation to this request.
  *
  * @return true if the request was accepted for processing, false otherwise
  *

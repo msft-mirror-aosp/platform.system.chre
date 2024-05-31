@@ -994,6 +994,7 @@ cc_defaults {
         "-DCHRE_WIFI_SUPPORT_ENABLED",
         "-DGTEST",
         "-Wextra-semi",
+        "-Wvla-extension",
     ],
 }
 

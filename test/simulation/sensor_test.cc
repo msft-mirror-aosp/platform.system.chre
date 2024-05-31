@@ -147,7 +147,7 @@ TEST_F(TestBase, SensorUnsubscribeToDataEventsOnUnload) {
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 
   Configuration config{.sensorHandle = 0,
-                       .interval = 100,
+                       .interval = 10 * 1000 * 1000,  // 10 ms aka 100 Hz
                        .mode = CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS};
   sendEventToNanoapp(appId, CONFIGURE, config);
   bool success;
