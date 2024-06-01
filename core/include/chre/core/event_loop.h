@@ -172,6 +172,27 @@ class EventLoop : public NonCopyable {
   void stop();
 
   /**
+   * Synchronously deliver an event to a nanoapp. The event is sent from the
+   * system to the nanoapp with instance ID nanoappInstanceId.
+   *
+   * This must only be used from the EventLoop thread, and must only be used in
+   * rare circumstances where one of the postEvent functions cannot be used. In
+   * particular, misuse of this API can break explicit and implicit event
+   * ordering guarantees and trigger subtle bugs in nanoapps, so use with
+   * caution.
+   *
+   * freeCallback is guaranteed to be called before returning.
+   *
+   * @param nanoappInstanceId The instance ID of the destination of this event
+   * @param eventType Event type identifier, which implies the type of eventData
+   * @param eventData The data being posted
+   * @return true if the event was successfully delivered, false otherwise.
+   */
+  bool deliverEventSync(uint16_t nanoappInstanceId,
+                        uint16_t eventType,
+                        void *eventData);
+
+  /**
    * Posts an event to a nanoapp that is currently running (or all nanoapps if
    * the target instance ID is kBroadcastInstanceId). A senderInstanceId cannot
    * be provided to this method because it must only be used to post events
