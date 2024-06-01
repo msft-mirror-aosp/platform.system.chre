@@ -298,6 +298,25 @@ bool EventLoop::hasNoSpaceForHighPriorityEvent() {
          !removeLowPriorityEventsFromBack(targetLowPriorityEventRemove);
 }
 
+bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
+                                 uint16_t eventType,
+                                 void *eventData) {
+  Event event(eventType, eventData,
+              /* freeCallback= */ nullptr,
+              /* isLowPriority= */ false,
+              /* senderInstanceId= */ kSystemInstanceId,
+              /* targetInstanceId= */ nanoappInstanceId,
+              kDefaultTargetGroupMask);
+  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+    if (app->getInstanceId() == nanoappInstanceId) {
+      deliverNextEvent(app, &event);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // TODO(b/264108686): Refactor this function and postSystemEvent
 void EventLoop::postEventOrDie(uint16_t eventType, void *eventData,
                                chreEventCompleteFunction *freeCallback,
