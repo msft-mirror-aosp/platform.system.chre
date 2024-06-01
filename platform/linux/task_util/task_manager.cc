@@ -32,18 +32,7 @@ TaskManager::TaskManager()
 }
 
 TaskManager::~TaskManager() {
-  {
-    std::lock_guard<std::mutex> lock(mMutex);
-    while (!mQueue.empty()) {
-      mQueue.pop();
-    }
-    mContinueRunningThread = false;
-  }
-
-  mConditionVariable.notify_all();
-  if (mThread.joinable()) {
-    mThread.join();
-  }
+  flushAndStop();
 }
 
 std::optional<uint32_t> TaskManager::addTask(
@@ -99,6 +88,26 @@ void TaskManager::flushTasks() {
   std::lock_guard<std::mutex> lock(mMutex);
   while (!mQueue.empty()) {
     mQueue.pop();
+  }
+}
+
+void TaskManager::flushAndStop() {
+  {
+    std::lock_guard<std::mutex> lock(mMutex);
+    if (!mContinueRunningThread) {
+      // Already shutting down.
+      return;
+    }
+
+    while (!mQueue.empty()) {
+      mQueue.pop();
+    }
+    mContinueRunningThread = false;
+  }
+
+  mConditionVariable.notify_all();
+  if (mThread.joinable()) {
+    mThread.join();
   }
 }
 
