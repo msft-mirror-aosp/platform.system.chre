@@ -21,11 +21,9 @@
 #include <type_traits>
 
 #include "chre/platform/mutex.h"
-#include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
+#include "chre/util/array_queue.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
-#include "chre/util/segmented_queue.h"
 #include "chre/util/time.h"
 
 namespace chre {
@@ -43,18 +41,29 @@ namespace chre {
  * Typical usage:
  * 1. Start a transaction. Get the ID back.
  * 2. TransactionManager will run start callback with the data.
- * 3. TransactionManager will retry if needed.
+ * 3. If the start callback fails or if the transaction is not completed,
+ *    TransactionManager will call the start callback again after the retry
+ *    wait time.
  * 4. Call completeTransaction with the ID.
  * 5. TransactionManager will call the complete callback with the data.
  *
+ * If completeTransaction is not called before the timeout, the transaction
+ * will be completed with a CHRE_ERROR_TIMEOUT.
+ *
+ * Ensure the thread processing the deferred callbacks is completed before the
+ * destruction of the TransactionManager.
+ *
  * @param TransactionData The data passed to the start and complete callbacks.
+ * @param kMaxTransactions The maximum number of pending transactions.
  */
-template <typename TransactionData>
+template <typename TransactionData, size_t kMaxTransactions>
 class TransactionManager : public NonCopyable {
  public:
   /**
    * Type of the callback called on transaction completion. This callback is
-   * called  in the event loop thread.
+   * called in the defer callback thread.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    *
    * @param data The data for the transaction.
    * @param errorCode The error code passed to completeTransaction.
@@ -69,7 +78,9 @@ class TransactionManager : public NonCopyable {
   /**
    * Type of the callback called to start the transaction. This is the action
    * that will be repeated on a retry of the transaction. This callback is
-   * called in the event loop thread.
+   * called in the defer callback thread.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    *
    * @param data The data for the transaction.
    * @return whether the callback succeeded.
@@ -78,7 +89,7 @@ class TransactionManager : public NonCopyable {
       typename std::conditional<std::is_pointer<TransactionData>::value ||
                                     std::is_fundamental<TransactionData>::value,
                                 bool (*)(TransactionData data),
-                                bool (*)(const TransactionData &data)>::type;
+                                bool (*)(TransactionData &data)>::type;
 
   /**
    * The type of function used to defer a callback. See DeferCallback.
@@ -93,6 +104,8 @@ class TransactionManager : public NonCopyable {
   /**
    * Type of the callback used to defer the call of func with data and extraData
    * after waiting for delay. extraData is ignored if delay > 0 ns.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    *
    * @param func The function to call when the callback is executed.
    * @param data The data to pass to the function.
@@ -109,6 +122,8 @@ class TransactionManager : public NonCopyable {
    * Type of the callback used to cancel a defer call made using the
    * DeferCallback.
    *
+   * This callback cannot call any of the TransactionManager methods.
+   *
    * @param timerHandle the timer handle returned using the DeferCallback.
    * @return whether the callback was successfully cancelled.
    */
@@ -117,17 +132,14 @@ class TransactionManager : public NonCopyable {
   /**
    * The callback used to determine which elements to remove
    * during a flush.
+   *
+   * This callback cannot call any of the TransactionManager methods.
    */
   using FlushCallback = typename std::conditional<
       std::is_pointer<TransactionData>::value ||
           std::is_fundamental<TransactionData>::value,
       bool (*)(TransactionData data, void *callbackData),
       bool (*)(const TransactionData &data, void *callbackData)>::type;
-
-  /**
-   * The maximum number of retries for a transaction.
-   */
-  static constexpr uint16_t kMaxNumRetries = 3;
 
   /**
    * The function called when the transaction processing timer is fired.
@@ -141,8 +153,8 @@ class TransactionManager : public NonCopyable {
       return;
     }
 
-    transactionManagerPtr->deferProcessTransactions(data,
-                                                    /* timerFired= */ true);
+    transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
+    transactionManagerPtr->processTransactions();
   }
 
   TransactionManager() = delete;
@@ -151,30 +163,22 @@ class TransactionManager : public NonCopyable {
                      CompleteCallback completeCallback,
                      DeferCallback deferCallback,
                      DeferCancelCallback deferCancelCallback,
-                     Nanoseconds retryWaitTime)
-      : mStartCallback(startCallback),
-        mCompleteCallback(completeCallback),
-        mDeferCallback(deferCallback),
-        mDeferCancelCallback(deferCancelCallback),
-        mRetryWaitTime(retryWaitTime) {
+                     Nanoseconds retryWaitTime, Nanoseconds timeout,
+                     uint16_t maxNumRetries = 3)
+      : kStartCallback(startCallback),
+        kCompleteCallback(completeCallback),
+        kDeferCallback(deferCallback),
+        kDeferCancelCallback(deferCancelCallback),
+        kRetryWaitTime(retryWaitTime),
+        kTimeout(timeout),
+        kMaxNumRetries(maxNumRetries) {
     CHRE_ASSERT(startCallback != nullptr);
     CHRE_ASSERT(completeCallback != nullptr);
     CHRE_ASSERT(deferCallback != nullptr);
     CHRE_ASSERT(deferCancelCallback != nullptr);
     CHRE_ASSERT(retryWaitTime.toRawNanoseconds() > 0);
-  }
-
-  ~TransactionManager() {
-    LockGuard lock(mMutex);
-
-    while (!mTransactions.empty()) {
-      mTransactions.pop();
-    }
-
-    if (mTimerHandle != CHRE_TIMER_INVALID) {
-      mDeferCancelCallback(mTimerHandle);
-      mTimerHandle = CHRE_TIMER_INVALID;
-    }
+    CHRE_ASSERT(timeout.toRawNanoseconds() == 0 ||
+                timeout.toRawNanoseconds() > retryWaitTime.toRawNanoseconds());
   }
 
   /**
@@ -213,93 +217,111 @@ class TransactionManager : public NonCopyable {
 
   /**
    * Starts a transaction. This function will mark the transaction as ready to
-   * execute the StartCallback and processes transactions.
+   * execute the StartCallback and processes transactions. The StartCallback
+   * will be called only when there are no other pending transactions for the
+   * unique cookie.
+   *
+   * The transaction will complete with a CHRE_ERROR_TIMEOUT if
+   * completeTransaction has not been called before the timeout. The timeout
+   * is calculated from the time the StartCallback is called.
    *
    * This function is safe to call in any thread.
    *
    * @param data The transaction data and callbacks used to run the transaction.
-   * @param timeout The transaction timeout. The transaction will complete with
-   *        a CHRE_ERROR_TIMEOUT if completeTransaction has not been called
-   *        before the timeout. This must be greater than the retry time.
+   * @param cookie The cookie used to ensure only one transaction will be
+   *        started and pending for a given cookie.
    * @param id A pointer to the transaction ID that will be populated when
    *        startTransaction succeed. It must not be null.
    * @return Whether the transaction was started successfully.
    */
-  bool startTransaction(const TransactionData &data, Nanoseconds timeout,
+  bool startTransaction(const TransactionData &data, uint16_t cookie,
                         uint32_t *id);
 
-  /**
-   * Returns the retry wait time.
-   *
-   * @return The retry wait time.
-   */
-  Nanoseconds getRetryWaitTime() {
-    return mRetryWaitTime;
-  }
-
-  /**
-   * Defers processing transactions in the event loop thread.
-   *
-   * @param data The pointer to the TransactionManager.
-   * @param timerFired If the timer fired.
-   */
-  void deferProcessTransactions(void *data, bool timerFired);
-
  private:
-  //! Size of a single block for the transaction queue.
-  static constexpr size_t kTransactionQueueBlockSize = 64;
-
-  //! Number of blocks for the transaction queue.
-  static constexpr size_t kTransactionQueueNumBlocks = 5;
-
   //! Stores transaction-related data.
   struct Transaction {
     uint32_t id;
     TransactionData data;
     Nanoseconds nextRetryTime;
     Nanoseconds timeoutTime;
+    uint16_t cookie;
     uint16_t numCompletedStartCalls;
     Optional<uint8_t> errorCode;
   };
 
   /**
+   * Defers processing transactions in the defer callback thread.
+   */
+  void deferProcessTransactions();
+
+  /**
+   * Calls the complete callback for a transaction if needed. Also updates the
+   * transaction state. Assumes the caller holds the mutex.
+   *
+   * @param transaction The transaction.
+   */
+  void doCompleteTransactionLocked(Transaction &transaction);
+
+  /**
+   * Calls the start callback for a transaction if needed. Also updates the
+   * transaction state. Assumes the caller holds the mutex.
+   *
+   * @param transaction The transaction.
+   * @param i The index of the transaction in mTransactions.
+   * @param now The current time.
+   */
+  void doStartTransactionLocked(Transaction &transaction, size_t i,
+                                Nanoseconds now);
+
+  /**
+   * Generates a pseudo random ID for a transaction in the range of
+   * [0, 2^30 - 1].
+   * @return The generated ID.
+   */
+  uint32_t generatePseudoRandomId();
+
+  /**
    * Processes transactions. This function will call the start callback and
    * complete callback where appropriate and keep track of which transactions
-   * need to be retried next. This function is called in the event loop thread
-   * and will defer a call to itself at the next time needed to processes the
-   * next transaction.
-   *
-   * @param timerFired If the timer fired.
+   * need to be retried next. This function is called in the defer callback
+   * thread and will defer a call to itself at the next time needed to processes
+   * the next transaction.
    */
-  void processTransactions(bool timerFired);
+  void processTransactions();
 
   //! The start callback.
-  StartCallback mStartCallback;
+  const StartCallback kStartCallback;
 
   //! The complete callback.
-  CompleteCallback mCompleteCallback;
+  const CompleteCallback kCompleteCallback;
 
   //! The defer callback.
-  DeferCallback mDeferCallback;
+  const DeferCallback kDeferCallback;
 
   //! The defer cancel callback.
-  DeferCancelCallback mDeferCancelCallback;
+  const DeferCancelCallback kDeferCancelCallback;
+
+  //! The retry wait time.
+  const Nanoseconds kRetryWaitTime;
+
+  //! The timeout for a transaction.
+  const Nanoseconds kTimeout;
+
+  //! The maximum number of retries for a transaction.
+  const uint16_t kMaxNumRetries;
 
   //! The mutex protecting mTransactions and mTimerHandle.
   Mutex mMutex;
 
   //! The next ID for use when creating a transaction.
-  uint32_t mNextTransactionId = 0;
-
-  //! The retry wait time.
-  Nanoseconds mRetryWaitTime;
+  Optional<uint32_t> mNextTransactionId;
 
   //! The timer handle for the timer tracking execution of processTransactions.
+  //! Can only be modified in the defer callback thread.
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
   //! The list of transactions.
-  SegmentedQueue<Transaction, kTransactionQueueBlockSize> mTransactions{
-      kTransactionQueueNumBlocks};
+  ArrayQueue<Transaction, kMaxTransactions> mTransactions;
 };
 
 }  // namespace chre

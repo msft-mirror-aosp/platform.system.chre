@@ -132,15 +132,7 @@ class MultiClientContextHubBase
       const ::chre::fbs::DebugDumpResponseT & /* response */);
   void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
   void handleClientDeath(pid_t pid);
-
-  /**
-   * Returns true to allow metrics to be reported to stats service.
-   *
-   * <p>Subclasses can override to turn it off.
-   */
-  virtual bool isMetricEnabled() {
-    return true;
-  }
+  void handleLogMessageV2(const ::chre::fbs::LogMessageV2T &logMessage);
 
   /**
    * Enables test mode by unloading all the nanoapps except the system nanoapps.
@@ -211,7 +203,8 @@ class MultiClientContextHubBase
   // The parser of buffered logs from CHRE
   LogMessageParser mLogger;
 
-  MetricsReporter mMetricsReporter;
+  // Metrics reporter that will report metrics if it is initialized to non-null.
+  std::unique_ptr<MetricsReporter> mMetricsReporter;
 
   // Used to map message sequence number to host endpoint ID
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;

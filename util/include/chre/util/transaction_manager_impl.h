@@ -17,15 +17,12 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 
-#include <inttypes.h>
 #include <algorithm>
-#include <cmath>
+#include <inttypes.h>
 
-#include "chre/platform/assert.h"
 #include "chre/platform/system_time.h"
+#include "chre/util/hash.h"
 #include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
-#include "chre/util/time.h"
 #include "chre/util/transaction_manager.h"
 #include "chre_api/chre.h"
 
@@ -34,169 +31,239 @@ namespace chre {
 using ::chre::Nanoseconds;
 using ::chre::Seconds;
 
-template <typename TransactionData>
-bool TransactionManager<TransactionData>::completeTransaction(
+template <typename TransactionData, size_t kMaxTransactions>
+bool TransactionManager<TransactionData, kMaxTransactions>::completeTransaction(
     uint32_t transactionId, uint8_t errorCode) {
-  LockGuard lock(mMutex);
+  bool success = false;
 
-  for (size_t i = 0; i < mTransactions.size(); ++i) {
-    Transaction &transaction = mTransactions[i];
-    if (transaction.id == transactionId) {
-      if (errorCode == CHRE_ERROR_TRANSIENT) {
-        transaction.nextRetryTime = Nanoseconds(0);
-      } else {
-        transaction.errorCode = errorCode;
+  {
+    LockGuard<Mutex> lock(mMutex);
+    for (size_t i = 0; i < mTransactions.size(); ++i) {
+      Transaction &transaction = mTransactions[i];
+      if (transaction.id == transactionId) {
+        if (errorCode == CHRE_ERROR_TRANSIENT) {
+          transaction.nextRetryTime = Nanoseconds(0);
+        } else {
+          transaction.errorCode = errorCode;
+        }
+        success = true;
+        break;
       }
-      deferProcessTransactions(this, /* timerFired= */ false);
-      return true;
     }
   }
 
-  LOGE("Unable to complete transaction with ID: %" PRIu32, transactionId);
-  return false;
+  if (success) {
+    deferProcessTransactions();
+  } else {
+    LOGE("Unable to complete transaction with ID: %" PRIu32, transactionId);
+  }
+  return success;
 }
 
-template <typename TransactionData>
-size_t TransactionManager<TransactionData>::flushTransactions(
+template <typename TransactionData, size_t kMaxTransactions>
+size_t TransactionManager<TransactionData, kMaxTransactions>::flushTransactions(
     FlushCallback callback, void *data) {
   if (callback == nullptr) {
     return 0;
   }
 
-  LockGuard lock(mMutex);
+  deferProcessTransactions();
 
-  deferProcessTransactions(this, /* timerFired= */ false);
-  return mTransactions.removeMatchedFromBack(
-      [](Transaction &transaction, void *data, void *extraData) {
-        FlushCallback callback = reinterpret_cast<FlushCallback>(data);
-        if (callback == nullptr) {
-          return false;
-        }
-
-        return callback(transaction.data, extraData);
-      },
-      reinterpret_cast<void *>(callback), data, mTransactions.size());
+  LockGuard<Mutex> lock(mMutex);
+  size_t numFlushed = 0;
+  for (size_t i = 0; i < mTransactions.size();) {
+    if (callback(mTransactions[i].data, data)) {
+      mTransactions.remove(i);
+      ++numFlushed;
+    } else {
+      ++i;
+    }
+  }
+  return numFlushed;
 }
 
-template <typename TransactionData>
-bool TransactionManager<TransactionData>::startTransaction(
-    const TransactionData &data, Nanoseconds timeout, uint32_t *id) {
+template <typename TransactionData, size_t kMaxTransactions>
+bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
+    const TransactionData &data, uint16_t cookie, uint32_t *id) {
   CHRE_ASSERT(id != nullptr);
 
-  LockGuard lock(mMutex);
+  {
+    LockGuard<Mutex> lock(mMutex);
+    if (mTransactions.full()) {
+      LOGE("The transaction queue is full");
+      return false;
+    }
 
-  if (timeout.toRawNanoseconds() != 0 && timeout <= mRetryWaitTime) {
-    LOGE("Timeout: %" PRIu64 "ns is <= retry wait time: %" PRIu64 "ns",
-         timeout.toRawNanoseconds(), mRetryWaitTime.toRawNanoseconds());
-    return false;
+    if (!mNextTransactionId.has_value()) {
+      mNextTransactionId = generatePseudoRandomId();
+    }
+    uint32_t transactionId = (mNextTransactionId.value())++;
+    *id = transactionId;
+
+    Transaction transaction{
+        .id = transactionId,
+        .data = data,
+        .nextRetryTime = Nanoseconds(0),
+        .timeoutTime = Nanoseconds(0),
+        .cookie = cookie,
+        .numCompletedStartCalls = 0,
+        .errorCode = Optional<uint8_t>(),
+    };
+
+    mTransactions.push(transaction);
   }
 
-  if (mTransactions.full()) {
-    LOGE("The transaction queue is full");
-    return false;
-  }
-
-  uint32_t transactionId = mNextTransactionId++;
-  *id = transactionId;
-
-  Transaction transaction{
-      .id = transactionId,
-      .data = data,
-      .nextRetryTime = Nanoseconds(0),
-      .timeoutTime = timeout.toRawNanoseconds() == 0
-                         ? Nanoseconds(UINT64_MAX)
-                         : SystemTime::getMonotonicTime() + timeout,
-      .numCompletedStartCalls = 0,
-      .errorCode = Optional<uint8_t>(),
-  };
-
-  mTransactions.push_back(transaction);
-
-  deferProcessTransactions(this, /* timerFired= */ false);
+  deferProcessTransactions();
   return true;
 }
 
-template <typename TransactionData>
-void TransactionManager<TransactionData>::deferProcessTransactions(
-    void *data, bool timerFired) {
-  bool status = mDeferCallback(
-      [](uint16_t /* type */, void *data, void *extraData) {
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData,
+                        kMaxTransactions>::deferProcessTransactions() {
+  bool success = kDeferCallback(
+      [](uint16_t /* type */, void *data, void * /* extraData */) {
         auto transactionManagerPtr = static_cast<TransactionManager *>(data);
         if (transactionManagerPtr == nullptr) {
           LOGE("Could not get transaction manager to process transactions");
           return;
         }
 
-        NestedDataPtr<bool> timerFiredFromExtraData(extraData);
-        transactionManagerPtr->processTransactions(timerFiredFromExtraData);
+        transactionManagerPtr->processTransactions();
       },
-      data, NestedDataPtr<bool>(timerFired),
+      this,
+      /* extraData= */ nullptr,
       /* delay= */ Nanoseconds(0),
       /* outTimerHandle= */ nullptr);
 
-  if (!status) {
+  if (!success) {
     LOGE("Could not defer callback to process transactions");
   }
 }
 
-template <typename TransactionData>
-void TransactionManager<TransactionData>::processTransactions(bool timerFired) {
-  LockGuard lock(mMutex);
-
-  if (!timerFired && mTimerHandle != CHRE_TIMER_INVALID) {
-    mDeferCancelCallback(mTimerHandle);
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData, kMaxTransactions>::
+    doCompleteTransactionLocked(Transaction &transaction) {
+  uint8_t errorCode = CHRE_ERROR_TIMEOUT;
+  if (transaction.errorCode.has_value()) {
+    errorCode = *transaction.errorCode;
   }
-  mTimerHandle = CHRE_TIMER_INVALID;
 
-  if (mTransactions.size() == 0) {
+  bool success = kCompleteCallback(transaction.data, errorCode);
+  if (success) {
+    LOGI("Transaction %" PRIu32 " completed with error code: %" PRIu8,
+         transaction.id, errorCode);
+  } else {
+    LOGE("Could not complete transaction %" PRIu32, transaction.id);
+  }
+}
+
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData, kMaxTransactions>::
+    doStartTransactionLocked(Transaction &transaction, size_t i,
+                             Nanoseconds now) {
+  // Ensure only one pending transaction per unique cookie.
+  bool canStart = true;
+  for (size_t j = 0; j < mTransactions.size(); ++j) {
+    if (i != j && mTransactions[j].cookie == transaction.cookie &&
+        mTransactions[j].numCompletedStartCalls > 0) {
+      canStart = false;
+      break;
+    }
+  }
+  if (!canStart) {
     return;
+  }
+
+  if (transaction.timeoutTime.toRawNanoseconds() != 0) {
+    transaction.timeoutTime = now + kTimeout;
+  }
+
+  bool success = kStartCallback(transaction.data);
+  if (success) {
+    LOGI("Transaction %" PRIu32 " started", transaction.id);
+  } else {
+    LOGE("Could not start transaction %" PRIu32, transaction.id);
+  }
+
+  ++transaction.numCompletedStartCalls;
+  transaction.nextRetryTime = now + kRetryWaitTime;
+}
+
+template <typename TransactionData, size_t kMaxTransactions>
+uint32_t TransactionManager<TransactionData,
+                        kMaxTransactions>::generatePseudoRandomId() {
+  uint64_t data =
+      SystemTime::getMonotonicTime().toRawNanoseconds() +
+      static_cast<uint64_t>(SystemTime::getEstimatedHostTimeOffset());
+  uint32_t hash = fnv1a32Hash(reinterpret_cast<const uint8_t*>(&data),
+                              sizeof(uint64_t));
+
+  // We mix the top 2 bits back into the middle of the hash to provide a value
+  // that leaves a gap of at least ~1 billion sequence numbers before
+  // overflowing a signed int32 (as used on the Java side).
+  constexpr uint32_t kMask = 0xC0000000;
+  constexpr uint32_t kShiftAmount = 17;
+  uint32_t extraBits = hash & kMask;
+  hash ^= extraBits >> kShiftAmount;
+  return hash & ~kMask;
+}
+
+template <typename TransactionData, size_t kMaxTransactions>
+void TransactionManager<TransactionData,
+                        kMaxTransactions>::processTransactions() {
+  if (mTimerHandle != CHRE_TIMER_INVALID) {
+    CHRE_ASSERT(kDeferCancelCallback(mTimerHandle));
+    mTimerHandle = CHRE_TIMER_INVALID;
   }
 
   Nanoseconds now = SystemTime::getMonotonicTime();
   Nanoseconds nextExecutionTime(UINT64_MAX);
-  for (size_t i = 0; i < mTransactions.size();) {
-    Transaction &transaction = mTransactions[i];
-    if (transaction.timeoutTime <= now ||
-        (transaction.nextRetryTime <= now &&
-         transaction.numCompletedStartCalls >= kMaxNumRetries + 1) ||
-        transaction.errorCode.has_value()) {
-      uint8_t errorCode = transaction.errorCode.has_value()
-                              ? *transaction.errorCode
-                              : CHRE_ERROR_TIMEOUT;
 
-      bool status = mCompleteCallback(transaction.data, errorCode);
-      if (status) {
-        LOGI("Transaction %" PRIu32 " completed with error code: %" PRIu8,
-             transaction.id, errorCode);
-      } else {
-        LOGE("Could not complete transaction %" PRIu32, transaction.id);
-      }
-
-      mTransactions.remove(i);
-    } else {
-      if (transaction.nextRetryTime <= now) {
-        bool status = mStartCallback(transaction.data);
-        if (status) {
-          LOGI("Transaction %" PRIu32 " started", transaction.id);
-        } else {
-          LOGE("Could not start transaction %" PRIu32, transaction.id);
-        }
-
-        ++transaction.numCompletedStartCalls;
-        transaction.nextRetryTime = now + mRetryWaitTime;
-      }
-
-      nextExecutionTime = std::min(
-          nextExecutionTime,
-          std::min(transaction.nextRetryTime, transaction.timeoutTime));
-      ++i;
+  {
+    LockGuard<Mutex> lock(mMutex);
+    if (mTransactions.empty()) {
+      return;
     }
+
+    // If a transaction is completed, it will be removed from the queue.
+    // The loop continues processing in this case as there may be another
+    // transaction that is ready to start with the same cookie that was
+    // blocked from starting by the completed transaction.
+    bool continueProcessing;
+    do {
+      continueProcessing = false;
+      for (size_t i = 0; i < mTransactions.size();) {
+        Transaction &transaction = mTransactions[i];
+        if ((transaction.timeoutTime.toRawNanoseconds() != 0 &&
+             transaction.timeoutTime <= now) ||
+            (transaction.nextRetryTime <= now &&
+             transaction.numCompletedStartCalls > kMaxNumRetries) ||
+            transaction.errorCode.has_value()) {
+          doCompleteTransactionLocked(transaction);
+          mTransactions.remove(i);
+          continueProcessing = true;
+        } else {
+          if (transaction.nextRetryTime <= now) {
+            doStartTransactionLocked(transaction, i, now);
+          }
+
+          nextExecutionTime =
+              std::min(nextExecutionTime, transaction.nextRetryTime);
+          if (transaction.timeoutTime.toRawNanoseconds() != 0) {
+            nextExecutionTime =
+                std::min(nextExecutionTime, transaction.timeoutTime);
+          }
+          ++i;
+        }
+      }
+    } while (continueProcessing);
   }
 
   Nanoseconds waitTime = nextExecutionTime - SystemTime::getMonotonicTime();
   if (waitTime.toRawNanoseconds() > 0) {
-    mDeferCallback(TransactionManager<TransactionData>::onTimerFired, this,
-                   /* extraData= */ nullptr, waitTime, &mTimerHandle);
+    kDeferCallback(
+        TransactionManager<TransactionData, kMaxTransactions>::onTimerFired,
+        /* data= */ this, /* extraData= */ nullptr, waitTime, &mTimerHandle);
     CHRE_ASSERT(mTimerHandle != CHRE_TIMER_INVALID);
   }
 }

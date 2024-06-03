@@ -50,3 +50,24 @@ flag {
   description: "Enable support for reliable messages in CHRE"
   bug: "314081414"
 }
+
+flag {
+  name: "reliable_message_duplicate_detection_service"
+  namespace: "context_hub"
+  description: "Enable duplicate detection for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_retry_support_service"
+  namespace: "context_hub"
+  description: "Enable retries for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_test_mode_behavior"
+  namespace: "context_hub"
+  description: "Enables test mode behaviors in the Context Hub Service for reliable messages"
+  bug: "333567339"
+}

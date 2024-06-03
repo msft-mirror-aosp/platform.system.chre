@@ -3,10 +3,7 @@
 
 # make sure $ANDROID_BUILD_TOP is set
 if [[ -z "$ANDROID_BUILD_TOP" ]]; then
-    echo "Must setup Android build environment first" 1>&2
-    echo "Run the following commands from the repo root:" 1>&2
-    echo " source build/envsetup.sh" 1>&2
-    echo " lunch vext_k6985v1_64-userdebug" 1>&2
+    echo "ANDROID_BUILD_TOP must be defined" 1>&2
     exit 1
 fi
 
@@ -20,9 +17,32 @@ if [[ -z "$RISCV_TOOLCHAIN_PATH" ]] || [[ -z "$RISCV_TINYSYS_PREFIX" ]]; then
     exit 1
 fi
 
+usage() {
+    echo "Usage: $0 [options] [target]" 1>&2;
+    echo "options:" 1>&2;
+    echo "    -c    clean build that runs 'make clean' before building" 1>&2;
+    echo "Supported targets:" 1>&2;
+    echo "    aosp_riscv55e03_tinysys (default)" 1>&2;
+    echo "    aosp_riscv55e300_tinysys" 1>&2;
+}
+
+# do incremental build by default.
+clean_build="false"
+while getopts "c" opt; do
+  case ${opt} in
+    c) clean_build="true" ;;
+    *) usage; exit 0 ;;
+  esac
+done
+
 pushd $ANDROID_BUILD_TOP/system/chre > /dev/null
 
+shift $(($OPTIND - 1))
 target=${1:-aosp_riscv55e03_tinysys}
+
+if [[ "$clean_build" == "true" ]];then
+  make clean
+fi
 
 CHRE_VARIANT_MK_INCLUDES=variant/tinysys/variant.mk \
  IS_ARCHIVE_ONLY_BUILD=true \

@@ -15,25 +15,25 @@
 // GmsCore code is not affected by this file.
 // The binary message on wire is not affected by this file either.
 
-nearby.PublicateCertificate.authenticity_key max_size:16
+nearby.PublicateCertificate.authenticity_key max_size:32
 nearby.PublicateCertificate.authenticity_key type:FT_INLINE
 
-nearby.PublicateCertificate.metadata_encryption_key_tag max_size:8
+nearby.PublicateCertificate.metadata_encryption_key_tag max_size:32
 nearby.PublicateCertificate.metadata_encryption_key_tag type:FT_INLINE
 
 nearby.PublicCredential.secret_id max_size:4
 nearby.PublicCredential.secret_id type:FT_INLINE
 
-nearby.PublicCredential.authenticity_key max_size:16
+nearby.PublicCredential.authenticity_key max_size:32
 nearby.PublicCredential.authenticity_key type:FT_INLINE
 
 nearby.PublicCredential.public_key max_size:4
 nearby.PublicCredential.public_key type:FT_INLINE
 
-nearby.PublicCredential.encrypted_metadata max_size:4
+nearby.PublicCredential.encrypted_metadata max_size:16
 nearby.PublicCredential.encrypted_metadata type:FT_INLINE
 
-nearby.PublicCredential.encrypted_metadata_tag max_size:8
+nearby.PublicCredential.encrypted_metadata_tag max_size:32
 nearby.PublicCredential.encrypted_metadata_tag type:FT_INLINE
 
 nearby.BleFilter.mac_address max_size:6
