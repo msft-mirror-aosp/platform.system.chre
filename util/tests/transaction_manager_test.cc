@@ -210,6 +210,7 @@ class TransactionManagerTest : public testing::Test {
       sMap.erase(testName);
     }
 
+    mTaskManager->flushAndStop();
     mTaskManager.reset();
     mZeroRetriesTransactionManager.reset();
     mFaultyStartTransactionManager.reset();
