@@ -171,6 +171,10 @@ void Manager::compareAndSendResultToHost() {
       mApScanResults.size() > mExpectedMaxChreResultCanHandle &&
       mApScanResults.size() < mChreScanResults.size();
 
+  LOGI("Wifi scan result counts, AP = %zu, CHRE = %zu, MAX = %" PRIu8,
+       mApScanResults.size(), mChreScanResults.size(),
+       mExpectedMaxChreResultCanHandle);
+
   verifyScanResults(&testResult);
 
   if (belowMaxSizeCheck || aboveMaxSizeCheck) {
@@ -252,7 +256,14 @@ void Manager::verifyScanResults(chre_test_common_TestResult *testResultOut) {
 
   for (auto &scanResult : mApScanResults) {
     if (!scanResult.getSeen()) {
-      LOGW("AP %s is not seen in CHRE", scanResult.getSsid());
+      const char *bssidStr = "<non-printable>";
+      char bssidBuffer[chre::kBssidStrLen];
+      if (chre::parseBssidToStr(scanResult.getBssid(), bssidBuffer,
+                                sizeof(bssidBuffer))) {
+        bssidStr = bssidBuffer;
+      }
+      LOGW("AP %s with bssid %s is not seen in CHRE", scanResult.getSsid(),
+           bssidStr);
       // Since CHRE is more constrained in memory, it is expected that if we
       // receive over a cretin amount of AP, we will drop some of them.
       if (mApScanResults.size() <= mExpectedMaxChreResultCanHandle) {
