@@ -251,7 +251,7 @@ int generateMessageToHost(const MessageToHost *msgToHost, unsigned char *buffer,
                           size_t bufferSize, unsigned int *messageLen) {
   // TODO: ideally we'd construct our flatbuffer directly in the
   // host-supplied buffer
-  constexpr size_t kFixedSizePortion = 80;
+  constexpr size_t kFixedSizePortion = 88;
   ChreFlatBufferBuilder builder(msgToHost->message.size() + kFixedSizePortion);
   HostProtocolChre::encodeNanoappMessage(
       builder, msgToHost->appId, msgToHost->toHostData.messageType,
@@ -291,8 +291,8 @@ int generateHubInfoResponse(uint16_t hostClientId, unsigned char *buffer,
   HostProtocolChre::encodeHubInfoResponse(
       builder, kHubName, kVendor, kToolchain, kLegacyPlatformVersion,
       kLegacyToolchainVersion, kPeakMips, kStoppedPower, kSleepPower,
-      kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
-      chreGetVersion(), hostClientId);
+      kPeakPower, chreGetMessageToHostMaxSize(), chreGetPlatformId(),
+      chreGetVersion(), hostClientId, /* supportsReliableMessage= */ false);
 
   return copyToHostBuffer(builder, buffer, bufferSize, messageLen);
 }
@@ -594,6 +594,11 @@ bool HostLink::sendMessage(const MessageToHost *message) {
       PendingMessage(PendingMessageType::NanoappMessageToHost, message));
 }
 
+bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
+                                         uint8_t /* errorCode */) {
+  return false;
+}
+
 bool HostLink::sendMetricLog(uint32_t metricId, const uint8_t *encodedMetric,
                              size_t encodedMetricLen) {
   struct MetricLogData {
@@ -764,11 +769,10 @@ void HostMessageHandlers::sendFragmentResponse(uint16_t hostClientId,
                          kInitialBufferSize, msgBuilder, &response);
 }
 
-void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
-                                               uint32_t messageType,
-                                               uint16_t hostEndpoint,
-                                               const void *messageData,
-                                               size_t messageDataLen) {
+void HostMessageHandlers::handleNanoappMessage(
+    uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
+    const void *messageData, size_t messageDataLen, bool isReliable,
+    uint32_t messageSequenceNumber) {
   LOGD("Parsed nanoapp message from host: app ID 0x%016" PRIx64
        ", endpoint "
        "0x%" PRIx16 ", msgType %" PRIu32 ", payload size %zu",
@@ -777,8 +781,12 @@ void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
   HostCommsManager &manager =
       EventLoopManagerSingleton::get()->getHostCommsManager();
   manager.sendMessageToNanoappFromHost(appId, messageType, hostEndpoint,
-                                       messageData, messageDataLen);
+                                       messageData, messageDataLen, isReliable,
+                                       messageSequenceNumber);
 }
+
+void HostMessageHandlers::handleMessageDeliveryStatus(
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
 
 void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
   // We generate the response in the context of chre_slpi_get_message_to_host
@@ -907,6 +915,8 @@ void HostMessageHandlers::handleSelfTestRequest(uint16_t hostClientId) {
   bool success = true;
   sendSelfTestResponse(hostClientId, success);
 }
+
+void HostMessageHandlers::handlePulseRequest() {}
 
 void HostMessageHandlers::handleNanConfigurationUpdate(bool enabled) {
 #ifdef CHRE_WIFI_NAN_SUPPORT_ENABLED

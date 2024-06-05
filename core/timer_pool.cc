@@ -15,11 +15,15 @@
  */
 
 #include "chre/core/timer_pool.h"
+#include "chre/core/event.h"
 #include "chre/core/event_loop.h"
+#include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
+#include "chre/target_platform/log.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/nested_data_ptr.h"
 
 namespace chre {
 
@@ -81,16 +85,22 @@ TimerHandle TimerPool::setTimer(uint16_t instanceId, Nanoseconds duration,
   timerRequest.callbackType = callbackType;
   timerRequest.isOneShot = isOneShot;
 
-  bool newTimerExpiresEarliest =
-      (!mTimerRequests.empty() && mTimerRequests.top() > timerRequest);
   bool success = insertTimerRequestLocked(timerRequest);
 
   if (success) {
-    if (newTimerExpiresEarliest) {
-      mSystemTimer.set(handleSystemTimerCallback, this, duration);
-    } else if (mTimerRequests.size() == 1) {
+    if (mTimerRequests.size() == 1) {
       // If this timer request was the first, schedule it.
       handleExpiredTimersAndScheduleNextLocked();
+    } else {
+      // If there was already a timer pending before this, and we just inserted
+      // to the top of the queue, just update the system timer. This is slightly
+      // more efficient than calling into
+      // handleExpiredTimersAndScheduleNextLocked().
+      bool newRequestExpiresFirst =
+          timerRequest.timerHandle == mTimerRequests.top().timerHandle;
+      if (newRequestExpiresFirst) {
+        mSystemTimer.set(handleSystemTimerCallback, this, duration);
+      }
     }
   }
 
@@ -119,7 +129,7 @@ bool TimerPool::cancelTimer(uint16_t instanceId, TimerHandle timerHandle) {
 
 TimerPool::TimerRequest *TimerPool::getTimerRequestByTimerHandleLocked(
     TimerHandle timerHandle, size_t *index) {
-  for (size_t i = 0; i < mTimerRequests.size(); i++) {
+  for (size_t i = 0; i < mTimerRequests.size(); ++i) {
     if (mTimerRequests[i].timerHandle == timerHandle) {
       if (index != nullptr) {
         *index = i;
@@ -132,7 +142,7 @@ TimerPool::TimerRequest *TimerPool::getTimerRequestByTimerHandleLocked(
 }
 
 bool TimerPool::TimerRequest::operator>(const TimerRequest &request) const {
-  return (expirationTime > request.expirationTime);
+  return expirationTime > request.expirationTime;
 }
 
 TimerHandle TimerPool::generateTimerHandleLocked() {
@@ -243,33 +253,28 @@ bool TimerPool::handleExpiredTimersAndScheduleNextLocked() {
     Nanoseconds currentTime = SystemTime::getMonotonicTime();
     TimerRequest &currentTimerRequest = mTimerRequests.top();
     if (currentTime >= currentTimerRequest.expirationTime) {
+      handledExpiredTimer = true;
+
       // This timer has expired, so post an event if it is a nanoapp timer, or
       // submit a deferred callback if it's a system timer.
+      bool success;
       if (currentTimerRequest.instanceId == kSystemInstanceId) {
-        EventLoopManagerSingleton::get()->deferCallback(
+        success = EventLoopManagerSingleton::get()->deferCallback(
             currentTimerRequest.callbackType,
             const_cast<void *>(currentTimerRequest.cookie),
             currentTimerRequest.systemCallback);
       } else {
-        EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-            CHRE_EVENT_TIMER, const_cast<void *>(currentTimerRequest.cookie),
-            nullptr /*freeCallback*/, currentTimerRequest.instanceId);
+        success = EventLoopManagerSingleton::get()->deferCallback(
+            SystemCallbackType::TimerPoolTimerExpired,
+            NestedDataPtr<TimerHandle>(currentTimerRequest.timerHandle),
+            TimerPool::handleTimerExpiredCallback,
+            this);
       }
-      handledExpiredTimer = true;
+      if (!success) {
+        LOGW("Failed to defer timer callback");
+      }
 
-      // Reschedule the timer if needed, and release the current request.
-      if (!currentTimerRequest.isOneShot) {
-        // Important: we need to make a copy of currentTimerRequest here,
-        // because it's a reference to memory that may get moved during the
-        // insert operation (thereby invalidating it).
-        TimerRequest cyclicTimerRequest = currentTimerRequest;
-        cyclicTimerRequest.expirationTime =
-            currentTime + currentTimerRequest.duration;
-        popTimerRequestLocked();
-        CHRE_ASSERT(insertTimerRequestLocked(cyclicTimerRequest));
-      } else {
-        popTimerRequestLocked();
-      }
+      rescheduleAndRemoveExpiredTimersLocked(currentTimerRequest);
     } else {
       // Update the system timer to reflect the duration until the closest
       // expiry (mTimerRequests is sorted by expiry, so we just do this for
@@ -281,6 +286,20 @@ bool TimerPool::handleExpiredTimersAndScheduleNextLocked() {
   }
 
   return handledExpiredTimer;
+}
+
+void TimerPool::rescheduleAndRemoveExpiredTimersLocked(
+    const TimerRequest &request) {
+  if (request.isOneShot && request.instanceId == kSystemInstanceId) {
+    popTimerRequestLocked();
+  } else {
+    TimerRequest copyRequest = request;
+    copyRequest.expirationTime = request.isOneShot
+        ? Nanoseconds(UINT64_MAX)
+        : request.expirationTime + request.duration;
+    popTimerRequestLocked();
+    CHRE_ASSERT(insertTimerRequestLocked(copyRequest));
+  }
 }
 
 bool TimerPool::hasNanoappTimers(uint16_t instanceId) {
@@ -296,7 +315,7 @@ bool TimerPool::hasNanoappTimers(uint16_t instanceId) {
 }
 
 void TimerPool::handleSystemTimerCallback(void *timerPoolPtr) {
-  auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
+  auto callback = [](uint16_t /* type */, void *data, void * /* extraData */) {
     auto *timerPool = static_cast<TimerPool *>(data);
     if (!timerPool->handleExpiredTimersAndScheduleNext()) {
       // Means that the system timer invoked our callback before the next
@@ -310,6 +329,37 @@ void TimerPool::handleSystemTimerCallback(void *timerPoolPtr) {
 
   EventLoopManagerSingleton::get()->deferCallback(
       SystemCallbackType::TimerPoolTick, timerPoolPtr, callback);
+}
+
+void TimerPool::handleTimerExpiredCallback(uint16_t /* type */, void *data,
+                                           void *extraData) {
+  NestedDataPtr<TimerHandle> timerHandle(data);
+  TimerPool* timerPool = static_cast<TimerPool*>(extraData);
+  size_t index;
+  TimerRequest currentTimerRequest;
+
+  {
+    LockGuard<Mutex> lock(timerPool->mMutex);
+    TimerRequest* timerRequest =
+        timerPool->getTimerRequestByTimerHandleLocked(
+            timerHandle, &index);
+    if (timerRequest == nullptr) {
+      return;
+    }
+
+    currentTimerRequest = *timerRequest;
+    if (currentTimerRequest.isOneShot) {
+      timerPool->removeTimerRequestLocked(index);
+    }
+  }
+
+  if (!EventLoopManagerSingleton::get()->getEventLoop()
+        .deliverEventSync(
+            currentTimerRequest.instanceId,
+            CHRE_EVENT_TIMER,
+            const_cast<void*>(currentTimerRequest.cookie))) {
+    LOGW("Failed to deliver timer event");
+  }
 }
 
 }  // namespace chre

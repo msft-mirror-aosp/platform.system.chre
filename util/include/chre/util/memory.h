@@ -18,6 +18,7 @@
 #define CHRE_UTIL_MEMORY_H_
 
 #include <cstddef>
+#include <type_traits>
 
 namespace chre {
 
@@ -58,6 +59,14 @@ void uninitializedMoveOrCopy(ElementType *source, size_t count,
  */
 template <typename T, typename... Args>
 T *memoryAlloc(Args &&... args);
+
+/**
+ * Allocates memory for an array of objects, default-initializing them (i.e.
+ * may be indeterminate/uninitialized). This is only supported for unbounded
+ * array types, e.g. char[].
+ */
+template <typename T>
+typename std::remove_extent<T>::type *memoryAllocArray(size_t count);
 
 /**
  * Destroys an element and deallocate its memory.

@@ -50,8 +50,8 @@ struct FragmentedLoadRequest {
   std::vector<uint8_t> binary;
 
   FragmentedLoadRequest(size_t fragmentId, uint32_t transactionId,
-                        const std::vector<uint8_t> &binary)
-      : FragmentedLoadRequest(fragmentId, transactionId, 0, 0, 0, 0, 0,
+                        uint64_t appId, const std::vector<uint8_t> &binary)
+      : FragmentedLoadRequest(fragmentId, transactionId, appId, 0, 0, 0, 0,
                               binary) {}
 
   FragmentedLoadRequest(size_t fragmentId, uint32_t transactionId,
@@ -109,16 +109,27 @@ class FragmentedLoadTransaction {
    * @return true if the last fragment has been retrieved by getNextRequest(),
    *         false otherwise.
    */
-  bool isComplete() const;
+  [[nodiscard]] bool isComplete() const;
 
-  uint32_t getTransactionId() const {
-    return mTransactionId;
+  [[nodiscard]] uint32_t getTransactionId() const {
+    return mFragmentRequests[0].transactionId;
+  }
+
+  [[nodiscard]] uint64_t getNanoappId() const {
+    return mFragmentRequests[0].appId;
+  }
+
+  [[nodiscard]] size_t getNanoappTotalSize() const {
+    return !mFragmentRequests[0].appTotalSizeBytes;
+  }
+
+  [[nodiscard]] uint32_t getNanoappVersion() const {
+    return mFragmentRequests[0].appVersion;
   }
 
  private:
   std::vector<FragmentedLoadRequest> mFragmentRequests;
   size_t mCurrentRequestIndex = 0;
-  uint32_t mTransactionId;
 
   static constexpr size_t kDefaultFragmentSize =
       CHRE_HOST_DEFAULT_FRAGMENT_SIZE;

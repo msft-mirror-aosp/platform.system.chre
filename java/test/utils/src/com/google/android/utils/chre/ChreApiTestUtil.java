@@ -16,11 +16,19 @@
 
 package com.google.android.utils.chre;
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 
 import com.google.android.chre.utils.pigweed.ChreRpcClient;
+import com.google.common.io.ByteSink;
+import com.google.common.io.Files;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import com.google.protobuf.MessageLite;
 
+import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -55,12 +63,29 @@ public class ChreApiTestUtil {
     public static final int RPC_TIMEOUT_IN_MS = RPC_TIMEOUT_IN_SECONDS * 1000;
 
     /**
+     * The default timeout for an RPC call in nanosecond.
+     */
+    public static final long RPC_TIMEOUT_IN_NS = RPC_TIMEOUT_IN_SECONDS * 1000000000L;
+
+    /**
      * The number of threads for the executor that executes the futures.
      * We need at least 2 here. One to process the RPCs for server streaming
      * and one to process events (which has server streaming as a dependent).
      * 2 is the minimum needed to run smoothly without timeout issues.
      */
     private static final int NUM_THREADS_FOR_EXECUTOR = 2;
+
+    /**
+     * The maximum number of samples to remove from the beginning of an audio
+     * data event. 8000 samples == 500ms.
+     */
+    private static final int MAX_LEADING_ZEROS_TO_REMOVE = 8000;
+
+    /**
+     * CHRE audio format enum values for 8-bit and 16-bit audio formats.
+     */
+    private static final int CHRE_AUDIO_DATA_FORMAT_8_BIT = 0;
+    private static final int CHRE_AUDIO_DATA_FORMAT_16_BIT = 1;
 
     /**
      * Executor for use with server streaming RPCs.
@@ -140,7 +165,7 @@ public class ChreApiTestUtil {
 
     /**
      * Calls a server streaming RPC method with RPC_TIMEOUT_IN_SECONDS seconds of
-     * timeout with a void request.
+     * timeout with an empty request.
      *
      * @param <ResponseType>  the type of the response (proto generated type).
      * @param rpcClient       the RPC client.
@@ -155,7 +180,7 @@ public class ChreApiTestUtil {
         Objects.requireNonNull(rpcClient);
         Objects.requireNonNull(method);
 
-        ChreApiTest.Void request = ChreApiTest.Void.newBuilder().build();
+        Empty request = Empty.newBuilder().build();
         return callServerStreamingRpcMethodSync(rpcClient, method, request);
     }
 
@@ -266,7 +291,7 @@ public class ChreApiTestUtil {
     }
 
     /**
-     * Calls an RPC method with RPC_TIMEOUT_IN_SECONDS seconds of timeout with a void request.
+     * Calls an RPC method with RPC_TIMEOUT_IN_SECONDS seconds of timeout with an empty request.
      *
      * @param <ResponseType>  the type of the response (proto generated type).
      * @param rpcClient       the RPC client.
@@ -280,7 +305,7 @@ public class ChreApiTestUtil {
         Objects.requireNonNull(rpcClient);
         Objects.requireNonNull(method);
 
-        ChreApiTest.Void request = ChreApiTest.Void.newBuilder().build();
+        Empty request = Empty.newBuilder().build();
         return callUnaryRpcMethodSync(rpcClient, method, request);
     }
 
@@ -303,7 +328,6 @@ public class ChreApiTestUtil {
 
         ChreApiTest.GatherEventsInput input = ChreApiTest.GatherEventsInput.newBuilder()
                 .addAllEventTypes(eventTypes)
-                .setEventTypeCount(eventTypes.size())
                 .setEventCount(eventCount)
                 .setTimeoutInNs(timeoutInNs)
                 .build();
@@ -379,75 +403,194 @@ public class ChreApiTestUtil {
     }
 
     /**
+     * Gather and re-merge a single CHRE audio data event.
+     */
+    public ChreApiTest.ChreAudioDataEvent gatherAudioDataEvent(
+            @NonNull ChreRpcClient rpcClient, int audioEventType,
+                    int eventCount, long timeoutInNs) throws Exception {
+        Objects.requireNonNull(rpcClient);
+
+        Future<List<ChreApiTest.GeneralEventsMessage>> audioEventsFuture =
+                gatherEvents(rpcClient, audioEventType, eventCount,
+                             timeoutInNs);
+        List<ChreApiTest.GeneralEventsMessage> audioEvents =
+                audioEventsFuture.get(2 * timeoutInNs, TimeUnit.NANOSECONDS);
+        return processAudioDataEvents(audioEvents);
+    }
+
+    /**
+     * Re-merge a single CHRE audio data event.
+     */
+    public ChreApiTest.ChreAudioDataEvent processAudioDataEvents(
+            @NonNull List<ChreApiTest.GeneralEventsMessage> audioEvents) throws Exception {
+        Objects.requireNonNull(audioEvents);
+        // Assert audioEvents isn't empty
+        if (audioEvents.size() == 0) {
+            return null;
+        }
+
+        ChreApiTest.ChreAudioDataMetadata metadata =
+                audioEvents.get(0).getChreAudioDataMetadata();
+        // 8-bit format == 0
+        // 16-bit format == 1
+        int bufferSize = metadata.getSampleCount() * (metadata.getFormat() + 1);
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        ByteString sampleBytes;
+        boolean status = true;
+
+        for (int i = 1; i < audioEvents.size() && status; ++i) {
+            ChreApiTest.ChreAudioDataSamples samples = audioEvents.get(i).getChreAudioDataSamples();
+            // assert samples sent/received in order
+            if (samples.getId() != (i - 1)) {
+                status = false;
+            } else {
+                buffer.put(samples.getSamples().toByteArray());
+            }
+        }
+
+        // Remove leading zeros before creating the full event
+        buffer.rewind();
+        sampleBytes = removeLeadingZerosFromAudio(buffer, MAX_LEADING_ZEROS_TO_REMOVE,
+                                                  metadata.getFormat());
+        if (sampleBytes == null) {
+            status = false;
+        }
+
+        ChreApiTest.ChreAudioDataEvent audioEvent =
+                ChreApiTest.ChreAudioDataEvent.newBuilder()
+                        .setStatus(status)
+                        .setVersion(metadata.getVersion())
+                        .setReserved(metadata.getReserved())
+                        .setHandle(metadata.getHandle())
+                        .setTimestamp(metadata.getTimestamp())
+                        .setSampleRate(metadata.getSampleRate())
+                        .setSampleCount(metadata.getSampleCount())
+                        .setFormat(metadata.getFormat())
+                        .setSamples(sampleBytes)
+                        .build();
+
+        return audioEvent;
+    }
+
+    /**
      * Gets the RPC service for the CHRE API Test nanoapp.
      */
     public static Service getChreApiService() {
         return new Service("chre.rpc.ChreApiTestService",
                 Service.unaryMethod(
                         "ChreBleGetCapabilities",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.Capabilities.class),
+                        Empty.parser(),
+                        ChreApiTest.Capabilities.parser()),
                 Service.unaryMethod(
                         "ChreBleGetFilterCapabilities",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.Capabilities.class),
-                Service.unaryMethod(
-                        "ChreBleStartScanAsync",
-                        ChreApiTest.ChreBleStartScanAsyncInput.class,
-                        ChreApiTest.Status.class),
+                        Empty.parser(),
+                        ChreApiTest.Capabilities.parser()),
                 Service.serverStreamingMethod(
                         "ChreBleStartScanSync",
-                        ChreApiTest.ChreBleStartScanAsyncInput.class,
-                        ChreApiTest.GeneralSyncMessage.class),
-                Service.unaryMethod(
-                        "ChreBleStopScanAsync",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.Status.class),
+                        ChreApiTest.ChreBleStartScanAsyncInput.parser(),
+                        ChreApiTest.GeneralSyncMessage.parser()),
                 Service.serverStreamingMethod(
                         "ChreBleStopScanSync",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.GeneralSyncMessage.class),
+                        Empty.parser(),
+                        ChreApiTest.GeneralSyncMessage.parser()),
                 Service.unaryMethod(
                         "ChreSensorFindDefault",
-                        ChreApiTest.ChreSensorFindDefaultInput.class,
-                        ChreApiTest.ChreSensorFindDefaultOutput.class),
+                        ChreApiTest.ChreSensorFindDefaultInput.parser(),
+                        ChreApiTest.ChreSensorFindDefaultOutput.parser()),
                 Service.unaryMethod(
                         "ChreGetSensorInfo",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreGetSensorInfoOutput.class),
+                        ChreApiTest.ChreHandleInput.parser(),
+                        ChreApiTest.ChreGetSensorInfoOutput.parser()),
                 Service.unaryMethod(
                         "ChreGetSensorSamplingStatus",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreGetSensorSamplingStatusOutput.class),
+                        ChreApiTest.ChreHandleInput.parser(),
+                        ChreApiTest.ChreGetSensorSamplingStatusOutput.parser()),
                 Service.unaryMethod(
                         "ChreSensorConfigure",
-                        ChreApiTest.ChreSensorConfigureInput.class,
-                        ChreApiTest.Status.class),
+                        ChreApiTest.ChreSensorConfigureInput.parser(),
+                        ChreApiTest.Status.parser()),
                 Service.unaryMethod(
                         "ChreSensorConfigureModeOnly",
-                        ChreApiTest.ChreSensorConfigureModeOnlyInput.class,
-                        ChreApiTest.Status.class),
+                        ChreApiTest.ChreSensorConfigureModeOnlyInput.parser(),
+                        ChreApiTest.Status.parser()),
                 Service.unaryMethod(
                         "ChreAudioGetSource",
-                        ChreApiTest.ChreHandleInput.class,
-                        ChreApiTest.ChreAudioGetSourceOutput.class),
+                        ChreApiTest.ChreHandleInput.parser(),
+                        ChreApiTest.ChreAudioGetSourceOutput.parser()),
+                Service.unaryMethod(
+                        "ChreAudioConfigureSource",
+                        ChreApiTest.ChreHandleInput.parser(),
+                        ChreApiTest.Status.parser()),
+                Service.unaryMethod(
+                        "ChreAudioGetStatus",
+                        ChreApiTest.ChreHandleInput.parser(),
+                        ChreApiTest.ChreAudioGetStatusOutput.parser()),
                 Service.unaryMethod(
                         "ChreConfigureHostEndpointNotifications",
-                        ChreApiTest.ChreConfigureHostEndpointNotificationsInput.class,
-                        ChreApiTest.Status.class),
-                Service.unaryMethod(
-                        "RetrieveLatestDisconnectedHostEndpointEvent",
-                        ChreApiTest.Void.class,
-                        ChreApiTest.RetrieveLatestDisconnectedHostEndpointEventOutput
-                                .class),
+                        ChreApiTest.ChreConfigureHostEndpointNotificationsInput.parser(),
+                        ChreApiTest.Status.parser()),
                 Service.unaryMethod(
                         "ChreGetHostEndpointInfo",
-                        ChreApiTest.ChreGetHostEndpointInfoInput.class,
-                        ChreApiTest.ChreGetHostEndpointInfoOutput.class),
+                        ChreApiTest.ChreGetHostEndpointInfoInput.parser(),
+                        ChreApiTest.ChreGetHostEndpointInfoOutput.parser()),
                 Service.serverStreamingMethod(
                         "GatherEvents",
-                        ChreApiTest.GatherEventsInput.class,
-                        ChreApiTest.GeneralEventsMessage.class));
+                        ChreApiTest.GatherEventsInput.parser(),
+                        ChreApiTest.GeneralEventsMessage.parser()));
+    }
+
+    /**
+     * Writes data out to permanent storage.
+     *
+     * @param data      Byte array holding the data to write out to file
+     * @param filename  Filename for the created file
+     * @param context   Current target context
+     */
+    public static void writeDataToFile(byte[] data, String filename,
+                Context context) throws Exception {
+        File file = new File(context.getExternalFilesDir(null), filename);
+        ByteSink sink = Files.asByteSink(file);
+        sink.write(data);
+    }
+
+    /**
+     * Removes leading 0 samples from an audio data packet
+     *
+     * @param buffer    ByteBuffer containing all the data
+     * @param limit     Max amount of samples to remove
+     * @param format    Audio data format from metadata
+     *
+     * @return          ByteString with the leading zero samples removed
+     */
+    private ByteString removeLeadingZerosFromAudio(ByteBuffer buffer, int limit, int format) {
+        ByteString sampleString;
+
+        if (format != CHRE_AUDIO_DATA_FORMAT_8_BIT && format != CHRE_AUDIO_DATA_FORMAT_16_BIT) {
+            return null;
+        }
+
+        for (int i = 0; i < limit; ++i) {
+            int s;
+            if (format == CHRE_AUDIO_DATA_FORMAT_8_BIT) {
+                s = buffer.get();
+            } else {
+                s = buffer.getShort();
+            }
+
+            if (s != 0) {
+                break;
+            }
+        }
+
+        // move back to the first non-zero sample
+        if (format == CHRE_AUDIO_DATA_FORMAT_8_BIT) {
+            buffer.position(buffer.position() - 1);
+        } else {
+            buffer.position(buffer.position() - 2);
+        }
+        sampleString = ByteString.copyFrom(buffer.slice());
+
+        return sampleString;
     }
 
     /**

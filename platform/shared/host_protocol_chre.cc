@@ -64,7 +64,16 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         const flatbuffers::Vector<uint8_t> *msgData = nanoappMsg->message();
         HostMessageHandlers::handleNanoappMessage(
             nanoappMsg->app_id(), nanoappMsg->message_type(),
-            nanoappMsg->host_endpoint(), msgData->data(), msgData->size());
+            nanoappMsg->host_endpoint(), msgData->data(), msgData->size(),
+            nanoappMsg->is_reliable(), nanoappMsg->message_sequence_number());
+        break;
+      }
+
+      case fbs::ChreMessage::MessageDeliveryStatus: {
+        const auto *status = static_cast<const fbs::MessageDeliveryStatus *>(
+            container->message());
+        HostMessageHandlers::handleMessageDeliveryStatus(
+            status->message_sequence_number(), status->error_code());
         break;
       }
 
@@ -186,6 +195,11 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         break;
       }
 
+      case fbs::ChreMessage::PulseRequest: {
+        HostMessageHandlers::handlePulseRequest();
+        break;
+      }
+
       default:
         LOGW("Got invalid/unexpected message type %" PRIu8,
              static_cast<uint8_t>(container->message_type()));
@@ -201,7 +215,8 @@ void HostProtocolChre::encodeHubInfoResponse(
     const char *toolchain, uint32_t legacyPlatformVersion,
     uint32_t legacyToolchainVersion, float peakMips, float stoppedPower,
     float sleepPower, float peakPower, uint32_t maxMessageLen,
-    uint64_t platformId, uint32_t version, uint16_t hostClientId) {
+    uint64_t platformId, uint32_t version, uint16_t hostClientId,
+    bool supportsReliableMessages) {
   auto nameOffset = addStringAsByteVector(builder, name);
   auto vendorOffset = addStringAsByteVector(builder, vendor);
   auto toolchainOffset = addStringAsByteVector(builder, toolchain);
@@ -209,7 +224,7 @@ void HostProtocolChre::encodeHubInfoResponse(
   auto response = fbs::CreateHubInfoResponse(
       builder, nameOffset, vendorOffset, toolchainOffset, legacyPlatformVersion,
       legacyToolchainVersion, peakMips, stoppedPower, sleepPower, peakPower,
-      maxMessageLen, platformId, version);
+      maxMessageLen, platformId, version, supportsReliableMessages);
   finalize(builder, fbs::ChreMessage::HubInfoResponse, response.Union(),
            hostClientId);
 }
@@ -251,6 +266,11 @@ void HostProtocolChre::finishNanoappListResponse(
            hostClientId);
 }
 
+void HostProtocolChre::encodePulseResponse(ChreFlatBufferBuilder &builder) {
+  auto response = fbs::CreatePulseResponse(builder);
+  finalize(builder, fbs::ChreMessage::PulseResponse, response.Union());
+}
+
 void HostProtocolChre::encodeLoadNanoappResponse(ChreFlatBufferBuilder &builder,
                                                  uint16_t hostClientId,
                                                  uint32_t transactionId,
@@ -260,6 +280,15 @@ void HostProtocolChre::encodeLoadNanoappResponse(ChreFlatBufferBuilder &builder,
                                                  success, fragmentId);
   finalize(builder, fbs::ChreMessage::LoadNanoappResponse, response.Union(),
            hostClientId);
+}
+
+void HostProtocolChre::encodeNanoappTokenDatabaseInfo(
+    ChreFlatBufferBuilder &builder, uint16_t instanceId, uint64_t appId,
+    uint32_t tokenDatabaseOffset, size_t tokenDatabaseSize) {
+  auto response = fbs::CreateNanoappTokenDatabaseInfo(
+      builder, instanceId, appId, tokenDatabaseOffset, tokenDatabaseSize);
+  finalize(builder, fbs::ChreMessage::NanoappTokenDatabaseInfo,
+           response.Union());
 }
 
 void HostProtocolChre::encodeUnloadNanoappResponse(

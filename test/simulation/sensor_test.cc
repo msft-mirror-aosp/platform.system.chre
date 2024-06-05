@@ -23,6 +23,7 @@
 #include "chre/platform/linux/pal_sensor.h"
 #include "chre/platform/log.h"
 #include "chre/util/system/napp_permissions.h"
+#include "chre_api/chre/common.h"
 #include "chre_api/chre/event.h"
 
 #include "gtest/gtest.h"
@@ -44,44 +45,46 @@ TEST_F(TestBase, SensorCanSubscribeAndUnsubscribeToDataEvents) {
     enum chreSensorConfigureMode mode;
   };
 
-  struct App : public TestNanoapp {
-    decltype(nanoappHandleEvent) *handleEvent =
-        [](uint32_t, uint16_t eventType, const void *eventData) {
-          switch (eventType) {
-            case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
-              auto *event =
-                  static_cast<const struct chreSensorSamplingStatusEvent *>(
-                      eventData);
-              TestEventQueueSingleton::get()->pushEvent(
-                  CHRE_EVENT_SENSOR_SAMPLING_CHANGE, *event);
+  class App : public TestNanoapp {
+   public:
+    void handleEvent(uint32_t, uint16_t eventType,
+                     const void *eventData) override {
+      switch (eventType) {
+        case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
+          auto *event =
+              static_cast<const struct chreSensorSamplingStatusEvent *>(
+                  eventData);
+          TestEventQueueSingleton::get()->pushEvent(
+              CHRE_EVENT_SENSOR_SAMPLING_CHANGE, *event);
+          break;
+        }
+
+        case CHRE_EVENT_TEST_EVENT: {
+          auto event = static_cast<const TestEvent *>(eventData);
+          switch (event->type) {
+            case CONFIGURE: {
+              auto config = static_cast<const Configuration *>(event->data);
+              const bool success = chreSensorConfigure(
+                  config->sensorHandle, config->mode, config->interval, 0);
+              TestEventQueueSingleton::get()->pushEvent(CONFIGURE, success);
               break;
             }
-
-            case CHRE_EVENT_TEST_EVENT: {
-              auto event = static_cast<const TestEvent *>(eventData);
-              switch (event->type) {
-                case CONFIGURE: {
-                  auto config = static_cast<const Configuration *>(event->data);
-                  const bool success = chreSensorConfigure(
-                      config->sensorHandle, config->mode, config->interval, 0);
-                  TestEventQueueSingleton::get()->pushEvent(CONFIGURE, success);
-                  break;
-                }
-              }
-            }
           }
-        };
+        }
+      }
+    }
   };
 
-  auto app = loadNanoapp<App>();
+  uint64_t appId = loadNanoapp(MakeUnique<App>());
+
   bool success;
 
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 
   Configuration config{.sensorHandle = 0,
-                       .interval = 100,
+                       .interval = CHRE_NSEC_PER_SEC,
                        .mode = CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS};
-  sendEventToNanoapp(app, CONFIGURE, config);
+  sendEventToNanoapp(appId, CONFIGURE, config);
   waitForEvent(CONFIGURE, &success);
   EXPECT_TRUE(success);
   struct chreSensorSamplingStatusEvent event;
@@ -94,7 +97,7 @@ TEST_F(TestBase, SensorCanSubscribeAndUnsubscribeToDataEvents) {
   config = {.sensorHandle = 0,
             .interval = 50,
             .mode = CHRE_SENSOR_CONFIGURE_MODE_DONE};
-  sendEventToNanoapp(app, CONFIGURE, config);
+  sendEventToNanoapp(appId, CONFIGURE, config);
   waitForEvent(CONFIGURE, &success);
   EXPECT_TRUE(success);
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
@@ -109,42 +112,44 @@ TEST_F(TestBase, SensorUnsubscribeToDataEventsOnUnload) {
     enum chreSensorConfigureMode mode;
   };
 
-  struct App : public TestNanoapp {
-    decltype(nanoappHandleEvent) *handleEvent =
-        [](uint32_t, uint16_t eventType, const void *eventData) {
-          switch (eventType) {
-            case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
-              auto *event =
-                  static_cast<const struct chreSensorSamplingStatusEvent *>(
-                      eventData);
-              TestEventQueueSingleton::get()->pushEvent(
-                  CHRE_EVENT_SENSOR_SAMPLING_CHANGE, *event);
+  class App : public TestNanoapp {
+   public:
+    void handleEvent(uint32_t, uint16_t eventType,
+                     const void *eventData) override {
+      switch (eventType) {
+        case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
+          auto *event =
+              static_cast<const struct chreSensorSamplingStatusEvent *>(
+                  eventData);
+          TestEventQueueSingleton::get()->pushEvent(
+              CHRE_EVENT_SENSOR_SAMPLING_CHANGE, *event);
+          break;
+        }
+
+        case CHRE_EVENT_TEST_EVENT: {
+          auto event = static_cast<const TestEvent *>(eventData);
+          switch (event->type) {
+            case CONFIGURE: {
+              auto config = static_cast<const Configuration *>(event->data);
+              const bool success = chreSensorConfigure(
+                  config->sensorHandle, config->mode, config->interval, 0);
+              TestEventQueueSingleton::get()->pushEvent(CONFIGURE, success);
               break;
             }
-
-            case CHRE_EVENT_TEST_EVENT: {
-              auto event = static_cast<const TestEvent *>(eventData);
-              switch (event->type) {
-                case CONFIGURE: {
-                  auto config = static_cast<const Configuration *>(event->data);
-                  const bool success = chreSensorConfigure(
-                      config->sensorHandle, config->mode, config->interval, 0);
-                  TestEventQueueSingleton::get()->pushEvent(CONFIGURE, success);
-                  break;
-                }
-              }
-            }
           }
-        };
+        }
+      }
+    }
   };
 
-  auto app = loadNanoapp<App>();
+  uint64_t appId = loadNanoapp(MakeUnique<App>());
+
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 
   Configuration config{.sensorHandle = 0,
-                       .interval = 100,
+                       .interval = 10 * 1000 * 1000,  // 10 ms aka 100 Hz
                        .mode = CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS};
-  sendEventToNanoapp(app, CONFIGURE, config);
+  sendEventToNanoapp(appId, CONFIGURE, config);
   bool success;
   waitForEvent(CONFIGURE, &success);
   EXPECT_TRUE(success);
@@ -155,7 +160,7 @@ TEST_F(TestBase, SensorUnsubscribeToDataEventsOnUnload) {
   EXPECT_TRUE(event.status.enabled);
   EXPECT_TRUE(chrePalSensorIsSensor0Enabled());
 
-  unloadNanoapp(app);
+  unloadNanoapp(appId);
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 }
 

@@ -184,7 +184,9 @@ void GnssManager::handleRequestStateResyncCallbackSync() {
   mPlatformPassiveLocationListenerEnabled = false;
   if (!mPassiveLocationListenerNanoapps.empty()) {
     if (!platformConfigurePassiveLocationListener(true /* enable */)) {
-      FATAL_ERROR("Failed to resync passive location listener");
+      // TODO(b/330789214): Change LOGE back to FATAL_ERROR once the odd
+      //                    peripheral behavior is resolved.
+      LOGE("Failed to resync passive location listener");
     }
   }
 }
@@ -613,8 +615,6 @@ void GnssSession::postAsyncResultEventFatal(uint16_t instanceId, bool success,
 void GnssSession::handleStatusChangeSync(bool enabled, uint8_t errorCode) {
   bool success = (errorCode == CHRE_ERROR_NONE);
 
-  CHRE_ASSERT_LOG(asyncResponsePending(),
-                  "handleStatusChangeSync called with no transitions");
   if (mInternalRequestPending) {
     // Silently handle internal requests from CHRE, since they are not pushed
     // to the mStateTransitions queue.
@@ -635,6 +635,10 @@ void GnssSession::handleStatusChangeSync(bool enabled, uint8_t errorCode) {
         stateTransition.nanoappInstanceId, success, stateTransition.enable,
         stateTransition.minInterval, errorCode, stateTransition.cookie);
     mStateTransitions.pop();
+  } else {
+    // TODO(b/296222493): change this back to an assert once issue resolved
+    LOGE("GnssSession::handleStatusChangeSync called with no transitions");
+    return;
   }
 
   // If a previous setting change or resync event is pending process, do that

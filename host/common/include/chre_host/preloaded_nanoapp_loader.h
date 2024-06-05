@@ -18,6 +18,7 @@
 #define CHRE_HOST_PRELOADED_NANOAPP_LOADER_H_
 
 #include <android/binder_to_string.h>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -25,14 +26,20 @@
 #include <utility>
 
 #include "chre_connection.h"
+
 #include "chre_host/generated/host_messages_generated.h"
+#include "chre_host/log_message_parser.h"
+#include "chre_host/metrics_reporter.h"
+#include "chre_host/nanoapp_load_listener.h"
 #include "chre_host/napp_header.h"
+#include "event_logger.h"
 #include "fragmented_load_transaction.h"
 #include "hal_client_id.h"
 
 namespace android::chre {
 
 using namespace ::android::hardware::contexthub::common::implementation;
+using ::aidl::android::hardware::contexthub::EventLogger;
 
 /**
  * A class loads preloaded nanoapps.
@@ -45,8 +52,15 @@ using namespace ::android::hardware::contexthub::common::implementation;
 class PreloadedNanoappLoader {
  public:
   explicit PreloadedNanoappLoader(ChreConnection *connection,
-                                  std::string configPath)
-      : mConnection(connection), mConfigPath(std::move(configPath)){};
+                                  EventLogger &eventLogger,
+                                  MetricsReporter *metricsReporter,
+                                  std::string configPath,
+                                  INanoappLoadListener *nanoappLoadListener)
+      : mConnection(connection),
+        mEventLogger(eventLogger),
+        mMetricsReporter(metricsReporter),
+        mConfigPath(std::move(configPath)),
+        mNanoappLoadListener(nanoappLoadListener) {}
 
   ~PreloadedNanoappLoader() = default;
   /**
@@ -60,8 +74,14 @@ class PreloadedNanoappLoader {
    * ]}
    *
    * The napp_header and so files will both be used.
+   *
+   * @param skippedNanoappIds nanoapp ids identifying which nanoapps will NOT be
+   * loaded.
+   *
+   * @return the number of nanoapps loaded
    */
-  void loadPreloadedNanoapps();
+  int loadPreloadedNanoapps(const std::optional<const std::vector<uint64_t>>
+                                &skippedNanoappIds = std::nullopt);
 
   /** Callback function to handle the response from CHRE. */
   bool onLoadNanoappResponse(const ::chre::fbs::LoadNanoappResponseT &response,
@@ -72,35 +92,25 @@ class PreloadedNanoappLoader {
   /** Returns true if the loading is ongoing. */
   [[nodiscard]] bool isPreloadOngoing() const {
     return mIsPreloadingOngoing;
-  };
+  }
 
  private:
-  /** Timeout value of waiting for the response of a fragmented load */
-  static constexpr auto kTimeoutInMs = std::chrono::milliseconds(2000);
-
-  /**
-   * Loads a preloaded nanoapp given a filename.
-   *
-   * This function allows the transaction to complete before the nanoapp starts
-   * so the server can start serving requests as soon as possible.
-   *
-   * @param directory The directory to load the nanoapp from.
-   * @param name The filename of the nanoapp to load.
-   * @param transactionId The transaction ID to use when loading the app.
-   */
-  void loadPreloadedNanoapp(const std::string &directory,
-                            const std::string &name, uint32_t transactionId);
+  /** Tracks the transaction state of the ongoing nanoapp loading */
+  struct Transaction {
+    uint32_t transactionId;
+    size_t fragmentId;
+  };
 
   /**
    * Loads a preloaded nanoapp.
    *
-   * @param header The nanoapp header binary blob.
-   * @param nanoapp The nanoapp binary.
+   * @param appHeader The nanoapp header binary blob.
+   * @param nanoappFileName The nanoapp binary file name.
    * @param transactionId The transaction ID identifying this load transaction.
    * @return true if successful, false otherwise.
    */
-  bool loadNanoapp(const std::vector<uint8_t> &header,
-                   const std::vector<uint8_t> &nanoapp, uint32_t transactionId);
+  bool loadNanoapp(const NanoAppBinaryHeader *appHeader,
+                   const std::string &nanoappFileName, uint32_t transactionId);
 
   /**
    * Chunks the nanoapp binary into fragments and load each fragment
@@ -116,18 +126,13 @@ class PreloadedNanoappLoader {
       ::android::chre::FragmentedLoadRequest &request);
 
   /** Verifies the future returned by sendFragmentedLoadRequest(). */
-  [[nodiscard]] static bool waitAndVerifyFuture(
-      std::future<bool> &future, const FragmentedLoadRequest &request);
+  [[nodiscard]] bool waitAndVerifyFuture(std::future<bool> &future,
+                                         const FragmentedLoadRequest &request);
 
   /** Verifies the response of a loading request. */
   [[nodiscard]] bool verifyFragmentLoadResponse(
       const ::chre::fbs::LoadNanoappResponseT &response) const;
 
-  /** Tracks the transaction state of the ongoing nanoapp loading */
-  struct Transaction {
-    uint32_t transactionId;
-    size_t fragmentId;
-  };
   Transaction mPreloadedNanoappPendingTransaction{0, 0};
 
   /** The value of this promise carries the result in the load response. */
@@ -136,10 +141,14 @@ class PreloadedNanoappLoader {
   /** The mutex used to guard states change for preloading. */
   std::mutex mPreloadedNanoappsMutex;
 
-  bool mIsPreloadingOngoing = false;
+  std::atomic_bool mIsPreloadingOngoing = false;
 
   ChreConnection *mConnection;
+  EventLogger &mEventLogger;
+  MetricsReporter *mMetricsReporter;
   std::string mConfigPath;
+
+  INanoappLoadListener *mNanoappLoadListener;
 };
 
 }  // namespace android::chre

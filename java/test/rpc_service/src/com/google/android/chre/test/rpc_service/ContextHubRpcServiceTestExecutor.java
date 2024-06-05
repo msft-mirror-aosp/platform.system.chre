@@ -73,7 +73,8 @@ public class ContextHubRpcServiceTestExecutor extends ContextHubClientCallback {
         mNanoAppId = mNanoAppBinary.getNanoAppId();
 
         mEchoService = new Service("pw.rpc.EchoService",
-                Service.unaryMethod("Echo", Echo.EchoMessage.class, Echo.EchoMessage.class));
+                Service.unaryMethod("Echo", Echo.EchoMessage.parser(),
+                                    Echo.EchoMessage.parser()));
     }
 
     @Override
@@ -129,7 +130,6 @@ public class ContextHubRpcServiceTestExecutor extends ContextHubClientCallback {
         };
 
         IntentFilter filter = new IntentFilter(ACTION);
-        mContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         Intent intent = new Intent(ACTION).setPackage(mContext.getPackageName());
         PendingIntent pendingIntent = PendingIntent.getBroadcast(mContext, 0 /* requestCode */,
                 intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
@@ -138,6 +138,7 @@ public class ContextHubRpcServiceTestExecutor extends ContextHubClientCallback {
                 pendingIntent, mNanoAppId);
 
         mRpcClient = new ChreRpcClient(contextHubClient, mNanoAppId, List.of(mEchoService));
+        mContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
 
         invokeRpc(mRpcClient);
 

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// IWYU pragma: private, include "chre_api/chre.h"
+// IWYU pragma: friend chre/.*\.h
+
 #ifndef _CHRE_WWAN_H_
 #define _CHRE_WWAN_H_
 
@@ -549,8 +552,8 @@ uint32_t chreWwanGetCapabilities(void);
  * implementation is expected to return a successful asynchronous result with an
  * empty cell info list.
  *
- * @param cookie An opaque value that will be included in the chreAsyncResult
- *        sent in relation to this request.
+ * @param cookie An opaque value that will be included in the
+ *               chreWwanCellInfoResult sent in relation to this request.
  *
  * @return true if the request was accepted for processing, false otherwise
  *

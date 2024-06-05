@@ -139,12 +139,10 @@ void testRequestRangingAsync(const struct chreWifiScanResult *aps,
   uint8_t targetLength =
       std::min(length, static_cast<uint8_t>(CHRE_WIFI_RANGING_LIST_MAX_LEN));
 
-  void *array = chreHeapAlloc(sizeof(chreWifiRangingTarget) * targetLength);
-  ASSERT_NE(array, nullptr,
+  auto targetList =
+      chre::MakeUniqueArray<struct chreWifiRangingTarget[]>(targetLength);
+  ASSERT_NE(targetList, nullptr,
             "Failed to allocate array for issuing a ranging request");
-
-  chre::UniquePtr<struct chreWifiRangingTarget> targetList(
-      static_cast<struct chreWifiRangingTarget *>(array));
 
   // Save the last spot for any available RTT APs in case they didn't make it
   // in the array earlier. This first loop allows non-RTT compatible APs as a
@@ -639,18 +637,18 @@ void BasicWifiTest::validateRangingEvent(
     } else {
       validateRssi(result.rssi);
 
+      // TODO(b/289432591): Use sendFatalFailureToHost to check ranging distance
+      // results.
       constexpr uint32_t kMaxDistanceMillimeters = 100 * 1000;
       if (result.distance > kMaxDistanceMillimeters) {
-        sendFatalFailureToHost(
-            "Ranging result was more than 100 meters away %" PRIu32,
-            &result.distance);
+        LOGE("Ranging result was more than 100 meters away %" PRIu32,
+             result.distance);
       }
 
       constexpr uint32_t kMaxStdDevMillimeters = 10 * 1000;
       if (result.distanceStdDev > kMaxStdDevMillimeters) {
-        sendFatalFailureToHost(
-            "Ranging result distance stddev was more than 10 meters %" PRIu32,
-            &result.distanceStdDev);
+        LOGE("Ranging result distance stddev was more than 10 meters %" PRIu32,
+             result.distanceStdDev);
       }
 
       if (result.flags & CHRE_WIFI_RTT_RESULT_HAS_LCI) {

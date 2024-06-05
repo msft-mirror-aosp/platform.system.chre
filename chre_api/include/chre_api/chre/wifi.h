@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// IWYU pragma: private, include "chre_api/chre.h"
+// IWYU pragma: friend chre/.*\.h
+
 #ifndef _CHRE_WIFI_H_
 #define _CHRE_WIFI_H_
 
@@ -270,7 +273,9 @@ extern "C" {
  * @{
  */
 
-#define CHRE_WIFI_SECURITY_MODE_UNKONWN  UINT8_C(0)
+#define CHRE_WIFI_SECURITY_MODE_UNKNOWN  UINT8_C(0)
+//! @deprecated since v1.10. Use CHRE_WIFI_SECURITY_MODE_UNKNOWN instead.
+#define CHRE_WIFI_SECURITY_MODE_UNKONWN CHRE_WIFI_SECURITY_MODE_UNKNOWN
 
 #define CHRE_WIFI_SECURITY_MODE_OPEN  UINT8_C(1 << 0)  //!< No auth/security
 #define CHRE_WIFI_SECURITY_MODE_WEP   UINT8_C(1 << 1)
@@ -1208,7 +1213,7 @@ static inline void chreWifiRangingTargetFromScanResult(
  * Subscribe to a NAN service.
  *
  * Sends a subscription request to the NAN discovery engine with the
- * specified configration parameters. If successful, a unique non-zero
+ * specified configuration parameters. If successful, a unique non-zero
  * subscription ID associated with this instance of the subscription
  * request is assigned by the NAN discovery engine. The subscription request
  * is active until explicitly canceled, or if the connection was interrupted.

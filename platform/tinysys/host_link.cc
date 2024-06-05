@@ -15,6 +15,7 @@
  */
 
 #include "FreeRTOS.h"
+#include "encoding.h"
 #include "task.h"
 
 #include "chre/core/event_loop_manager.h"
@@ -28,12 +29,12 @@
 #include "chre/platform/system_timer.h"
 #include "chre/util/flatbuffers/helpers.h"
 #include "chre/util/nested_data_ptr.h"
+#include "chre_api/chre.h"
 
-// TODO(b/265046038): MTK headers are not c++ friendly,
-// should be modified to wrap function proto with "extern C"
 #include "dma_api.h"
 #include "ipi.h"
 #include "ipi_id.h"
+#include "resource_req.h"
 #include "scp_dram_region.h"
 
 // Because the LOGx macros are being redirected to logcat through
@@ -75,19 +76,24 @@ struct UnloadNanoappCallbackData {
   bool allowSystemNanoappUnload;
 };
 
-uint32_t gChreIpiRecvData[2];
-uint32_t gChreIpiAckToHost[2];  // SCP reply ack data (AP to SCP)
-int gChreIpiAckFromHost[2];     // SCP get ack data from AP (SCP to AP)
+SRAM_REGION_BSS uint32_t gChreIpiRecvData[2];
+
+// SCP reply ack data (AP to SCP)
+SRAM_REGION_BSS uint32_t gChreIpiAckToHost[2];
+
+// SCP get ack data from AP (SCP to AP)
+SRAM_REGION_BSS int gChreIpiAckFromHost[2];
 
 void *gChreSubregionRecvAddr;
 size_t gChreSubregionRecvSize;
 void *gChreSubregionSendAddr;
 size_t gChreSubregionSendSize;
 
-// TODO(b/263958729): move it to HostLinkBase, and revisit buffer size
+// TODO(b/277235389): move it to HostLinkBase, and revisit buffer size
 // payload buffers
 #define CHRE_IPI_RECV_BUFFER_SIZE (CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128)
-uint32_t gChreRecvBuffer[CHRE_IPI_RECV_BUFFER_SIZE / sizeof(uint32_t)]
+DRAM_REGION_VARIABLE uint32_t
+    gChreRecvBuffer[CHRE_IPI_RECV_BUFFER_SIZE / sizeof(uint32_t)]
     __attribute__((aligned(CACHE_LINE_SIZE)));
 
 #ifdef SCP_CHRE_USE_DMA
@@ -124,6 +130,8 @@ enum class PendingMessageType {
   SelfTestResponse,
   MetricLog,
   NanConfigurationRequest,
+  PulseRequest,
+  PulseResponse,
 };
 
 struct PendingMessage {
@@ -152,7 +160,8 @@ struct PendingMessage {
 };
 
 constexpr size_t kOutboundQueueSize = 100;
-FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize> gOutboundQueue;
+DRAM_REGION_VARIABLE FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize>
+    gOutboundQueue;
 
 typedef void(MessageBuilderFunction)(ChreFlatBufferBuilder &builder,
                                      void *cookie);
@@ -161,7 +170,8 @@ inline HostCommsManager &getHostCommsManager() {
   return EventLoopManagerSingleton::get()->getHostCommsManager();
 }
 
-bool generateMessageFromBuilder(ChreFlatBufferBuilder *builder) {
+DRAM_REGION_FUNCTION bool generateMessageFromBuilder(
+    ChreFlatBufferBuilder *builder) {
   CHRE_ASSERT(builder != nullptr);
   LOGV("%s: message size %d", __func__, builder->GetSize());
   bool result =
@@ -173,11 +183,11 @@ bool generateMessageFromBuilder(ChreFlatBufferBuilder *builder) {
   return result;
 }
 
-bool generateMessageToHost(const HostMessage *message) {
+DRAM_REGION_FUNCTION bool generateMessageToHost(const HostMessage *message) {
   LOGV("%s: message size %zu", __func__, message->message.size());
-  // TODO(b/263958729): ideally we'd construct our flatbuffer directly in the
+  // TODO(b/285219398): ideally we'd construct our flatbuffer directly in the
   // host-supplied buffer
-  constexpr size_t kFixedReserveSize = 80;
+  constexpr size_t kFixedReserveSize = 88;
   ChreFlatBufferBuilder builder(message->message.size() + kFixedReserveSize);
   HostProtocolChre::encodeNanoappMessage(
       builder, message->appId, message->toHostData.messageType,
@@ -192,7 +202,7 @@ bool generateMessageToHost(const HostMessage *message) {
   return result;
 }
 
-int generateHubInfoResponse(uint16_t hostClientId) {
+DRAM_REGION_FUNCTION int generateHubInfoResponse(uint16_t hostClientId) {
   constexpr size_t kInitialBufferSize = 192;
 
   constexpr char kHubName[] = "CHRE on Tinysys";
@@ -208,19 +218,21 @@ int generateHubInfoResponse(uint16_t hostClientId) {
   constexpr float kStoppedPower = 0;
   constexpr float kSleepPower = 1;
   constexpr float kPeakPower = 15;
+  bool supportsReliableMessages =
+      IS_BIT_SET(chreGetCapabilities(), CHRE_CAPABILITIES_RELIABLE_MESSAGES);
 
   // Note that this may execute prior to EventLoopManager::lateInit() completing
   ChreFlatBufferBuilder builder(kInitialBufferSize);
   HostProtocolChre::encodeHubInfoResponse(
       builder, kHubName, kVendor, kToolchain, kLegacyPlatformVersion,
       kLegacyToolchainVersion, kPeakMips, kStoppedPower, kSleepPower,
-      kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
-      chreGetVersion(), hostClientId);
+      kPeakPower, chreGetMessageToHostMaxSize(), chreGetPlatformId(),
+      chreGetVersion(), hostClientId, supportsReliableMessages);
 
   return HostLinkBase::send(builder.GetBufferPointer(), builder.GetSize());
 }
 
-bool dequeueMessage(PendingMessage pendingMsg) {
+DRAM_REGION_FUNCTION bool dequeueMessage(PendingMessage pendingMsg) {
   LOGV("%s: message type %d", __func__, pendingMsg.type);
   bool result = false;
   switch (pendingMsg.type) {
@@ -244,6 +256,7 @@ bool dequeueMessage(PendingMessage pendingMsg) {
     case PendingMessageType::SelfTestResponse:
     case PendingMessageType::MetricLog:
     case PendingMessageType::NanConfigurationRequest:
+    case PendingMessageType::PulseResponse:
       result = generateMessageFromBuilder(pendingMsg.data.builder);
       break;
 
@@ -261,7 +274,7 @@ bool dequeueMessage(PendingMessage pendingMsg) {
  *
  * @return true if the message was successfully added to the queue.
  */
-bool enqueueMessage(PendingMessage pendingMsg) {
+DRAM_REGION_FUNCTION bool enqueueMessage(PendingMessage pendingMsg) {
   return gOutboundQueue.push(pendingMsg);
 }
 
@@ -279,9 +292,9 @@ bool enqueueMessage(PendingMessage pendingMsg) {
  *
  * @return true if the message was successfully added to the queue
  */
-bool buildAndEnqueueMessage(PendingMessageType msgType,
-                            size_t initialBufferSize,
-                            MessageBuilderFunction *msgBuilder, void *cookie) {
+DRAM_REGION_FUNCTION bool buildAndEnqueueMessage(
+    PendingMessageType msgType, size_t initialBufferSize,
+    MessageBuilderFunction *msgBuilder, void *cookie) {
   LOGV("%s: message type %d, size %zu", __func__, msgType, initialBufferSize);
   bool pushed = false;
 
@@ -292,8 +305,6 @@ bool buildAndEnqueueMessage(PendingMessageType msgType,
   } else {
     msgBuilder(*builder, cookie);
 
-    // TODO(b/263958729): if this fails, ideally we should block for some
-    // timeout until there's space in the queue
     if (!enqueueMessage(PendingMessage(msgType, builder.get()))) {
       LOGE("Couldn't push message type %d to outbound queue",
            static_cast<int>(msgType));
@@ -309,7 +320,16 @@ bool buildAndEnqueueMessage(PendingMessageType msgType,
 /**
  * FlatBuffer message builder callback used with handleNanoappListRequest()
  */
-void buildNanoappListResponse(ChreFlatBufferBuilder &builder, void *cookie) {
+DRAM_REGION_FUNCTION void buildPulseResponse(ChreFlatBufferBuilder &builder,
+                                             void * /*cookie*/) {
+  HostProtocolChre::encodePulseResponse(builder);
+}
+
+/**
+ * FlatBuffer message builder callback used with handleNanoappListRequest()
+ */
+DRAM_REGION_FUNCTION void buildNanoappListResponse(
+    ChreFlatBufferBuilder &builder, void *cookie) {
   LOGV("%s", __func__);
   auto nanoappAdderCallback = [](const Nanoapp *nanoapp, void *data) {
     auto *cbData = static_cast<NanoappListData *>(data);
@@ -328,8 +348,9 @@ void buildNanoappListResponse(ChreFlatBufferBuilder &builder, void *cookie) {
                                               cbData->hostClientId);
 }
 
-void handleUnloadNanoappCallback(uint16_t /*type*/, void *data,
-                                 void * /*extraData*/) {
+DRAM_REGION_FUNCTION void handleUnloadNanoappCallback(uint16_t /*type*/,
+                                                      void *data,
+                                                      void * /*extraData*/) {
   auto *cbData = static_cast<UnloadNanoappCallbackData *>(data);
   bool success = false;
   uint16_t instanceId;
@@ -357,25 +378,79 @@ void handleUnloadNanoappCallback(uint16_t /*type*/, void *data,
   memoryFree(data);
 }
 
-}  // anonymous namespace
+DRAM_REGION_FUNCTION void sendDebugDumpData(uint16_t hostClientId,
+                                            const char *debugStr,
+                                            size_t debugStrSize) {
+  struct DebugDumpMessageData {
+    uint16_t hostClientId;
+    const char *debugStr;
+    size_t debugStrSize;
+  };
 
-void sendDebugDumpResultToHost(uint16_t hostClientId, const char * /*debugStr*/,
-                               size_t /*debugStrSize*/, bool /*complete*/,
-                               uint32_t /*dataCount*/) {
-  LOGV("%s: host client id %d", __func__, hostClientId);
-  // TODO(b/263958729): Implement this.
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void *cookie) {
+    const auto *data = static_cast<const DebugDumpMessageData *>(cookie);
+    HostProtocolChre::encodeDebugDumpData(builder, data->hostClientId,
+                                          data->debugStr, data->debugStrSize);
+  };
+
+  constexpr size_t kFixedSizePortion = 52;
+  DebugDumpMessageData data;
+  data.hostClientId = hostClientId;
+  data.debugStr = debugStr;
+  data.debugStrSize = debugStrSize;
+  buildAndEnqueueMessage(PendingMessageType::DebugDumpData,
+                         kFixedSizePortion + debugStrSize, msgBuilder, &data);
 }
 
-HostLinkBase::HostLinkBase() {
+DRAM_REGION_FUNCTION void sendDebugDumpResponse(uint16_t hostClientId,
+                                                bool success,
+                                                uint32_t dataCount) {
+  struct DebugDumpResponseData {
+    uint16_t hostClientId;
+    bool success;
+    uint32_t dataCount;
+  };
+
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void *cookie) {
+    const auto *data = static_cast<const DebugDumpResponseData *>(cookie);
+    HostProtocolChre::encodeDebugDumpResponse(builder, data->hostClientId,
+                                              data->success, data->dataCount);
+  };
+
+  constexpr size_t kInitialSize = 52;
+  DebugDumpResponseData data;
+  data.hostClientId = hostClientId;
+  data.success = success;
+  data.dataCount = dataCount;
+  buildAndEnqueueMessage(PendingMessageType::DebugDumpResponse, kInitialSize,
+                         msgBuilder, &data);
+}
+}  // anonymous namespace
+
+DRAM_REGION_FUNCTION void sendDebugDumpResultToHost(uint16_t hostClientId,
+                                                    const char *debugStr,
+                                                    size_t debugStrSize,
+                                                    bool complete,
+                                                    uint32_t dataCount) {
+  LOGV("%s: host client id %d", __func__, hostClientId);
+  if (debugStrSize > 0) {
+    sendDebugDumpData(hostClientId, debugStr, debugStrSize);
+  }
+  if (complete) {
+    sendDebugDumpResponse(hostClientId, /* success= */ true, dataCount);
+  }
+}
+
+DRAM_REGION_FUNCTION HostLinkBase::HostLinkBase() {
   LOGV("HostLinkBase::%s", __func__);
   initializeIpi();
 }
 
-HostLinkBase::~HostLinkBase() {
+DRAM_REGION_FUNCTION HostLinkBase::~HostLinkBase() {
   LOGV("HostLinkBase::%s", __func__);
 }
 
-void HostLinkBase::vChreReceiveTask(void *pvParameters) {
+DRAM_REGION_FUNCTION void HostLinkBase::vChreReceiveTask(void *pvParameters) {
   int i = 0;
   int ret = 0;
 
@@ -390,15 +465,16 @@ void HostLinkBase::vChreReceiveTask(void *pvParameters) {
   }
 }
 
-void HostLinkBase::vChreSendTask(void *pvParameters) {
+DRAM_REGION_FUNCTION void HostLinkBase::vChreSendTask(void *pvParameters) {
   while (true) {
     auto msg = gOutboundQueue.pop();
     dequeueMessage(msg);
   }
 }
 
-void HostLinkBase::chreIpiHandler(unsigned int id, void *prdata, void *data,
-                                  unsigned int len) {
+DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
+                                                       void *prdata, void *data,
+                                                       unsigned int len) {
   /* receive magic and cmd */
   struct ScpChreIpiMsg msg = *(struct ScpChreIpiMsg *)data;
 
@@ -426,8 +502,10 @@ void HostLinkBase::chreIpiHandler(unsigned int id, void *prdata, void *data,
   mrv_dcache_invalid_multi_addr(reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]),
                                 align(msg.size, CACHE_LINE_SIZE));
 #else
+  dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(static_cast<void *>(gChreRecvBuffer),
          reinterpret_cast<void *>(srcAddr), msg.size);
+  dvfs_disable_DRAM_resource(CHRE_MEM_ID);
 #endif
 
   // process the message
@@ -440,7 +518,7 @@ void HostLinkBase::chreIpiHandler(unsigned int id, void *prdata, void *data,
   gChreIpiAckToHost[1] = msg.size;
 }
 
-void HostLinkBase::initializeIpi(void) {
+DRAM_REGION_FUNCTION void HostLinkBase::initializeIpi(void) {
   LOGV("%s", __func__);
   bool success = false;
   int ret;
@@ -481,11 +559,11 @@ void HostLinkBase::initializeIpi(void) {
   }
 }
 
-void HostLinkBase::receive(HostLinkBase *instance, void *message,
-                           int messageLen) {
+DRAM_REGION_FUNCTION void HostLinkBase::receive(HostLinkBase *instance,
+                                                void *message, int messageLen) {
   LOGV("%s: message len %d", __func__, messageLen);
 
-  // TODO(b/263958729): A crude way to initially determine daemon's up - set
+  // TODO(b/277128368): A crude way to initially determine daemon's up - set
   // a flag on the first message received. This is temporary until a better
   // way to do this is available.
   instance->setInitialized(true);
@@ -495,7 +573,7 @@ void HostLinkBase::receive(HostLinkBase *instance, void *message,
   }
 }
 
-bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
+DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
 #ifndef HOST_LINK_IPI_SEND_TIMEOUT_MS
 #define HOST_LINK_IPI_SEND_TIMEOUT_MS 100
 #endif
@@ -512,11 +590,13 @@ bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr)));
 
 #ifdef SCP_CHRE_USE_DMA
-  // TODO(b/263958729): use DMA for larger payload
+  // TODO(b/288415339): use DMA for larger payload
   // No need cache operation, because src_dst handled by SCP CPU and dstAddr is
   // non-cacheable
 #else
+  dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(dstAddr, data, dataLen);
+  dvfs_disable_DRAM_resource(CHRE_MEM_ID);
 #endif
 
   // NB: len param for ipi_send is in number of 32-bit words
@@ -545,14 +625,10 @@ bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
   return ret == IPI_ACTION_DONE;
 }
 
-void HostLinkBase::sendTimeSyncRequest() {
-  LOGV("%s", __func__);
-  // TODO(b/263958729): Implement this.
-}
+DRAM_REGION_FUNCTION void HostLinkBase::sendTimeSyncRequest() {}
 
-void HostLinkBase::sendLogMessageV2(const uint8_t *logMessage,
-                                    size_t logMessageSize,
-                                    uint32_t numLogsDropped) {
+DRAM_REGION_FUNCTION void HostLinkBase::sendLogMessageV2(
+    const uint8_t *logMessage, size_t logMessageSize, uint32_t numLogsDropped) {
   LOGV("%s: size %zu", __func__, logMessageSize);
   struct LogMessageData {
     const uint8_t *logMsg;
@@ -586,7 +662,7 @@ void HostLinkBase::sendLogMessageV2(const uint8_t *logMessage,
 #endif
 }
 
-bool HostLink::sendMessage(HostMessage const *message) {
+DRAM_REGION_FUNCTION bool HostLink::sendMessage(HostMessage const *message) {
   LOGV("HostLink::%s size(%zu)", __func__, message->message.size());
   bool success = false;
 
@@ -599,32 +675,41 @@ bool HostLink::sendMessage(HostMessage const *message) {
   return success;
 }
 
-// TODO(b/263958729): HostMessageHandlers member function implementations are
+bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
+                                         uint8_t /* errorCode */) {
+  return false;
+}
+
+// TODO(b/285219398): HostMessageHandlers member function implementations are
 // expected to be (mostly) identical for any platform that uses flatbuffers
 // to encode messages - refactor the host link to merge the multiple copies
 // we currently have.
-void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
-                                               uint32_t messageType,
-                                               uint16_t hostEndpoint,
-                                               const void *messageData,
-                                               size_t messageDataLen) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
+    uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
+    const void *messageData, size_t messageDataLen, bool isReliable,
+    uint32_t messageSequenceNumber) {
   LOGV("Parsed nanoapp message from host: app ID 0x%016" PRIx64
        ", endpoint "
        "0x%" PRIx16 ", msgType %" PRIu32 ", payload size %zu",
        appId, hostEndpoint, messageType, messageDataLen);
 
-  // TODO(b/263958729): Implement this.
   getHostCommsManager().sendMessageToNanoappFromHost(
-      appId, messageType, hostEndpoint, messageData, messageDataLen);
+      appId, messageType, hostEndpoint, messageData, messageDataLen, isReliable,
+      messageSequenceNumber);
 }
 
-void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
+    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
+
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
+    uint16_t hostClientId) {
   LOGV("%s: host client id %d", __func__, hostClientId);
   enqueueMessage(
       PendingMessage(PendingMessageType::HubInfoResponse, hostClientId));
 }
 
-void HostMessageHandlers::handleNanoappListRequest(uint16_t hostClientId) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappListRequest(
+    uint16_t hostClientId) {
   auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
     uint16_t cbHostClientId = NestedDataPtr<uint16_t>(data);
 
@@ -653,10 +738,9 @@ void HostMessageHandlers::handleNanoappListRequest(uint16_t hostClientId) {
       NestedDataPtr<uint16_t>(hostClientId), callback);
 }
 
-void HostMessageHandlers::sendFragmentResponse(uint16_t hostClientId,
-                                               uint32_t transactionId,
-                                               uint32_t fragmentId,
-                                               bool success) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::sendFragmentResponse(
+    uint16_t hostClientId, uint32_t transactionId, uint32_t fragmentId,
+    bool success) {
   struct FragmentedLoadInfoResponse {
     uint16_t hostClientId;
     uint32_t transactionId;
@@ -682,7 +766,17 @@ void HostMessageHandlers::sendFragmentResponse(uint16_t hostClientId,
                          kInitialBufferSize, msgBuilder, &response);
 }
 
-void HostMessageHandlers::handleLoadNanoappRequest(
+DRAM_REGION_FUNCTION void HostMessageHandlers::handlePulseRequest() {
+  auto callback = [](uint16_t /*type*/, void * /*data*/, void * /*extraData*/) {
+    buildAndEnqueueMessage(PendingMessageType::PulseResponse,
+                           /*initialBufferSize= */ 48, buildPulseResponse,
+                           /* cookie= */ nullptr);
+  };
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::PulseResponse, /* data= */ nullptr, callback);
+}
+
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleLoadNanoappRequest(
     uint16_t hostClientId, uint32_t transactionId, uint64_t appId,
     uint32_t appVersion, uint32_t appFlags, uint32_t targetApiVersion,
     const void *buffer, size_t bufferLen, const char *appFileName,
@@ -694,7 +788,7 @@ void HostMessageHandlers::handleLoadNanoappRequest(
                   respondBeforeStart);
 }
 
-void HostMessageHandlers::handleUnloadNanoappRequest(
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleUnloadNanoappRequest(
     uint16_t hostClientId, uint32_t transactionId, uint64_t appId,
     bool allowSystemNanoappUnload) {
   LOGD("Unload nanoapp request from client %" PRIu16 " (txnID %" PRIu32
@@ -715,22 +809,49 @@ void HostMessageHandlers::handleUnloadNanoappRequest(
   }
 }
 
-void HostLink::flushMessagesSentByNanoapp(uint64_t /* appId */) {
+DRAM_REGION_FUNCTION void HostLinkBase::sendNanoappTokenDatabaseInfo(
+    uint64_t appId, uint32_t tokenDatabaseOffset, size_t tokenDatabaseSize) {
+  constexpr size_t kInitialBufferSize = 56;
+  ChreFlatBufferBuilder builder(kInitialBufferSize);
+  uint16_t instanceId;
+  EventLoopManagerSingleton::get()->getEventLoop().findNanoappInstanceIdByAppId(
+      appId, &instanceId);
+  HostProtocolChre::encodeNanoappTokenDatabaseInfo(
+      builder, instanceId, appId, tokenDatabaseOffset, tokenDatabaseSize);
+
+  if (!getHostCommsManager().send(builder.GetBufferPointer(),
+                                  builder.GetSize())) {
+    LOGE("Failed to send nanoapp token database info for AppID: 0x%016" PRIx64
+         " InstanceID: %" PRIu16,
+         appId, instanceId);
+  }
+}
+
+DRAM_REGION_FUNCTION void HostLink::flushMessagesSentByNanoapp(
+    uint64_t /* appId */) {
   // Not implemented
 }
 
-void HostMessageHandlers::handleTimeSyncMessage(int64_t offset) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleTimeSyncMessage(
+    int64_t offset) {
   LOGE("%s unsupported.", __func__);
 }
 
-void HostMessageHandlers::handleDebugDumpRequest(uint16_t hostClientId) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleDebugDumpRequest(
+    uint16_t hostClientId) {
   LOGV("%s: host client id %d", __func__, hostClientId);
-  // TODO(b/263958729): Implement this.
+  if (!EventLoopManagerSingleton::get()
+           ->getDebugDumpManager()
+           .onDebugDumpRequested(hostClientId)) {
+    LOGE("Couldn't trigger debug dump process");
+    sendDebugDumpResponse(hostClientId, /* success= */ false,
+                          /* dataCount= */ 0);
+  }
 }
 
-void HostMessageHandlers::handleSettingChangeMessage(fbs::Setting setting,
-                                                     fbs::SettingState state) {
-  // TODO(b/267207477): Refactor handleSettingChangeMessage to shared code
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleSettingChangeMessage(
+    fbs::Setting setting, fbs::SettingState state) {
+  // TODO(b/285219398): Refactor handleSettingChangeMessage to shared code
   Setting chreSetting;
   bool chreSettingEnabled;
   if (HostProtocolChre::getSettingFromFbs(setting, &chreSetting) &&
@@ -740,16 +861,17 @@ void HostMessageHandlers::handleSettingChangeMessage(fbs::Setting setting,
   }
 }
 
-void HostMessageHandlers::handleSelfTestRequest(uint16_t hostClientId) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleSelfTestRequest(
+    uint16_t hostClientId) {
   LOGV("%s: host client id %d", __func__, hostClientId);
-  // TODO(b/263958729): Implement this.
 }
 
-void HostMessageHandlers::handleNanConfigurationUpdate(bool /* enabled */) {
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanConfigurationUpdate(
+    bool /* enabled */) {
   LOGE("%s NAN unsupported.", __func__);
 }
 
-void sendAudioRequest() {
+DRAM_REGION_FUNCTION void sendAudioRequest() {
   auto msgBuilder = [](ChreFlatBufferBuilder &builder, void * /*cookie*/) {
     HostProtocolChre::encodeLowPowerMicAccessRequest(builder);
   };
@@ -758,7 +880,7 @@ void sendAudioRequest() {
                          kInitialSize, msgBuilder, /* cookie= */ nullptr);
 }
 
-void sendAudioRelease() {
+DRAM_REGION_FUNCTION void sendAudioRelease() {
   auto msgBuilder = [](ChreFlatBufferBuilder &builder, void * /*cookie*/) {
     HostProtocolChre::encodeLowPowerMicAccessRelease(builder);
   };

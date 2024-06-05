@@ -62,10 +62,9 @@ bool NanoappLoader::relocateTable(DynamicHeader *dyn, int tag) {
                  static_cast<long unsigned int>(curr->r_offset));
             size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
             auto *dynamicSymbolTable =
-                reinterpret_cast<ElfSym *>(getDynamicSymbolTable());
+                reinterpret_cast<ElfSym *>(mDynamicSymbolTablePtr);
             ElfSym *sym = &dynamicSymbolTable[posInSymbolTable];
             *addr = reinterpret_cast<uintptr_t>(mMapping + sym->st_value);
-
             break;
           }
 
@@ -96,6 +95,8 @@ bool NanoappLoader::resolveGot() {
   size_t nRelocs = relocSize / sizeof(ElfRela);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
 
+  bool success = true;
+
   for (size_t i = 0; i < nRelocs; ++i) {
     ElfRela *curr = &reloc[i];
     int relocType = ELFW_R_TYPE(curr->r_info);
@@ -108,9 +109,9 @@ bool NanoappLoader::resolveGot() {
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
         if (resolved == nullptr) {
-          LOGV("Failed to resolve symbol(%zu) at offset 0x%x", i,
+          LOGE("Failed to resolve symbol(%zu) at offset 0x%x", i,
                curr->r_offset);
-          return false;
+          success = false;
         }
         *addr = reinterpret_cast<ElfAddr>(resolved) + curr->r_addend;
         break;
@@ -119,10 +120,10 @@ bool NanoappLoader::resolveGot() {
       default:
         LOGE("Unsupported relocation type: %u for symbol %s", relocType,
              getDataName(getDynamicSymbol(ELFW_R_SYM(curr->r_info))));
-        return false;
+        success = false;
     }
   }
-  return true;
+  return success;
 }
 
 }  // namespace chre

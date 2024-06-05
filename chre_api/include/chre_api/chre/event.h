@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// IWYU pragma: private, include "chre_api/chre.h"
+// IWYU pragma: friend chre/.*\.h
+
 #ifndef _CHRE_EVENT_H_
 #define _CHRE_EVENT_H_
 
@@ -38,9 +41,10 @@ extern "C" {
  *
  * CHRE_MESSAGE_TO_HOST_MAX_SIZE: The maximum size, in bytes, allowed for
  *     a message sent to chreSendMessageToHostEndpoint().  This must be at least
- *     CHRE_MESSAGE_TO_HOST_MINIMUM_MAX_SIZE.
+ *     CHRE_MESSAGE_TO_HOST_MINIMUM_MAX_SIZE. If the system supports a larger
+ *     maximum size, it will be defined as the return value of
+ *     chreGetMessageToHostMaxSize().
  */
-
 #ifndef CHRE_MESSAGE_TO_HOST_MAX_SIZE
 #error CHRE_MESSAGE_TO_HOST_MAX_SIZE must be defined by the CHRE implementation
 #endif
@@ -64,6 +68,15 @@ extern "C" {
     (defined(CHRE_NANOAPP_SUPPORTS_PRE_V1_5) &&  \
      CHRE_MESSAGE_TO_HOST_MAX_SIZE < 128)
 #error CHRE_MESSAGE_TO_HOST_MAX_SIZE is too small.
+#endif
+
+/**
+ * CHRE_MESSAGE_TO_HOST_MAX_SIZE must be less than or equal to 4096. If the system
+ * supports a larger maximum size, it will be defined as the return value of
+ * chreGetMessageToHostMaxSize().
+ */
+#if CHRE_MESSAGE_TO_HOST_MAX_SIZE > 4096
+#error CHRE_MESSAGE_TO_HOST_MAX_SIZE must be <= 4096
 #endif
 
 /**
@@ -162,6 +175,31 @@ extern "C" {
  * @since v1.6
  */
 #define CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION UINT16_C(0x0008)
+
+/**
+ * Indicates a RPC request from a nanoapp.
+ *
+ * @since v1.9
+ */
+#define CHRE_EVENT_RPC_REQUEST UINT16_C(0x00009)
+
+/**
+ * Indicates a RPC response from a nanoapp.
+ *
+ * @since v1.9
+ */
+#define CHRE_EVENT_RPC_RESPONSE UINT16_C(0x0000A)
+
+/**
+ * nanoappHandleEvent argument: struct chreAsyncResult
+ *
+ * Async status for reliable messages. The resultType field
+ * will be populated with a value of 0.
+ *
+ * @see chreSendReliableMessageAsync
+ * @since v1.10
+ */
+#define CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT UINT16_C(0x000B)
 
 /**
  * First possible value for CHRE_EVENT_SENSOR events.
@@ -307,6 +345,15 @@ extern "C" {
 #define CHRE_MESSAGE_PERMISSION_VENDOR_END (UINT32_C(1) << 31)
 
 /** @} */
+
+/**
+ * Reserved message type for RPC messages.
+ *
+ * @see chreSendMessageWithPermissions
+ *
+ * @since v1.9
+ */
+#define CHRE_MESSAGE_TYPE_RPC UINT32_C(0x7FFFFFF5)
 
 /**
  * @see chrePublishRpcServices
@@ -484,19 +531,19 @@ struct chreHostEndpointNotification {
  */
 
 //! The host endpoint is part of the Android system framework.
-#define CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK UINT8_C(0)
+#define CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK UINT8_C(0x00)
 
 //! The host endpoint is an Android app.
-#define CHRE_HOST_ENDPOINT_TYPE_APP UINT8_C(1)
+#define CHRE_HOST_ENDPOINT_TYPE_APP UINT8_C(0x01)
 
 //! The host endpoint is an Android native program.
-#define CHRE_HOST_ENDPOINT_TYPE_NATIVE UINT8_C(2)
+#define CHRE_HOST_ENDPOINT_TYPE_NATIVE UINT8_C(0x02)
 
 //! Values in the range [CHRE_HOST_ENDPOINT_TYPE_VENDOR_START,
 //! CHRE_HOST_ENDPOINT_TYPE_VENDOR_END] can be a custom defined host endpoint
 //! type for platform-specific vendor use.
-#define CHRE_HOST_ENDPOINT_TYPE_VENDOR_START UINT8_C(128)
-#define CHRE_HOST_ENDPOINT_TYPE_VENDOR_END UINT8_C(255)
+#define CHRE_HOST_ENDPOINT_TYPE_VENDOR_START UINT8_C(0x80)
+#define CHRE_HOST_ENDPOINT_TYPE_VENDOR_END UINT8_C(0xFF)
 
 /** @} */
 
@@ -717,6 +764,8 @@ bool chreSendMessageToHostEndpoint(void *message, size_t messageSize,
  *     NOTE: In CHRE API v1.0, support for forwarding this field to the host was
  *     not strictly required, and some implementations did not support it.
  *     However, its support is mandatory as of v1.1.
+ *     NOTE: The value CHRE_MESSAGE_TYPE_RPC is reserved for usage by RPC
+ *     libraries and normally should not be directly used by nanoapps.
  * @param hostEndpoint  An identifier for the intended recipient of the message,
  *     or CHRE_HOST_ENDPOINT_BROADCAST if all registered endpoints on the host
  *     should receive the message.  Endpoint identifiers are assigned on the
@@ -749,6 +798,51 @@ bool chreSendMessageWithPermissions(void *message, size_t messageSize,
                                     uint32_t messageType, uint16_t hostEndpoint,
                                     uint32_t messagePermissions,
                                     chreMessageFreeFunction *freeCallback);
+
+/**
+ * Send a reliable message to the host.
+ *
+ * A reliable message is similar to a message sent by
+ * chreSendMessageWithPermissions() with the difference that the host
+ * acknowledges the message by sending a status back to the nanoapp, and the
+ * CHRE implementation takes care of retries to help mitigate transient
+ * failures. The final result of attempting to deliver the message is given
+ * via a CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT event. The maximum time until the
+ * nanoapp will receive the result is CHRE_ASYNC_RESULT_TIMEOUT_NS.
+ *
+ * The free callback is invoked before the async status is delivered to the
+ * nanoapp via the CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT event and does not
+ * indicate successful delivery of the message.
+ *
+ * The API is similar to chreSendMessageWithPermissions() with a few
+ * differences:
+ * - chreSendReliableMessageAsync() takes an extra cookie that is part of the
+ *   async result
+ * - When the message is accepted for transmission (the function returns true)
+ *   then an async status is delivered to the nanoapp when the transmission
+ *   completes either successfully or in error via the
+ *   CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT event.
+ * - The error codes received are:
+ *   - CHRE_ERROR_NANOAPP_STOPPING if the nanoapp was stopping during the
+ *                                 request.
+ *   - CHRE_ERROR_DESTINATION_NOT_FOUND if the destination was not found.
+ *   - CHRE_ERROR if there was a permanent error.
+ *   - CHRE_ERROR_TIMEOUT if there was no response from the recipient
+ *                        (a timeout).
+ *
+ * This is an optional feature, and this function will always return
+ * false if CHRE_CAPABILITIES_RELIABLE_MESSAGES is not indicated by
+ * chreGetCapabilities().
+ *
+ * @see chreSendMessageWithPermissions
+ *
+ * @since v1.10
+ */
+bool chreSendReliableMessageAsync(void *message, size_t messageSize,
+                                  uint32_t messageType, uint16_t hostEndpoint,
+                                  uint32_t messagePermissions,
+                                  chreMessageFreeFunction *freeCallback,
+                                  const void *cookie);
 
 /**
  * Queries for information about a nanoapp running in the system.

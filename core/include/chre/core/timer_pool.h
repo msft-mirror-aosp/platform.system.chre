@@ -149,10 +149,10 @@ class TimerPool : public NonCopyable {
     uint16_t instanceId;
 
     /**
-     * Provides a greater than comparison of TimerRequests.
+     * Returns whether the current request expires after the passed one.
      *
-     * @param request The other request to compare against.
-     * @return Returns true if this request is greater than the provided
+     * @param request The other request.
+     * @return Returns whether this request expires after the provided
      *         request.
      */
     bool operator>(const TimerRequest &request) const;
@@ -300,6 +300,14 @@ class TimerPool : public NonCopyable {
   bool handleExpiredTimersAndScheduleNextLocked();
 
   /**
+   * Reschedules the expired timer if it is not a one-shot timer and removes
+   * the expired timer.
+   *
+   * @param request The timer request.
+   */
+  void rescheduleAndRemoveExpiredTimersLocked(const TimerRequest &request);
+
+  /**
    * Returns whether the nanoapp holds timers.
    *
    * @param instanceId The instance id of the nanoapp.
@@ -314,6 +322,17 @@ class TimerPool : public NonCopyable {
    * @param data A pointer to the timer pool.
    */
   static void handleSystemTimerCallback(void *timerPoolPtr);
+
+  /**
+   * This callback is called when a timer fires and synchronously delivers the
+   * method to the nanoapp.
+   *
+   * @param type The type of the callback.
+   * @param data The data pointer passed to the callback.
+   * @param extraData The extra data pointer passed to the callback.
+   */
+  static void handleTimerExpiredCallback(uint16_t type, void *data,
+                                         void *extraData);
 };
 
 }  // namespace chre

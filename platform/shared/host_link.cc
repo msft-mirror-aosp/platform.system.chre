@@ -104,6 +104,9 @@ void HostMessageHandlers::loadNanoappData(
       cbData->nanoapp = getLoadManager().releaseNanoapp();
       cbData->sendFragmentResponse = !respondBeforeStart;
 
+      LOGD("Instance ID %" PRIu16 " assigned to app ID 0x%" PRIx64,
+           cbData->nanoapp->getInstanceId(), appId);
+
       // Note that if this fails, we'll generate the error response in
       // the normal deferred callback
       EventLoopManagerSingleton::get()->deferCallback(

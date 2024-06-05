@@ -51,6 +51,7 @@ constexpr uint32_t kDefaultHubId = 0;
 constexpr char kPreloadedNanoappsConfigPath[] =
     "/vendor/etc/chre/preloaded_nanoapps.json";
 constexpr std::chrono::duration kTestModeTimeout = std::chrono::seconds(10);
+constexpr uint16_t kMaxValidHostEndPointId = 0x7fff;
 
 /*
  * The starting transaction ID for internal transactions. We choose
@@ -123,6 +124,8 @@ ScopedAStatus ContextHub::getContextHubs(
     hub.chrePatchVersion = extractChrePatchVersion(version);
 
     hub.supportedPermissions = kSupportedPermissions;
+
+    hub.supportsReliableMessages = false;
 
     out_contextHubInfos->push_back(hub);
   }
@@ -296,6 +299,12 @@ ScopedAStatus ContextHub::setTestMode(bool enable) {
   return enable ? enableTestMode() : disableTestMode();
 }
 
+ScopedAStatus ContextHub::sendMessageDeliveryStatusToHub(
+    int32_t /* contextHubId */,
+    const MessageDeliveryStatus & /* messageDeliveryStatus */) {
+  return ndk::ScopedAStatus::ok();
+}
+
 ScopedAStatus ContextHub::onHostEndpointConnected(
     const HostEndpointInfo &in_info) {
   std::lock_guard<std::mutex> lock(mConnectedHostEndpointsMutex);
@@ -345,6 +354,11 @@ ScopedAStatus ContextHub::onNanSessionStateChanged(
 void ContextHub::onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) {
   std::lock_guard<std::mutex> lock(mCallbackMutex);
   if (mCallback != nullptr) {
+    if (message.host_endpoint > kMaxValidHostEndPointId &&
+        message.host_endpoint != CHRE_HOST_ENDPOINT_BROADCAST) {
+      return;
+    }
+
     mEventLogger.logMessageFromNanoapp(message);
     ContextHubMessage outMessage;
     outMessage.nanoappId = message.app_id;
@@ -416,7 +430,7 @@ void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
     mSynchronousLoadUnloadSuccess = success;
     mSynchronousLoadUnloadCondVar.notify_all();
   } else {
-    std::lock_guard<std::mutex> lock(mCallbackMutex);
+    std::lock_guard<std::mutex> callbackLock(mCallbackMutex);
     if (mCallback != nullptr) {
       mCallback->handleTransactionResult(transactionId, success);
     }
@@ -531,9 +545,8 @@ ScopedAStatus ContextHub::enableTestMode() {
                           std::back_inserter(nanoappIdsToUnload));
     if (!unloadNanoappsInternal(kDefaultHubId, nanoappIdsToUnload)) {
       LOGE("Unable to unload all loaded and preloaded nanoapps.");
-    } else {
-      success = true;
     }
+    success = true;
   }
 
   if (success) {
@@ -570,9 +583,10 @@ ScopedAStatus ContextHub::disableTestMode() {
 
     if (!loadNanoappsInternal(kDefaultHubId, nanoappsToLoad)) {
       LOGE("Unable to load all preloaded, non-system nanoapps.");
-    } else {
-      success = true;
     }
+    // Any attempt to load non-test nanoapps should disable test mode, even if
+    // not all nanoapps are successfully loaded.
+    success = true;
   }
 
   if (success) {
@@ -616,7 +630,9 @@ bool ContextHub::loadNanoappInternal(const NanoappBinary &appBinary,
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary);
   bool success = mConnection.loadNanoapp(transaction);
-  mEventLogger.logNanoappLoad(appBinary, success);
+  mEventLogger.logNanoappLoad(appBinary.nanoappId,
+                              appBinary.customBinary.size(),
+                              appBinary.nanoappVersion, success);
   return success;
 }
 
@@ -647,7 +663,6 @@ bool ContextHub::loadNanoappsInternal(
           *mSynchronousLoadUnloadSuccess) {
         LOGI("Successfully loaded nanoapp with ID: 0x%016" PRIx64,
              nanoappToLoad.nanoappId);
-        ++(*mSynchronousLoadUnloadTransactionId);
         success = true;
       }
     }
@@ -655,9 +670,8 @@ bool ContextHub::loadNanoappsInternal(
     if (!success) {
       LOGE("Failed to load nanoapp with ID 0x%" PRIx64,
            nanoappToLoad.nanoappId);
-      mSynchronousLoadUnloadTransactionId.reset();
-      return false;
     }
+    ++(*mSynchronousLoadUnloadTransactionId);
   }
 
   return true;
@@ -696,16 +710,15 @@ bool ContextHub::unloadNanoappsInternal(
           *mSynchronousLoadUnloadSuccess) {
         LOGI("Successfully unloaded nanoapp with ID: 0x%016" PRIx64,
              nanoappIdToUnload);
-        ++(*mSynchronousLoadUnloadTransactionId);
+
         success = true;
       }
     }
 
     if (!success) {
       LOGE("Failed to unload nanoapp with ID 0x%" PRIx64, nanoappIdToUnload);
-      mSynchronousLoadUnloadTransactionId.reset();
-      return false;
     }
+    ++(*mSynchronousLoadUnloadTransactionId);
   }
 
   return true;

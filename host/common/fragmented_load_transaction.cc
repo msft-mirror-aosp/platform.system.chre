@@ -50,13 +50,14 @@ FragmentedLoadTransaction::FragmentedLoadTransaction(
     uint32_t transactionId, uint64_t appId, uint32_t appVersion,
     uint32_t appFlags, uint32_t targetApiVersion,
     const std::vector<uint8_t> &appBinary, size_t fragmentSize) {
-  mTransactionId = transactionId;
-
   // Start with fragmentId at 1 since 0 is used to indicate
   // legacy behavior at CHRE
   size_t fragmentId = 1;
   size_t byteIndex = 0;
   do {
+    // It is guaranteed that mFragmentRequests must have at least one element,
+    // which is the precondition of the getters retrieving the info from the
+    // first fragmented request.
     if (fragmentId == 1) {
       mFragmentRequests.emplace_back(
           fragmentId++, transactionId, appId, appVersion, appFlags,
@@ -64,7 +65,7 @@ FragmentedLoadTransaction::FragmentedLoadTransaction(
           getSubVector(appBinary, byteIndex, fragmentSize));
     } else {
       mFragmentRequests.emplace_back(
-          fragmentId++, transactionId,
+          fragmentId++, transactionId, appId,
           getSubVector(appBinary, byteIndex, fragmentSize));
     }
 

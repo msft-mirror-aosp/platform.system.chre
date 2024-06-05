@@ -64,6 +64,16 @@ class BleScanner {
     return is_batch_flushing_;
   }
 
+  // Returns whether BLE scan is running.
+  bool isScanning() {
+    return is_started_;
+  }
+
+  // Returns true if BLE scan is available in the device.
+  bool isAvailable() {
+    return is_ble_scan_supported_;
+  }
+
   // Returns whether BLE batch scan is supported.
   bool IsBatchSupported() {
     return is_batch_supported_;
@@ -93,6 +103,10 @@ class BleScanner {
   void ClearDefaultFilters() {
     is_default_generic_filter_enabled_ = false;
   }
+
+  // Returns whether the filter list contains the given filter.
+  bool ContainsFilter(const chre::DynamicVector<chreBleGenericFilter> &filters,
+                      const chreBleGenericFilter &src);
 
  private:
   // Whether BLE scan is started.
