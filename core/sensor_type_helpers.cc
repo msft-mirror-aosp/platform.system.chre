@@ -19,6 +19,7 @@
 #include <cinttypes>
 
 #include "chre/platform/assert.h"
+#include "chre_api/chre.h"
 
 namespace chre {
 
