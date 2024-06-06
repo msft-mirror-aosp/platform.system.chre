@@ -36,6 +36,7 @@ using ::android::base::WriteStringToFd;
 using ::android::chre::FragmentedLoadTransaction;
 using ::android::chre::getStringFromByteVector;
 using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
+using ::android::chre::flags::abort_if_no_context_hub_found;
 using ::android::chre::flags::reliable_message_implementation;
 using ::ndk::ScopedAStatus;
 namespace fbs = ::chre::fbs;
@@ -186,6 +187,9 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
   } else {
     LOGE("Unable to get a valid context hub info for PID %d",
          AIBinder_getCallingPid());
+    if (abort_if_no_context_hub_found()) {
+      std::abort();
+    }
   }
   return ScopedAStatus::ok();
 }

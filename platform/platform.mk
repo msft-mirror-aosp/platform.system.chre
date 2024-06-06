@@ -510,6 +510,10 @@ ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_audio.cc
 endif
 
+ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_gnss.cc
+endif
+
 # Compiler flags
 
 # Variables

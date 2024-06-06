@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 #define CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 
+#include <algorithm>
 #include <type_traits>
 #include <utility>
 
