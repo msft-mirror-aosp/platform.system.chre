@@ -79,6 +79,7 @@ cc_defaults {
         "libprotobuf-cpp-lite",
         "libutils",
         "server_configurable_flags",
+        "libaconfig_storage_read_api_cc",
     ],
     static_libs: [
         "chre_client",
