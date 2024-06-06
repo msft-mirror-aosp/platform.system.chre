@@ -200,17 +200,15 @@ void Nanoapp::logStateToBuffer(DebugDumpWrapper &debugDump) const {
 void Nanoapp::logMemAndComputeHeader(DebugDumpWrapper &debugDump) const {
   // Print table header
   // Nanoapp column sized to accommodate largest known name
-  debugDump.print("\n%10sNanoapp%9s| Mem Alloc (Bytes) |%7sEvent Time (Ms)\n",
+  debugDump.print("\n%10sNanoapp%9s| Mem Alloc (Bytes) |%2sEvent Time (Ms)\n",
                   "", "", "");
-  debugDump.print("%26s| Current |     Max |    Mean |     Max |   Total\n",
-                  "");
+  debugDump.print("%26s| Current |     Max |     Max |   Total\n", "");
 }
 
 void Nanoapp::logMemAndComputeEntry(DebugDumpWrapper &debugDump) const {
   debugDump.print("%25s |", getAppName());
   debugDump.print(" %7zu |", getTotalAllocatedBytes());
   debugDump.print(" %7zu |", getPeakAllocatedBytes());
-  debugDump.print(" %7" PRIu64 " |", mEventProcessTime.getMean());
   debugDump.print(" %7" PRIu64 " |", mEventProcessTime.getMax());
   debugDump.print(" %7" PRIu64 "\n", mEventProcessTimeSinceBoot);
 }

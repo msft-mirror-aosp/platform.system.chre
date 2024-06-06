@@ -358,10 +358,6 @@ class EventLoop : public NonCopyable {
     return mEventPoolUsage.getMax();
   }
 
-  inline uint32_t getMeanEventQueueSize() const {
-    return mEventPoolUsage.getMean();
-  }
-
   inline uint32_t getNumEventsDropped() const {
     return mNumDroppedLowPriEvents;
   }
