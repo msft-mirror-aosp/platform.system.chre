@@ -365,12 +365,7 @@ void LogMessageParser::resetNanoappDetokenizerState() {
 
 void LogMessageParser::onNanoappLoadStarted(
     uint64_t appId, std::shared_ptr<const std::vector<uint8_t>> nanoappBinary) {
-#ifdef CHRE_NANOAPP_TOKENIZED_LOGGING_ENABLED
   mNanoappAppIdToBinary[appId] = nanoappBinary;
-#else
-  UNUSED_VAR(appId);
-  UNUSED_VAR(nanoappBinary);
-#endif  // CHRE_NANOAPP_TOKENIZED_LOGGING_ENABLED
 }
 
 void LogMessageParser::onNanoappLoadFailed(uint64_t appId) {
