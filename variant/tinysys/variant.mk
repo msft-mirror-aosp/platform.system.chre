@@ -66,7 +66,7 @@ TINYSYS_CFLAGS += -DCHRE_MAX_EVENT_BLOCKS=4
 # Optional Features ############################################################
 
 CHRE_AUDIO_SUPPORT_ENABLED = true
-CHRE_GNSS_SUPPORT_ENABLED = false
+CHRE_GNSS_SUPPORT_ENABLED = true
 CHRE_SENSORS_SUPPORT_ENABLED = true
 CHRE_WIFI_SUPPORT_ENABLED = false
 CHRE_WWAN_SUPPORT_ENABLED = false
