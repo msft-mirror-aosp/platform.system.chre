@@ -596,10 +596,9 @@ void HalClientManager::updateClientIdMappingFile() {
 
 std::string HalClientManager::debugDump() {
   std::ostringstream result;
-  result << "\n-- HAL Client Manager Debug Info --\n"
-         << "\nKnown clients, format:\n"
-         << "[isConnected] (uuid : name) : Pid, ClientId, {endpointIds, in "
-            "'original (mutated)' format, sorted}\n\n";
+  result << "\nKnown clients:\n"
+         << "Format: [isConnected] (uuid : name) : Pid, ClientId, "
+            "{endpointIds, in 'original (mutated)' format, sorted}\n";
 
   // Dump states of each client.
   const std::lock_guard<std::mutex> lock(mLock);
@@ -629,7 +628,7 @@ std::string HalClientManager::debugDump() {
   }
 
   // Dump active transactions, if any.
-  result << "\nActive pending transaction:\n\n";
+  result << "\nActive pending transaction:\n";
   if (mPendingLoadTransaction.has_value()) {
     result << "Load transaction from client "
            << mPendingLoadTransaction->clientId << ": Transaction "
@@ -643,7 +642,6 @@ std::string HalClientManager::debugDump() {
            << mPendingUnloadTransaction->transactionId << "\n";
   }
 
-  result << "\n-- End Of HAL Client Manager Debug Info --\n";
   return result.str();
 }
 }  // namespace android::hardware::contexthub::common::implementation
