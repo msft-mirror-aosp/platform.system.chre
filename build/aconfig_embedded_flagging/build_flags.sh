@@ -19,8 +19,8 @@ shift
 shift
 IN_FLAG_VALUES=""
 for i in "$@"; do
-  IN_FLAG_VALUES+="--values "
-  IN_FLAG_VALUES+=$(realpath "$i ")
+  IN_FLAG_VALUES+=" --values "
+  IN_FLAG_VALUES+=$(realpath "$i")
 done
 
 pushd $IN_ACONFIG_EMB_DIR > /dev/null
