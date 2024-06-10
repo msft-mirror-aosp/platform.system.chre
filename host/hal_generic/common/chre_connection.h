@@ -85,6 +85,13 @@ class ChreConnection {
   virtual bool isTimeSyncNeeded() {
     return false;
   }
+
+  /**
+   * Returns debug information.
+   */
+  virtual std::string dump() {
+    return {};
+  }
 };
 
 }  // namespace android::hardware::contexthub::common::implementation
