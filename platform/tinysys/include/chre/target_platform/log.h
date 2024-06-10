@@ -45,42 +45,68 @@ void chrePlatformLogToBuffer(enum chreLogLevel level, const char *format, ...);
 // Print logs to host logcat
 #define CHRE_BUFFER_LOG(level, fmt, arg...)     \
   do {                                          \
-    CHRE_LOG_PREAMBLE                           \
     chrePlatformLogToBuffer(level, fmt, ##arg); \
-    CHRE_LOG_EPILOGUE                           \
   } while (0)
 
 #define LOGE(fmt, arg...)                                 \
   do {                                                    \
+    CHRE_LOG_PREAMBLE                                     \
     PRINTF_E("[CHRE]" fmt "\n", ##arg);                   \
     CHRE_BUFFER_LOG(CHRE_LOG_ERROR, "[CHRE]" fmt, ##arg); \
+    CHRE_LOG_EPILOGUE                                     \
   } while (0)
 
 #define LOGW(fmt, arg...)                                \
   do {                                                   \
+    CHRE_LOG_PREAMBLE                                    \
     PRINTF_W("[CHRE]" fmt "\n", ##arg);                  \
     CHRE_BUFFER_LOG(CHRE_LOG_WARN, "[CHRE]" fmt, ##arg); \
+    CHRE_LOG_EPILOGUE                                    \
   } while (0)
 
 #define LOGI(fmt, arg...)                                \
   do {                                                   \
+    CHRE_LOG_PREAMBLE                                    \
     PRINTF_I("[CHRE]" fmt "\n", ##arg);                  \
     CHRE_BUFFER_LOG(CHRE_LOG_INFO, "[CHRE]" fmt, ##arg); \
+    CHRE_LOG_EPILOGUE                                    \
   } while (0)
 
 #define LOGD(fmt, arg...)                                 \
   do {                                                    \
+    CHRE_LOG_PREAMBLE                                     \
     PRINTF_D("[CHRE]" fmt "\n", ##arg);                   \
     CHRE_BUFFER_LOG(CHRE_LOG_DEBUG, "[CHRE]" fmt, ##arg); \
+    CHRE_LOG_EPILOGUE                                     \
   } while (0)
 
 #else
 
-#define LOGE(fmt, arg...) PRINTF_E("[CHRE]" fmt "\n", ##arg)
-#define LOGW(fmt, arg...) PRINTF_W("[CHRE]" fmt "\n", ##arg)
-#define LOGI(fmt, arg...) PRINTF_I("[CHRE]" fmt "\n", ##arg)
-#define LOGD(fmt, arg...) PRINTF_D("[CHRE]" fmt "\n", ##arg)
+#define LOGE(fmt, arg...)              \
+  do {                                 \
+    CHRE_LOG_PREAMBLE                  \
+    PRINTF_E("[CHRE]" fmt "\n", ##arg) \
+    CHRE_LOG_EPILOGUE                  \
+  } while (0)
+#define LOGW(fmt, arg...)              \
+  do {                                 \
+    CHRE_LOG_PREAMBLE                  \
+    PRINTF_W("[CHRE]" fmt "\n", ##arg) \
+    CHRE_LOG_EPILOGUE                  \
+  } while (0)
+#define LOGI(fmt, arg...)              \
+  do {                                 \
+    CHRE_LOG_PREAMBLE                  \
+    PRINTF_I("[CHRE]" fmt "\n", ##arg) \
+    CHRE_LOG_EPILOGUE                  \
+  } while (0)
+#define LOGD(fmt, arg...)              \
+  do {                                 \
+    CHRE_LOG_PREAMBLE                  \
+    PRINTF_D("[CHRE]" fmt "\n", ##arg) \
+    CHRE_LOG_EPILOGUE                  \
+  } while (0)
 
-#endif
+#endif  // CHRE_USE_BUFFERED_LOGGING
 
 #endif  // CHRE_PLATFORM_TINYSYS_LOG_H_
