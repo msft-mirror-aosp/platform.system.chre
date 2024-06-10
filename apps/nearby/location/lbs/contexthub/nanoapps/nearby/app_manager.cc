@@ -20,19 +20,21 @@
 #include <pb_decode.h>
 #include <pb_encode.h>
 
+#include <cstdint>
 #include <utility>
 
 #include "chre_api/chre.h"
 #include "location/lbs/contexthub/nanoapps/common/math/macros.h"
-#ifdef ENABLE_EXTENSION
 #include "location/lbs/contexthub/nanoapps/nearby/nearby_extension.h"
 #include "location/lbs/contexthub/nanoapps/nearby/proto/nearby_extension.nanopb.h"
-#endif
+#include "location/lbs/contexthub/nanoapps/nearby/tracker_storage.h"
 #include "location/lbs/contexthub/nanoapps/proto/filter.nanopb.h"
 #include "third_party/contexthub/chre/util/include/chre/util/macros.h"
 #include "third_party/contexthub/chre/util/include/chre/util/nanoapp/log.h"
 
 #define LOG_TAG "[NEARBY][APP_MANAGER]"
+
+extern uint32_t ble_scan_keep_alive_timer_id;
 
 namespace nearby {
 
@@ -40,12 +42,14 @@ using ::chre::Nanoseconds;
 
 AppManager::AppManager() {
   fp_filter_cache_time_nanosec_ = chreGetTime();
+  tracker_storage_.SetCallback(this);
 #ifdef NEARBY_PROFILE
   ashProfileInit(
       &profile_data_, "[NEARBY_MATCH_ADV_PERF]", 1000 /* print_interval_ms */,
       false /* report_total_thread_cycles */, true /* printCsvFormat */);
 #endif
 }
+
 bool AppManager::IsInitialized() {
   // AppManager initialized successfully only when BLE scan is available.
   return ble_scanner_.isAvailable();
@@ -64,11 +68,12 @@ void AppManager::HandleEvent(uint32_t sender_instance_id, uint16_t event_type,
       break;
     case CHRE_EVENT_BLE_ADVERTISEMENT:
       event = static_cast<const chreBleAdvertisementEvent *>(event_data);
-      LOGD("Received %d BLE reports", event->numReports);
+      LOGD("Received %" PRIu16 "BLE reports", event->numReports);
       // Print BLE advertisements for debug only.
-      for (int i = 0; i < event->numReports; i++) {
-        LOGD_SENSITIVE_INFO("Report %d has %d bytes service data", i,
-                            event->reports[i].dataLength);
+      for (uint16_t i = 0; i < event->numReports; i++) {
+        LOGD_SENSITIVE_INFO("Report %" PRIu16 " has %" PRIu16
+                            " bytes service data",
+                            i, event->reports[i].dataLength);
         LOGD_SENSITIVE_INFO("timestamp msec: %" PRIu64,
                             event->reports[i].timestamp / MSEC_TO_NANOS(1));
         LOGD_SENSITIVE_INFO("service data byte: ");
@@ -103,8 +108,13 @@ void AppManager::HandleEvent(uint32_t sender_instance_id, uint16_t event_type,
       LOGD("Received batch complete event");
       HandleMatchAdvReports(adv_reports_cache_);
       break;
+    case CHRE_EVENT_TIMER:
+      if (event_data == &ble_scan_keep_alive_timer_id) {
+        tracker_storage_.Refresh(tracker_filter_.GetBatchConfig());
+      }
+      break;
     default:
-      LOGD("Unknown event type: %d", event_type);
+      LOGD("Unknown event type: %" PRIu16, event_type);
   }
   Nanoseconds wakeup_duration_ns = Nanoseconds(chreGetTime()) - wakeup_start_ns;
   LOGD("NanoApp wakeup ends after %" PRIu64 " ns by event %" PRIu16,
@@ -138,7 +148,9 @@ void AppManager::HandleMatchAdvReports(AdvReportCache &adv_reports_cache) {
     fp_filter_cache_results_ = std::move(fp_filter_results);
     fp_filter_cache_time_nanosec_ = chreGetTime();
   }
-#ifdef ENABLE_EXTENSION
+  // Matches tracker filters.
+  tracker_filter_.MatchAndSave(adv_reports_cache.GetAdvReports(),
+                               tracker_storage_);
   // Matches extended filters.
   chre::DynamicVector<FilterExtensionResult> filter_extension_results;
   filter_extension_.Match(adv_reports_cache.GetAdvReports(),
@@ -159,7 +171,6 @@ void AppManager::HandleMatchAdvReports(AdvReportCache &adv_reports_cache) {
       LOGD("Updated filter extension result cache");
     }
   }
-#endif
   adv_reports_cache.Clear();
 #ifdef NEARBY_PROFILE
   ashProfileEnd(&profile_data_, nullptr /* output */);
@@ -187,20 +198,15 @@ void AppManager::HandleMessageFromHost(const chreMessageFromHostData *event) {
       HandleHostConfigRequest(static_cast<const uint8_t *>(event->message),
                               event->messageSize);
       break;
-#ifdef ENABLE_EXTENSION
     case lbs_FilterMessageType_MESSAGE_EXT_CONFIG_REQUEST:
       HandleHostExtConfigRequest(event);
       break;
-#endif
   }
 }
 
 void AppManager::UpdateBleScanState() {
-  if (!filter_.IsEmpty()
-#ifdef ENABLE_EXTENSION
-      || !filter_extension_.IsEmpty()
-#endif
-  ) {
+  if (!filter_.IsEmpty() || !tracker_filter_.IsEmpty() ||
+      !filter_extension_.IsEmpty()) {
     ble_scanner_.Restart();
   } else {
     ble_scanner_.Stop();
@@ -255,13 +261,11 @@ void AppManager::HandleHostConfigRequest(const uint8_t *message,
           fp_filter_cache_results_.clear();
         }
       }
-#ifdef ENABLE_EXTENSION
       if (!screen_on_filter_extension_results_.empty()) {
         LOGD("try to send filter extension result from cache");
         SendFilterExtensionResultToHost(screen_on_filter_extension_results_);
         screen_on_filter_extension_results_.clear();
       }
-#endif
     }
   }
   if (config.has_fast_pair_cache_expire_time_sec) {
@@ -443,7 +447,6 @@ bool AppManager::EncodeFilterResult(const nearby_BleFilterResult &filter_result,
   return true;
 }
 
-#ifdef ENABLE_EXTENSION
 void AppManager::HandleHostExtConfigRequest(
     const chreMessageFromHostData *event) {
   chreHostEndpointInfo host_info;
@@ -479,6 +482,17 @@ void AppManager::HandleHostExtConfigRequest(
                                     &config_response)) {
           LOGE("Failed to handle extended service config");
         }
+        break;
+      case nearby_extension_ExtConfigRequest_tracker_filter_config_tag:
+        if (!HandleExtTrackerFilterConfig(host_info,
+                                          config.config.tracker_filter_config,
+                                          &config_response)) {
+          LOGE("Failed to handle tracker filter config");
+        }
+        break;
+      case nearby_extension_ExtConfigRequest_flush_tracker_reports_tag:
+        HandleExtFlushTrackerReports(
+            host_info, config.config.flush_tracker_reports, &config_response);
         break;
       default:
         LOGE("Unknown extended config %d", config.which_config);
@@ -592,10 +606,92 @@ const char *AppManager::GetExtConfigNameFromTag(pb_size_t config_tag) {
       return "FilterConfig";
     case nearby_extension_ExtConfigRequest_service_config_tag:
       return "ServiceConfig";
+    case nearby_extension_ExtConfigRequest_tracker_filter_config_tag:
+      return "TrackerFilterConfig";
+    case nearby_extension_ExtConfigRequest_flush_tracker_reports_tag:
+      return "FlushTrackerReports";
     default:
       return "Unknown";
   }
 }
-#endif
+
+void AppManager::OnTrackerStorageFullEvent() {
+  SendTrackerStorageFullEventToHost();
+}
+
+bool AppManager::HandleExtTrackerFilterConfig(
+    const chreHostEndpointInfo &host_info,
+    const nearby_extension_ExtConfigRequest_TrackerFilterConfig &config,
+    nearby_extension_ExtConfigResponse *config_response) {
+  chre::DynamicVector<chreBleGenericFilter> generic_filters;
+  tracker_filter_.Update(host_info, config, &generic_filters, config_response);
+  if (config_response->result != CHREX_NEARBY_RESULT_OK) {
+    return false;
+  }
+  ble_scanner_.UpdateTrackerFilters(generic_filters);
+  UpdateBleScanState();
+  // Send tracker reports to host before clearing the tracker storage if the
+  // host stops the tracker filter.
+  if (tracker_filter_.IsEmpty()) {
+    SendTrackerReportsToHost(tracker_storage_.GetBatchReports());
+    tracker_storage_.Clear();
+  }
+  return true;
+}
+
+void AppManager::HandleExtFlushTrackerReports(
+    const chreHostEndpointInfo &host_info,
+    const nearby_extension_ExtConfigRequest_FlushTrackerReports & /*config*/,
+    nearby_extension_ExtConfigResponse *config_response) {
+  LOGD("Flush tracker reports by host: id (%" PRIu16 "), package name (%s)",
+       host_info.hostEndpointId,
+       host_info.isNameValid ? host_info.packageName : "unknown");
+  SendTrackerReportsToHost(tracker_storage_.GetBatchReports());
+  tracker_storage_.Clear();
+  config_response->has_result = true;
+  config_response->result = CHREX_NEARBY_RESULT_OK;
+}
+
+void AppManager::SendTrackerStorageFullEventToHost() {
+  uint16_t host_end_point = tracker_filter_.GetHostEndPoint();
+  LOGI("Send tracker storage full event.");
+  if (chreSendMessageWithPermissions(
+          /*message=*/nullptr, /*messageSize=*/0,
+          lbs_FilterMessageType_MESSAGE_EXT_STORAGE_FULL_EVENT, host_end_point,
+          CHRE_MESSAGE_PERMISSION_BLE,
+          [](void *msg, size_t /*size*/) { chreHeapFree(msg); })) {
+    LOGI("Succeeded to send tracker storage full event");
+  } else {
+    LOGI("Failed to send tracker storage full event");
+  }
+}
+
+void AppManager::SendTrackerReportsToHost(
+    chre::DynamicVector<TrackerReport> &tracker_reports) {
+  uint16_t host_end_point = tracker_filter_.GetHostEndPoint();
+  for (auto &tracker_report : tracker_reports) {
+    size_t encoded_size;
+    uint8_t *msg_buf = (uint8_t *)chreHeapAlloc(kTrackerReportsBufSize);
+    if (msg_buf == nullptr) {
+      LOGE("Failed to allocate message buffer of size %zu for dispatch.",
+           kTrackerReportsBufSize);
+      return;
+    }
+    if (!TrackerFilter::EncodeTrackerReport(
+            tracker_report, ByteArray(msg_buf, kTrackerReportsBufSize),
+            &encoded_size)) {
+      chreHeapFree(msg_buf);
+      return;
+    }
+    if (chreSendMessageWithPermissions(
+            msg_buf, encoded_size, lbs_FilterMessageType_MESSAGE_TRACKER_REPORT,
+            host_end_point, CHRE_MESSAGE_PERMISSION_BLE,
+            [](void *msg, size_t /*size*/) { chreHeapFree(msg); })) {
+      LOGD("Successfully sent the tracker report.");
+    } else {
+      LOGE("Failed to send tracker report.");
+    }
+  }
+}
 
 }  // namespace nearby

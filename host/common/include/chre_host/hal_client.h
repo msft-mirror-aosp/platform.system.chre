@@ -204,6 +204,7 @@ class HalClient {
     ABinderProcess_startThreadPool();
     mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
         AIBinder_DeathRecipient_new(onHalDisconnected));
+    mCallback->getName(&mClientName);
   }
 
   /**
@@ -268,6 +269,8 @@ class HalClient {
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
 
   std::shared_ptr<HalClientCallback> mCallback;
+
+  std::string mClientName;
 
   // Lock guarding background connection threads.
   std::mutex mBackgroundConnectionThreadsLock;

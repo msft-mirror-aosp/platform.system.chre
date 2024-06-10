@@ -81,12 +81,44 @@ message ExtConfigRequest {
     optional uint32 data_length = 2;
   }
 
+  message TrackerFilterConfig {
+    // Tracker scan filter configuration as list of Hardware filters which
+    // follows chreBleScanFilter defined in CHRE BLE API.
+    repeated ChreBleGenericFilter hardware_filter = 1;
+
+    // The advertising report is considered seen only if the signal strength is
+    // higher than the RSSI threshold in dBm. If the RSSI threshold is
+    // CHRE_BLE_RSSI_NONE (127), the RSSI filter is not applied.
+    optional sint32 rssi_threshold = 2 [default = 127];
+
+    // Tracker batch report configuration.
+    // Minimum sampling interval to update tracker history.
+    optional uint32 sample_interval_ms = 3 [default = 60000];
+
+    // Maximum number of tracker reports that can be stored in storage.
+    optional uint32 max_tracker_count = 4 [default = 30];
+
+    // Notification threshold of the number of tracker reports, which should be
+    // equal to or smaller than max_tracker_count.
+    optional uint32 notify_threshold_tracker_count = 5 [default = 28];
+
+    // Maximum number of tracker histories that can be stored in tracker report.
+    optional uint32 max_history_count = 6 [default = 20];
+
+    // Timeout for tracker history to be considered lost.
+    optional uint32 lost_timeout_ms = 7 [default = 60000];
+  }
+
+  message FlushTrackerReports {}
+
   // Request ID specified by the client to pair Request/Response messages.
   optional uint32 request_id = 1;
 
   oneof config {
     FilterConfig filter_config = 2;
     ServiceConfig service_config = 3;
+    TrackerFilterConfig tracker_filter_config = 4;
+    FlushTrackerReports flush_tracker_reports = 5;
   }
 }
 
@@ -197,4 +229,55 @@ message ChreBleAdvertisingReport {
   optional bytes data = 7;
 
   optional int32 data_length = 8;
+}
+
+message TrackerReport {
+  // Advertising key report
+  optional ChreBleAdvertisingReport report = 1;
+
+  // Found and lost history for the tracker
+  repeated TrackerHistory historian = 2;
+}
+
+message TrackerHistory {
+  enum TrackerState {
+    UNSPECIFIED = 0;
+    PRESENT = 1;
+    ABSENT = 2;
+  }
+
+  // The number of times the tracker report was found at each sampling interval
+  // when in the Present state.
+  optional uint32 found_count = 1;
+
+  // The timestamp when the tracker report was first discovered when it was not
+  // in the present state, relative to Android
+  // SystemClock.elapsedRealtimeNanos().
+  optional uint32 first_found_time_ms = 2;
+
+  // The most recent timestamp when the tracker report was discovered for each
+  // sampling period in the Present state, relative to Android
+  // SystemClock.elapsedRealtimeNanos().
+  optional uint32 last_found_time_ms = 3;
+
+  // The timestamp at which the tracker report was lost. Only valid when the
+  // tracker state is Absent, relative to Android
+  // SystemClock.elapsedRealtimeNanos().
+  optional uint32 lost_time_ms = 4;
+
+  // The latest state of the tracker history.
+  optional TrackerState state = 5;
+}
+
+message ExtConfigEvent {
+  enum EventCode {
+    UNSPECIFIED = 0;
+
+    // This event is sent to host when the storage size reaches the notification
+    // level or higher defined as notify_threshold_tracker_count.
+    STORAGE_FULL = 1;
+  }
+
+  // Event code returned to host.
+  optional EventCode event_code = 1;
 }

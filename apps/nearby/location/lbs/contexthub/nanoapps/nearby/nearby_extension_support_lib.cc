@@ -19,6 +19,10 @@
 #include "location/lbs/contexthub/nanoapps/nearby/nearby_extension.h"
 #include "third_party/contexthub/chre/util/include/chre/util/macros.h"
 
+#ifndef RTLD_DEFAULT
+#define RTLD_DEFAULT ((void *)0)
+#endif
+
 /**
  * Lazily calls dlsym to find the function pointer for a given function
  * (provided without quotes) in another library (i.e. the CHRE platform DSO),
