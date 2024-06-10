@@ -20,6 +20,7 @@
 #include <chre.h>
 
 #include "third_party/contexthub/chre/util/include/chre/util/dynamic_vector.h"
+#include "third_party/contexthub/chre/util/include/chre/util/time.h"
 
 namespace nearby {
 
@@ -45,6 +46,10 @@ class BleScanner {
 
   // Default value for report delay of batch scan results in low power mode.
   static constexpr uint32_t kBatchScanReportDelayLowPowerMilliSec = 3000;
+
+  // Default value for BLE scan keep alive timer interval.
+  static constexpr uint64_t kKeepAliveTimerIntervalNanoSec =
+      60 * chre::kOneSecondInNanoseconds;
 
   // Constructs BLE Scanner and checks whether BLE batch scan is supported.
   BleScanner();
@@ -85,6 +90,12 @@ class BleScanner {
       uint16_t host_end_point,
       chre::DynamicVector<chreBleGenericFilter> *generic_filters);
 
+  // Updates the tracker filters.
+  void UpdateTrackerFilters(
+      chre::DynamicVector<chreBleGenericFilter> &filters) {
+    tracker_filters_ = std::move(filters);
+  }
+
   // Updates the report delay of batch scan
   void UpdateBatchDelay(uint32_t delay_ms);
 
@@ -108,6 +119,17 @@ class BleScanner {
   bool ContainsFilter(const chre::DynamicVector<chreBleGenericFilter> &filters,
                       const chreBleGenericFilter &src);
 
+  // Starts BLE scan keep alive timer.
+  void StartKeepAliveTimer();
+
+  // Stops BLE scan keep alive timer.
+  void StopKeepAliveTimer();
+
+  // Sets BLE scan keep alive timer interval.
+  void SetKeepAliveTimerInterval(uint64_t interval_ns) {
+    keep_alive_timer_interval_ns_ = interval_ns;
+  }
+
  private:
   // Whether BLE scan is started.
   bool is_started_ = false;
@@ -130,7 +152,11 @@ class BleScanner {
   // Current BLE scan mode
   chreBleScanMode scan_mode_ = CHRE_BLE_SCAN_MODE_BACKGROUND;
 
+  // Current BLE scan keep alive timer interval.
+  uint64_t keep_alive_timer_interval_ns_ = kKeepAliveTimerIntervalNanoSec;
+
   chre::DynamicVector<GenericFilters> generic_filters_list_;
+  chre::DynamicVector<chreBleGenericFilter> tracker_filters_;
 };
 
 }  // namespace nearby
