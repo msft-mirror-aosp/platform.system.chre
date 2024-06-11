@@ -68,6 +68,7 @@ cc_binary {
         "libprotobuf-cpp-lite",
         "libutils",
         "server_configurable_flags",
+        "libaconfig_storage_read_api_cc",
     ],
     header_libs: [
         "chre_api",

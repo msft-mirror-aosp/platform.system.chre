@@ -24,4 +24,8 @@ enum FilterMessageType {
   MESSAGE_EXT_CONFIG_REQUEST = 6;
   // Message from CHRE to host for the response of extended configuration.
   MESSAGE_EXT_CONFIG_RESPONSE = 7;
+  // Message from CHRE to host for the tracker report.
+  MESSAGE_TRACKER_REPORT = 8;
+  // Message from CHRE to host for the storage full event.
+  MESSAGE_EXT_STORAGE_FULL_EVENT = 9;
 }
