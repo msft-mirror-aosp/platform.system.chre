@@ -37,6 +37,13 @@ flag {
 }
 
 flag {
+  name: "abort_if_no_context_hub_found"
+  namespace: "context_hub"
+  description: "Abort the HAL process if no context hub info found. For debug purpose only."
+  bug: "344642685"
+}
+
+flag {
   name: "reliable_message"
   is_exported: true
   namespace: "context_hub"
