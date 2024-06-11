@@ -189,6 +189,7 @@ void parseAdData(const uint8_t *data, uint16_t size) {
     if (adDataLength == 0) break;
     // Log 2 byte UUIDs for service data or manufacturer data AD types.
     if (adDataLength < kUuidLengthInBytes) {
+      i += adDataLength + 1;
       continue;
     }
     uint8_t adDataType = data[++i];
