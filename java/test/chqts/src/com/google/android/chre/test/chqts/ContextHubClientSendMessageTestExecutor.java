@@ -51,7 +51,7 @@ import java.util.concurrent.TimeoutException;
  * {@code @Before} and {@link #deinit()} as part of tearing down annotated by {@code @After}.
  */
 public class ContextHubClientSendMessageTestExecutor {
-    private static final String TAG = "ContextHubClientSendMessageExecutor";
+    private static final String TAG = "ContextHubClientSendMessageTestExecutor";
     private static final int MESSAGE_TYPE =
             ContextHubTestConstants.MessageType.SERVICE_MESSAGE.asInt();
     private static final int MAX_MESSAGE_SIZE = 4000;

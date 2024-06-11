@@ -17,6 +17,9 @@
 #ifndef CHRE_UTIL_HASH_H_
 #define CHRE_UTIL_HASH_H_
 
+#include <cstddef>
+#include <cstdint>
+
 namespace chre {
 
 /**
