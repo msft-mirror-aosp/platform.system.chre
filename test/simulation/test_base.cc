@@ -44,9 +44,9 @@ namespace chre {
  * this test.
  */
 void TestBase::SetUp() {
+  chre::PlatformLogSingleton::init();
   TaskManagerSingleton::init();
   TestEventQueueSingleton::init();
-  chre::PlatformLogSingleton::init();
   chre::init();
   EventLoopManagerSingleton::get()->lateInit();
 
@@ -72,11 +72,11 @@ void TestBase::TearDown() {
   mChreThread.join();
 
   chre::deinit();
-  chre::PlatformLogSingleton::deinit();
   TestEventQueueSingleton::deinit();
   TaskManagerSingleton::deinit();
   deleteNanoappInfos();
   unregisterAllTestNanoapps();
+  chre::PlatformLogSingleton::deinit();
 }
 
 TEST_F(TestBase, CanLoadAndStartSingleNanoapp) {
