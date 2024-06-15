@@ -44,9 +44,14 @@ namespace chre {
  * this test.
  */
 void TestBase::SetUp() {
+  // TODO(b/346903946): remove these extra prints once init failure is resolved
+  printf("SetUp(): log\n");
   chre::PlatformLogSingleton::init();
+  printf("SetUp(): TaskManager\n");
   TaskManagerSingleton::init();
+  printf("SetUp(): TestEventQueue\n");
   TestEventQueueSingleton::init();
+  printf("SetUp(): CHRE\n");
   chre::init();
   EventLoopManagerSingleton::get()->lateInit();
 
@@ -62,6 +67,7 @@ void TestBase::SetUp() {
   ASSERT_TRUE(mSystemTimer.init());
   ASSERT_TRUE(mSystemTimer.set(callback, nullptr /*data*/,
                                Nanoseconds(getTimeoutNs())));
+  printf("SetUp() complete\n");
 }
 
 void TestBase::TearDown() {
