@@ -272,7 +272,7 @@ bool EventLoop::unloadNanoapp(uint16_t instanceId,
   return unloaded;
 }
 
-bool EventLoop::removeLowPriorityEventsFromBack(size_t removeNum) {
+bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNum) {
 #ifdef CHRE_STATIC_EVENT_LOOP
   return false;
 #else
