@@ -56,6 +56,13 @@ class IntrusiveListBase : public NonCopyable {
   }
 
   /**
+   * Link a new node to the front of the linked list.
+   *
+   * @param newNode: The node to push onto the linked list.
+   */
+  void doLinkFront(Node *newNode);
+
+  /**
    * Link a new node to the end of the linked list.
    *
    * @param newNode: The node to push onto the linked list.

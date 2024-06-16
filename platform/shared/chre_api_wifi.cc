@@ -34,8 +34,8 @@ DLL_EXPORT uint32_t chreWifiGetCapabilities() {
 #endif  // CHRE_WIFI_SUPPORT_ENABLED
 }
 
-DLL_EXPORT bool chreWifiConfigureScanMonitorAsync(bool enable,
-                                                  const void *cookie) {
+DLL_EXPORT bool chreWifiConfigureScanMonitorAsync(
+    [[maybe_unused]] bool enable, [[maybe_unused]] const void *cookie) {
 #ifdef CHRE_WIFI_SUPPORT_ENABLED
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
@@ -48,7 +48,8 @@ DLL_EXPORT bool chreWifiConfigureScanMonitorAsync(bool enable,
 }
 
 DLL_EXPORT bool chreWifiRequestScanAsync(
-    const struct chreWifiScanParams *params, const void *cookie) {
+    [[maybe_unused]] const struct chreWifiScanParams *params,
+    [[maybe_unused]] const void *cookie) {
 #ifdef CHRE_WIFI_SUPPORT_ENABLED
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
@@ -60,7 +61,8 @@ DLL_EXPORT bool chreWifiRequestScanAsync(
 }
 
 DLL_EXPORT bool chreWifiRequestRangingAsync(
-    const struct chreWifiRangingParams *params, const void *cookie) {
+    [[maybe_unused]] const struct chreWifiRangingParams *params,
+    [[maybe_unused]] const void *cookie) {
 #ifdef CHRE_WIFI_SUPPORT_ENABLED
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
@@ -73,8 +75,9 @@ DLL_EXPORT bool chreWifiRequestRangingAsync(
 #endif  // CHRE_WIFI_SUPPORT_ENABLED
 }
 
-DLL_EXPORT bool chreWifiNanSubscribe(struct chreWifiNanSubscribeConfig *config,
-                                     const void *cookie) {
+DLL_EXPORT bool chreWifiNanSubscribe(
+    [[maybe_unused]] struct chreWifiNanSubscribeConfig *config,
+    [[maybe_unused]] const void *cookie) {
 #if defined(CHRE_WIFI_SUPPORT_ENABLED) && defined(CHRE_WIFI_NAN_SUPPORT_ENABLED)
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
@@ -85,7 +88,8 @@ DLL_EXPORT bool chreWifiNanSubscribe(struct chreWifiNanSubscribeConfig *config,
 #endif  // CHRE_WIFI_SUPPORT_ENABLED
 }
 
-DLL_EXPORT bool chreWifiNanSubscribeCancel(uint32_t subscriptionId) {
+DLL_EXPORT bool chreWifiNanSubscribeCancel(
+    [[maybe_unused]] uint32_t subscriptionId) {
 #if defined(CHRE_WIFI_SUPPORT_ENABLED) && defined(CHRE_WIFI_NAN_SUPPORT_ENABLED)
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
@@ -98,7 +102,8 @@ DLL_EXPORT bool chreWifiNanSubscribeCancel(uint32_t subscriptionId) {
 }
 
 DLL_EXPORT bool chreWifiNanRequestRangingAsync(
-    const struct chreWifiNanRangingParams *params, const void *cookie) {
+    [[maybe_unused]] const struct chreWifiNanRangingParams *params,
+    [[maybe_unused]] const void *cookie) {
 #if defined(CHRE_WIFI_SUPPORT_ENABLED) && defined(CHRE_WIFI_NAN_SUPPORT_ENABLED)
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WIFI) &&
