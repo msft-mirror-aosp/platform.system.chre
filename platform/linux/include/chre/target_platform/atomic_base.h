@@ -26,6 +26,10 @@ namespace chre {
  */
 template <typename AtomicType>
 class AtomicBase {
+ public:
+  constexpr explicit AtomicBase(AtomicType startingValue)
+      : mAtomic(startingValue) {}
+
  protected:
   //! The underlying std::atomic struct.
   std::atomic<AtomicType> mAtomic;
