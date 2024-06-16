@@ -18,6 +18,7 @@
 #define CHRE_HOST_HAL_CLIENT_H_
 
 #include <cinttypes>
+#include <future>
 #include <memory>
 #include <shared_mutex>
 #include <thread>
@@ -121,10 +122,14 @@ class HalClient {
 
   /** Connects to CHRE HAL in background. */
   void connectInBackground(BackgroundConnectionCallback &callback) {
-    std::lock_guard<std::mutex> lock(mBackgroundConnectionThreadsLock);
-    mBackgroundConnectionThreads.emplace_back([&]() {
-      callback.onInitialization(initConnection() == HalError::SUCCESS);
-    });
+    std::lock_guard<std::mutex> lock(mBackgroundConnectionFuturesLock);
+    // Policy std::launch::async is required to avoid lazy evaluation which can
+    // postpone the execution until get() of the future returned by std::async
+    // is called.
+    mBackgroundConnectionFutures.emplace_back(
+        std::async(std::launch::async, [&]() {
+          callback.onInitialization(initConnection() == HalError::SUCCESS);
+        }));
   }
 
   ScopedAStatus queryNanoapps() {
@@ -273,8 +278,8 @@ class HalClient {
   std::string mClientName;
 
   // Lock guarding background connection threads.
-  std::mutex mBackgroundConnectionThreadsLock;
-  std::vector<std::thread> mBackgroundConnectionThreads;
+  std::mutex mBackgroundConnectionFuturesLock;
+  std::vector<std::future<void>> mBackgroundConnectionFutures;
 };
 
 }  // namespace android::chre
