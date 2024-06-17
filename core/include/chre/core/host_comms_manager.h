@@ -80,6 +80,10 @@ struct HostMessage : public NonCopyable {
     } toHostData;
   };
 
+  //! Distinguishes whether this is a message from the host or to the host,
+  //! which dictates whether fromHostData or toHostData are used.
+  bool fromHost;
+
   //! Whether the message is reliable.
   //! Reliable messages are acknowledge by sending with a status containing
   //! the transaction ID.
@@ -302,14 +306,13 @@ class HostCommsManager : public HostLink {
                                       MessageToHost *msgToHost);
 
   /**
-   * Find the message associated with the message sequence number if it exists.
-   * Returns nullptr other wise.
+   * Find the message to the host associated with the message sequence number,
+   * if it exists. Returns nullptr otherwise.
    *
    * @param messageSequenceNumber The message sequence number.
    * @return The message or nullptr if not found.
    */
-  HostMessage *findMessageByMessageSequenceNumber(
-      uint32_t messageSequenceNumber);
+  MessageToHost *findMessageToHostBySeq(uint32_t messageSequenceNumber);
 
   /**
    * Flushes all the pending reliable message transactions for a nanoapp.
