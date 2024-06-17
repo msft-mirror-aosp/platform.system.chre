@@ -171,6 +171,10 @@ void Manager::compareAndSendResultToHost() {
       mApScanResults.size() > mExpectedMaxChreResultCanHandle &&
       mApScanResults.size() < mChreScanResults.size();
 
+  LOGI("Wifi scan result counts, AP = %zu, CHRE = %zu, MAX = %" PRIu8,
+       mApScanResults.size(), mChreScanResults.size(),
+       mExpectedMaxChreResultCanHandle);
+
   verifyScanResults(&testResult);
 
   if (belowMaxSizeCheck || aboveMaxSizeCheck) {
