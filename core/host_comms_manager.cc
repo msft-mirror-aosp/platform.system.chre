@@ -96,20 +96,9 @@ bool HostCommsManager::completeTransaction(uint32_t transactionId,
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
-void HostCommsManager::flushNanoappMessagesAndTransactions(uint64_t appId) {
-  uint16_t nanoappInstanceId;
-  bool nanoappFound =
-      EventLoopManagerSingleton::get()
-          ->getEventLoop()
-          .findNanoappInstanceIdByAppId(appId, &nanoappInstanceId);
-  if (nanoappFound) {
-    flushNanoappTransactions(nanoappInstanceId);
-  } else {
-    LOGE("Could not find nanoapp 0x%016" PRIx64 " to flush transactions",
-         appId);
-  }
-
-  HostLink::flushMessagesSentByNanoapp(appId);
+void HostCommsManager::flushNanoappMessages(Nanoapp &nanoapp) {
+  flushNanoappTransactions(nanoapp.getInstanceId());
+  HostLink::flushMessagesSentByNanoapp(nanoapp.getAppId());
 }
 
 void HostCommsManager::onMessageToHostComplete(const MessageToHost *message) {

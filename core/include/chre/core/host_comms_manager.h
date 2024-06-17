@@ -130,14 +130,15 @@ class HostCommsManager : public HostLink {
    * pending delivery to the host. At the point that this function is called, it
    * is guaranteed that no new messages will be generated from this nanoapp.
    *
-   * This function also flushes any outstanding reliable message transactions
-   * for the associated nanoapp.
+   * This function also flushes any outstanding reliable message transactions,
+   * by ensuring at least one attempt to send to the host is made, and not
+   * providing a message delivery status event to the nanoapp.
    *
    * This function must impose strict ordering constraints, such that after it
    * returns, it is guaranteed that HostCommsManager::onMessageToHostComplete
    * will not be invoked for the app with the given ID.
    */
-  void flushNanoappMessagesAndTransactions(uint64_t appId);
+  void flushNanoappMessages(Nanoapp &nanoapp);
 
   /**
    * Invoked by the HostLink platform layer when it is done with a message to
