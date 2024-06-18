@@ -143,7 +143,7 @@ TEST_F(TestBase, BleSimpleScanTest) {
           switch (event->type) {
             case START_SCAN: {
               const bool success = chreBleStartScanAsync(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }
@@ -200,7 +200,7 @@ TEST_F(TestBase, BleStopScanOnUnload) {
           switch (event->type) {
             case START_SCAN: {
               const bool success = chreBleStartScanAsync(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }
@@ -261,7 +261,7 @@ TEST_F(TestBase, BleStartTwiceScanTest) {
           switch (event->type) {
             case START_SCAN: {
               const bool success = chreBleStartScanAsync(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }
@@ -409,7 +409,7 @@ TEST_F(TestBase, BleSettingChangeTest) {
           switch (event->type) {
             case START_SCAN: {
               const bool success = chreBleStartScanAsync(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }
@@ -487,7 +487,7 @@ TEST_F(TestBase, BleSettingDisabledStartScanTest) {
           switch (event->type) {
             case START_SCAN: {
               const bool success = chreBleStartScanAsync(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }
@@ -673,7 +673,7 @@ TEST_F(TestBase, BleStartScanTwiceBeforeAsyncResponseTest) {
             case START_SCAN: {
               auto data = static_cast<testData *>(event->data);
               const bool success = chreBleStartScanAsyncV1_9(
-                  CHRE_BLE_SCAN_MODE_BACKGROUND, 0, nullptr, data->cookie);
+                  CHRE_BLE_SCAN_MODE_AGGRESSIVE, 0, nullptr, data->cookie);
               TestEventQueueSingleton::get()->pushEvent(START_SCAN, success);
               break;
             }

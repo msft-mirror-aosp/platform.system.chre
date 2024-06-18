@@ -301,5 +301,5 @@ void nanoappEnd() {
 #include "chre/util/system/napp_permissions.h"
 
 CHRE_STATIC_NANOAPP_INIT(GnssWorld, chre::kGnssWorldAppId, 0,
-                         chre::NanoappPermissions::CHRE_PERMS_GNSS);
+                         chre::NanoappPermissions::CHRE_PERMS_GNSS)
 #endif  // CHRE_NANOAPP_INTERNAL
