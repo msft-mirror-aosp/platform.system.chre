@@ -76,6 +76,18 @@ public class ChreApiTestUtil {
     private static final int NUM_THREADS_FOR_EXECUTOR = 2;
 
     /**
+     * The maximum number of samples to remove from the beginning of an audio
+     * data event. 8000 samples == 500ms.
+     */
+    private static final int MAX_LEADING_ZEROS_TO_REMOVE = 8000;
+
+    /**
+     * CHRE audio format enum values for 8-bit and 16-bit audio formats.
+     */
+    private static final int CHRE_AUDIO_DATA_FORMAT_8_BIT = 0;
+    private static final int CHRE_AUDIO_DATA_FORMAT_16_BIT = 1;
+
+    /**
      * Executor for use with server streaming RPCs.
      */
     private final ExecutorService mExecutor =
@@ -426,7 +438,7 @@ public class ChreApiTestUtil {
         ByteString sampleBytes;
         boolean status = true;
 
-        for (int i = 1; i < audioEvents.size() && status; i++) {
+        for (int i = 1; i < audioEvents.size() && status; ++i) {
             ChreApiTest.ChreAudioDataSamples samples = audioEvents.get(i).getChreAudioDataSamples();
             // assert samples sent/received in order
             if (samples.getId() != (i - 1)) {
@@ -436,8 +448,13 @@ public class ChreApiTestUtil {
             }
         }
 
+        // Remove leading zeros before creating the full event
         buffer.rewind();
-        sampleBytes = ByteString.copyFrom(buffer);
+        sampleBytes = removeLeadingZerosFromAudio(buffer, MAX_LEADING_ZEROS_TO_REMOVE,
+                                                  metadata.getFormat());
+        if (sampleBytes == null) {
+            status = false;
+        }
 
         ChreApiTest.ChreAudioDataEvent audioEvent =
                 ChreApiTest.ChreAudioDataEvent.newBuilder()
@@ -534,6 +551,46 @@ public class ChreApiTestUtil {
         File file = new File(context.getExternalFilesDir(null), filename);
         ByteSink sink = Files.asByteSink(file);
         sink.write(data);
+    }
+
+    /**
+     * Removes leading 0 samples from an audio data packet
+     *
+     * @param buffer    ByteBuffer containing all the data
+     * @param limit     Max amount of samples to remove
+     * @param format    Audio data format from metadata
+     *
+     * @return          ByteString with the leading zero samples removed
+     */
+    private ByteString removeLeadingZerosFromAudio(ByteBuffer buffer, int limit, int format) {
+        ByteString sampleString;
+
+        if (format != CHRE_AUDIO_DATA_FORMAT_8_BIT && format != CHRE_AUDIO_DATA_FORMAT_16_BIT) {
+            return null;
+        }
+
+        for (int i = 0; i < limit; ++i) {
+            int s;
+            if (format == CHRE_AUDIO_DATA_FORMAT_8_BIT) {
+                s = buffer.get();
+            } else {
+                s = buffer.getShort();
+            }
+
+            if (s != 0) {
+                break;
+            }
+        }
+
+        // move back to the first non-zero sample
+        if (format == CHRE_AUDIO_DATA_FORMAT_8_BIT) {
+            buffer.position(buffer.position() - 1);
+        } else {
+            buffer.position(buffer.position() - 2);
+        }
+        sampleString = ByteString.copyFrom(buffer.slice());
+
+        return sampleString;
     }
 
     /**

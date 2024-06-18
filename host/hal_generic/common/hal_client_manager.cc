@@ -20,7 +20,6 @@
 
 #include <aidl/android/hardware/contexthub/AsyncEventType.h>
 #include <android-base/strings.h>
-#include <android_chre_flags.h>
 #include <json/json.h>
 #include <utils/SystemClock.h>
 
@@ -30,7 +29,6 @@ using ::aidl::android::hardware::contexthub::AsyncEventType;
 using ::aidl::android::hardware::contexthub::ContextHubMessage;
 using ::aidl::android::hardware::contexthub::HostEndpointInfo;
 using ::aidl::android::hardware::contexthub::IContextHubCallback;
-using ::android::chre::flags::context_hub_callback_uuid_enabled;
 
 namespace {
 using Client = HalClientManager::Client;
@@ -45,7 +43,7 @@ bool getClientMappingsFromFile(const std::string &filePath,
 bool isCallbackV3Enabled(const std::shared_ptr<IContextHubCallback> &callback) {
   int32_t callbackVersion;
   callback->getInterfaceVersion(&callbackVersion);
-  return callbackVersion >= 3 && context_hub_callback_uuid_enabled();
+  return callbackVersion >= 3;
 }
 
 std::string getName(const std::shared_ptr<IContextHubCallback> &callback) {
@@ -56,13 +54,24 @@ std::string getName(const std::shared_ptr<IContextHubCallback> &callback) {
   callback->getName(&name);
   return name;
 }
+
+inline HostEndpointId mutateVendorEndpointId(const Client &client,
+                                             HostEndpointId endpointId) {
+  return HalClientManager::kVendorEndpointIdBitMask |
+         client.clientId << HalClientManager::kNumOfBitsForEndpointId |
+         endpointId;
+}
 }  // namespace
 
 std::string HalClientManager::getUuid(
     const std::shared_ptr<IContextHubCallback> &callback) {
   if (!isCallbackV3Enabled(callback)) {
-    return isSystemServerConnected() ? kVendorClientUuid : kSystemServerUuid;
+    Client *client = getClientByUuid(kSystemServerUuid);
+    bool isSystemServerConnected =
+        client != nullptr && client->pid != Client::kPidUnset;
+    return isSystemServerConnected ? kVendorClientUuid : kSystemServerUuid;
   }
+
   std::array<uint8_t, 16> uuidBytes{};
   callback->getUuid(&uuidBytes);
   std::ostringstream oStringStream;
@@ -267,8 +276,9 @@ HalClientManager::getNextFragmentedLoadRequest() {
   return request;
 }
 
-bool HalClientManager::registerPendingUnloadTransaction(
-    pid_t pid, uint32_t transactionId) {
+bool HalClientManager::registerPendingUnloadTransaction(pid_t pid,
+                                                        uint32_t transactionId,
+                                                        int64_t nanoappId) {
   const std::lock_guard<std::mutex> lock(mLock);
   const Client *client = getClientByProcessId(pid);
   if (client == nullptr) {
@@ -280,7 +290,7 @@ bool HalClientManager::registerPendingUnloadTransaction(
   }
   mPendingUnloadTransaction.emplace(
       client->clientId, transactionId,
-      /* registeredTimeMs= */ android::elapsedRealtime());
+      /* registeredTimeMs= */ android::elapsedRealtime(), nanoappId);
   return true;
 }
 
@@ -349,12 +359,13 @@ bool HalClientManager::registerEndpointId(pid_t pid,
     return false;
   }
   if (client->endpointIds.find(endpointId) != client->endpointIds.end()) {
-    LOGW("The endpoint %" PRIu16 " is already connected.", endpointId);
-    return false;
+    LOGW("Client %" PRIu16 "'s endpoint id %" PRIu16 " is already registered",
+         endpointId, client->clientId);
+  } else {
+    client->endpointIds.insert(endpointId);
+    LOGI("Client %" PRIu16 " registers endpoint id %" PRIu16, client->clientId,
+         endpointId);
   }
-  client->endpointIds.insert(endpointId);
-  LOGI("Endpoint id %" PRIu16 " is connected to client %" PRIu16, endpointId,
-       client->clientId);
   return true;
 }
 
@@ -443,10 +454,10 @@ bool HalClientManager::mutateEndpointIdFromHostIfNeeded(
     LOGE("Unknown HAL client with pid %d", pid);
     return false;
   }
+
   // no need to mutate client id for framework service
   if (client->uuid != kSystemServerUuid) {
-    endpointId = kVendorEndpointIdBitMask |
-                 client->clientId << kNumOfBitsForEndpointId | endpointId;
+    endpointId = mutateVendorEndpointId(*client, endpointId);
   }
   return true;
 }
@@ -491,8 +502,10 @@ HalClientManager::HalClientManager(
   updateNextClientId();
 }
 
-bool HalClientManager::isPendingLoadTransactionMatched(
+std::optional<HalClientManager::PendingLoadNanoappInfo>
+HalClientManager::getNanoappInfoFromPendingLoadTransaction(
     HalClientId clientId, uint32_t transactionId, uint32_t currentFragmentId) {
+  const std::lock_guard<std::mutex> lock(mLock);
   bool success =
       isPendingTransactionMatched(clientId, transactionId,
                                   mPendingLoadTransaction) &&
@@ -512,8 +525,10 @@ bool HalClientManager::isPendingLoadTransactionMatched(
            " fragment %" PRIu32 " doesn't match any pending transaction.",
            clientId, transactionId, currentFragmentId);
     }
+    return std::nullopt;
   }
-  return success;
+  return std::make_optional<PendingLoadNanoappInfo>(
+      mPendingLoadTransaction->getNanoappInfo());
 }
 
 void HalClientManager::resetPendingLoadTransaction() {
@@ -521,23 +536,24 @@ void HalClientManager::resetPendingLoadTransaction() {
   mPendingLoadTransaction.reset();
 }
 
-bool HalClientManager::resetPendingUnloadTransaction(HalClientId clientId,
-                                                     uint32_t transactionId) {
+std::optional<int64_t> HalClientManager::resetPendingUnloadTransaction(
+    HalClientId clientId, uint32_t transactionId) {
   const std::lock_guard<std::mutex> lock(mLock);
   // Only clear a pending transaction when the client id and the transaction id
   // are both matched
   if (isPendingTransactionMatched(clientId, transactionId,
                                   mPendingUnloadTransaction)) {
-    LOGI("Clears out the pending unload transaction: client id %" PRIu16
-         ", transaction id %" PRIu32,
-         clientId, transactionId);
+    int64_t nanoappId = mPendingUnloadTransaction->nanoappId;
+    LOGI("Clears out the pending unload transaction for nanoapp 0x%" PRIx64
+         ": client id %" PRIu16 ", transaction id %" PRIu32,
+         nanoappId, clientId, transactionId);
     mPendingUnloadTransaction.reset();
-    return true;
+    return nanoappId;
   }
   LOGW("Client %" PRIu16 " doesn't have a pending unload transaction %" PRIu32
        ". Skip resetting",
        clientId, transactionId);
-  return false;
+  return std::nullopt;
 }
 
 void HalClientManager::handleChreRestart() {
@@ -580,29 +596,39 @@ void HalClientManager::updateClientIdMappingFile() {
 
 std::string HalClientManager::debugDump() {
   std::ostringstream result;
-  result << "\n-- HAL Client Manager Debug Info --\n"
-         << "\nKnown clients, in the format of [isConnected] (uuid : name) : "
-            "Pid, ClientId, {Connected endpoint Ids}\n\n";
+  result << "\nKnown clients:\n"
+         << "Format: [isConnected] (uuid : name) : Pid, ClientId, "
+            "{endpointIds, in 'original (mutated)' format, sorted}\n";
 
   // Dump states of each client.
-
   const std::lock_guard<std::mutex> lock(mLock);
 
-  std::string endpointIds;
+  std::vector<HostEndpointId> endpointIds;
   for (const auto &client : mClients) {
-    endpointIds.clear();
     for (const HostEndpointId &endpointId : client.endpointIds) {
-      endpointIds.append(std::to_string(endpointId)).append(", ");
+      endpointIds.push_back(endpointId);
+    }
+    std::sort(endpointIds.begin(), endpointIds.end());
+    std::ostringstream endpointIdsStream;
+    for (const HostEndpointId &endpointId : endpointIds) {
+      endpointIdsStream << endpointId;
+      // Only vendor endpoint ids are mutated.
+      if (client.uuid != kSystemServerUuid) {
+        endpointIdsStream << " (0x" << std::hex
+                          << mutateVendorEndpointId(client, endpointId) << ")";
+      }
+      endpointIdsStream << ", ";
     }
     bool isConnected = client.callback != nullptr;
     result << (isConnected ? "[ x ]" : "[   ]") << " (" << std::setw(32)
            << client.uuid << " : " << std::setw(17) << client.name
            << ") : " << std::setw(5) << client.pid << ", " << std::setw(2)
-           << client.clientId << ", {" << endpointIds << "}\n";
+           << client.clientId << ", {" << endpointIdsStream.str() << "}\n";
+    endpointIds.clear();
   }
 
   // Dump active transactions, if any.
-  result << "\nActive pending transaction:\n\n";
+  result << "\nActive pending transaction:\n";
   if (mPendingLoadTransaction.has_value()) {
     result << "Load transaction from client "
            << mPendingLoadTransaction->clientId << ": Transaction "
@@ -616,7 +642,6 @@ std::string HalClientManager::debugDump() {
            << mPendingUnloadTransaction->transactionId << "\n";
   }
 
-  result << "\n-- End Of HAL Client Manager Debug Info --\n";
   return result.str();
 }
 }  // namespace android::hardware::contexthub::common::implementation

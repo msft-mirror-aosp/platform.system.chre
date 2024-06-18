@@ -52,7 +52,7 @@ class DynamicVector : private DynamicVectorBase {
   DynamicVector(DynamicVector<ElementType> &&other);
 
   /**
-   * Move-constructs a dynamic vector from another. The other dynamic vector is
+   * Move assigns a dynamic vector from another. The other dynamic vector is
    * left in an empty state.
    */
   DynamicVector &operator=(DynamicVector<ElementType> &&other);

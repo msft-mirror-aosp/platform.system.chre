@@ -51,9 +51,13 @@ import java.util.concurrent.TimeoutException;
  * {@code @Before} and {@link #deinit()} as part of tearing down annotated by {@code @After}.
  */
 public class ContextHubClientSendMessageTestExecutor {
-    private static final String TAG = "ContextHubClientSendMessageExecutor";
+    private static final String TAG = "ContextHubClientSendMessageTestExecutor";
     private static final int MESSAGE_TYPE =
             ContextHubTestConstants.MessageType.SERVICE_MESSAGE.asInt();
+
+    // This is useful for cases when the max supported message size is large, and we don't want to
+    // overload the system unnecessarily.
+    private static final int LARGE_MESSAGE_SIZE = 4000;
     private final Random mRandom = new Random();
     private final NanoAppBinary mNanoAppBinary;
     private final ContextHubInfo mContextHubInfo;
@@ -78,10 +82,18 @@ public class ContextHubClientSendMessageTestExecutor {
         mTestHelper.deinit();
     }
 
-    /** Generates a {@link NanoAppMessage} with randomized message body. */
-    private NanoAppMessage createNanoAppMessage() {
-        int maxMessageLength = mContextHubInfo.getMaxPacketLengthBytes();
-        byte[] payload = new byte[maxMessageLength];
+    /**
+     * Generates a {@link NanoAppMessage} with randomized message body.
+     *
+     * mContextHubInfo.getMaxPacketLengthBytes() will be used as the message length instead if
+     * maxMessageLength is larger.
+     *
+     * @param maxMessageLength the maximum length of the message body.
+     */
+    private NanoAppMessage createNanoAppMessage(int maxMessageLength) {
+        int messageLength = Math.min(maxMessageLength,
+                mContextHubInfo.getMaxPacketLengthBytes());
+        byte[] payload = new byte[messageLength];
         mRandom.nextBytes(payload);
         Log.d(TAG, "Created a nanoapp message: " + Base64.getEncoder().encodeToString(payload));
         return NanoAppMessage.createMessageToNanoApp(
@@ -92,7 +104,7 @@ public class ContextHubClientSendMessageTestExecutor {
     private List<NanoAppMessage> createNanoAppMessages(int numOfMessages) {
         List<NanoAppMessage> result = new ArrayList<>(numOfMessages);
         for (int i = 0; i < numOfMessages; i++) {
-            result.add(createNanoAppMessage());
+            result.add(createNanoAppMessage(LARGE_MESSAGE_SIZE));
         }
         return result;
     }
@@ -126,7 +138,8 @@ public class ContextHubClientSendMessageTestExecutor {
      * message back.
      */
     public void testSingleMessage(int numOfTestCycles) throws InterruptedException {
-        NanoAppMessage mNanoAppMessage = createNanoAppMessage();
+        NanoAppMessage mNanoAppMessage =
+                createNanoAppMessage(mContextHubInfo.getMaxPacketLengthBytes());
         for (int i = 0; i < numOfTestCycles; i++) {
             CountDownLatch latch = new CountDownLatch(1);
             ContextHubClient contextHubClient =
@@ -246,7 +259,7 @@ public class ContextHubClientSendMessageTestExecutor {
             client.close();
             Log.d(TAG, "Sending message after closing client, "
                     + "expecting a error message from sendMessageToNanoApp");
-            int result = client.sendMessageToNanoApp(createNanoAppMessage());
+            int result = client.sendMessageToNanoApp(createNanoAppMessage(LARGE_MESSAGE_SIZE));
             assertWithMessage("Send message succeeded after client close")
                     .that(result)
                     .isNotEqualTo(ContextHubTransaction.RESULT_SUCCESS);

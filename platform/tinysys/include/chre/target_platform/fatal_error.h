@@ -30,4 +30,13 @@ extern "C" {
 
 #define FATAL_ERROR_QUIT() configASSERT(0)
 
+#define CHRE_HANDLE_FATAL_ERROR(format, ...) \
+  do {                                       \
+    LOGE(format, ##__VA_ARGS__);             \
+    FATAL_ERROR_QUIT();                      \
+    while (1) {                              \
+      /* never return */                     \
+    }                                        \
+  } while (0)
+
 #endif  // CHRE_PLATFORM_TINYSYS_FATAL_ERROR_H_

@@ -64,7 +64,11 @@ class HostMessageHandlers {
   static void handleNanoappMessage(uint64_t appId, uint32_t messageType,
                                    uint16_t hostEndpoint,
                                    const void *messageData,
-                                   size_t messageDataLen);
+                                   size_t messageDataLen, bool isReliable,
+                                   uint32_t messageSequenceNumber);
+
+  static void handleMessageDeliveryStatus(uint32_t messageSequenceNumber,
+                                          uint8_t errorCode);
 
   static void handleHubInfoRequest(uint16_t hostClientId);
 
@@ -159,7 +163,8 @@ class HostProtocolChre : public HostProtocolCommon {
       const char *toolchain, uint32_t legacyPlatformVersion,
       uint32_t legacyToolchainVersion, float peakMips, float stoppedPower,
       float sleepPower, float peakPower, uint32_t maxMessageLen,
-      uint64_t platformId, uint32_t version, uint16_t hostClientId);
+      uint64_t platformId, uint32_t version, uint16_t hostClientId,
+      bool supportsReliableMessages);
 
   /**
    * Supports construction of a NanoappListResponse by adding a single

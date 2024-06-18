@@ -184,7 +184,9 @@ void GnssManager::handleRequestStateResyncCallbackSync() {
   mPlatformPassiveLocationListenerEnabled = false;
   if (!mPassiveLocationListenerNanoapps.empty()) {
     if (!platformConfigurePassiveLocationListener(true /* enable */)) {
-      FATAL_ERROR("Failed to resync passive location listener");
+      // TODO(b/330789214): Change LOGE back to FATAL_ERROR once the odd
+      //                    peripheral behavior is resolved.
+      LOGE("Failed to resync passive location listener");
     }
   }
 }

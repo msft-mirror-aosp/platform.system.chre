@@ -17,31 +17,39 @@
 #include "location/lbs/contexthub/nanoapps/nearby/presence_decoder_v1.h"
 
 #include <cinttypes>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 
+#include "location/lbs/contexthub/nanoapps/nearby/byte_array.h"
 #include "location/lbs/contexthub/nanoapps/nearby/crypto.h"
+#include "location/lbs/contexthub/nanoapps/nearby/proto/ble_filter.nanopb.h"
 #include "third_party/contexthub/chre/util/include/chre/util/nanoapp/log.h"
+#include "third_party/contexthub/chre/util/include/chre/util/optional.h"
+// #include "third_party/nearby/internal/platform/byte_array.h"
 
 #define LOG_TAG "[NEARBY][PRESENCE_DECODER_V1]"
 
 namespace nearby {
 // The Presence v1 advertisement is defined in the format below:
-// Header (1 byte) | salt (1+2 bytes) | Identity + filter (2+16 bytes)
-// | repeated Data Element fields (various bytes)
-// The header contains:
-// version (3 bits) | 5 bit reserved for future use (RFU)
+// Header (1 byte) | Section header (1 byte) | salt (1+2 bytes) | Identity +
+// filter (2+16 bytes) | repeated Data Element fields (various bytes), ending
+// with MIC 16 bytes The header contains: version (3 bits) | 5 bit reserved for
+// future use (RFU)
 bool PresenceDecoderV1::Decode(const ByteArray &encoded_data,
-                               const Crypto &crypto,
-                               const Crypto &identity_crypto,
-                               const ByteArray &key,
+                               const Crypto &crypto, const ByteArray &key,
                                const ByteArray &metadata_encryption_key_tag) {
-  // 1 + 1 + 2 + 2 + 16
-  constexpr size_t kMinAdvertisementLength = 22;
+  LOGI("Start V1 Decoding");
+
+  // 1 + 1 + 1 + 2 + 2 + 16
+  constexpr size_t kMinAdvertisementLength = 23;
   constexpr size_t kHeaderIndex = 0;
-  constexpr size_t kSaltIndex = 1;
-  constexpr size_t kIdentityIndex = 4;
-  constexpr size_t kDataElementIndex = 22;
+  // Section header index is 1
+  constexpr size_t kSaltIndex = 2;
+  constexpr size_t kIdentityIndex = 5;
+  constexpr size_t kDataElementIndex = 23;
   constexpr size_t kIdentityHeaderLength = 2;
-  constexpr size_t kDataElementSignatureLength = 16;
+  constexpr size_t kMicLength = 16;
 
   constexpr uint8_t kVersionMask = 0b11100000;
   constexpr uint8_t kVersion = 1;
@@ -93,85 +101,72 @@ bool PresenceDecoderV1::Decode(const ByteArray &encoded_data,
     LOGD_SENSITIVE_INFO("%" PRIi8, key.data[i]);
   }
 #endif
-  ByteArray decrypted_identity_array(identity,
-                                     DataElementHeaderV1::kIdentityLength);
-  if (de_header.has_value() &&
-      de_header->type >= DataElementHeaderV1::kPrivateIdentityType &&
-      de_header->type <= DataElementHeaderV1::kProvisionIdentityType &&
-      de_header->length == DataElementHeaderV1::kIdentityLength) {
-    if (!identity_crypto.decrypt(
-            ByteArray(&data[kIdentityIndex + kIdentityHeaderLength],
-                      DataElementHeaderV1::kIdentityLength),
-            ByteArray(salt, DataElementHeaderV1::kSaltLength), key,
-            decrypted_identity_array)) {
-      LOGE("Fail to decrypt the identity.");
-      return false;
-    }
-#ifdef LOG_INCLUDE_SENSITIVE_INFO
-    LOGD_SENSITIVE_INFO("decrypted identity:");
-    for (size_t i = 0; i < decrypted_identity_array.length; i++) {
-      LOGD_SENSITIVE_INFO("%" PRIi8, decrypted_identity_array.data[i]);
-    }
-#endif
-  } else {
+  if (!de_header.has_value()) {
+    LOGE("Advertisement has wrong format.");
+    return false;
+  }
+  if (de_header->type < DataElementHeaderV1::kPrivateIdentityType ||
+      de_header->type > DataElementHeaderV1::kProvisionIdentityType ||
+      de_header->length != DataElementHeaderV1::kIdentityLength) {
     LOGE("Advertisement has no identity.");
     return false;
   }
-  if (!identity_crypto.verify(decrypted_identity_array, ByteArray(),
-                              metadata_encryption_key_tag)) {
-    LOGD("Authenticity key not matched.");
+  if (data_size < kDataElementIndex + kMicLength) {
+    LOGE("Presence advertisement has wrong format.");
     return false;
   }
+  size_t cipher_text_index = kIdentityIndex + kIdentityHeaderLength;
+  size_t cipher_text_length = data_size - cipher_text_index - kMicLength;
+  ByteArray cipher_text(&data[cipher_text_index], cipher_text_length);
+
+  // Decodes Data Elements including identity
+  ByteArray decrypted_byte_array(decryption_output_buffer, cipher_text_length);
+  if (!crypto.decrypt(cipher_text,
+                      ByteArray(salt, DataElementHeaderV1::kSaltLength), key,
+                      decrypted_byte_array)) {
+    LOGE("Fail to decrypt data elements.");
+    return false;
+  }
+  memcpy(identity, decrypted_byte_array.data,
+         DataElementHeaderV1::kIdentityLength);
+  if (!crypto.verify(ByteArray(identity, sizeof(identity)), key,
+                     metadata_encryption_key_tag)) {
+    LOGW("Metadata encryption key not matched.");
+    return false;
+  }
+
+#ifdef LOG_INCLUDE_SENSITIVE_INFO
+  LOGD_SENSITIVE_INFO("decrypted identity:");
+  for (size_t i = 0; i < sizeof(identity); i++) {
+    LOGD_SENSITIVE_INFO("%" PRIi8, identity[i]);
+  }
+#endif
 
   if (data_size == kMinAdvertisementLength) {
     LOGD("Presence advertisement has no data elements.");
     return true;
   }
-
-  size_t signature_length = kDataElementIndex + kDataElementSignatureLength;
-  if (data_size < signature_length) {
-    LOGE(
-        "Presence advertisement data elements signature has less than %zu "
-        "bytes.",
-        kDataElementSignatureLength);
-    return false;
-  }
-  size_t de_length = data_size - signature_length;
-
-  // Decodes Data Elements.
-  ByteArray decrypted_byte_array(decryption_output_buffer, de_length);
 #ifdef LOG_INCLUDE_SENSITIVE_INFO
-  LOGD_SENSITIVE_INFO("Data Elements length %d and encrypted bytes:",
-                      (int)de_length);
-  for (size_t i = kDataElementIndex; i < (kDataElementIndex + de_length); i++) {
-    LOGD_SENSITIVE_INFO("%" PRIi8, data[i]);
-  }
+  LOGD_SENSITIVE_INFO(
+      "Data Elements length %d and encrypted bytes(including identity without "
+      "header):",
+      (int)decrypted_byte_array.length);
   LOGD_SENSITIVE_INFO("Salt bytes: %" PRIi8 " %" PRIu8, salt[0], salt[1]);
   LOGD_SENSITIVE_INFO("authenticity key:");
   for (size_t i = 0; i < key.length; i++) {
     LOGD_SENSITIVE_INFO("%" PRIi8, key.data[i]);
   }
 #endif
-  if (!crypto.decrypt(ByteArray(&data[kDataElementIndex], de_length),
-                      ByteArray(salt, DataElementHeaderV1::kSaltLength), key,
-                      decrypted_byte_array)) {
-    LOGE("Fail to decrypt data elements.");
-    return false;
-  }
+
 #ifdef LOG_INCLUDE_SENSITIVE_INFO
   LOGD_SENSITIVE_INFO("decrypted data elements bytes:");
   for (size_t i = 0; i < decrypted_byte_array.length; i++) {
     LOGD_SENSITIVE_INFO("%" PRIi8, decrypted_byte_array.data[i]);
   }
 #endif
-  if (!crypto.verify(decrypted_byte_array, key,
-                     ByteArray(&data[data_size - kDataElementSignatureLength],
-                               kDataElementSignatureLength))) {
-    LOGE("Fail to verify data elements with signature.");
-    return false;
-  }
-  if (!DecodeDataElements(decrypted_byte_array.data,
-                          decrypted_byte_array.length)) {
+  if (!DecodeDataElements(
+          &decrypted_byte_array.data[DataElementHeaderV1::kIdentityLength],
+          decrypted_byte_array.length - DataElementHeaderV1::kIdentityLength)) {
     LOGE("Advertisement has invalid data elements.");
     return false;
   }

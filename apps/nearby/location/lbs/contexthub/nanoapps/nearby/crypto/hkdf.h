@@ -37,6 +37,8 @@ extern "C" {
  * @saltLen: number of bytes of the input salt array
  * @inKm: input key material byte array
  * @ikmLen: number of bytes of the input key material byte array
+ * @info: arbitrary string used to bind a derived key to an intended context
+ * @infoLen number of bytes of the info byte array
  * @outKm: output key material byte array
  * @okmLen: number of bytes of the output key material byte array
  *          okmLen should be less than 8161
@@ -50,7 +52,8 @@ extern "C" {
  * Returns:
  */
 void hkdf(const void *inSalt, size_t saltLen, const void *inKm, size_t ikmLen,
-          void *outKm, size_t okmLen);
+          const void *info, size_t infoLen, void *outKm, size_t okmLen);
+
 #ifdef __cplusplus
 }
 #endif

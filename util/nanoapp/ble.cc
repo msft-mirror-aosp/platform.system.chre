@@ -15,13 +15,18 @@
  */
 
 #include "chre/util/nanoapp/ble.h"
+#include "chre_api/chre.h"
 
 namespace chre {
 
 using ble_constants::kGoogleEddystoneUuid;
+using ble_constants::kGoogleManufactureData;
+using ble_constants::kGoogleManufactureDataLength;
+using ble_constants::kGoogleManufactureDataMask;
 using ble_constants::kGoogleNearbyFastpairUuid;
 using ble_constants::kGoogleUuidDataLength;
 using ble_constants::kGoogleUuidMask;
+using ble_constants::kNumManufacturerDataFilters;
 using ble_constants::kNumScanFilters;
 using ble_constants::kRssiThreshold;
 
@@ -75,6 +80,27 @@ bool createBleScanFilterForKnownBeaconsV1_9(
 
   filter.rssiThreshold = kRssiThreshold;
   filter.genericFilterCount = kNumScanFilters;
+  filter.genericFilters = genericFilters;
+
+  filter.broadcasterAddressFilterCount = 0;
+  filter.broadcasterAddressFilters = nullptr;
+  return true;
+}
+
+bool createBleManufacturerDataFilter(uint8_t numGenericFilters,
+                                     chreBleGenericFilter *genericFilters,
+                                     struct chreBleScanFilterV1_9 &filter) {
+  if (numGenericFilters < kNumManufacturerDataFilters) {
+    return false;
+  }
+  memset(&filter, 0, sizeof(filter));
+  filter.rssiThreshold = kRssiThreshold;
+
+  genericFilters[0] = createBleGenericFilter(
+      CHRE_BLE_AD_TYPE_MANUFACTURER_DATA, kGoogleManufactureDataLength,
+      kGoogleManufactureData, kGoogleManufactureDataMask);
+
+  filter.genericFilterCount = kNumManufacturerDataFilters;
   filter.genericFilters = genericFilters;
 
   filter.broadcasterAddressFilterCount = 0;

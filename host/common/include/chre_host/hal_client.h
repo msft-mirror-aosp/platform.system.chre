@@ -18,8 +18,10 @@
 #define CHRE_HOST_HAL_CLIENT_H_
 
 #include <cinttypes>
+#include <future>
 #include <memory>
 #include <shared_mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -72,6 +74,20 @@ class HalClient {
  public:
   static constexpr int32_t kDefaultContextHubId = 0;
 
+  /** Callback interface for a background connection. */
+  class BackgroundConnectionCallback {
+   public:
+    /**
+     * This function is called when the connection to CHRE HAL is finished.
+     *
+     * @param isConnected indicates whether CHRE HAL is successfully connected.
+     */
+    virtual void onInitialization(bool isConnected) = 0;
+    virtual ~BackgroundConnectionCallback() = default;
+  };
+
+  ~HalClient();
+
   /**
    * Create a HalClient unique pointer used to communicate with CHRE HAL.
    *
@@ -97,6 +113,23 @@ class HalClient {
   bool isConnected() {
     std::lock_guard<std::shared_mutex> lock(mConnectionLock);
     return mContextHub != nullptr;
+  }
+
+  /** Connects to CHRE HAL synchronously. */
+  bool connect() {
+    return initConnection() == HalError::SUCCESS;
+  }
+
+  /** Connects to CHRE HAL in background. */
+  void connectInBackground(BackgroundConnectionCallback &callback) {
+    std::lock_guard<std::mutex> lock(mBackgroundConnectionFuturesLock);
+    // Policy std::launch::async is required to avoid lazy evaluation which can
+    // postpone the execution until get() of the future returned by std::async
+    // is called.
+    mBackgroundConnectionFutures.emplace_back(
+        std::async(std::launch::async, [&]() {
+          callback.onInitialization(initConnection() == HalError::SUCCESS);
+        }));
   }
 
   ScopedAStatus queryNanoapps() {
@@ -176,6 +209,7 @@ class HalClient {
     ABinderProcess_startThreadPool();
     mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
         AIBinder_DeathRecipient_new(onHalDisconnected));
+    mCallback->getName(&mClientName);
   }
 
   /**
@@ -240,6 +274,12 @@ class HalClient {
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
 
   std::shared_ptr<HalClientCallback> mCallback;
+
+  std::string mClientName;
+
+  // Lock guarding background connection threads.
+  std::mutex mBackgroundConnectionFuturesLock;
+  std::vector<std::future<void>> mBackgroundConnectionFutures;
 };
 
 }  // namespace android::chre

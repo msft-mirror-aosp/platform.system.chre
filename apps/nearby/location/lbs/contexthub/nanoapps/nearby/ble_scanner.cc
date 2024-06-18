@@ -18,6 +18,8 @@
 
 #include <chre.h>
 
+#include <cstdint>
+#include <cstring>
 #include <utility>
 
 #include "third_party/contexthub/chre/util/include/chre/util/macros.h"
@@ -30,6 +32,8 @@
 uint32_t mock_ble_timer_id = CHRE_TIMER_INVALID;
 uint32_t mock_ble_flush_complete_timer_id = CHRE_TIMER_INVALID;
 #endif
+
+uint32_t ble_scan_keep_alive_timer_id = CHRE_TIMER_INVALID;
 
 #define LOG_TAG "[NEARBY][BLE_SCANNER]"
 
@@ -182,22 +186,17 @@ void BleScanner::Start() {
   Restart();
 }
 
-static bool ContainsFilter(
+bool BleScanner::ContainsFilter(
     const chre::DynamicVector<chreBleGenericFilter> &filters,
     const chreBleGenericFilter &src) {
   bool contained = false;
   for (const auto &dst : filters) {
     if (src.type == dst.type && src.len == dst.len) {
-      for (int i = 0; i < src.len; i++) {
-        if (src.data[i] != dst.data[i]) {
-          continue;
-        }
-        if (src.dataMask[i] != dst.dataMask[i]) {
-          continue;
-        }
+      if (memcmp(src.data, dst.data, src.len) == 0 &&
+          memcmp(src.dataMask, dst.dataMask, src.len) == 0) {
+        contained = true;
+        break;
       }
-      contained = true;
-      break;
     }
   }
   return contained;
@@ -212,6 +211,11 @@ void BleScanner::Restart() {
   if (is_default_generic_filter_enabled_) {
     for (size_t i = 0; i < ARRAY_SIZE(kDefaultGenericFilters); i++) {
       generic_filters.push_back(kDefaultGenericFilters[i]);
+    }
+  }
+  for (auto &tracker_filter : tracker_filters_) {
+    if (!ContainsFilter(generic_filters, tracker_filter)) {
+      generic_filters.push_back(tracker_filter);
     }
   }
   for (auto &oem_generic_filters : generic_filters_list_) {
@@ -232,6 +236,7 @@ void BleScanner::Restart() {
     // if CHRE_BLE_REQUEST_TYPE_START_SCAN request is failed in
     // CHRE_EVENT_BLE_ASYNC_RESULT event.
     is_started_ = true;
+    StartKeepAliveTimer();
   } else {
     LOGE("Failed to start BLE scan");
   }
@@ -248,6 +253,7 @@ void BleScanner::Stop() {
   } else {
     LOGE("Failed to stop BLE scan");
   }
+  StopKeepAliveTimer();
 }
 
 bool BleScanner::UpdateFilters(
@@ -312,6 +318,24 @@ bool BleScanner::Flush() {
   return true;
 }
 
+void BleScanner::StartKeepAliveTimer() {
+  if (ble_scan_keep_alive_timer_id == CHRE_TIMER_INVALID) {
+    ble_scan_keep_alive_timer_id = chreTimerSet(keep_alive_timer_interval_ns_,
+                                                &ble_scan_keep_alive_timer_id,
+                                                /*oneShot=*/false);
+    if (ble_scan_keep_alive_timer_id == CHRE_TIMER_INVALID) {
+      LOGE("Error in configuring BLE scan keep alive timer.");
+    }
+  }
+}
+
+void BleScanner::StopKeepAliveTimer() {
+  if (ble_scan_keep_alive_timer_id != CHRE_TIMER_INVALID &&
+      chreTimerCancel(ble_scan_keep_alive_timer_id)) {
+    ble_scan_keep_alive_timer_id = CHRE_TIMER_INVALID;
+  }
+}
+
 void BleScanner::HandleEvent(uint16_t event_type, const void *event_data) {
   const chreAsyncResult *async_result =
       static_cast<const chreAsyncResult *>(event_data);
@@ -335,6 +359,7 @@ void BleScanner::HandleEvent(uint16_t event_type, const void *event_data) {
           if (is_started_) {
             is_started_ = false;
           }
+          StopKeepAliveTimer();
         } else if (async_result->requestType ==
                    CHRE_BLE_REQUEST_TYPE_STOP_SCAN) {
           LOGD("Failed in CHRE_BLE_REQUEST_TYPE_STOP_SCAN");
