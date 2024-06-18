@@ -21,6 +21,15 @@
 namespace chre {
 namespace intrusive_list_internal {
 
+void IntrusiveListBase::doLinkFront(Node *newNode) {
+  Node *nextNode = mSentinelNode.next;
+  nextNode->prev = newNode;
+  newNode->next = nextNode;
+  newNode->prev = &mSentinelNode;
+  mSentinelNode.next = newNode;
+  mSize++;
+}
+
 void IntrusiveListBase::doLinkBack(Node *newNode) {
   Node *prevNode = mSentinelNode.prev;
   prevNode->next = newNode;
