@@ -41,16 +41,12 @@ class HostLink : public HostLinkBase, public NonCopyable {
  public:
   /**
    * Flush (or purge) any messages sent by the given app ID that are currently
-   * pending delivery to the host. Note that this doesn't need to guarantee that
-   * messages have arrived on the host side, only that the memory associated
-   * with them is no longer referenced by HostLink, i.e.
-   * HostCommsManager::onMessageToHostComplete() has been invoked. This function
-   * must impose strict ordering constraints, such that after it returns, it is
-   * guaranteed that HostCommsManager::onMessageToHostComplete will not be
-   * invoked for the app with the given ID.
+   * pending delivery to the host. At the point that this function is called, it
+   * is guaranteed that no new messages will be generated from this nanoapp.
    *
-   * At the point that this function is called, it is guaranteed that no new
-   * messages will be generated from this nanoapp.
+   * This function must impose strict ordering constraints, such that after it
+   * returns, it is guaranteed that HostCommsManager::onMessageToHostComplete
+   * will not be invoked for the app with the given ID.
    */
   void flushMessagesSentByNanoapp(uint64_t appId);
 
