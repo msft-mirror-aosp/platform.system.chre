@@ -96,20 +96,9 @@ bool HostCommsManager::completeTransaction(uint32_t transactionId,
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
-void HostCommsManager::flushNanoappMessagesAndTransactions(uint64_t appId) {
-  uint16_t nanoappInstanceId;
-  bool nanoappFound =
-      EventLoopManagerSingleton::get()
-          ->getEventLoop()
-          .findNanoappInstanceIdByAppId(appId, &nanoappInstanceId);
-  if (nanoappFound) {
-    flushNanoappTransactions(nanoappInstanceId);
-  } else {
-    LOGE("Could not find nanoapp 0x%016" PRIx64 " to flush transactions",
-         appId);
-  }
-
-  HostLink::flushMessagesSentByNanoapp(appId);
+void HostCommsManager::flushNanoappMessages(Nanoapp &nanoapp) {
+  flushNanoappTransactions(nanoapp.getInstanceId());
+  HostLink::flushMessagesSentByNanoapp(nanoapp.getAppId());
 }
 
 void HostCommsManager::onMessageToHostComplete(const MessageToHost *message) {
@@ -331,12 +320,12 @@ bool HostCommsManager::doSendMessageToHostFromNanoapp(
   return true;
 }
 
-HostMessage *HostCommsManager::findMessageByMessageSequenceNumber(
+MessageToHost *HostCommsManager::findMessageToHostBySeq(
     uint32_t messageSequenceNumber) {
   return mMessagePool.find(
       [](HostMessage *inputMessage, void *data) {
         NestedDataPtr<uint32_t> targetMessageSequenceNumber(data);
-        return inputMessage->isReliable &&
+        return inputMessage->isReliable && !inputMessage->fromHost &&
                inputMessage->messageSequenceNumber ==
                    targetMessageSequenceNumber;
       },
@@ -349,10 +338,10 @@ size_t HostCommsManager::flushNanoappTransactions(uint16_t nanoappInstanceId) {
       [](const MessageTransactionData &data, void *callbackData) {
         NestedDataPtr<uint16_t> innerNanoappInstanceId(callbackData);
         if (innerNanoappInstanceId == data.nanoappInstanceId) {
-          HostMessage *message = EventLoopManagerSingleton::get()
-                                     ->getHostCommsManager()
-                                     .findMessageByMessageSequenceNumber(
-                                         data.messageSequenceNumber);
+          HostMessage *message =
+              EventLoopManagerSingleton::get()
+                  ->getHostCommsManager()
+                  .findMessageToHostBySeq(data.messageSequenceNumber);
           if (message != nullptr) {
             EventLoopManagerSingleton::get()
                 ->getHostCommsManager()
@@ -404,10 +393,10 @@ bool HostCommsManager::sendMessageWithTransactionData(
   // so the pointer could be invalid at a later time.
   data.messageSequenceNumber = *data.messageSequenceNumberPtr;
 
-  HostMessage *message =
+  MessageToHost *message =
       EventLoopManagerSingleton::get()
           ->getHostCommsManager()
-          .findMessageByMessageSequenceNumber(data.messageSequenceNumber);
+          .findMessageToHostBySeq(data.messageSequenceNumber);
   Nanoapp *nanoapp =
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByInstanceId(
           data.nanoappInstanceId);
@@ -435,10 +424,10 @@ bool HostCommsManager::onMessageDeliveryStatus(
       CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT, asyncResult, freeEventDataCallback,
       data.nanoappInstanceId);
 
-  HostMessage *message =
+  MessageToHost *message =
       EventLoopManagerSingleton::get()
           ->getHostCommsManager()
-          .findMessageByMessageSequenceNumber(data.messageSequenceNumber);
+          .findMessageToHostBySeq(data.messageSequenceNumber);
   if (message != nullptr) {
     EventLoopManagerSingleton::get()
         ->getHostCommsManager()

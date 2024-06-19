@@ -80,6 +80,10 @@ struct HostMessage : public NonCopyable {
     } toHostData;
   };
 
+  //! Distinguishes whether this is a message from the host or to the host,
+  //! which dictates whether fromHostData or toHostData are used.
+  bool fromHost;
+
   //! Whether the message is reliable.
   //! Reliable messages are acknowledge by sending with a status containing
   //! the transaction ID.
@@ -126,14 +130,15 @@ class HostCommsManager : public HostLink {
    * pending delivery to the host. At the point that this function is called, it
    * is guaranteed that no new messages will be generated from this nanoapp.
    *
-   * This function also flushes any outstanding reliable message transactions
-   * for the associated nanoapp.
+   * This function also flushes any outstanding reliable message transactions,
+   * by ensuring at least one attempt to send to the host is made, and not
+   * providing a message delivery status event to the nanoapp.
    *
    * This function must impose strict ordering constraints, such that after it
    * returns, it is guaranteed that HostCommsManager::onMessageToHostComplete
    * will not be invoked for the app with the given ID.
    */
-  void flushNanoappMessagesAndTransactions(uint64_t appId);
+  void flushNanoappMessages(Nanoapp &nanoapp);
 
   /**
    * Invoked by the HostLink platform layer when it is done with a message to
@@ -302,14 +307,13 @@ class HostCommsManager : public HostLink {
                                       MessageToHost *msgToHost);
 
   /**
-   * Find the message associated with the message sequence number if it exists.
-   * Returns nullptr other wise.
+   * Find the message to the host associated with the message sequence number,
+   * if it exists. Returns nullptr otherwise.
    *
    * @param messageSequenceNumber The message sequence number.
    * @return The message or nullptr if not found.
    */
-  HostMessage *findMessageByMessageSequenceNumber(
-      uint32_t messageSequenceNumber);
+  MessageToHost *findMessageToHostBySeq(uint32_t messageSequenceNumber);
 
   /**
    * Flushes all the pending reliable message transactions for a nanoapp.
