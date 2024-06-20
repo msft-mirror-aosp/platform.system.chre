@@ -114,7 +114,7 @@ class HalClient {
 
   /** Returns true if this HalClient instance is connected to the HAL. */
   bool isConnected() {
-    return mContextHub != nullptr;
+    return mIsHalConnected;
   }
 
   /** Connects to CHRE HAL synchronously. */
@@ -281,6 +281,7 @@ class HalClient {
   // The lock guarding the init connection flow.
   std::shared_mutex mConnectionLock;
   std::shared_ptr<IContextHub> mContextHub;
+  std::atomic_bool mIsHalConnected = false;
 
   // Handler of the binder disconnection event with HAL.
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
