@@ -44,6 +44,13 @@ flag {
 }
 
 flag {
+  name: "reduce_lock_holding_period"
+  namespace: "context_hub"
+  description: "A flag guarding the change of reducing lock holding period to avoid deadlock."
+  bug: "347392749"
+}
+
+flag {
   name: "reliable_message"
   is_exported: true
   namespace: "context_hub"
