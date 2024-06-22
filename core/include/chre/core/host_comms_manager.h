@@ -20,7 +20,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "chre/core/event_loop.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/host_link.h"
 #include "chre/util/buffer.h"
@@ -70,11 +69,10 @@ struct HostMessage : public NonCopyable {
       //! from the EventLoop where the nanoapp runs.
       chreMessageFreeFunction *nanoappFreeFunction;
 
-      //! Identifier for the host-side entity that should receive this message,
-      //! or that which sent it
+      //! Identifier for the host-side entity that should receive this message.
       uint16_t hostEndpoint;
 
-      //! true if this message results in the host transitioning from suspend
+      //! true if this message resulted in the host transitioning from suspend
       //! to awake.
       bool wokeHost;
     } toHostData;
@@ -89,13 +87,16 @@ struct HostMessage : public NonCopyable {
   //! the transaction ID.
   bool isReliable;
 
-  //! Source/destination nanoapp ID
-  uint64_t appId;
-
   //! Used to report reliable message status back to the sender.
   uint32_t messageSequenceNumber;
 
-  //! Application-defined message data
+  //! Opaque nanoapp-supplied cookie associated with reliable messages.
+  const void *cookie;
+
+  //! Source/destination nanoapp ID.
+  uint64_t appId;
+
+  //! Application-defined message data.
   Buffer<uint8_t> message;
 };
 
@@ -109,7 +110,7 @@ typedef HostMessage MessageToHost;
  * Singleton) to the platform-specific HostLinkBase functionality for use by
  * platform-specific code.
  */
-class HostCommsManager : public HostLink {
+class HostCommsManager : public HostLink, private TransactionManagerCallback {
  public:
   HostCommsManager();
 
@@ -233,26 +234,32 @@ class HostCommsManager : public HostLink {
                                     uint32_t messageSequenceNumber);
 
  private:
-  //! The data passed to the transaction manager for use with reliable messages.
-  struct MessageTransactionData {
-    uint32_t *messageSequenceNumberPtr;
-    uint32_t messageSequenceNumber;
-    uint16_t nanoappInstanceId;
-    const void *cookie;
-  };
+  //! How many times we'll try sending a reliable message before giving up.
+  static constexpr uint16_t kReliableMessageMaxAttempts = 4;
 
-  //! The maximum number of retries for a reliable message.
-  static constexpr uint16_t kReliableMessageNumRetries = 3;
-
-  //! The retry wait time for reliable messages.
+  //! How long we'll wait after sending a reliable message which doesn't receive
+  //! an ACK before trying again.
   static constexpr Milliseconds kReliableMessageRetryWaitTime =
       Milliseconds(250);
 
-  //! The timeout to receive an acknowledgment for a reliable message.
-  static constexpr Seconds kReliableMessageTimeout = Seconds(1);
-
   //! The maximum number of messages we can have outstanding at any given time.
   static constexpr size_t kMaxOutstandingMessages = 32;
+
+  //! Ensures that we do not blame more than once per host wakeup. This is
+  //! checked before calling host blame to make sure it is set once. The power
+  //! control managers then reset back to false on host suspend.
+  AtomicBool mIsNanoappBlamedForWakeup{false};
+
+  //! Memory pool used to allocate message metadata (but not the contents of the
+  //! messages themselves). Must be synchronized as the same HostCommsManager
+  //! handles communications for all EventLoops, and also to support freeing
+  //! messages directly in onMessageToHostComplete.
+  SynchronizedMemoryPool<HostMessage, kMaxOutstandingMessages> mMessagePool;
+
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  //! The transaction manager for reliable messages.
+  TransactionManager<kMaxOutstandingMessages> mTransactionManager;
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
   /**
    * Allocates and populates the event structure used to notify a nanoapp of an
@@ -269,12 +276,6 @@ class HostCommsManager : public HostLink {
       uint64_t appId, uint16_t hostEndpoint, uint32_t messageType,
       const void *messageData, uint32_t messageSize, bool isReliable,
       uint32_t messageSequenceNumber);
-
-  //! @see TransactionManager::DeferCallback
-  static bool deferCallback(
-      TransactionManager<MessageTransactionData,
-                         kMaxOutstandingMessages>::DeferCallbackFunction func,
-      void *data, void *extraData, Nanoseconds delay, uint32_t *outTimerHandle);
 
   /**
    * Posts a crafted event, craftedMessage, to a nanoapp for processing, and
@@ -316,18 +317,6 @@ class HostCommsManager : public HostLink {
   MessageToHost *findMessageToHostBySeq(uint32_t messageSequenceNumber);
 
   /**
-   * Flushes all the pending reliable message transactions for a nanoapp.
-   *
-   * The completion callback is not called. However,
-   * onMessageToHostCompleteInternal is called for every message removed.
-   *
-   * @param nanoappInstanceId The nanoapp instance ID which
-   * transactions will be flushed.
-   * @return The number of flushed transactions.
-   */
-  size_t flushNanoappTransactions(uint16_t nanoappInstanceId);
-
-  /**
    * Releases memory associated with a message to the host, including invoking
    * the Nanoapp's free callback (if given). Must be called from within the
    * context of the EventLoop that contains the sending Nanoapp.
@@ -347,11 +336,18 @@ class HostCommsManager : public HostLink {
 
   /**
    * Callback used to send a reliable message.
-   *
-   * @param data The message transaction data.
-   * @return Whether the message was sent successfully.
+   * @see TransactionManagerCallback
    */
-  static bool sendMessageWithTransactionData(MessageTransactionData &data);
+  void onTransactionAttempt(uint32_t messageSequenceNumber,
+                            uint16_t nanoappInstanceId) final;
+
+  /**
+   * Callback invoked when a transaction has timed out after the maximum number
+   * of retries.
+   * @see TransactionManagerCallback
+   */
+  void onTransactionFailure(uint32_t messageSequenceNumber,
+                            uint16_t nanoappInstanceId) final;
 
   /**
    * Called when a reliable message transaction status is reported by the host.
@@ -364,8 +360,8 @@ class HostCommsManager : public HostLink {
    * @return Whether the event was posted successfully.
    *
    */
-  static bool onMessageDeliveryStatus(const MessageTransactionData &data,
-                                      uint8_t errorCode);
+  void handleMessageDeliveryStatusSync(uint32_t messageSequenceNumber,
+                                       uint8_t errorCode);
 
   /**
    * Invoked by onMessageToHostComplete for a non-reliable message
@@ -378,22 +374,18 @@ class HostCommsManager : public HostLink {
    */
   void onMessageToHostCompleteInternal(const MessageToHost *msgToHost);
 
-  //! Ensures that we do not blame more than once per host wakeup. This is
-  //! checked before calling host blame to make sure it is set once. The power
-  //! control managers then reset back to false on host suspend.
-  AtomicBool mIsNanoappBlamedForWakeup{false};
+  /**
+   * Calls TransactionManager::remove for all pending reliable messages sent by
+   * this nanoapp, normally used as part of nanoapp unload flow.
+   */
+  void removeAllTransactionsFromNanoapp(const Nanoapp &nanoapp);
 
-  //! Memory pool used to allocate message metadata (but not the contents of the
-  //! messages themselves). Must be synchronized as the same HostCommsManager
-  //! handles communications for all EventLoops, and also to support freeing
-  //! messages directly in onMessageToHostComplete.
-  SynchronizedMemoryPool<HostMessage, kMaxOutstandingMessages> mMessagePool;
-
-#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-  //! The transaction manager for reliable messages.
-  TransactionManager<MessageTransactionData, kMaxOutstandingMessages>
-      mTransactionManager;
-#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  /**
+   * Releases memory for all pending reliable messages sent by this nanoapp.
+   * The data must have already been flushed through HostLink, and the
+   * transactions must have already been cleaned up.
+   */
+  void freeAllReliableMessagesFromNanoapp(Nanoapp &nanoapp);
 };
 
 }  // namespace chre
