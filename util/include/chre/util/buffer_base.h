@@ -25,6 +25,8 @@ namespace chre {
 
 class BufferBase : public NonCopyable {
  protected:
+  BufferBase() : mBuffer(nullptr), mSize(0), mBufferRequiresFree(false) {}
+
   /**
    * Cleans up for the buffer. If the buffer is currently owned by this object,
    * it is released.
@@ -32,13 +34,13 @@ class BufferBase : public NonCopyable {
   ~BufferBase();
 
   //! The buffer to manage.
-  void *mBuffer = nullptr;
+  void *mBuffer;
 
   //! The number of elements in the buffer.
-  size_t mSize = 0;
+  size_t mSize : 31;
 
   //! Set to true when mBuffer needs to be released by the destructor.
-  bool mBufferRequiresFree = false;
+  bool mBufferRequiresFree : 1;
 
   /**
    * @see Buffer::wrap.

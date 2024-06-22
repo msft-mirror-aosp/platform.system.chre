@@ -85,3 +85,10 @@ flag {
   description: "Enables test mode behaviors in the Context Hub Service for reliable messages"
   bug: "333567339"
 }
+
+flag {
+  name: "fix_api_check"
+  namespace: "context_hub"
+  description: "Fixes API check errors in Context Hub classes"
+  bug: "340880058"
+}
