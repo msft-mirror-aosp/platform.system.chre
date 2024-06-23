@@ -126,6 +126,7 @@ HalError HalClient::initConnection() {
     mContextHub = nullptr;
     return HalError::CALLBACK_REGISTRATION_FAILED;
   }
+  mIsHalConnected = true;
   LOGI("%s is successfully (re)connected to CHRE HAL", mClientName.c_str());
   return HalError::SUCCESS;
 }
@@ -136,6 +137,7 @@ void HalClient::onHalDisconnected(void *cookie) {
   {
     std::lock_guard<std::shared_mutex> lockGuard(halClient->mConnectionLock);
     halClient->mContextHub = nullptr;
+    halClient->mIsHalConnected = false;
   }
   LOGW("%s is disconnected from CHRE HAL. Reconnecting...",
        halClient->mClientName.c_str());
