@@ -51,6 +51,13 @@ flag {
 }
 
 flag {
+  name: "reconnect_host_endpoints_after_hal_restart"
+  namespace: "context_hub"
+  description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
+  bug: "348253728"
+}
+
+flag {
   name: "reliable_message"
   is_exported: true
   namespace: "context_hub"
