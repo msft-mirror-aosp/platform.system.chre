@@ -470,8 +470,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   } else if (inEventLoopThread()) {
     // If we're already within the event loop context, it is safe to call the
     // free callback synchronously.
-    EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-        msgToHost);
+    freeMessageToHost(msgToHost);
   } else {
     auto freeMsgCallback = [](uint16_t /*type*/, void *data,
                               void * /*extraData*/) {
@@ -482,8 +481,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
     if (!EventLoopManagerSingleton::get()->deferCallback(
             SystemCallbackType::MessageToHostComplete, msgToHost,
             freeMsgCallback)) {
-      EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-          static_cast<MessageToHost *>(msgToHost));
+      freeMessageToHost(static_cast<MessageToHost *>(msgToHost));
     }
   }
 }
