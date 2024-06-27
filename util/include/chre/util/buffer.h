@@ -67,7 +67,7 @@ class Buffer : private BufferBase {
    * this object will not attempt to free the memory itself.
    *
    * @param buffer A pointer to a pre-allocated array.
-   * @param size The number of elements in the array.
+   * @param size The number of elements in the array. Maximum supported is 2^31.
    */
   void wrap(ElementType *buffer, size_t size) {
     BufferBase::wrap(buffer, size);
@@ -83,7 +83,7 @@ class Buffer : private BufferBase {
    * returned.
    *
    * @param buffer A pointer to an array to copy.
-   * @param size The number of elements in the array.
+   * @param size The number of elements in the array. Maximum supported is 2^31.
    * @return true if capacity was reserved to fit the supplied buffer and the
    *         supplied buffer was copied into the internal buffer of this object,
    *         or if the supplied input is empty, false otherwise.

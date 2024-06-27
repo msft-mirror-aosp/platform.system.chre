@@ -18,6 +18,7 @@
 
 #include <chre.h>
 
+#include <cstdint>
 #include <cstring>
 #include <utility>
 
@@ -31,6 +32,8 @@
 uint32_t mock_ble_timer_id = CHRE_TIMER_INVALID;
 uint32_t mock_ble_flush_complete_timer_id = CHRE_TIMER_INVALID;
 #endif
+
+uint32_t ble_scan_keep_alive_timer_id = CHRE_TIMER_INVALID;
 
 #define LOG_TAG "[NEARBY][BLE_SCANNER]"
 
@@ -210,6 +213,11 @@ void BleScanner::Restart() {
       generic_filters.push_back(kDefaultGenericFilters[i]);
     }
   }
+  for (auto &tracker_filter : tracker_filters_) {
+    if (!ContainsFilter(generic_filters, tracker_filter)) {
+      generic_filters.push_back(tracker_filter);
+    }
+  }
   for (auto &oem_generic_filters : generic_filters_list_) {
     for (auto &generic_filter : oem_generic_filters.filters) {
       if (!ContainsFilter(generic_filters, generic_filter)) {
@@ -228,6 +236,7 @@ void BleScanner::Restart() {
     // if CHRE_BLE_REQUEST_TYPE_START_SCAN request is failed in
     // CHRE_EVENT_BLE_ASYNC_RESULT event.
     is_started_ = true;
+    StartKeepAliveTimer();
   } else {
     LOGE("Failed to start BLE scan");
   }
@@ -244,6 +253,7 @@ void BleScanner::Stop() {
   } else {
     LOGE("Failed to stop BLE scan");
   }
+  StopKeepAliveTimer();
 }
 
 bool BleScanner::UpdateFilters(
@@ -308,6 +318,24 @@ bool BleScanner::Flush() {
   return true;
 }
 
+void BleScanner::StartKeepAliveTimer() {
+  if (ble_scan_keep_alive_timer_id == CHRE_TIMER_INVALID) {
+    ble_scan_keep_alive_timer_id = chreTimerSet(keep_alive_timer_interval_ns_,
+                                                &ble_scan_keep_alive_timer_id,
+                                                /*oneShot=*/false);
+    if (ble_scan_keep_alive_timer_id == CHRE_TIMER_INVALID) {
+      LOGE("Error in configuring BLE scan keep alive timer.");
+    }
+  }
+}
+
+void BleScanner::StopKeepAliveTimer() {
+  if (ble_scan_keep_alive_timer_id != CHRE_TIMER_INVALID &&
+      chreTimerCancel(ble_scan_keep_alive_timer_id)) {
+    ble_scan_keep_alive_timer_id = CHRE_TIMER_INVALID;
+  }
+}
+
 void BleScanner::HandleEvent(uint16_t event_type, const void *event_data) {
   const chreAsyncResult *async_result =
       static_cast<const chreAsyncResult *>(event_data);
@@ -331,6 +359,7 @@ void BleScanner::HandleEvent(uint16_t event_type, const void *event_data) {
           if (is_started_) {
             is_started_ = false;
           }
+          StopKeepAliveTimer();
         } else if (async_result->requestType ==
                    CHRE_BLE_REQUEST_TYPE_STOP_SCAN) {
           LOGD("Failed in CHRE_BLE_REQUEST_TYPE_STOP_SCAN");

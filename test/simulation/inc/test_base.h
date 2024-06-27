@@ -23,17 +23,36 @@
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
+#include "chre/platform/system_time.h"
 #include "chre/platform/system_timer.h"
 #include "chre/util/time.h"
 #include "test_event_queue.h"
 
 namespace chre {
 
+// TODO(b/346903946): remove these extra debug logs once issue resolved
+#define CHRE_TEST_DEBUG(fmt, ...)                                        \
+  do {                                                                   \
+    fprintf(stderr, "%" PRIu64 "ns %s: " fmt "\n",                       \
+            SystemTime::getMonotonicTime().toRawNanoseconds(), __func__, \
+            ##__VA_ARGS__);                                              \
+    fprintf(stdout, "%" PRIu64 "ns %s: " fmt "\n",                       \
+            SystemTime::getMonotonicTime().toRawNanoseconds(), __func__, \
+            ##__VA_ARGS__);                                              \
+  } while (0)
+
 /*
  * A base class for all CHRE simulated tests.
  */
 class TestBase : public testing::Test {
  protected:
+  TestBase() {
+    CHRE_TEST_DEBUG("Constructed %p", this);
+  }
+  ~TestBase() {
+    CHRE_TEST_DEBUG("Destroying %p", this);
+  }
+
   void SetUp() override;
   void TearDown() override;
 
@@ -94,6 +113,17 @@ class TestBase : public testing::Test {
     return nanoapp;
   }
 
+  class MemberInitLogger {
+   public:
+    MemberInitLogger() {
+      CHRE_TEST_DEBUG("Construction start");
+    }
+    ~MemberInitLogger() {
+      CHRE_TEST_DEBUG("Destruction finished");
+    }
+  };
+
+  MemberInitLogger mInitLogger;
   std::thread mChreThread;
   SystemTimer mSystemTimer;
 };

@@ -101,6 +101,10 @@ LOCAL_SHARED_LIBRARIES := \
     libbinder_ndk \
     server_configurable_flags
 
+ifeq ($(RELEASE_READ_FROM_NEW_STORAGE),true)
+LOCAL_SHARED_LIBRARIES += libaconfig_storage_read_api_cc
+endif
+
 LOCAL_STATIC_LIBRARIES := \
     chre_flags_c_lib \
     chre_metrics_reporter

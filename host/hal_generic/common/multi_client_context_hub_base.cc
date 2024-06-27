@@ -36,6 +36,7 @@ using ::android::base::WriteStringToFd;
 using ::android::chre::FragmentedLoadTransaction;
 using ::android::chre::getStringFromByteVector;
 using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
+using ::android::chre::flags::abort_if_no_context_hub_found;
 using ::android::chre::flags::reliable_message_implementation;
 using ::ndk::ScopedAStatus;
 namespace fbs = ::chre::fbs;
@@ -186,6 +187,9 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
   } else {
     LOGE("Unable to get a valid context hub info for PID %d",
          AIBinder_getCallingPid());
+    if (abort_if_no_context_hub_found()) {
+      std::abort();
+    }
   }
   return ScopedAStatus::ok();
 }
@@ -951,26 +955,40 @@ binder_status_t MultiClientContextHubBase::dump(int fd,
   // Dump of CHRE debug data. It waits for the dump to finish before returning.
   debugDumpStart(fd);
 
+  if (!WriteStringToFd("\n-- Context Hub HAL dump --\n", fd)) {
+    LOGW("Failed to write the Context Hub HAL dump banner");
+  }
+
   // Dump debug info of HalClientManager.
   std::string dumpOfHalClientManager = mHalClientManager->debugDump();
   if (!WriteStringToFd(dumpOfHalClientManager, fd)) {
-    LOGW("Failed to write debug dump of HalClientManager. Size: %zu.",
+    LOGW("Failed to write debug dump of HalClientManager. Size: %zu",
          dumpOfHalClientManager.size());
   }
 
   // Dump the status of test mode
   std::ostringstream testModeDump;
-  testModeDump << "\n-- HAL Test Mode Status --\n\n";
   {
     std::lock_guard<std::mutex> lockGuard(mTestModeMutex);
-    testModeDump << (mIsTestModeEnabled ? "Enabled" : "Disabled") << "\n";
+    testModeDump << "\nTest mode: "
+                 << (mIsTestModeEnabled ? "Enabled" : "Disabled") << "\n";
     if (!mTestModeNanoapps.has_value()) {
       testModeDump << "\nError: Nanoapp list is left unset\n";
     }
   }
-  testModeDump << "\n-- End of HAL Test Mode Status --\n";
   if (!WriteStringToFd(testModeDump.str(), fd)) {
     LOGW("Failed to write test mode dump");
+  }
+
+  // Dump the status of ChreConnection
+  std::string chreConnectionDump = mConnection->dump();
+  if (!WriteStringToFd(chreConnectionDump, fd)) {
+    LOGW("Failed to write ChreConnection dump. Size: %zu",
+         chreConnectionDump.size());
+  }
+
+  if (!WriteStringToFd("\n-- End of Context Hub HAL dump --\n\n", fd)) {
+    LOGW("Failed to write the end dump banner");
   }
 
   return STATUS_OK;

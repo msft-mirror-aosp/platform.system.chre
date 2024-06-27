@@ -20,6 +20,12 @@ nearby_extension.ExtConfigRequest.FilterConfig.hardware_filter type:FT_STATIC
 nearby_extension.ExtConfigRequest.ServiceConfig.data max_size:800
 nearby_extension.ExtConfigRequest.ServiceConfig.data type:FT_INLINE
 
+nearby_extension.ExtConfigRequest.TrackerFilterConfig.hardware_filter max_count:7
+nearby_extension.ExtConfigRequest.TrackerFilterConfig.hardware_filter type:FT_STATIC
+
+nearby_extension.TrackerReport.historian max_count:30
+nearby_extension.TrackerReport.historian type:FT_STATIC
+
 nearby_extension.ChreBleGenericFilter.data max_size:29
 nearby_extension.ChreBleGenericFilter.data type:FT_INLINE
 
