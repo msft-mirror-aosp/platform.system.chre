@@ -47,7 +47,7 @@ bool HalClient::isServiceAvailable() {
 }
 
 bool HalClient::reduceLockHolding() {
-  return flags::reduce_lock_holding_period();
+  return flags::bug_fix_reduce_lock_holding_period();
 }
 
 std::unique_ptr<HalClient> HalClient::create(
