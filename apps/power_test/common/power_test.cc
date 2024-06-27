@@ -171,5 +171,5 @@ CHRE_STATIC_NANOAPP_INIT(PowerTest, chre::kPowerTestAppId, 0,
                          NanoappPermissions::CHRE_PERMS_AUDIO |
                              NanoappPermissions::CHRE_PERMS_GNSS |
                              NanoappPermissions::CHRE_PERMS_WIFI |
-                             NanoappPermissions::CHRE_PERMS_WWAN);
+                             NanoappPermissions::CHRE_PERMS_WWAN)
 #endif  // CHRE_NANOAPP_INTERNAL
