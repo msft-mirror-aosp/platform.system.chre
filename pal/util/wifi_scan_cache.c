@@ -165,6 +165,24 @@ static bool isWifiScanResultInCache(const struct chreWifiScanResult *result,
   return false;
 }
 
+static bool isLowerRssiScanResultInCache(
+    const struct chreWifiScanResult *result, size_t *index) {
+  int8_t lowestRssi = result->rssi;
+  bool foundWeakerResult = false;
+  for (uint8_t i = 0; i < gWifiCacheState.event.resultTotal; i++) {
+    const struct chreWifiScanResult *cacheResult =
+        &gWifiCacheState.resultList[i];
+    // Filter based on RSSI to determine weakest result in cache.
+    if (cacheResult->rssi < lowestRssi) {
+      lowestRssi = cacheResult->rssi;
+      *index = i;
+      foundWeakerResult = true;
+    }
+  }
+
+  return foundWeakerResult;
+}
+
 /************************************************
  *  Public functions
  ***********************************************/
@@ -233,29 +251,32 @@ bool chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
 void chreWifiScanCacheScanEventAdd(const struct chreWifiScanResult *result) {
   if (!gWifiCacheState.started) {
     gSystemApi->log(CHRE_LOG_ERROR, "Cannot add to cache before starting it");
-  } else {
-    size_t index;
-    bool exists = isWifiScanResultInCache(result, &index);
-    if (!exists && gWifiCacheState.event.resultTotal >=
-                       CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY) {
-      // TODO(b/174510884): Filter based on e.g. RSSI if full
+    return;
+  }
+
+  size_t index;
+  if (!isWifiScanResultInCache(result, &index)) {
+    if (gWifiCacheState.event.resultTotal >=
+        CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY) {
       gWifiCacheState.numWifiScanResultsDropped++;
-    } else {
-      if (!exists) {
-        // Only add a new entry if the result was not already cached.
-        index = gWifiCacheState.event.resultTotal;
-        gWifiCacheState.event.resultTotal++;
+      // Determine weakest result in cache to replace with the new result.
+      if (!isLowerRssiScanResultInCache(result, &index)) {
+        return;
       }
-
-      memcpy(&gWifiCacheState.resultList[index], result,
-             sizeof(const struct chreWifiScanResult));
-
-      // ageMs will be properly populated in chreWifiScanCacheScanEventEnd
-      gWifiCacheState.resultList[index].ageMs =
-          (uint32_t)gSystemApi->getCurrentTime() /
-          (uint32_t)kOneMillisecondInNanoseconds;
+    } else {
+      // Result was not already cached, add new entry to the end of the cache
+      index = gWifiCacheState.event.resultTotal;
+      gWifiCacheState.event.resultTotal++;
     }
   }
+
+  memcpy(&gWifiCacheState.resultList[index], result,
+         sizeof(const struct chreWifiScanResult));
+
+  // ageMs will be properly populated in chreWifiScanCacheScanEventEnd
+  gWifiCacheState.resultList[index].ageMs =
+      (uint32_t)gSystemApi->getCurrentTime() /
+      (uint32_t)kOneMillisecondInNanoseconds;
 }
 
 void chreWifiScanCacheScanEventEnd(enum chreError errorCode) {
