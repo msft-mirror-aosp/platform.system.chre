@@ -203,18 +203,6 @@ class HalChreSocketConnection {
    */
   bool sendFragmentedLoadNanoAppRequest(
       chre::FragmentedLoadTransaction &transaction);
-
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
-  // TODO(b/298459533): Remove this when the flag_log_nanoapp_load_metrics flag
-  // is cleaned up
-  /**
-   * Create and report CHRE vendor atom and send it to stats_client
-   *
-   * @param atom the vendor atom to be reported
-   */
-  void reportMetric(const aidl::android::frameworks::stats::VendorAtom atom);
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
-  // TODO(b/298459533): Remove end
 };
 
 }  // namespace implementation
