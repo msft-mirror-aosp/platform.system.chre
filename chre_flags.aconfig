@@ -16,13 +16,6 @@ flag {
 }
 
 flag {
-  name: "wait_for_preloaded_nanoapp_start"
-  namespace: "context_hub"
-  description: "This flag controls the waiting-for-nanoapp-start behavior in the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
   name: "remove_ap_wakeup_metric_report_limit"
   namespace: "context_hub"
   description: "This flag controls removing a count limit on reporting the AP wakeup metric"
