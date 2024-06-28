@@ -9,13 +9,6 @@ flag {
 }
 
 flag {
-  name: "metrics_reporter_in_the_daemon"
-  namespace: "context_hub"
-  description: "This flag controls the addition of MetricsReporter into the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
   name: "remove_ap_wakeup_metric_report_limit"
   namespace: "context_hub"
   description: "This flag controls removing a count limit on reporting the AP wakeup metric"
