@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// TODO(b/298459533): remove_ap_wakeup_metric_report_limit ramp up -> remove old
-// code
-
 #define LOG_TAG "ContextHubHal"
 #define LOG_NDEBUG 1
 
@@ -56,7 +53,6 @@ using ::aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::chre::Atoms::CHRE_AP_WAKE_UP_OCCURRED;
 using ::android::chre::Atoms::CHRE_HAL_NANOAPP_LOAD_FAILED;
 using ::android::chre::flags::flag_log_nanoapp_load_metrics;
-using ::android::chre::flags::remove_ap_wakeup_metric_report_limit;
 // TODO(b/298459533): Remove end
 
 using ::android::chre::MetricsReporter;
@@ -198,13 +194,7 @@ bool HalChreSocketConnection::isLoadTransactionPending() {
 
 HalChreSocketConnection::SocketCallbacks::SocketCallbacks(
     HalChreSocketConnection &parent, IChreSocketCallback *callback)
-    : mParent(parent), mCallback(callback) {
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
-  if (!remove_ap_wakeup_metric_report_limit()) {
-    mLastClearedTimestamp = elapsedRealtime();
-  }
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
-}
+    : mParent(parent), mCallback(callback) {}
 
 void HalChreSocketConnection::SocketCallbacks::onMessageReceived(
     const void *data, size_t length) {
@@ -235,37 +225,23 @@ void HalChreSocketConnection::SocketCallbacks::handleNanoappMessage(
 #ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
   if (message.woke_host) {
     // check and update the 24hour timer
-    std::lock_guard<std::mutex> lock(mNanoappWokeApCountMutex);
     long nanoappId = message.app_id;
 
-    if (!remove_ap_wakeup_metric_report_limit()) {
-      long timeElapsed = elapsedRealtime() - mLastClearedTimestamp;
-      if (timeElapsed > kOneDayinMillis) {
-        mNanoappWokeUpCount = 0;
-        mLastClearedTimestamp = elapsedRealtime();
+    if (flag_log_nanoapp_load_metrics()) {
+      if (!mParent.mMetricsReporter.logApWakeupOccurred(nanoappId)) {
+        ALOGE("Could not log AP Wakeup metric");
       }
+    } else {
+      // create and report the vendor atom
+      std::vector<VendorAtomValue> values(1);
+      values[0].set<VendorAtomValue::longValue>(nanoappId);
 
-      mNanoappWokeUpCount++;
-    }
+      const VendorAtom atom{
+          .atomId = CHRE_AP_WAKE_UP_OCCURRED,
+          .values{std::move(values)},
+      };
 
-    if (remove_ap_wakeup_metric_report_limit() ||
-        mNanoappWokeUpCount < kMaxDailyReportedApWakeUp) {
-      if (flag_log_nanoapp_load_metrics()) {
-        if (!mParent.mMetricsReporter.logApWakeupOccurred(nanoappId)) {
-          ALOGE("Could not log AP Wakeup metric");
-        }
-      } else {
-        // create and report the vendor atom
-        std::vector<VendorAtomValue> values(1);
-        values[0].set<VendorAtomValue::longValue>(nanoappId);
-
-        const VendorAtom atom{
-            .atomId = CHRE_AP_WAKE_UP_OCCURRED,
-            .values{std::move(values)},
-        };
-
-        mParent.reportMetric(atom);
-      }
+      mParent.reportMetric(atom);
     }
   }
 #endif  // CHRE_HAL_SOCKET_METRICS_ENABLED

@@ -160,14 +160,6 @@ class HalChreSocketConnection {
     HalChreSocketConnection &mParent;
     IChreSocketCallback *mCallback = nullptr;
     bool mHaveConnected = false;
-
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
-    long mLastClearedTimestamp = 0;
-    static constexpr uint32_t kOneDayinMillis = 24 * 60 * 60 * 1000;
-    static constexpr uint16_t kMaxDailyReportedApWakeUp = 200;
-    uint16_t mNanoappWokeUpCount = 0;
-    std::mutex mNanoappWokeApCountMutex;
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
   };
 
   sp<SocketCallbacks> mSocketCallbacks;
