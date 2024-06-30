@@ -242,13 +242,16 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
     const void *messageData, size_t messageSize, bool isReliable,
     uint32_t messageSequenceNumber) {
+  chreError error = CHRE_ERROR_NONE;
   if (hostEndpoint == kHostEndpointBroadcast) {
     LOGE("Received invalid message from host from broadcast endpoint");
+    error = CHRE_ERROR_INVALID_ARGUMENT;
   } else if (messageSize > ((UINT32_MAX))) {
     // The current CHRE API uses uint32_t to represent the message size in
     // struct chreMessageFromHostData. We don't expect to ever need to exceed
     // this, but the check ensures we're on the up and up.
     LOGE("Rejecting message of size %zu (too big)", messageSize);
+    error = CHRE_ERROR_NO_MEMORY;
   } else {
     MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
         appId, hostEndpoint, messageType, messageData,
@@ -257,9 +260,7 @@ void HostCommsManager::sendMessageToNanoappFromHost(
       LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
            "(size %zu)",
            appId, messageSize);
-      if (isReliable) {
-        sendMessageDeliveryStatus(messageSequenceNumber, CHRE_ERROR_NO_MEMORY);
-      }
+      error = CHRE_ERROR_NO_MEMORY;
     } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
       LOGV("Deferring message; destination app ID 0x%016" PRIx64
            " not found at this time",
@@ -274,9 +275,14 @@ void HostCommsManager::sendMessageToNanoappFromHost(
       if (!EventLoopManagerSingleton::get()->deferCallback(
               SystemCallbackType::DeferredMessageToNanoappFromHost,
               craftedMessage, callback)) {
+        error = CHRE_ERROR_BUSY;
         mMessagePool.deallocate(craftedMessage);
       }
     }
+  }
+
+  if (isReliable && error != CHRE_ERROR_NONE) {
+    sendMessageDeliveryStatus(messageSequenceNumber, error);
   }
 }
 
@@ -470,8 +476,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   } else if (inEventLoopThread()) {
     // If we're already within the event loop context, it is safe to call the
     // free callback synchronously.
-    EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-        msgToHost);
+    freeMessageToHost(msgToHost);
   } else {
     auto freeMsgCallback = [](uint16_t /*type*/, void *data,
                               void * /*extraData*/) {
@@ -482,8 +487,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
     if (!EventLoopManagerSingleton::get()->deferCallback(
             SystemCallbackType::MessageToHostComplete, msgToHost,
             freeMsgCallback)) {
-      EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-          static_cast<MessageToHost *>(msgToHost));
+      freeMessageToHost(static_cast<MessageToHost *>(msgToHost));
     }
   }
 }
