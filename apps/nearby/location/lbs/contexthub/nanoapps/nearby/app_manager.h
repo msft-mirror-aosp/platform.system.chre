@@ -17,6 +17,13 @@
 #ifndef LOCATION_LBS_CONTEXTHUB_NANOAPPS_NEARBY_APP_MANAGER_H_
 #define LOCATION_LBS_CONTEXTHUB_NANOAPPS_NEARBY_APP_MANAGER_H_
 
+#include <cstdint>
+
+#include "location/lbs/contexthub/nanoapps/nearby/proto/nearby_extension.nanopb.h"
+#include "location/lbs/contexthub/nanoapps/nearby/tracker_filter.h"
+#include "location/lbs/contexthub/nanoapps/nearby/tracker_storage.h"
+#include "third_party/contexthub/chre/util/include/chre/util/dynamic_vector.h"
+#include "third_party/nanopb/pb.h"
 #ifdef NEARBY_PROFILE
 #include <ash/profile.h>
 #endif
@@ -26,16 +33,14 @@
 #include "location/lbs/contexthub/nanoapps/nearby/adv_report_cache.h"
 #include "location/lbs/contexthub/nanoapps/nearby/ble_scanner.h"
 #include "location/lbs/contexthub/nanoapps/nearby/filter.h"
-#ifdef ENABLE_EXTENSION
 #include "location/lbs/contexthub/nanoapps/nearby/filter_extension.h"
-#endif
 #include "third_party/contexthub/chre/util/include/chre/util/singleton.h"
 #include "third_party/contexthub/chre/util/include/chre/util/time.h"
 
 namespace nearby {
 
 // AppManager handles events from CHRE as well messages with host.
-class AppManager {
+class AppManager : public TrackerStorageCallbackInterface {
   friend class AppManagerTest;
 
  public:
@@ -99,7 +104,6 @@ class AppManager {
       const chre::DynamicVector<nearby_BleFilterResult> &filter_results,
       size_t &encoded_size);
 
-#ifdef ENABLE_EXTENSION
   // Handles extended config request from the host.
   void HandleHostExtConfigRequest(const chreMessageFromHostData *event);
 
@@ -115,6 +119,32 @@ class AppManager {
       const nearby_extension_ExtConfigRequest_ServiceConfig &config,
       nearby_extension_ExtConfigResponse *config_response);
 
+  // BLE scan keep alive timer callback.
+  void OnBleScanKeepAliveTimerCallback();
+
+  // Handles tracker filter config request from the host.
+  bool HandleExtTrackerFilterConfig(
+      const chreHostEndpointInfo &host_info,
+      const nearby_extension_ExtConfigRequest_TrackerFilterConfig &config,
+      nearby_extension_ExtConfigResponse *config_response);
+
+  // Handles flush tracker reports request from the host.
+  void HandleExtFlushTrackerReports(
+      const chreHostEndpointInfo &host_info,
+      const nearby_extension_ExtConfigRequest_FlushTrackerReports &config,
+      nearby_extension_ExtConfigResponse *config_response);
+
+  // Sends a tracker storage full event to host.
+  void SendTrackerStorageFullEventToHost();
+
+  // Sends tracker reports to host.
+  void SendTrackerReportsToHost(
+      chre::DynamicVector<TrackerReport> &tracker_reports);
+
+  // TrackerStorageCallbackInterface API called when sending a tracker
+  // storage full event to host.
+  void OnTrackerStorageFullEvent() override;
+
   static void SendExtConfigResponseToHost(
       uint32_t request_id, uint16_t host_end_point,
       nearby_extension_ExtConfigResponse &config_response);
@@ -123,7 +153,6 @@ class AppManager {
       chre::DynamicVector<FilterExtensionResult> &filter_results);
 
   static const char *GetExtConfigNameFromTag(pb_size_t config_tag);
-#endif
   // TODO(b/193756395): Find the optimal size or compute the size in runtime.
   // Note: the nanopb API pb_get_encoded_size
   // (https://jpa.kapsi.fi/nanopb/docs/reference.html#pb_get_encoded_size)
@@ -135,6 +164,7 @@ class AppManager {
   // rehearsing the encoding without actually storing in memory. Explore to
   // enhance nanopb API to extend pb_get_encoded_size for repeated fields.
   static constexpr size_t kFilterResultsBufSize = 400;
+  static constexpr size_t kTrackerReportsBufSize = 800;
   // Default value for Fast Pair cache to expire.
   static constexpr uint64_t kFpFilterResultExpireTimeNanoSec =
 #ifdef USE_SHORT_FP_CACHE_TO
@@ -144,20 +174,18 @@ class AppManager {
 #endif
 
   Filter filter_;
-#ifdef ENABLE_EXTENSION
   FilterExtension filter_extension_;
-#endif
   BleScanner ble_scanner_;
+  TrackerFilter tracker_filter_;
+  TrackerStorage tracker_storage_;
 
   uint16_t host_endpoint_ = 0;
   bool screen_on_ = false;
   bool fp_screen_on_sent_ = false;
   AdvReportCache adv_reports_cache_;
   chre::DynamicVector<nearby_BleFilterResult> fp_filter_cache_results_;
-#ifdef ENABLE_EXTENSION
   chre::DynamicVector<FilterExtensionResult>
       screen_on_filter_extension_results_;
-#endif
   uint64_t fp_filter_cache_time_nanosec_;
   uint64_t fp_filter_cache_expire_nanosec_ = kFpFilterResultExpireTimeNanoSec;
 #ifdef NEARBY_PROFILE
