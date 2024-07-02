@@ -224,10 +224,17 @@ void HalClient::tryReconnectEndpoints(HalClient *halClient) {
 }
 
 HalClient::~HalClient() {
-  std::lock_guard<std::mutex> lock(mBackgroundConnectionThreadsLock);
-  for (std::thread &thread : mBackgroundConnectionThreads) {
-    if (thread.joinable()) {
-      thread.join();
+  std::lock_guard<std::mutex> lock(mBackgroundConnectionFuturesLock);
+  for (const auto &future : mBackgroundConnectionFutures) {
+    // Calling std::thread.join() has chance to hang if the background thread
+    // being joined is still waiting for connecting to the service. Therefore
+    // waiting for the thread to finish here instead and logging the timeout
+    // every second until system kills the process to report the abnormality.
+    while (future.wait_for(std::chrono::seconds(1)) !=
+           std::future_status::ready) {
+      LOGE(
+          "Failed to finish a background connection in time when HalClient is "
+          "being destructed. Waiting...");
     }
   }
 }
