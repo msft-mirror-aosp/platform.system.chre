@@ -29,6 +29,11 @@ IntrusiveList<ElementType>::~IntrusiveList() {
 }
 
 template <typename ElementType>
+void IntrusiveList<ElementType>::link_front(ListNode<ElementType> *newNode) {
+  return IntrusiveListBase::doLinkFront(&newNode->node);
+}
+
+template <typename ElementType>
 void IntrusiveList<ElementType>::link_back(ListNode<ElementType> *newNode) {
   return IntrusiveListBase::doLinkBack(&newNode->node);
 }
