@@ -60,7 +60,7 @@ public class ContextHubReliableMessageTestExecutor {
     /**
      * The number of messages to send during a multiple message test.
      */
-    public static final int NUM_MESSAGES_TO_SEND = 5;
+    public static final int NUM_MESSAGES_TO_SEND = 50;
 
     private static final String TAG = "ContextHubReliableMessageExecutor";
     private final NanoAppBinary mNanoAppBinary;
