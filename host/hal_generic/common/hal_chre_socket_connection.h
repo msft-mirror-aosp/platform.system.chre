@@ -160,14 +160,6 @@ class HalChreSocketConnection {
     HalChreSocketConnection &mParent;
     IChreSocketCallback *mCallback = nullptr;
     bool mHaveConnected = false;
-
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
-    long mLastClearedTimestamp = 0;
-    static constexpr uint32_t kOneDayinMillis = 24 * 60 * 60 * 1000;
-    static constexpr uint16_t kMaxDailyReportedApWakeUp = 200;
-    uint16_t mNanoappWokeUpCount = 0;
-    std::mutex mNanoappWokeApCountMutex;
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
   };
 
   sp<SocketCallbacks> mSocketCallbacks;
@@ -211,18 +203,6 @@ class HalChreSocketConnection {
    */
   bool sendFragmentedLoadNanoAppRequest(
       chre::FragmentedLoadTransaction &transaction);
-
-#ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
-  // TODO(b/298459533): Remove this when the flag_log_nanoapp_load_metrics flag
-  // is cleaned up
-  /**
-   * Create and report CHRE vendor atom and send it to stats_client
-   *
-   * @param atom the vendor atom to be reported
-   */
-  void reportMetric(const aidl::android::frameworks::stats::VendorAtom atom);
-#endif  // CHRE_HAL_SOCKET_METRICS_ENABLED
-  // TODO(b/298459533): Remove end
 };
 
 }  // namespace implementation
