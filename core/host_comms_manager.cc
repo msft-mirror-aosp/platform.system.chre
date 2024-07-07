@@ -246,7 +246,7 @@ void HostCommsManager::sendMessageToNanoappFromHost(
   if (hostEndpoint == kHostEndpointBroadcast) {
     LOGE("Received invalid message from host from broadcast endpoint");
     error = CHRE_ERROR_INVALID_ARGUMENT;
-  } else if (messageSize > ((UINT32_MAX))) {
+  } else if (messageSize > UINT32_MAX) {
     // The current CHRE API uses uint32_t to represent the message size in
     // struct chreMessageFromHostData. We don't expect to ever need to exceed
     // this, but the check ensures we're on the up and up.
