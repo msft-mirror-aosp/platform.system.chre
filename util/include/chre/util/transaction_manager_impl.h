@@ -17,186 +17,71 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 
-#include <algorithm>
-#include <inttypes.h>
+// IWYU pragma: private, include "transaction_manager.h"
+#include "chre/util/transaction_manager.h"
 
 #include "chre/platform/system_time.h"
 #include "chre/util/hash.h"
-#include "chre/util/lock_guard.h"
-#include "chre/util/transaction_manager.h"
-#include "chre_api/chre.h"
 
 namespace chre {
 
-using ::chre::Nanoseconds;
-using ::chre::Seconds;
-
-template <typename TransactionData, size_t kMaxTransactions>
-bool TransactionManager<TransactionData, kMaxTransactions>::completeTransaction(
-    uint32_t transactionId, uint8_t errorCode) {
-  bool success = false;
-
-  {
-    LockGuard<Mutex> lock(mMutex);
-    for (size_t i = 0; i < mTransactions.size(); ++i) {
-      Transaction &transaction = mTransactions[i];
-      if (transaction.id == transactionId) {
-        if (errorCode == CHRE_ERROR_TRANSIENT) {
-          transaction.nextRetryTime = Nanoseconds(0);
-        } else {
-          transaction.errorCode = errorCode;
-        }
-        success = true;
-        break;
-      }
-    }
+template <size_t kMaxTransactions, class TimerPoolType>
+TransactionManager<kMaxTransactions, TimerPoolType>::~TransactionManager() {
+  if (mTimerHandle != CHRE_TIMER_INVALID) {
+    LOGI("At least one pending transaction at destruction");
+    mTimerPool.cancelSystemTimer(mTimerHandle);
   }
-
-  if (success) {
-    deferProcessTransactions();
-  } else {
-    LOGE("Unable to complete transaction with ID: %" PRIu32, transactionId);
-  }
-  return success;
 }
 
-template <typename TransactionData, size_t kMaxTransactions>
-size_t TransactionManager<TransactionData, kMaxTransactions>::flushTransactions(
-    FlushCallback callback, void *data) {
-  if (callback == nullptr) {
-    return 0;
-  }
-
-  deferProcessTransactions();
-
-  LockGuard<Mutex> lock(mMutex);
-  size_t numFlushed = 0;
-  for (size_t i = 0; i < mTransactions.size();) {
-    if (callback(mTransactions[i].data, data)) {
-      mTransactions.remove(i);
-      ++numFlushed;
-    } else {
-      ++i;
-    }
-  }
-  return numFlushed;
-}
-
-template <typename TransactionData, size_t kMaxTransactions>
-bool TransactionManager<TransactionData, kMaxTransactions>::startTransaction(
-    const TransactionData &data, uint16_t cookie, uint32_t *id) {
+template <size_t kMaxTransactions, class TimerPoolType>
+bool TransactionManager<kMaxTransactions, TimerPoolType>::add(uint16_t groupId,
+                                                              uint32_t *id) {
   CHRE_ASSERT(id != nullptr);
+  CHRE_ASSERT(!mInCallback);
 
-  {
-    LockGuard<Mutex> lock(mMutex);
-    if (mTransactions.full()) {
-      LOGE("The transaction queue is full");
-      return false;
-    }
-
-    if (!mNextTransactionId.has_value()) {
-      mNextTransactionId = generatePseudoRandomId();
-    }
-    uint32_t transactionId = (mNextTransactionId.value())++;
-    *id = transactionId;
-
-    Transaction transaction{
-        .id = transactionId,
-        .data = data,
-        .nextRetryTime = Nanoseconds(0),
-        .timeoutTime = Nanoseconds(0),
-        .cookie = cookie,
-        .numCompletedStartCalls = 0,
-        .errorCode = Optional<uint8_t>(),
-    };
-
-    mTransactions.push(transaction);
+  if (mTransactions.full()) {
+    LOGE("Can't add new transaction: storage is full");
+    return false;
   }
 
-  deferProcessTransactions();
+  if (!mNextTransactionId.has_value()) {
+    mNextTransactionId = generatePseudoRandomId();
+  }
+  *id = (mNextTransactionId.value())++;
+  mTransactions.emplace(*id, groupId);
+
+  maybeStartLastTransaction();
+  if (mTransactions.size() == 1) {
+    setTimerAbsolute(mTransactions.back().timeout);
+  }
   return true;
 }
 
-template <typename TransactionData, size_t kMaxTransactions>
-void TransactionManager<TransactionData,
-                        kMaxTransactions>::deferProcessTransactions() {
-  bool success = kDeferCallback(
-      [](uint16_t /* type */, void *data, void * /* extraData */) {
-        auto transactionManagerPtr = static_cast<TransactionManager *>(data);
-        if (transactionManagerPtr == nullptr) {
-          LOGE("Could not get transaction manager to process transactions");
-          return;
-        }
-
-        transactionManagerPtr->processTransactions();
-      },
-      this,
-      /* extraData= */ nullptr,
-      /* delay= */ Nanoseconds(0),
-      /* outTimerHandle= */ nullptr);
-
-  if (!success) {
-    LOGE("Could not defer callback to process transactions");
-  }
-}
-
-template <typename TransactionData, size_t kMaxTransactions>
-void TransactionManager<TransactionData, kMaxTransactions>::
-    doCompleteTransactionLocked(Transaction &transaction) {
-  uint8_t errorCode = CHRE_ERROR_TIMEOUT;
-  if (transaction.errorCode.has_value()) {
-    errorCode = *transaction.errorCode;
-  }
-
-  bool success = kCompleteCallback(transaction.data, errorCode);
-  if (success) {
-    LOGI("Transaction %" PRIu32 " completed with error code: %" PRIu8,
-         transaction.id, errorCode);
-  } else {
-    LOGE("Could not complete transaction %" PRIu32, transaction.id);
-  }
-}
-
-template <typename TransactionData, size_t kMaxTransactions>
-void TransactionManager<TransactionData, kMaxTransactions>::
-    doStartTransactionLocked(Transaction &transaction, size_t i,
-                             Nanoseconds now) {
-  // Ensure only one pending transaction per unique cookie.
-  bool canStart = true;
-  for (size_t j = 0; j < mTransactions.size(); ++j) {
-    if (i != j && mTransactions[j].cookie == transaction.cookie &&
-        mTransactions[j].numCompletedStartCalls > 0) {
-      canStart = false;
-      break;
+template <size_t kMaxTransactions, class TimerPoolType>
+bool TransactionManager<kMaxTransactions, TimerPoolType>::remove(
+    uint32_t transactionId) {
+  CHRE_ASSERT(!mInCallback);
+  for (size_t i = 0; i < mTransactions.size(); ++i) {
+    Transaction &transaction = mTransactions[i];
+    if (transaction.id == transactionId) {
+      uint16_t groupId = transaction.groupId;
+      mTransactions.remove(i);
+      startNextTransactionInGroup(groupId);
+      updateTimer();
+      return true;
     }
   }
-  if (!canStart) {
-    return;
-  }
-
-  if (transaction.timeoutTime.toRawNanoseconds() != 0) {
-    transaction.timeoutTime = now + kTimeout;
-  }
-
-  bool success = kStartCallback(transaction.data);
-  if (success) {
-    LOGI("Transaction %" PRIu32 " started", transaction.id);
-  } else {
-    LOGE("Could not start transaction %" PRIu32, transaction.id);
-  }
-
-  ++transaction.numCompletedStartCalls;
-  transaction.nextRetryTime = now + kRetryWaitTime;
+  return false;
 }
 
-template <typename TransactionData, size_t kMaxTransactions>
-uint32_t TransactionManager<TransactionData,
-                        kMaxTransactions>::generatePseudoRandomId() {
+template <size_t kMaxTransactions, class TimerPoolType>
+uint32_t
+TransactionManager<kMaxTransactions, TimerPoolType>::generatePseudoRandomId() {
   uint64_t data =
       SystemTime::getMonotonicTime().toRawNanoseconds() +
       static_cast<uint64_t>(SystemTime::getEstimatedHostTimeOffset());
-  uint32_t hash = fnv1a32Hash(reinterpret_cast<const uint8_t*>(&data),
-                              sizeof(uint64_t));
+  uint32_t hash =
+      fnv1a32Hash(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
 
   // We mix the top 2 bits back into the middle of the hash to provide a value
   // that leaves a gap of at least ~1 billion sequence numbers before
@@ -208,64 +93,134 @@ uint32_t TransactionManager<TransactionData,
   return hash & ~kMask;
 }
 
-template <typename TransactionData, size_t kMaxTransactions>
-void TransactionManager<TransactionData,
-                        kMaxTransactions>::processTransactions() {
-  if (mTimerHandle != CHRE_TIMER_INVALID) {
-    CHRE_ASSERT(kDeferCancelCallback(mTimerHandle));
-    mTimerHandle = CHRE_TIMER_INVALID;
-  }
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions,
+                        TimerPoolType>::maybeStartLastTransaction() {
+  Transaction &lastTransaction = mTransactions.back();
 
-  Nanoseconds now = SystemTime::getMonotonicTime();
-  Nanoseconds nextExecutionTime(UINT64_MAX);
-
-  {
-    LockGuard<Mutex> lock(mMutex);
-    if (mTransactions.empty()) {
+  for (const Transaction &transaction : mTransactions) {
+    if (transaction.groupId == lastTransaction.groupId &&
+        transaction.id != lastTransaction.id) {
+      // Have at least one pending request for this group, so this transaction
+      // will only be started via removeTransaction()
       return;
     }
+  }
 
-    // If a transaction is completed, it will be removed from the queue.
-    // The loop continues processing in this case as there may be another
-    // transaction that is ready to start with the same cookie that was
-    // blocked from starting by the completed transaction.
-    bool continueProcessing;
-    do {
-      continueProcessing = false;
-      for (size_t i = 0; i < mTransactions.size();) {
-        Transaction &transaction = mTransactions[i];
-        if ((transaction.timeoutTime.toRawNanoseconds() != 0 &&
-             transaction.timeoutTime <= now) ||
-            (transaction.nextRetryTime <= now &&
-             transaction.numCompletedStartCalls > kMaxNumRetries) ||
-            transaction.errorCode.has_value()) {
-          doCompleteTransactionLocked(transaction);
-          mTransactions.remove(i);
-          continueProcessing = true;
-        } else {
-          if (transaction.nextRetryTime <= now) {
-            doStartTransactionLocked(transaction, i, now);
-          }
+  startTransaction(lastTransaction);
+}
 
-          nextExecutionTime =
-              std::min(nextExecutionTime, transaction.nextRetryTime);
-          if (transaction.timeoutTime.toRawNanoseconds() != 0) {
-            nextExecutionTime =
-                std::min(nextExecutionTime, transaction.timeoutTime);
-          }
-          ++i;
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::
+    startNextTransactionInGroup(uint16_t groupId) {
+  for (Transaction &transaction : mTransactions) {
+    if (transaction.groupId == groupId) {
+      startTransaction(transaction);
+      return;
+    }
+  }
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::startTransaction(
+    Transaction &transaction) {
+  CHRE_ASSERT(transaction.attemptCount == 0);
+  transaction.attemptCount = 1;
+  transaction.timeout = SystemTime::getMonotonicTime() + kTimeout;
+  {
+    ScopedFlag f(mInCallback);
+    mCb.onTransactionAttempt(transaction.id, transaction.groupId);
+  }
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::updateTimer() {
+  mTimerPool.cancelSystemTimer(mTimerHandle);
+  if (mTransactions.empty()) {
+    mTimerHandle = CHRE_TIMER_INVALID;
+  } else {
+    Nanoseconds nextTimeout(UINT64_MAX);
+    for (const Transaction &transaction : mTransactions) {
+      if (transaction.timeout < nextTimeout) {
+        nextTimeout = transaction.timeout;
+      }
+    }
+    // If we hit this assert, we only have transactions that haven't been
+    // started yet
+    CHRE_ASSERT(nextTimeout.toRawNanoseconds() != UINT64_MAX);
+    setTimerAbsolute(nextTimeout);
+  }
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::setTimer(
+    Nanoseconds duration) {
+  mTimerHandle = mTimerPool.setSystemTimer(
+      duration, onTimerExpired, SystemCallbackType::TransactionManagerTimeout,
+      /*data=*/this);
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::setTimerAbsolute(
+    Nanoseconds expiry) {
+  constexpr Nanoseconds kMinDelay(100);
+  Nanoseconds now = SystemTime::getMonotonicTime();
+  Nanoseconds delay = (expiry > now) ? expiry - now : kMinDelay;
+  setTimer(delay);
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::handleTimerExpiry() {
+  mTimerHandle = CHRE_TIMER_INVALID;
+  if (mTransactions.empty()) {
+    LOGW("Got timer callback with no pending transactions");
+    return;
+  }
+
+  // - If a transaction has reached its timeout, try again
+  // - If a transaction has timed out for the final time, fail it
+  //   - If another transaction in the same group is pending, start it
+  // - Keep track of the transaction with the shortest timeout, use that to
+  //   update the timer
+  Nanoseconds now = SystemTime::getMonotonicTime();
+  Nanoseconds nextTimeout(UINT64_MAX);
+  for (size_t i = 0; i < mTransactions.size(); /* ++i at end of scope */) {
+    Transaction &transaction = mTransactions[i];
+    if (transaction.timeout <= now) {
+      if (++transaction.attemptCount > kMaxAttempts) {
+        Transaction transactionCopy = transaction;
+        mTransactions.remove(i);  // Invalidates transaction reference
+        handleTransactionFailure(transactionCopy);
+        // Since mTransactions is FIFO, any pending transactions in this group
+        // will appear after this one, so we don't need to restart the loop
+        continue;
+      } else {
+        transaction.timeout = now + kTimeout;
+        {
+          ScopedFlag f(mInCallback);
+          mCb.onTransactionAttempt(transaction.id, transaction.groupId);
         }
       }
-    } while (continueProcessing);
+    }
+    if (transaction.timeout < nextTimeout) {
+      nextTimeout = transaction.timeout;
+    }
+    ++i;
   }
 
-  Nanoseconds waitTime = nextExecutionTime - SystemTime::getMonotonicTime();
-  if (waitTime.toRawNanoseconds() > 0) {
-    kDeferCallback(
-        TransactionManager<TransactionData, kMaxTransactions>::onTimerFired,
-        /* data= */ this, /* extraData= */ nullptr, waitTime, &mTimerHandle);
-    CHRE_ASSERT(mTimerHandle != CHRE_TIMER_INVALID);
+  if (!mTransactions.empty()) {
+    setTimerAbsolute(nextTimeout);
   }
+}
+
+template <size_t kMaxTransactions, class TimerPoolType>
+void TransactionManager<kMaxTransactions, TimerPoolType>::
+    handleTransactionFailure(Transaction &transaction) {
+  {
+    ScopedFlag f(mInCallback);
+    mCb.onTransactionFailure(transaction.id, transaction.groupId);
+  }
+  startNextTransactionInGroup(transaction.groupId);
 }
 
 }  // namespace chre

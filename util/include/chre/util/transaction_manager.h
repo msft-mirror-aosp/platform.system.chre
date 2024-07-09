@@ -18,9 +18,8 @@
 #define CHRE_UTIL_TRANSACTION_MANAGER_H_
 
 #include <cstdint>
-#include <type_traits>
 
-#include "chre/platform/mutex.h"
+#include "chre/core/timer_pool.h"
 #include "chre/util/array_queue.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
@@ -28,304 +27,206 @@
 
 namespace chre {
 
+class TransactionManagerCallback {
+ public:
+  virtual ~TransactionManagerCallback() = default;
+
+  //! Initiate or retry an operation associated with the given transaction ID
+  virtual void onTransactionAttempt(uint32_t transactionId,
+                                    uint16_t groupId) = 0;
+
+  //! Invoked when a transaction fails to complete after the max attempt limit
+  virtual void onTransactionFailure(uint32_t transactionId,
+                                    uint16_t groupId) = 0;
+};
+
 /**
- * TransactionManager tracks pending transactions.
+ * TransactionManager helps track operations which should be retried if not
+ * completed within a set amount of time.
  *
- * Transactions are long running operations identified by an ID.
- * The TransactionManager makes sure that the transactions will complete only
- * once after a call to completeTransaction or after the optional timeout
- * expires whichever comes first. A transaction will be retried by calling
- * the start callback after no complete call has been made before the retry
- * wait time.
+ * Transactions are long running operations identified by an ID. Further,
+ * transactions can be grouped to ensure that only one transaction within a
+ * group is outstanding at a time.
  *
- * Typical usage:
- * 1. Start a transaction. Get the ID back.
- * 2. TransactionManager will run start callback with the data.
- * 3. If the start callback fails or if the transaction is not completed,
- *    TransactionManager will call the start callback again after the retry
- *    wait time.
- * 4. Call completeTransaction with the ID.
- * 5. TransactionManager will call the complete callback with the data.
+ * This class is not thread-safe, so the caller must ensure all its methods are
+ * invoked on the same thread that TimerPool callbacks are invoked on.
  *
- * If completeTransaction is not called before the timeout, the transaction
- * will be completed with a CHRE_ERROR_TIMEOUT.
+ * Usage summary:
+ *  - Call add() to initiate the transaction and assign an ID
+ *    - TransactionManager will invoke the onTransactionAttempt() callback,
+ *      either synchronously and immediately, or after any previous transactions
+ *      in the same group have completed
+ *  - Call remove() when the transaction's operation completes or is canceled
+ *    - If not called within the timeout, TransactionManager will call
+ *      onTransactionAttempt() again
+ *    - If the operation times out after the specified maximum number of
+ *      attempts, TransactionManager will call onTransactionFailure() and
+ *      remove the transaction (note that this is the only circumstance under
+ *      which onTransactionFailure() is called)
  *
- * Ensure the thread processing the deferred callbacks is completed before the
- * destruction of the TransactionManager.
- *
- * @param TransactionData The data passed to the start and complete callbacks.
- * @param kMaxTransactions The maximum number of pending transactions.
+ * @param kMaxTransactions The maximum number of pending transactions
+ * (statically allocated)
+ * @param TimerPoolType A chre::TimerPool-like class, which supports methods
+ * with the same signature and semantics as TimerPool::setSystemTimer() and
+ * TimerPool::cancelSystemTimer()
  */
-template <typename TransactionData, size_t kMaxTransactions>
+template <size_t kMaxTransactions, class TimerPoolType = TimerPool>
 class TransactionManager : public NonCopyable {
  public:
   /**
-   * Type of the callback called on transaction completion. This callback is
-   * called in the defer callback thread.
-   *
-   * This callback cannot call any of the TransactionManager methods.
-   *
-   * @param data The data for the transaction.
-   * @param errorCode The error code passed to completeTransaction.
-   * @return whether the callback succeeded.
+   * @param cb Callback
+   * @param timerPool TimerPool-like object to use for retry timers
+   * @param timeout How long to wait for remove() to be called after
+   *        onTransactionAttempt() before trying again or failing
+   * @param maxAttempts Maximum number of times to try the transaction before
+   *        giving up
    */
-  using CompleteCallback = typename std::conditional<
-      std::is_pointer<TransactionData>::value ||
-          std::is_fundamental<TransactionData>::value,
-      bool (*)(TransactionData data, uint8_t errorCode),
-      bool (*)(const TransactionData &data, uint8_t errorCode)>::type;
-
-  /**
-   * Type of the callback called to start the transaction. This is the action
-   * that will be repeated on a retry of the transaction. This callback is
-   * called in the defer callback thread.
-   *
-   * This callback cannot call any of the TransactionManager methods.
-   *
-   * @param data The data for the transaction.
-   * @return whether the callback succeeded.
-   */
-  using StartCallback =
-      typename std::conditional<std::is_pointer<TransactionData>::value ||
-                                    std::is_fundamental<TransactionData>::value,
-                                bool (*)(TransactionData data),
-                                bool (*)(TransactionData &data)>::type;
-
-  /**
-   * The type of function used to defer a callback. See DeferCallback.
-   *
-   * @param type The type passed from the DeferCallback.
-   * @param data The data passed from the DeferCallback.
-   * @param extraData The extra data passed from the DeferCallback.
-   */
-  using DeferCallbackFunction = void (*)(uint16_t type, void *data,
-                                         void *extraData);
-
-  /**
-   * Type of the callback used to defer the call of func with data and extraData
-   * after waiting for delay. extraData is ignored if delay > 0 ns.
-   *
-   * This callback cannot call any of the TransactionManager methods.
-   *
-   * @param func The function to call when the callback is executed.
-   * @param data The data to pass to the function.
-   * @param extraData The extra data to pass to the function.
-   * @param delay The nanoseconds delay to wait before calling the function.
-   * @param outTimerHandle The output timer handle if delay > 0 ns.
-   * @return whether the callback succeeded.
-   */
-  using DeferCallback = bool (*)(DeferCallbackFunction func, void *data,
-                                 void *extraData, Nanoseconds delay,
-                                 uint32_t *outTimerHandle);
-
-  /**
-   * Type of the callback used to cancel a defer call made using the
-   * DeferCallback.
-   *
-   * This callback cannot call any of the TransactionManager methods.
-   *
-   * @param timerHandle the timer handle returned using the DeferCallback.
-   * @return whether the callback was successfully cancelled.
-   */
-  using DeferCancelCallback = bool (*)(uint32_t timerHandle);
-
-  /**
-   * The callback used to determine which elements to remove
-   * during a flush.
-   *
-   * This callback cannot call any of the TransactionManager methods.
-   */
-  using FlushCallback = typename std::conditional<
-      std::is_pointer<TransactionData>::value ||
-          std::is_fundamental<TransactionData>::value,
-      bool (*)(TransactionData data, void *callbackData),
-      bool (*)(const TransactionData &data, void *callbackData)>::type;
-
-  /**
-   * The function called when the transaction processing timer is fired.
-   * @see DeferCallbackFunction() for parameter information.
-   */
-  static void onTimerFired(uint16_t /* type */, void *data,
-                           void * /* extraData */) {
-    auto transactionManagerPtr = static_cast<TransactionManager *>(data);
-    if (transactionManagerPtr == nullptr) {
-      LOGE("Could not get transaction manager to process transactions");
-      return;
-    }
-
-    transactionManagerPtr->mTimerHandle = CHRE_TIMER_INVALID;
-    transactionManagerPtr->processTransactions();
-  }
-
-  TransactionManager() = delete;
-
-  TransactionManager(StartCallback startCallback,
-                     CompleteCallback completeCallback,
-                     DeferCallback deferCallback,
-                     DeferCancelCallback deferCancelCallback,
-                     Nanoseconds retryWaitTime, Nanoseconds timeout,
-                     uint16_t maxNumRetries = 3)
-      : kStartCallback(startCallback),
-        kCompleteCallback(completeCallback),
-        kDeferCallback(deferCallback),
-        kDeferCancelCallback(deferCancelCallback),
-        kRetryWaitTime(retryWaitTime),
-        kTimeout(timeout),
-        kMaxNumRetries(maxNumRetries) {
-    CHRE_ASSERT(startCallback != nullptr);
-    CHRE_ASSERT(completeCallback != nullptr);
-    CHRE_ASSERT(deferCallback != nullptr);
-    CHRE_ASSERT(deferCancelCallback != nullptr);
-    CHRE_ASSERT(retryWaitTime.toRawNanoseconds() > 0);
-    CHRE_ASSERT(timeout.toRawNanoseconds() == 0 ||
-                timeout.toRawNanoseconds() > retryWaitTime.toRawNanoseconds());
+  TransactionManager(TransactionManagerCallback &cb, TimerPoolType &timerPool,
+                     Nanoseconds timeout, uint8_t maxAttempts = 3)
+      : kTimeout(timeout),
+        kMaxAttempts(maxAttempts),
+        mTimerPool(timerPool),
+        mCb(cb) {
+    CHRE_ASSERT(timeout.toRawNanoseconds() > 0);
   }
 
   /**
-   * Completes a transaction.
-   *
-   * The callback registered when starting the transaction is called with the
-   * errorCode if the error is not CHRE_ERROR_TRANSIENT. If the error is
-   * CHRE_ERROR_TRANSIENT, this function marks the transaction as ready
-   * to retry and processes transactions.
-   *
-   * This function is safe to call in any thread.
-   *
-   * Note that the callback will be called at most once on the first call to
-   * this method. For example if the transaction timed out before an explicit
-   * call to completeTransaction, the callback is only invoked for the timeout.
-   *
-   * @param transactionId ID of the transaction to complete.
-   * @param errorCode Error code to pass to the callback.
-   * @return Whether the transaction was completed successfully.
+   * This destructor only guarantees that no transaction callbacks will be
+   * invoked after it returns – it does not invoke any callbacks on its own.
+   * Users of this class should typically ensure that all pending transactions
+   * are cleaned up (i.e. removed) prior to destroying this object.
    */
-  bool completeTransaction(uint32_t transactionId, uint8_t errorCode);
+  ~TransactionManager();
 
   /**
-   * Flushes all the pending transactions that match the FlushCallback.
+   * Initiate a transaction, assigning it a globally unique transactionId and
+   * invoking the onTransactionAttempt() callback from within this function if
+   * it is the only pending transaction in the groupId.
    *
-   * This function is safe to call in any thread.
+   * This must not be called from within a callback method, like
+   * onTransactionFailed().
    *
-   * The completion callback is not called.
-   *
-   * @param flushCallback The function that determines which transactions will
-   * be flushed (upon return true).
-   * @param data The data to be passed to the flush callback.
-   * @return The number of flushed transactions.
+   * @param groupId ID used to serialize groups of transactions
+   * @param[out] transactionId Assigned ID, set prior to calling
+   *         onTransactionAttempt()
+   * @return false if kMaxTransactions are pending, true otherwise
    */
-  size_t flushTransactions(FlushCallback flushCallback, void *data);
+  bool add(uint16_t groupId, uint32_t *transactionId);
 
   /**
-   * Starts a transaction. This function will mark the transaction as ready to
-   * execute the StartCallback and processes transactions. The StartCallback
-   * will be called only when there are no other pending transactions for the
-   * unique cookie.
+   * Complete a transaction, by removing it from the active set of transactions.
    *
-   * The transaction will complete with a CHRE_ERROR_TIMEOUT if
-   * completeTransaction has not been called before the timeout. The timeout
-   * is calculated from the time the StartCallback is called.
+   * After this returns, it is guaranteed that callbacks will not be invoked for
+   * this transaction ID. If another transaction is pending with the same group
+   * ID as this one, onTransactionAttempt() is invoked for it from within this
+   * function.
    *
-   * This function is safe to call in any thread.
+   * This should be called on successful completion or cancelation of a
+   * transaction, but is automatically handled when a transaction fails due to
+   * timeout.
    *
-   * @param data The transaction data and callbacks used to run the transaction.
-   * @param cookie The cookie used to ensure only one transaction will be
-   *        started and pending for a given cookie.
-   * @param id A pointer to the transaction ID that will be populated when
-   *        startTransaction succeed. It must not be null.
-   * @return Whether the transaction was started successfully.
+   * This must not be called from within a callback method, like
+   * onTransactionAttempt().
+   *
+   * @param transactionId
+   * @return true if the transactionId was found and removed from the queue
    */
-  bool startTransaction(const TransactionData &data, uint16_t cookie,
-                        uint32_t *id);
+  bool remove(uint32_t transactionId);
 
  private:
   //! Stores transaction-related data.
   struct Transaction {
+    Transaction(uint32_t id_, uint16_t groupId_) : id(id_), groupId(groupId_) {}
+
     uint32_t id;
-    TransactionData data;
-    Nanoseconds nextRetryTime;
-    Nanoseconds timeoutTime;
-    uint16_t cookie;
-    uint16_t numCompletedStartCalls;
-    Optional<uint8_t> errorCode;
+    uint16_t groupId;
+
+    //! Counts up by 1 on each attempt, 0 when pending first attempt
+    uint8_t attemptCount = 0;
+
+    //! Absolute time when the next retry should be attempted or the transaction
+    //! should be considered failed. Defaults to max so it's never the next
+    //! timeout if something else is active.
+    Nanoseconds timeout = Nanoseconds(UINT64_MAX);
   };
 
-  /**
-   * Defers processing transactions in the defer callback thread.
-   */
-  void deferProcessTransactions();
+  //! RAII helper to set a boolean to true and restore to false at end of scope
+  class ScopedFlag {
+   public:
+    ScopedFlag(bool &flag) : mFlag(flag) {
+      mFlag = true;
+    }
+    ~ScopedFlag() {
+      mFlag = false;
+    }
 
-  /**
-   * Calls the complete callback for a transaction if needed. Also updates the
-   * transaction state. Assumes the caller holds the mutex.
-   *
-   * @param transaction The transaction.
-   */
-  void doCompleteTransactionLocked(Transaction &transaction);
+   private:
+    bool &mFlag;
+  };
 
-  /**
-   * Calls the start callback for a transaction if needed. Also updates the
-   * transaction state. Assumes the caller holds the mutex.
-   *
-   * @param transaction The transaction.
-   * @param i The index of the transaction in mTransactions.
-   * @param now The current time.
-   */
-  void doStartTransactionLocked(Transaction &transaction, size_t i,
-                                Nanoseconds now);
-
-  /**
-   * Generates a pseudo random ID for a transaction in the range of
-   * [0, 2^30 - 1].
-   * @return The generated ID.
-   */
-  uint32_t generatePseudoRandomId();
-
-  /**
-   * Processes transactions. This function will call the start callback and
-   * complete callback where appropriate and keep track of which transactions
-   * need to be retried next. This function is called in the defer callback
-   * thread and will defer a call to itself at the next time needed to processes
-   * the next transaction.
-   */
-  void processTransactions();
-
-  //! The start callback.
-  const StartCallback kStartCallback;
-
-  //! The complete callback.
-  const CompleteCallback kCompleteCallback;
-
-  //! The defer callback.
-  const DeferCallback kDeferCallback;
-
-  //! The defer cancel callback.
-  const DeferCancelCallback kDeferCancelCallback;
-
-  //! The retry wait time.
-  const Nanoseconds kRetryWaitTime;
-
-  //! The timeout for a transaction.
   const Nanoseconds kTimeout;
+  const uint8_t kMaxAttempts;
 
-  //! The maximum number of retries for a transaction.
-  const uint16_t kMaxNumRetries;
+  TimerPoolType &mTimerPool;
+  TransactionManagerCallback &mCb;
 
-  //! The mutex protecting mTransactions and mTimerHandle.
-  Mutex mMutex;
-
-  //! The next ID for use when creating a transaction.
+  //! Delayed assignment to start at a pseudo-random value
   Optional<uint32_t> mNextTransactionId;
 
-  //! The timer handle for the timer tracking execution of processTransactions.
-  //! Can only be modified in the defer callback thread.
+  //! Helps catch misuse, e.g. trying to remove a transaction from a callback
+  bool mInCallback = false;
+
+  //! Handle of timer that expires, or CHRE_TIMER_INVALID if none
   uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 
-  //! The list of transactions.
+  //! Set of active transactions
   ArrayQueue<Transaction, kMaxTransactions> mTransactions;
+
+  //! Callback given to mTimerPool, invoked when the next expiring transaction
+  //! has timed out
+  static void onTimerExpired(uint16_t /*type*/, void *data,
+                             void * /*extraData*/) {
+    auto *obj =
+        static_cast<TransactionManager<kMaxTransactions, TimerPoolType> *>(
+            data);
+    obj->handleTimerExpiry();
+  }
+
+  //! @return a pseudorandom ID for a transaction in the range of [0, 2^30 - 1]
+  uint32_t generatePseudoRandomId();
+
+  //! If the last added transaction is the only one in its group, start it;
+  //! otherwise do nothing
+  void maybeStartLastTransaction();
+
+  //! If there's a pending transaction in this group, start the next one;
+  //! otherwise do nothing
+  void startNextTransactionInGroup(uint16_t groupId);
+
+  //! Update the transaction state and invoke the attempt callback, but doesn't
+  //! set the timer
+  void startTransaction(Transaction &transaction);
+
+  //! Updates the timer to the proper state for mTransactions
+  void updateTimer();
+
+  //! Sets the timer to expire after a delay
+  void setTimer(Nanoseconds delay);
+
+  //! Sets the timer to expire at the given time, or effectively immediately if
+  //! expiry is in the past
+  void setTimerAbsolute(Nanoseconds expiry);
+
+  //! Processes any timed out transactions and reset the timer as needed
+  void handleTimerExpiry();
+
+  //! Invokes the failure callback and starts the next transaction in the group,
+  //! but does not remove the transaction (it should already be removed)
+  void handleTransactionFailure(Transaction &transaction);
 };
 
 }  // namespace chre
 
-#include "chre/util/transaction_manager_impl.h"
+#include "chre/util/transaction_manager_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_TRANSACTION_MANAGER_H_

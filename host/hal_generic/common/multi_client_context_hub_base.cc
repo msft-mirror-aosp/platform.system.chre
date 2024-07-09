@@ -133,6 +133,7 @@ ErrorCode toErrorCode(uint32_t chreErrorCode) {
   switch (chreErrorCode) {
     case CHRE_ERROR_NONE:
       return ErrorCode::OK;
+    case CHRE_ERROR_BUSY: // fallthrough
     case CHRE_ERROR_TRANSIENT:
       return ErrorCode::TRANSIENT_ERROR;
     case CHRE_ERROR:
