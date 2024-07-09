@@ -65,7 +65,8 @@ void Manager::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
     }
   }
 
-  if (mNumExpectedAsyncResults == 0 && mNumExpectedHostEchoMessages == 0 &&
+  if (mNumExpectedAsyncResults == 0 &&
+      mNumExpectedHostEchoMessages == 0 &&
       mNumExpectedFreeMessageCallbacks == 0) {
     completeTest(true);
   }
