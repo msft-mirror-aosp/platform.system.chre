@@ -17,6 +17,8 @@
 #include "chre/util/duplicate_message_detector.h"
 #include "chre/util/lock_guard.h"
 
+#include <cstdint>
+
 namespace chre {
 
 Optional<chreError> DuplicateMessageDetector::findOrAdd(
@@ -82,8 +84,8 @@ DuplicateMessageDetector::ReliableMessageRecord*
   DuplicateMessageDetector::findLocked(uint32_t messageSequenceNumber,
                                        uint16_t hostEndpoint,
                                        bool reverse) {
-  ssize_t size = static_cast<ssize_t>(mReliableMessageRecordQueue.size());
-  for (ssize_t i = reverse ? size - 1 : 0;
+  int32_t size = static_cast<int32_t>(mReliableMessageRecordQueue.size());
+  for (int32_t i = reverse ? size - 1 : 0;
        reverse ? i >= 0 : i < size;
        reverse ? --i : ++i) {
     ReliableMessageRecord &record = mReliableMessageRecordQueue[i];
