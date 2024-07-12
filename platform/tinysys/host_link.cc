@@ -627,6 +627,11 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
 
 DRAM_REGION_FUNCTION void HostLinkBase::sendTimeSyncRequest() {}
 
+DRAM_REGION_FUNCTION void HostLinkBase::sendNanConfiguration(
+    bool /* enabled */) {
+  LOGE("%s is unsupported", __func__);
+}
+
 DRAM_REGION_FUNCTION void HostLinkBase::sendLogMessageV2(
     const uint8_t *logMessage, size_t logMessageSize, uint32_t numLogsDropped) {
   LOGV("%s: size %zu", __func__, logMessageSize);
@@ -834,7 +839,7 @@ DRAM_REGION_FUNCTION void HostLink::flushMessagesSentByNanoapp(
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleTimeSyncMessage(
     int64_t offset) {
-  LOGE("%s unsupported.", __func__);
+  LOGE("%s is unsupported", __func__);
 }
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleDebugDumpRequest(
@@ -868,7 +873,7 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleSelfTestRequest(
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanConfigurationUpdate(
     bool /* enabled */) {
-  LOGE("%s NAN unsupported.", __func__);
+  LOGE("%s is unsupported", __func__);
 }
 
 DRAM_REGION_FUNCTION void sendAudioRequest() {
