@@ -698,7 +698,8 @@ void WifiRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     debugDump.print("  ts=%" PRIu64 " nappId=%" PRIu16 " scanType=%" PRIu8
                     " maxScanAge(ms)=%" PRIu64 "\n",
                     log.timestamp.toRawNanoseconds(), log.instanceId,
-                    log.scanType, log.maxScanAgeMs.getMilliseconds());
+                    static_cast<uint8_t>(log.scanType),
+                    log.maxScanAgeMs.getMilliseconds());
   }
 
   debugDump.print(" Last scan event @ %" PRIu64 " ms\n",
