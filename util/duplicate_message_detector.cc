@@ -84,11 +84,9 @@ DuplicateMessageDetector::ReliableMessageRecord*
   DuplicateMessageDetector::findLocked(uint32_t messageSequenceNumber,
                                        uint16_t hostEndpoint,
                                        bool reverse) {
-  int32_t size = static_cast<int32_t>(mReliableMessageRecordQueue.size());
-  for (int32_t i = reverse ? size - 1 : 0;
-       reverse ? i >= 0 : i < size;
-       reverse ? --i : ++i) {
-    ReliableMessageRecord &record = mReliableMessageRecordQueue[i];
+  for (size_t i = 0; i < mReliableMessageRecordQueue.size(); ++i) {
+    size_t index = reverse ? mReliableMessageRecordQueue.size() - i - 1 : i;
+    ReliableMessageRecord &record = mReliableMessageRecordQueue[index];
     if (record.messageSequenceNumber == messageSequenceNumber &&
         record.hostEndpoint == hostEndpoint) {
       return &record;
