@@ -662,6 +662,7 @@ cc_library_static {
         "platform/linux/task_util/task.cc",
         "platform/linux/task_util/task_manager.cc",
         "platform/shared/pal_system_api.cc",
+        "util/duplicate_message_detector.cc",
         "util/dynamic_vector_base.cc",
     ],
     export_include_dirs: [
