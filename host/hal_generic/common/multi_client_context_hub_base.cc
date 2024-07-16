@@ -271,6 +271,9 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
 
   bool result = mConnection->sendMessage(builder);
   if (!result) {
+    LOGE("Failed to send an unload request for nanoapp 0x%" PRIx64
+         " transaction %" PRIi32,
+         appId, transactionId);
     mHalClientManager->resetPendingUnloadTransaction(clientId, transactionId);
   }
   return fromResult(result);
@@ -715,6 +718,7 @@ void MultiClientContextHubBase::onDebugDumpComplete(
 
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
+  LOGI("Received nanoapp list response for client %" PRIu16, clientId);
   {
     std::unique_lock<std::mutex> lock(mTestModeMutex);
     if (!mTestModeNanoapps.has_value()) {
@@ -844,6 +848,9 @@ void MultiClientContextHubBase::onNanoappUnloadResponse(
     mEventLogger.logNanoappUnload(*nanoappId, response.success);
     if (auto callback = mHalClientManager->getCallback(clientId);
         callback != nullptr) {
+      LOGI("Unload transaction %" PRIu32 " for nanoapp 0x%" PRIx64
+           " client id %" PRIu16 " is finished",
+           response.transaction_id, *nanoappId, clientId);
       callback->handleTransactionResult(response.transaction_id,
                                         /* in_success= */ response.success);
     }
