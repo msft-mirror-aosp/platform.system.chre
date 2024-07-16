@@ -20,25 +20,21 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
+#include "chre/platform/log.h"
+#include "chre/util/duplicate_message_detector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
-#include "chre/util/system/event_callbacks.h"
+#include "chre/util/optional.h"
 #include "chre_api/chre.h"
 
 namespace chre {
 
 namespace {
-
-#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-//! @see TransactionManager::DeferCancelCallback
-bool deferCancelCallback(uint32_t timerHandle) {
-  return EventLoopManagerSingleton::get()->cancelDelayedCallback(timerHandle);
-}
-#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
 /**
  * Checks if the message can be send from the nanoapp to the host.
@@ -77,49 +73,104 @@ bool shouldAcceptMessageToHostFromNanoapp(Nanoapp *nanoapp, void *messageData,
 
 HostCommsManager::HostCommsManager()
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    : mTransactionManager(sendMessageWithTransactionData,
-                          onMessageDeliveryStatus, deferCallback,
-                          deferCancelCallback, kReliableMessageRetryWaitTime,
-                          kReliableMessageTimeout, kReliableMessageNumRetries)
+    : mDuplicateMessageDetector(kReliableMessageTimeout),
+      mTransactionManager(
+          *this,
+          EventLoopManagerSingleton::get()->getEventLoop().getTimerPool(),
+          kReliableMessageRetryWaitTime, kReliableMessageMaxAttempts)
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 {
 }
 
-bool HostCommsManager::completeTransaction(uint32_t transactionId,
-                                           uint8_t errorCode) {
+// TODO(b/346345637): rename this to align it with the message delivery status
+// terminology used elsewhere, and make it return void
+bool HostCommsManager::completeTransaction(
+    [[maybe_unused]] uint32_t transactionId,
+    [[maybe_unused]] uint8_t errorCode) {
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-  return mTransactionManager.completeTransaction(transactionId, errorCode);
+  auto callback = [](uint16_t /*type*/, void *data, void *extraData) {
+    uint32_t txnId = NestedDataPtr<uint32_t>(data);
+    uint8_t err = NestedDataPtr<uint8_t>(extraData);
+    EventLoopManagerSingleton::get()
+        ->getHostCommsManager()
+        .handleMessageDeliveryStatusSync(txnId, err);
+  };
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::ReliableMessageEvent, NestedDataPtr(transactionId),
+      callback, NestedDataPtr(errorCode));
+  return true;
 #else
-  UNUSED_VAR(transactionId);
-  UNUSED_VAR(errorCode);
   return false;
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
-void HostCommsManager::flushNanoappMessagesAndTransactions(uint64_t appId) {
-  uint16_t nanoappInstanceId;
-  bool nanoappFound =
-      EventLoopManagerSingleton::get()
-          ->getEventLoop()
-          .findNanoappInstanceIdByAppId(appId, &nanoappInstanceId);
-  if (nanoappFound) {
-    flushNanoappTransactions(nanoappInstanceId);
-  } else {
-    LOGE("Could not find nanoapp 0x%016" PRIx64 " to flush transactions",
-         appId);
-  }
+void HostCommsManager::removeAllTransactionsFromNanoapp(
+    [[maybe_unused]] const Nanoapp &nanoapp) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  struct FindContext {
+    decltype(mTransactionManager) &transactionManager;
+    const Nanoapp &nanoapp;
+  };
 
-  HostLink::flushMessagesSentByNanoapp(appId);
+  // Cancel any pending outbound reliable messages. We leverage find() here as
+  // a forEach() method by always returning false.
+  auto transactionRemover = [](HostMessage *msg, void *data) {
+    FindContext *ctx = static_cast<FindContext *>(data);
+
+    if (msg->isReliable && !msg->fromHost &&
+        msg->appId == ctx->nanoapp.getAppId() &&
+        !ctx->transactionManager.remove(msg->messageSequenceNumber)) {
+      LOGE("Couldn't find transaction %" PRIu32 " at flush",
+           msg->messageSequenceNumber);
+    }
+
+    return false;
+  };
+
+  FindContext context{mTransactionManager, nanoapp};
+  mMessagePool.find(transactionRemover, &context);
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
+void HostCommsManager::freeAllReliableMessagesFromNanoapp(
+    [[maybe_unused]] Nanoapp &nanoapp) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  auto reliableMessageFromNanoappMatcher = [](HostMessage *msg, void *data) {
+    auto *napp = static_cast<const Nanoapp *>(data);
+    return (msg->isReliable && !msg->fromHost &&
+            msg->appId == napp->getAppId());
+  };
+  MessageToHost *message;
+  while ((message = mMessagePool.find(reliableMessageFromNanoappMatcher,
+                                      &nanoapp)) != nullptr) {
+    // We don't post message delivery status to the nanoapp, since it's being
+    // unloaded and we don't actually know the final message delivery status –
+    // simply free the memory
+    onMessageToHostCompleteInternal(message);
+  }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+}
+
+void HostCommsManager::flushNanoappMessages(Nanoapp &nanoapp) {
+  // First we remove all of the outgoing reliable message transactions from the
+  // transaction manager, which triggers sending any pending reliable messages
+  removeAllTransactionsFromNanoapp(nanoapp);
+
+  // This ensures that HostLink does not reference message memory (owned the
+  // nanoapp) anymore, i.e. onMessageToHostComplete() is called, which lets us
+  // free memory for any pending reliable messages
+  HostLink::flushMessagesSentByNanoapp(nanoapp.getAppId());
+  freeAllReliableMessagesFromNanoapp(nanoapp);
+}
+
+// TODO(b/346345637): rename this to better reflect its true meaning, which is
+// that HostLink doesn't reference the memory anymore
 void HostCommsManager::onMessageToHostComplete(const MessageToHost *message) {
   // We do not call onMessageToHostCompleteInternal for reliable messages
   // until the completion callback is called.
-  if (message == nullptr || message->isReliable) {
-    return;
+  if (message != nullptr && !message->isReliable) {
+    onMessageToHostCompleteInternal(message);
   }
-
-  onMessageToHostCompleteInternal(message);
 }
 
 void HostCommsManager::resetBlameForNanoappHostWakeup() {
@@ -136,8 +187,10 @@ void HostCommsManager::sendDeferredMessageToNanoappFromHost(
          " still not found",
          craftedMessage->appId);
     if (craftedMessage->isReliable) {
-      sendMessageDeliveryStatus(craftedMessage->messageSequenceNumber,
-                                CHRE_ERROR_DESTINATION_NOT_FOUND);
+      handleDuplicateAndSendMessageDeliveryStatus(
+          craftedMessage->messageSequenceNumber,
+          craftedMessage->fromHostData.hostEndpoint,
+          CHRE_ERROR_DESTINATION_NOT_FOUND);
     }
     mMessagePool.deallocate(craftedMessage);
   } else {
@@ -171,21 +224,14 @@ bool HostCommsManager::sendMessageToHostFromNanoapp(
   msgToHost->toHostData.appPermissions = nanoapp->getAppPermissions();
   msgToHost->toHostData.nanoappFreeFunction = freeCallback;
   msgToHost->isReliable = isReliable;
+  msgToHost->cookie = cookie;
+  msgToHost->fromHost = false;
 
-  bool success;
+  bool success = false;
   if (isReliable) {
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    MessageTransactionData data = {
-        .messageSequenceNumberPtr = &msgToHost->messageSequenceNumber,
-        .messageSequenceNumber = static_cast<uint32_t>(-1),
-        .nanoappInstanceId = nanoapp->getInstanceId(),
-        .cookie = cookie,
-    };
-    success = mTransactionManager.startTransaction(
-        data, nanoapp->getInstanceId(), &msgToHost->messageSequenceNumber);
-#else
-    UNUSED_VAR(cookie);
-    success = false;
+    success = mTransactionManager.add(nanoapp->getInstanceId(),
+                                      &msgToHost->messageSequenceNumber);
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   } else {
     success = doSendMessageToHostFromNanoapp(nanoapp, msgToHost);
@@ -201,42 +247,66 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
     const void *messageData, size_t messageSize, bool isReliable,
     uint32_t messageSequenceNumber) {
+  [[maybe_unused]] chreError error;
+
   if (hostEndpoint == kHostEndpointBroadcast) {
     LOGE("Received invalid message from host from broadcast endpoint");
-  } else if (messageSize > ((UINT32_MAX))) {
+    error = CHRE_ERROR_INVALID_ARGUMENT;
+  } else if (messageSize > UINT32_MAX) {
     // The current CHRE API uses uint32_t to represent the message size in
     // struct chreMessageFromHostData. We don't expect to ever need to exceed
     // this, but the check ensures we're on the up and up.
     LOGE("Rejecting message of size %zu (too big)", messageSize);
+    error = CHRE_ERROR_NO_MEMORY;
   } else {
-    MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
-        appId, hostEndpoint, messageType, messageData,
-        static_cast<uint32_t>(messageSize), isReliable, messageSequenceNumber);
-    if (craftedMessage == nullptr) {
-      LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
-           "(size %zu)",
-           appId, messageSize);
-      if (isReliable) {
-        sendMessageDeliveryStatus(messageSequenceNumber, CHRE_ERROR_NO_MEMORY);
-      }
-    } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
-      LOGV("Deferring message; destination app ID 0x%016" PRIx64
-           " not found at this time",
-           appId);
+    // Detect duplicate reliable messages.
+    bool doSendMessageToNanoapp = true;
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+    if (isReliable) {
+      doSendMessageToNanoapp = shouldSendReliableMessageToNanoapp(
+          messageSequenceNumber, hostEndpoint);
+    }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
-      auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
-        EventLoopManagerSingleton::get()
-            ->getHostCommsManager()
-            .sendDeferredMessageToNanoappFromHost(
-                static_cast<MessageFromHost *>(data));
-      };
-      if (!EventLoopManagerSingleton::get()->deferCallback(
-              SystemCallbackType::DeferredMessageToNanoappFromHost,
-              craftedMessage, callback)) {
-        mMessagePool.deallocate(craftedMessage);
+    if (doSendMessageToNanoapp) {
+      MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
+          appId, hostEndpoint, messageType, messageData,
+          static_cast<uint32_t>(messageSize), isReliable,
+          messageSequenceNumber);
+      if (craftedMessage == nullptr) {
+        LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
+             "(size %zu)",
+             appId, messageSize);
+        error = CHRE_ERROR_NO_MEMORY;
+      } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
+        LOGV("Deferring message; destination app ID 0x%016" PRIx64
+             " not found at this time",
+             appId);
+
+        auto callback = [](uint16_t /*type*/, void *data,
+                           void * /*extraData*/) {
+          EventLoopManagerSingleton::get()
+              ->getHostCommsManager()
+              .sendDeferredMessageToNanoappFromHost(
+                  static_cast<MessageFromHost *>(data));
+        };
+        if (!EventLoopManagerSingleton::get()->deferCallback(
+                SystemCallbackType::DeferredMessageToNanoappFromHost,
+                craftedMessage, callback)) {
+          error = CHRE_ERROR_BUSY;
+          mMessagePool.deallocate(craftedMessage);
+        }
       }
     }
   }
+
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  if (isReliable && error != CHRE_ERROR_NONE) {
+    handleDuplicateAndSendMessageDeliveryStatus(messageSequenceNumber,
+                                                hostEndpoint, error);
+  }
+  mDuplicateMessageDetector.removeOldEntries();
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
@@ -249,8 +319,8 @@ MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
   } else if (!msgFromHost->message.copy_array(
                  static_cast<const uint8_t *>(messageData), messageSize)) {
     LOGE("Couldn't allocate %" PRIu32
-         " bytes for message data from host "
-         "(endpoint 0x%" PRIx16 " type %" PRIu32 ")",
+         " bytes for message data from host (endpoint 0x%" PRIx16
+         " type %" PRIu32 ")",
          messageSize, hostEndpoint, messageType);
     mMessagePool.deallocate(msgFromHost);
     msgFromHost = nullptr;
@@ -262,25 +332,10 @@ MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
     msgFromHost->fromHostData.hostEndpoint = hostEndpoint;
     msgFromHost->isReliable = isReliable;
     msgFromHost->messageSequenceNumber = messageSequenceNumber;
+    msgFromHost->fromHost = true;
   }
 
   return msgFromHost;
-}
-
-bool HostCommsManager::deferCallback(
-    TransactionManager<MessageTransactionData,
-                       kMaxOutstandingMessages>::DeferCallbackFunction func,
-    void *data, void *extraData, Nanoseconds delay, uint32_t *outTimerHandle) {
-  if (delay.toRawNanoseconds() == 0) {
-    CHRE_ASSERT(outTimerHandle == nullptr);
-    return EventLoopManagerSingleton::get()->deferCallback(
-        SystemCallbackType::ReliableMessageEvent, data, func, extraData);
-  }
-
-  CHRE_ASSERT(outTimerHandle != nullptr);
-  *outTimerHandle = EventLoopManagerSingleton::get()->setDelayedCallback(
-      SystemCallbackType::ReliableMessageEvent, data, func, delay);
-  return true;
 }
 
 bool HostCommsManager::deliverNanoappMessageFromHost(
@@ -299,8 +354,10 @@ bool HostCommsManager::deliverNanoappMessageFromHost(
         CHRE_EVENT_MESSAGE_FROM_HOST, &craftedMessage->fromHostData,
         freeMessageFromHostCallback, targetInstanceId);
     if (craftedMessage->isReliable) {
-      sendMessageDeliveryStatus(craftedMessage->messageSequenceNumber,
-                                CHRE_ERROR_NONE);
+      handleDuplicateAndSendMessageDeliveryStatus(
+          craftedMessage->messageSequenceNumber,
+          craftedMessage->fromHostData.hostEndpoint,
+          CHRE_ERROR_NONE);
     }
   }
 
@@ -331,42 +388,16 @@ bool HostCommsManager::doSendMessageToHostFromNanoapp(
   return true;
 }
 
-HostMessage *HostCommsManager::findMessageByMessageSequenceNumber(
+MessageToHost *HostCommsManager::findMessageToHostBySeq(
     uint32_t messageSequenceNumber) {
   return mMessagePool.find(
       [](HostMessage *inputMessage, void *data) {
         NestedDataPtr<uint32_t> targetMessageSequenceNumber(data);
-        return inputMessage->isReliable &&
+        return inputMessage->isReliable && !inputMessage->fromHost &&
                inputMessage->messageSequenceNumber ==
                    targetMessageSequenceNumber;
       },
       NestedDataPtr<uint32_t>(messageSequenceNumber));
-}
-
-size_t HostCommsManager::flushNanoappTransactions(uint16_t nanoappInstanceId) {
-#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-  return mTransactionManager.flushTransactions(
-      [](const MessageTransactionData &data, void *callbackData) {
-        NestedDataPtr<uint16_t> innerNanoappInstanceId(callbackData);
-        if (innerNanoappInstanceId == data.nanoappInstanceId) {
-          HostMessage *message = EventLoopManagerSingleton::get()
-                                     ->getHostCommsManager()
-                                     .findMessageByMessageSequenceNumber(
-                                         data.messageSequenceNumber);
-          if (message != nullptr) {
-            EventLoopManagerSingleton::get()
-                ->getHostCommsManager()
-                .onMessageToHostCompleteInternal(message);
-          }
-          return true;
-        }
-        return false;
-      },
-      NestedDataPtr<uint16_t>(nanoappInstanceId));
-#else
-  UNUSED_VAR(nanoappInstanceId);
-  return 0;
-#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 void HostCommsManager::freeMessageToHost(MessageToHost *msgToHost) {
@@ -375,6 +406,11 @@ void HostCommsManager::freeMessageToHost(MessageToHost *msgToHost) {
         msgToHost->appId, msgToHost->toHostData.nanoappFreeFunction,
         msgToHost->message.data(), msgToHost->message.size());
   }
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  if (msgToHost->isReliable) {
+    mTransactionManager.remove(msgToHost->messageSequenceNumber);
+  }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   mMessagePool.deallocate(msgToHost);
 }
 
@@ -397,55 +433,71 @@ void HostCommsManager::freeMessageFromHostCallback(uint16_t /*type*/,
   hostCommsMgr.mMessagePool.deallocate(msgFromHost);
 }
 
-bool HostCommsManager::sendMessageWithTransactionData(
-    MessageTransactionData &data) {
-  // Set the message sequence number now that TransactionManager has set it.
-  // The message should still be available right now, but might not be later,
-  // so the pointer could be invalid at a later time.
-  data.messageSequenceNumber = *data.messageSequenceNumberPtr;
-
-  HostMessage *message =
-      EventLoopManagerSingleton::get()
-          ->getHostCommsManager()
-          .findMessageByMessageSequenceNumber(data.messageSequenceNumber);
+void HostCommsManager::onTransactionAttempt(uint32_t messageSequenceNumber,
+                                            uint16_t nanoappInstanceId) {
+  MessageToHost *message = findMessageToHostBySeq(messageSequenceNumber);
   Nanoapp *nanoapp =
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByInstanceId(
-          data.nanoappInstanceId);
-  return nanoapp != nullptr && message != nullptr &&
-         EventLoopManagerSingleton::get()
-             ->getHostCommsManager()
-             .doSendMessageToHostFromNanoapp(nanoapp, message);
+          nanoappInstanceId);
+  if (message == nullptr || nanoapp == nullptr) {
+    LOGE("Attempted to retry reliable message %" PRIu32 " from nanoapp %" PRIu16
+         " but couldn't find:%s%s",
+         messageSequenceNumber, nanoappInstanceId,
+         (message == nullptr) ? " msg" : "",
+         (nanoapp == nullptr) ? " napp" : "");
+  } else {
+    doSendMessageToHostFromNanoapp(nanoapp, message);
+  }
 }
 
-bool HostCommsManager::onMessageDeliveryStatus(
-    const MessageTransactionData &data, uint8_t errorCode) {
-  chreAsyncResult *asyncResult = memoryAlloc<chreAsyncResult>();
-  if (asyncResult == nullptr) {
-    LOG_OOM();
-    return false;
+void HostCommsManager::onTransactionFailure(uint32_t messageSequenceNumber,
+                                            uint16_t nanoappInstanceId) {
+  LOGE("Reliable message %" PRIu32 " from nanoapp %" PRIu16 " timed out",
+       messageSequenceNumber, nanoappInstanceId);
+  handleMessageDeliveryStatusSync(messageSequenceNumber, CHRE_ERROR_TIMEOUT);
+}
+
+void HostCommsManager::handleDuplicateAndSendMessageDeliveryStatus(
+    [[maybe_unused]] uint32_t messageSequenceNumber,
+    [[maybe_unused]] uint16_t hostEndpoint,
+    [[maybe_unused]] chreError error) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  bool success = mDuplicateMessageDetector.findAndSetError(
+      messageSequenceNumber, hostEndpoint, error);
+  if (!success) {
+    LOGW("Failed to set error for message with message sequence number: %"
+          PRIu32 " and host endpoint: 0x%" PRIx16,
+          messageSequenceNumber,
+          hostEndpoint);
   }
+  sendMessageDeliveryStatus(messageSequenceNumber, error);
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+}
 
-  asyncResult->requestType = 0;
-  asyncResult->cookie = data.cookie;
-  asyncResult->errorCode = errorCode;
-  asyncResult->reserved = 0;
-  asyncResult->success = errorCode == CHRE_ERROR_NONE;
+void HostCommsManager::handleMessageDeliveryStatusSync(
+    uint32_t messageSequenceNumber, uint8_t errorCode) {
+  EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
+  uint16_t nanoappInstanceId;
+  MessageToHost *message = findMessageToHostBySeq(messageSequenceNumber);
+  if (message == nullptr) {
+    LOGW("Got message delivery status for unexpected seq %" PRIu32,
+         messageSequenceNumber);
+  } else if (!eventLoop.findNanoappInstanceIdByAppId(message->appId,
+                                                     &nanoappInstanceId)) {
+    // Expected if we unloaded the nanoapp while a message was in flight
+    LOGW("Got message delivery status seq %" PRIu32
+         " but couldn't find nanoapp 0x%" PRIx64,
+         messageSequenceNumber, message->appId);
+  } else {
+    chreAsyncResult asyncResult = {};
+    asyncResult.success = errorCode == CHRE_ERROR_NONE;
+    asyncResult.errorCode = errorCode;
+    asyncResult.cookie = message->cookie;
 
-  EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-      CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT, asyncResult, freeEventDataCallback,
-      data.nanoappInstanceId);
-
-  HostMessage *message =
-      EventLoopManagerSingleton::get()
-          ->getHostCommsManager()
-          .findMessageByMessageSequenceNumber(data.messageSequenceNumber);
-  if (message != nullptr) {
-    EventLoopManagerSingleton::get()
-        ->getHostCommsManager()
-        .onMessageToHostCompleteInternal(message);
+    onMessageToHostCompleteInternal(message);
+    eventLoop.deliverEventSync(
+        nanoappInstanceId, CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT, &asyncResult);
   }
-
-  return true;
 }
 
 void HostCommsManager::onMessageToHostCompleteInternal(
@@ -453,6 +505,10 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   // Removing const on message since we own the memory and will deallocate it;
   // the caller (HostLink) only gets a const pointer
   auto *msgToHost = const_cast<MessageToHost *>(message);
+
+  // TODO(b/346345637): add an assertion that HostLink does not own the memory,
+  // which is technically possible if a reliable message timed out before it
+  // was released
 
   // If there's no free callback, we can free the message right away as the
   // message pool is thread-safe; otherwise, we need to do it from within the
@@ -462,8 +518,7 @@ void HostCommsManager::onMessageToHostCompleteInternal(
   } else if (inEventLoopThread()) {
     // If we're already within the event loop context, it is safe to call the
     // free callback synchronously.
-    EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-        msgToHost);
+    freeMessageToHost(msgToHost);
   } else {
     auto freeMsgCallback = [](uint16_t /*type*/, void *data,
                               void * /*extraData*/) {
@@ -474,10 +529,36 @@ void HostCommsManager::onMessageToHostCompleteInternal(
     if (!EventLoopManagerSingleton::get()->deferCallback(
             SystemCallbackType::MessageToHostComplete, msgToHost,
             freeMsgCallback)) {
-      EventLoopManagerSingleton::get()->getHostCommsManager().freeMessageToHost(
-          static_cast<MessageToHost *>(msgToHost));
+      freeMessageToHost(static_cast<MessageToHost *>(msgToHost));
     }
   }
+}
+
+bool HostCommsManager::shouldSendReliableMessageToNanoapp(
+    [[maybe_unused]] uint32_t messageSequenceNumber,
+    [[maybe_unused]] uint16_t hostEndpoint) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  Optional<chreError> pastError =
+      mDuplicateMessageDetector.findOrAdd(messageSequenceNumber,
+                                          hostEndpoint);
+  if (pastError.has_value()) {
+    if (pastError.value() == CHRE_ERROR_BUSY ||
+        pastError.value() == CHRE_ERROR_TRANSIENT) {
+      LOGW("Duplicate message with message sequence number: %" PRIu32
+            " and host endpoint: 0x%" PRIx16 " was detected. Retrying.",
+            messageSequenceNumber, hostEndpoint);
+    } else {
+      LOGW("Duplicate message with message sequence number: %" PRIu32
+            " and host endpoint: 0x%" PRIx16 " was detected. "
+            "Not sending message to nanoapp.",
+            messageSequenceNumber, hostEndpoint);
+      sendMessageDeliveryStatus(messageSequenceNumber, pastError.value());
+      return false;
+    }
+  }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+
+  return true;
 }
 
 }  // namespace chre

@@ -10,6 +10,7 @@ COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 # Common Source Files ##########################################################
 
 COMMON_SRCS += $(CHRE_PREFIX)/util/buffer_base.cc
+COMMON_SRCS += $(CHRE_PREFIX)/util/duplicate_message_detector.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/dynamic_vector_base.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/hash.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/intrusive_list_base.cc
@@ -31,6 +32,7 @@ GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/blocking_queue_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/buffer_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/copyable_fixed_size_vector_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/debug_dump_test.cc
+GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/duplicate_message_detector_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/dynamic_vector_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/fixed_size_vector_test.cc
 GOOGLETEST_SRCS += $(CHRE_PREFIX)/util/tests/heap_test.cc

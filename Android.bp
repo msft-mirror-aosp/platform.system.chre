@@ -82,11 +82,16 @@ cc_library_static {
     export_header_lib_headers: ["chre_flatbuffers"],
     shared_libs: [
         "android.hardware.contexthub-V3-ndk",
+        "libaconfig_storage_read_api_cc",
         "libbase",
         "libbinder_ndk",
         "libcutils",
         "liblog",
         "libutils",
+        "server_configurable_flags",
+    ],
+    static_libs: [
+        "chre_flags_c_lib",
     ],
     cflags: [
         "-DCHRE_IS_HOST_BUILD",
@@ -534,6 +539,7 @@ cc_test_host {
         "android.frameworks.stats-V2-ndk",
         "android.hardware.contexthub-V3-ndk",
         "chre_atoms_log",
+        "libaconfig_storage_read_api_cc",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -541,7 +547,6 @@ cc_test_host {
         "liblog",
         "libutils",
         "server_configurable_flags",
-        "libaconfig_storage_read_api_cc",
     ],
     header_libs: [
         "chre_api",
@@ -657,6 +662,7 @@ cc_library_static {
         "platform/linux/task_util/task.cc",
         "platform/linux/task_util/task_manager.cc",
         "platform/shared/pal_system_api.cc",
+        "util/duplicate_message_detector.cc",
         "util/dynamic_vector_base.cc",
     ],
     export_include_dirs: [
@@ -1024,6 +1030,7 @@ cc_defaults {
         "platform/shared/host_protocol_common.cc",
     ],
     shared_libs: [
+        "libaconfig_storage_read_api_cc",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -1031,7 +1038,6 @@ cc_defaults {
         "liblog",
         "libutils",
         "server_configurable_flags",
-        "libaconfig_storage_read_api_cc",
     ],
     static_libs: [
         "chre_config_util",
@@ -1127,5 +1133,5 @@ cc_aconfig_library {
     name: "chre_flags_c_lib",
     aconfig_declarations: "chre_flags",
     host_supported: true,
-    vendor: true,
+    vendor_available: true,
 }
