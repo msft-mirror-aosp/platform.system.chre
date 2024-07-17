@@ -76,6 +76,16 @@ flag {
 }
 
 flag {
+  name: "bug_fix_hal_reliable_message_record"
+  namespace: "context_hub"
+  description: "A flag guarding the fix of how the Context Hub HAL stores the reliable message records."
+  bug: "333567700"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "fix_api_check"
   namespace: "context_hub"
   description: "Fixes API check errors in Context Hub classes"
