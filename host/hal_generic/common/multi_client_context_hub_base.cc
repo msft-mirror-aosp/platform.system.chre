@@ -201,7 +201,7 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
+  LOGD("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
   auto nanoappBuffer =
@@ -261,7 +261,7 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
                                                            appId)) {
     return fromResult(false);
   }
-  LOGI("Unloading nanoapp 0x%" PRIx64, appId);
+  LOGD("Unloading nanoapp 0x%" PRIx64, appId);
   HalClientId clientId = mHalClientManager->getClientId(pid);
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeUnloadNanoappRequest(
@@ -550,7 +550,7 @@ bool MultiClientContextHubBase::enableTestMode() {
   // Unload each nanoapp.
   // mTestModeNanoapps tracks nanoapps that are actually unloaded. Removing an
   // element from std::vector is O(n) but such a removal should rarely happen.
-  LOGI("Trying to unload %" PRIu64 " nanoapps to enable test mode",
+  LOGD("Trying to unload %" PRIu64 " nanoapps to enable test mode",
        mTestModeNanoapps->size());
   for (auto iter = mTestModeNanoapps->begin();
        iter != mTestModeNanoapps->end();) {
@@ -581,7 +581,7 @@ bool MultiClientContextHubBase::enableTestMode() {
     mEventLogger.logNanoappUnload(appId, success);
   }
 
-  LOGI("%" PRIu64 " nanoapps are unloaded to enable test mode",
+  LOGD("%" PRIu64 " nanoapps are unloaded to enable test mode",
        mTestModeNanoapps->size());
   mIsTestModeEnabled = true;
   mTestModeNanoapps.emplace();
@@ -595,7 +595,7 @@ void MultiClientContextHubBase::disableTestMode() {
   }
   int numOfNanoappsLoaded =
       mPreloadedNanoappLoader->loadPreloadedNanoapps(mTestModeSystemNanoapps);
-  LOGI("%d nanoapps are reloaded to recover from test mode",
+  LOGD("%d nanoapps are reloaded to recover from test mode",
        numOfNanoappsLoaded);
   mIsTestModeEnabled = false;
 }
@@ -718,7 +718,7 @@ void MultiClientContextHubBase::onDebugDumpComplete(
 
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
-  LOGI("Received nanoapp list response for client %" PRIu16, clientId);
+  LOGD("Received a nanoapp list response for client %" PRIu16, clientId);
   {
     std::unique_lock<std::mutex> lock(mTestModeMutex);
     if (!mTestModeNanoapps.has_value()) {
@@ -848,9 +848,10 @@ void MultiClientContextHubBase::onNanoappUnloadResponse(
     mEventLogger.logNanoappUnload(*nanoappId, response.success);
     if (auto callback = mHalClientManager->getCallback(clientId);
         callback != nullptr) {
-      LOGI("Unload transaction %" PRIu32 " for nanoapp 0x%" PRIx64
-           " client id %" PRIu16 " is finished",
-           response.transaction_id, *nanoappId, clientId);
+      LOGD("Unload transaction %" PRIu32 " for nanoapp 0x%" PRIx64
+           " client id %" PRIu16 " is finished: %s",
+           response.transaction_id, *nanoappId, clientId,
+           response.success ? "success" : "failure");
       callback->handleTransactionResult(response.transaction_id,
                                         /* in_success= */ response.success);
     }
@@ -877,7 +878,15 @@ void MultiClientContextHubBase::onNanoappMessage(
     outMessage.messageSequenceNumber = 0;
   }
 
-  auto messageContentPerms =
+  std::string messageSeq = "reliable message seq=" +
+                           std::to_string(outMessage.messageSequenceNumber);
+  LOGD("Received a nanoapp message from 0x%" PRIx64 " endpoint 0x%" PRIx16
+       ": Type 0x%" PRIx32 " size %zu %s",
+       outMessage.nanoappId, outMessage.hostEndPoint, outMessage.messageType,
+       outMessage.messageBody.size(),
+       outMessage.isReliable ? messageSeq.c_str() : "");
+
+  std::vector<std::string> messageContentPerms =
       chreToAndroidPermissions(message.message_permissions);
   // broadcast message is sent to every connected endpoint
   if (message.host_endpoint == CHRE_HOST_ENDPOINT_BROADCAST) {
@@ -938,7 +947,7 @@ void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
   LOGI("Process %d is dead. Cleaning up.", clientPid);
   if (auto endpoints = mHalClientManager->getAllConnectedEndpoints(clientPid)) {
     for (auto endpointId : *endpoints) {
-      LOGI("Sending message to remove endpoint 0x%" PRIx16, endpointId);
+      LOGD("Sending message to remove endpoint 0x%" PRIx16, endpointId);
       if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(clientPid,
                                                                endpointId)) {
         continue;
