@@ -26,6 +26,7 @@
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
 #include "chre/platform/log.h"
+#include "chre/target_platform/log.h"
 #include "chre/util/duplicate_message_detector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
@@ -440,13 +441,16 @@ void HostCommsManager::onTransactionAttempt(uint32_t messageSequenceNumber,
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByInstanceId(
           nanoappInstanceId);
   if (message == nullptr || nanoapp == nullptr) {
-    LOGE("Attempted to retry reliable message %" PRIu32 " from nanoapp %" PRIu16
+    LOGE("Attempted to send reliable message %" PRIu32 " from nanoapp %" PRIu16
          " but couldn't find:%s%s",
          messageSequenceNumber, nanoappInstanceId,
          (message == nullptr) ? " msg" : "",
          (nanoapp == nullptr) ? " napp" : "");
   } else {
-    doSendMessageToHostFromNanoapp(nanoapp, message);
+    bool success = doSendMessageToHostFromNanoapp(nanoapp, message);
+    LOGD("Attempted to send reliable message %" PRIu32 " from nanoapp %" PRIu16
+         " with success: %s",
+         messageSequenceNumber, nanoappInstanceId, success ? "true" : "false");
   }
 }
 
