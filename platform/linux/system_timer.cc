@@ -39,7 +39,11 @@ void NanosecondsToTimespec(uint64_t ns, struct timespec *ts) {
 
 void SystemTimerBase::systemTimerNotifyCallback(union sigval cookie) {
   SystemTimer *sysTimer = static_cast<SystemTimer *>(cookie.sival_ptr);
-  sysTimer->mCallback(sysTimer->mData);
+
+  {
+    std::lock_guard<std::mutex> lock(sysTimer->mMutex);
+    sysTimer->mCallback(sysTimer->mData);
+  }
 }
 
 SystemTimer::SystemTimer() {}
@@ -77,28 +81,30 @@ bool SystemTimer::init() {
 
 bool SystemTimer::set(SystemTimerCallback *callback, void *data,
                       Nanoseconds delay) {
+  if (!mInitialized) {
+    return false;
+  }
+
   // 0 has a special meaning in POSIX, i.e. cancel the timer. In our API, a
   // value of 0 just means fire right away.
   if (delay.toRawNanoseconds() == 0) {
     delay = Nanoseconds(1);
   }
 
-  if (mInitialized) {
+  {
+    std::lock_guard<std::mutex> lock(mMutex);
     mCallback = callback;
     mData = data;
-    return setInternal(delay.toRawNanoseconds());
-  } else {
-    return false;
   }
+  return setInternal(delay.toRawNanoseconds());
 }
 
 bool SystemTimer::cancel() {
   if (mInitialized) {
     // Setting delay to 0 disarms the timer.
     return setInternal(0);
-  } else {
-    return false;
   }
+  return false;
 }
 
 bool SystemTimer::isActive() {
@@ -119,7 +125,6 @@ bool SystemTimer::isActive() {
 bool SystemTimerBase::setInternal(uint64_t delayNs) {
   constexpr int kFlags = 0;
   struct itimerspec spec = {};
-  bool success = false;
 
   NanosecondsToTimespec(delayNs, &spec.it_value);
   NanosecondsToTimespec(0, &spec.it_interval);
@@ -127,11 +132,9 @@ bool SystemTimerBase::setInternal(uint64_t delayNs) {
   int ret = timer_settime(mTimerId, kFlags, &spec, nullptr);
   if (ret != 0) {
     LOGE("Couldn't set timer: %s", strerror(errno));
-  } else {
-    success = true;
+    return false;
   }
-
-  return success;
+  return true;
 }
 
 }  // namespace chre
