@@ -245,8 +245,12 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
 
   //! How long we'll wait before timing out a reliable message.
   static constexpr Nanoseconds kReliableMessageTimeout =
-      Nanoseconds(kReliableMessageRetryWaitTime.toRawNanoseconds() *
-                  kReliableMessageMaxAttempts);
+      kReliableMessageRetryWaitTime * kReliableMessageMaxAttempts;
+
+  //! How long we'll wait before removing a duplicate message record from the
+  //! duplicate message detector.
+  static constexpr Nanoseconds kReliableMessageDuplicateDetectorTimeout =
+      kReliableMessageTimeout * 3;
 
   //! The maximum number of messages we can have outstanding at any given time.
   static constexpr size_t kMaxOutstandingMessages = 32;
