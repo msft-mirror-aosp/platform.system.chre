@@ -248,7 +248,7 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
     const void *messageData, size_t messageSize, bool isReliable,
     uint32_t messageSequenceNumber) {
-  [[maybe_unused]] chreError error;
+  [[maybe_unused]] chreError error = CHRE_ERROR_NONE;
 
   if (hostEndpoint == kHostEndpointBroadcast) {
     LOGE("Received invalid message from host from broadcast endpoint");
@@ -259,44 +259,32 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     // this, but the check ensures we're on the up and up.
     LOGE("Rejecting message of size %zu (too big)", messageSize);
     error = CHRE_ERROR_NO_MEMORY;
-  } else {
-    // Detect duplicate reliable messages.
-    bool doSendMessageToNanoapp = true;
-#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    if (isReliable) {
-      doSendMessageToNanoapp = shouldSendReliableMessageToNanoapp(
-          messageSequenceNumber, hostEndpoint);
-    }
-#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  } else if (!isReliable || shouldSendReliableMessageToNanoapp(
+                                messageSequenceNumber, hostEndpoint)) {
+    MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
+        appId, hostEndpoint, messageType, messageData,
+        static_cast<uint32_t>(messageSize), isReliable, messageSequenceNumber);
+    if (craftedMessage == nullptr) {
+      LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
+           "(size %zu)",
+           appId, messageSize);
+      error = CHRE_ERROR_NO_MEMORY;
+    } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
+      LOGV("Deferring message; destination app ID 0x%016" PRIx64
+           " not found at this time",
+           appId);
 
-    if (doSendMessageToNanoapp) {
-      MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
-          appId, hostEndpoint, messageType, messageData,
-          static_cast<uint32_t>(messageSize), isReliable,
-          messageSequenceNumber);
-      if (craftedMessage == nullptr) {
-        LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
-             "(size %zu)",
-             appId, messageSize);
-        error = CHRE_ERROR_NO_MEMORY;
-      } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
-        LOGV("Deferring message; destination app ID 0x%016" PRIx64
-             " not found at this time",
-             appId);
-
-        auto callback = [](uint16_t /*type*/, void *data,
-                           void * /*extraData*/) {
-          EventLoopManagerSingleton::get()
-              ->getHostCommsManager()
-              .sendDeferredMessageToNanoappFromHost(
-                  static_cast<MessageFromHost *>(data));
-        };
-        if (!EventLoopManagerSingleton::get()->deferCallback(
-                SystemCallbackType::DeferredMessageToNanoappFromHost,
-                craftedMessage, callback)) {
-          error = CHRE_ERROR_BUSY;
-          mMessagePool.deallocate(craftedMessage);
-        }
+      auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
+        EventLoopManagerSingleton::get()
+            ->getHostCommsManager()
+            .sendDeferredMessageToNanoappFromHost(
+                static_cast<MessageFromHost *>(data));
+      };
+      if (!EventLoopManagerSingleton::get()->deferCallback(
+              SystemCallbackType::DeferredMessageToNanoappFromHost,
+              craftedMessage, callback)) {
+        error = CHRE_ERROR_BUSY;
+        mMessagePool.deallocate(craftedMessage);
       }
     }
   }
@@ -542,21 +530,22 @@ bool HostCommsManager::shouldSendReliableMessageToNanoapp(
     [[maybe_unused]] uint32_t messageSequenceNumber,
     [[maybe_unused]] uint16_t hostEndpoint) {
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-  Optional<chreError> pastError =
-      mDuplicateMessageDetector.findOrAdd(messageSequenceNumber,
-                                          hostEndpoint);
-  if (pastError.has_value()) {
-    if (pastError.value() == CHRE_ERROR_BUSY ||
-        pastError.value() == CHRE_ERROR_TRANSIENT) {
-      LOGW("Duplicate message with message sequence number: %" PRIu32
-            " and host endpoint: 0x%" PRIx16 " was detected. Retrying.",
-            messageSequenceNumber, hostEndpoint);
-    } else {
-      LOGW("Duplicate message with message sequence number: %" PRIu32
-            " and host endpoint: 0x%" PRIx16 " was detected. "
-            "Not sending message to nanoapp.",
-            messageSequenceNumber, hostEndpoint);
-      sendMessageDeliveryStatus(messageSequenceNumber, pastError.value());
+  bool isDuplicate;
+  Optional<chreError> pastError = mDuplicateMessageDetector.findOrAdd(
+      messageSequenceNumber, hostEndpoint, &isDuplicate);
+
+  if (isDuplicate) {
+    bool isTransientFailure =
+        pastError.has_value() && (pastError.value() == CHRE_ERROR_BUSY ||
+                                  pastError.value() == CHRE_ERROR_TRANSIENT);
+    LOGW("Duplicate message with message sequence number: %" PRIu32
+         " and host endpoint: 0x%" PRIx16 " was detected. %s",
+         messageSequenceNumber, hostEndpoint,
+         isTransientFailure ? "Retrying." : "Not sending message to nanoapp.");
+    if (!isTransientFailure) {
+      if (pastError.has_value()) {
+        sendMessageDeliveryStatus(messageSequenceNumber, pastError.value());
+      }
       return false;
     }
   }
