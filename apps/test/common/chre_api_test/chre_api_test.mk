@@ -25,6 +25,7 @@ COMMON_SRCS += $(NANOAPP_PATH)/src/chre_api_test.cc
 # Utilities ####################################################################
 
 COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/ble.cc
+COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/string.cc
 
 # Compiler Flags ###############################################################
 
@@ -40,7 +41,9 @@ COMMON_CFLAGS += -I$(NANOAPP_PATH)/inc
 # Permission declarations ######################################################
 
 CHRE_NANOAPP_USES_BLE = true
+CHRE_NANOAPP_USES_AUDIO = true
 
 # PW RPC protos ################################################################
 
 PW_RPC_SRCS = $(NANOAPP_PATH)/rpc/chre_api_test.proto
+PW_RPC_SRCS += $(ANDROID_BUILD_TOP)/external/protobuf/src/google/protobuf/empty.proto

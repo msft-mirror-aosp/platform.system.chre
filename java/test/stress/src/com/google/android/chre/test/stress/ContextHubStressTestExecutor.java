@@ -15,6 +15,11 @@
  */
 package com.google.android.chre.test.stress;
 
+import static android.Manifest.permission.BLUETOOTH_CONNECT;
+import static android.Manifest.permission.BLUETOOTH_SCAN;
+import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
+import static android.Manifest.permission.ACCESS_FINE_LOCATION;
+
 import android.app.Instrumentation;
 import android.content.Context;
 import android.hardware.location.ContextHubClient;
@@ -31,6 +36,7 @@ import androidx.test.InstrumentationRegistry;
 
 import com.google.android.chre.nanoapp.proto.ChreStressTest;
 import com.google.android.chre.nanoapp.proto.ChreTestCommon;
+import com.google.android.utils.chre.BleHostClientUtil;
 import com.google.android.utils.chre.ChreTestUtil;
 import com.google.protobuf.InvalidProtocolBufferException;
 
@@ -175,7 +181,7 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
      * @param timeout The amount of time to run the stress test.
      * @param unit    The unit for timeout.
      */
-    public void runStressTest(long timeout, TimeUnit unit) {
+    public void runStressTest(long timeout, TimeUnit unit) throws InterruptedException {
         ChreStressTest.TestCommand.Feature[] features = {
                 ChreStressTest.TestCommand.Feature.WIFI_ON_DEMAND_SCAN,
                 ChreStressTest.TestCommand.Feature.GNSS_LOCATION,
@@ -194,11 +200,8 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
         }
 
         if (!mLoadAndStartOnly) {
-            try {
-                mCountDownLatch.await(timeout, unit);
-            } catch (InterruptedException e) {
-                Assert.fail(e.getMessage());
-            }
+            boolean success = mCountDownLatch.await(timeout, unit);
+            Assert.assertTrue("Timeout waiting for signal", success);
 
             checkTestFailure();
 
@@ -233,7 +236,7 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
      * 4. Keep the nanoapp loaded, and then run this test.
      * 5. Unload the nanoapp after this test ends.
      */
-    public void runWifiScanMonitorRestartTest() {
+    public void runWifiScanMonitorRestartTest() throws InterruptedException {
         // Since the host connection may have reset, inform the nanoapp about this event.
         NanoAppMessage message = NanoAppMessage.createMessageToNanoApp(
                 mNanoAppId, ChreStressTest.MessageType.TEST_HOST_RESTARTED_VALUE,
@@ -246,11 +249,8 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
                 new byte[0]);
         sendMessageToNanoApp(message);
 
-        try {
-            mCountDownLatch.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Assert.fail(e.getMessage());
-        }
+        boolean success = mCountDownLatch.await(30, TimeUnit.SECONDS);
+        Assert.assertTrue("Timeout waiting for signal: wifi scan monitor restart test", success);
 
         if ((mCapabilities.getWifi() & WIFI_CAPABILITIES_SCAN_MONITORING) != 0) {
             WifiManager manager =
@@ -262,11 +262,8 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
             mCountDownLatch = new CountDownLatch(1);
             Assert.assertTrue(manager.startScan());
 
-            try {
-                mCountDownLatch.await(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Assert.fail(e.getMessage());
-            }
+            success = mCountDownLatch.await(30, TimeUnit.SECONDS);
+            Assert.assertTrue("Timeout waiting for signal: trigger scan monitor", success);
             Assert.assertTrue(mWifiScanMonitorTriggered.get());
             checkTestFailure();
         }
@@ -280,6 +277,25 @@ public class ContextHubStressTestExecutor extends ContextHubClientCallback {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
             Assert.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * Tests concurrent BLE scans from the AP and from CHRE.
+     */
+    public void runBleScanConcurrencyStressTest() throws InterruptedException {
+        sendTestMessage(ChreStressTest.TestCommand.Feature.BLE, true /* start */);
+
+        mInstrumentation.getUiAutomation().adoptShellPermissionIdentity(BLUETOOTH_SCAN,
+                BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED, ACCESS_FINE_LOCATION);
+        BleHostClientUtil bleClient = new BleHostClientUtil(mInstrumentation.getContext());
+        Assert.assertTrue("BLE capabilities are available", bleClient.isBleAvailable());
+
+        while (true) {
+            mCountDownLatch = new CountDownLatch(1);
+            bleClient.start();
+            mCountDownLatch.await(100, TimeUnit.MILLISECONDS);
+            bleClient.stop();
         }
     }
 

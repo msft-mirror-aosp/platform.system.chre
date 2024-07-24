@@ -21,6 +21,7 @@
 
 #include <hardware_legacy/power.h>
 #include <sys/ioctl.h>
+#include <utils/SystemClock.h>
 #include <cerrno>
 #include <thread>
 
@@ -79,7 +80,6 @@ bool TinysysChreConnection::init() {
          errno);
     return false;
   }
-  mLogger.init();
   // launch the tasks
   mMessageListener = std::thread(messageListenerTask, this);
   mMessageSender = std::thread(messageSenderTask, this);
@@ -131,10 +131,13 @@ bool TinysysChreConnection::init() {
            chreNextState);
     }
     if (chreCurrentState == SCP_CHRE_STOP && chreNextState == SCP_CHRE_START) {
-      // TODO(b/277128368): We should have an explicit indication from CHRE for
-      // restart recovery.
-      LOGW("SCP restarted. Give it 5s for recovery before notifying clients");
-      std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+      int64_t startTime = ::android::elapsedRealtime();
+      // Though usually CHRE is recovered within 1s after SCP is up, in a corner
+      // case it can go beyond 5s. Wait for 10s to cover more extreme cases.
+      chreConnection->waitChreBackOnline(
+          /* timeoutMs= */ std::chrono::milliseconds(10000));
+      LOGW("SCP restarted! CHRE recover time: %" PRIu64 "ms.",
+           ::android::elapsedRealtime() - startTime);
       chreConnection->getCallback()->onChreRestarted();
     }
     chreCurrentState = chreNextState;
@@ -188,22 +191,16 @@ void TinysysChreConnection::handleMessageFromChre(
        messageType, messageLen, hostClientId);
 
   switch (messageType) {
-    case fbs::ChreMessage::LogMessageV2: {
-      std::unique_ptr<fbs::MessageContainerT> container =
-          fbs::UnPackMessageContainer(messageBuffer);
-      const auto *logMessage = container->message.AsLogMessageV2();
-      const std::vector<int8_t> &buffer = logMessage->buffer;
-      const auto *logData = reinterpret_cast<const uint8_t *>(buffer.data());
-      uint32_t numLogsDropped = logMessage->num_logs_dropped;
-      chreConnection->mLogger.logV2(logData, buffer.size(), numLogsDropped);
-      break;
-    }
     case fbs::ChreMessage::LowPowerMicAccessRequest: {
       chreConnection->getLpmaHandler()->enable(/* enabled= */ true);
       break;
     }
     case fbs::ChreMessage::LowPowerMicAccessRelease: {
       chreConnection->getLpmaHandler()->enable(/* enabled= */ false);
+      break;
+    }
+    case fbs::ChreMessage::PulseResponse: {
+      chreConnection->notifyChreBackOnline();
       break;
     }
     case fbs::ChreMessage::MetricLog:

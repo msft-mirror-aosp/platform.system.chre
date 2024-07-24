@@ -186,6 +186,11 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         break;
       }
 
+      case fbs::ChreMessage::PulseRequest: {
+        HostMessageHandlers::handlePulseRequest();
+        break;
+      }
+
       default:
         LOGW("Got invalid/unexpected message type %" PRIu8,
              static_cast<uint8_t>(container->message_type()));
@@ -251,6 +256,11 @@ void HostProtocolChre::finishNanoappListResponse(
            hostClientId);
 }
 
+void HostProtocolChre::encodePulseResponse(ChreFlatBufferBuilder &builder) {
+  auto response = fbs::CreatePulseResponse(builder);
+  finalize(builder, fbs::ChreMessage::PulseResponse, response.Union());
+}
+
 void HostProtocolChre::encodeLoadNanoappResponse(ChreFlatBufferBuilder &builder,
                                                  uint16_t hostClientId,
                                                  uint32_t transactionId,
@@ -260,6 +270,15 @@ void HostProtocolChre::encodeLoadNanoappResponse(ChreFlatBufferBuilder &builder,
                                                  success, fragmentId);
   finalize(builder, fbs::ChreMessage::LoadNanoappResponse, response.Union(),
            hostClientId);
+}
+
+void HostProtocolChre::encodeNanoappTokenDatabaseInfo(
+    ChreFlatBufferBuilder &builder, uint16_t instanceId, uint64_t appId,
+    uint32_t tokenDatabaseOffset, size_t tokenDatabaseSize) {
+  auto response = fbs::CreateNanoappTokenDatabaseInfo(
+      builder, instanceId, appId, tokenDatabaseOffset, tokenDatabaseSize);
+  finalize(builder, fbs::ChreMessage::NanoappTokenDatabaseInfo,
+           response.Union());
 }
 
 void HostProtocolChre::encodeUnloadNanoappResponse(
