@@ -20,6 +20,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "chre/core/nanoapp.h"
+#include "chre/core/timer_pool.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/host_link.h"
 #include "chre/util/buffer.h"
@@ -271,7 +273,7 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   DuplicateMessageDetector mDuplicateMessageDetector;
 
   //! The transaction manager for reliable messages.
-  TransactionManager<kMaxOutstandingMessages> mTransactionManager;
+  TransactionManager<kMaxOutstandingMessages, TimerPool> mTransactionManager;
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
   /**
