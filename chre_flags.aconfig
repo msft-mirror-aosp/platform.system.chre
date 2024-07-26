@@ -2,34 +2,6 @@ package: "android.chre.flags"
 container: "system"
 
 flag {
-  name: "flag_log_nanoapp_load_metrics"
-  namespace: "context_hub"
-  description: "This flag controls nanoapp load failure logging in the HAL and the addition of MetricsReporter"
-  bug: "298459533"
-}
-
-flag {
-  name: "metrics_reporter_in_the_daemon"
-  namespace: "context_hub"
-  description: "This flag controls the addition of MetricsReporter into the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
-  name: "wait_for_preloaded_nanoapp_start"
-  namespace: "context_hub"
-  description: "This flag controls the waiting-for-nanoapp-start behavior in the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
-  name: "remove_ap_wakeup_metric_report_limit"
-  namespace: "context_hub"
-  description: "This flag controls removing a count limit on reporting the AP wakeup metric"
-  bug: "298459533"
-}
-
-flag {
   name: "context_hub_callback_uuid_enabled"
   namespace: "context_hub"
   description: "Call IContextHubCallback.getUuid() to retrieve the UUID when this flag is on"
@@ -55,6 +27,16 @@ flag {
   namespace: "context_hub"
   description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
   bug: "348253728"
+}
+
+flag {
+  name: "bug_fix_reduce_lock_holding_period"
+  namespace: "context_hub"
+  description: "A flag guarding the fix of reducing lock holding period to avoid deadlock."
+  bug: "347392749"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }
 
 flag {
@@ -91,6 +73,16 @@ flag {
   namespace: "context_hub"
   description: "Enables test mode behaviors in the Context Hub Service for reliable messages"
   bug: "333567339"
+}
+
+flag {
+  name: "bug_fix_hal_reliable_message_record"
+  namespace: "context_hub"
+  description: "A flag guarding the fix of how the Context Hub HAL stores the reliable message records."
+  bug: "333567700"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }
 
 flag {

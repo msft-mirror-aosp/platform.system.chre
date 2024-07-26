@@ -31,6 +31,7 @@
 #include "location/lbs/contexthub/nanoapps/proto/filter.nanopb.h"
 #include "third_party/contexthub/chre/util/include/chre/util/macros.h"
 #include "third_party/contexthub/chre/util/include/chre/util/nanoapp/log.h"
+#include "third_party/contexthub/chre/util/include/chre/util/time.h"
 
 #define LOG_TAG "[NEARBY][APP_MANAGER]"
 
@@ -42,7 +43,11 @@ using ::chre::Nanoseconds;
 
 AppManager::AppManager() {
   fp_filter_cache_time_nanosec_ = chreGetTime();
+  last_tracker_report_flush_time_nanosec_ = chreGetTime();
   tracker_storage_.SetCallback(this);
+  // Enable host awake and sleep state events to opportunistically flush the
+  // tracker reports to the host.
+  chreConfigureHostSleepStateEvents(true /* enable */);
 #ifdef NEARBY_PROFILE
   ashProfileInit(
       &profile_data_, "[NEARBY_MATCH_ADV_PERF]", 1000 /* print_interval_ms */,
@@ -112,6 +117,9 @@ void AppManager::HandleEvent(uint32_t sender_instance_id, uint16_t event_type,
       if (event_data == &ble_scan_keep_alive_timer_id) {
         tracker_storage_.Refresh(tracker_filter_.GetBatchConfig());
       }
+      break;
+    case CHRE_EVENT_HOST_AWAKE:
+      HandleHostAwakeEvent();
       break;
     default:
       LOGD("Unknown event type: %" PRIu16, event_type);
@@ -615,6 +623,20 @@ const char *AppManager::GetExtConfigNameFromTag(pb_size_t config_tag) {
   }
 }
 
+void AppManager::HandleHostAwakeEvent() {
+  // Send tracker reports to host when receive host awake event.
+  uint64_t current_time = chreGetTime();
+  uint64_t flush_threshold_nanosec =
+      tracker_filter_.GetBatchConfig().opportunistic_flush_threshold_time_ms *
+      chre::kOneMillisecondInNanoseconds;
+  if (current_time - last_tracker_report_flush_time_nanosec_ >=
+      flush_threshold_nanosec) {
+    LOGI("Flush tracker reports by host awake event.");
+    SendTrackerReportsToHost(tracker_storage_.GetBatchReports());
+    tracker_storage_.Clear();
+  }
+}
+
 void AppManager::OnTrackerStorageFullEvent() {
   SendTrackerStorageFullEventToHost();
 }
@@ -668,6 +690,7 @@ void AppManager::SendTrackerStorageFullEventToHost() {
 
 void AppManager::SendTrackerReportsToHost(
     chre::DynamicVector<TrackerReport> &tracker_reports) {
+  last_tracker_report_flush_time_nanosec_ = chreGetTime();
   uint16_t host_end_point = tracker_filter_.GetHostEndPoint();
   for (auto &tracker_report : tracker_reports) {
     size_t encoded_size;

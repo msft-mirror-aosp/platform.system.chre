@@ -26,8 +26,11 @@
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
 #include "chre/platform/log.h"
+#include "chre/target_platform/log.h"
+#include "chre/util/duplicate_message_detector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
+#include "chre/util/optional.h"
 #include "chre_api/chre.h"
 
 namespace chre {
@@ -71,7 +74,8 @@ bool shouldAcceptMessageToHostFromNanoapp(Nanoapp *nanoapp, void *messageData,
 
 HostCommsManager::HostCommsManager()
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-    : mTransactionManager(
+    : mDuplicateMessageDetector(kReliableMessageDuplicateDetectorTimeout),
+      mTransactionManager(
           *this,
           EventLoopManagerSingleton::get()->getEventLoop().getTimerPool(),
           kReliableMessageRetryWaitTime, kReliableMessageMaxAttempts)
@@ -184,8 +188,10 @@ void HostCommsManager::sendDeferredMessageToNanoappFromHost(
          " still not found",
          craftedMessage->appId);
     if (craftedMessage->isReliable) {
-      sendMessageDeliveryStatus(craftedMessage->messageSequenceNumber,
-                                CHRE_ERROR_DESTINATION_NOT_FOUND);
+      handleDuplicateAndSendMessageDeliveryStatus(
+          craftedMessage->messageSequenceNumber,
+          craftedMessage->fromHostData.hostEndpoint,
+          CHRE_ERROR_DESTINATION_NOT_FOUND);
     }
     mMessagePool.deallocate(craftedMessage);
   } else {
@@ -242,17 +248,19 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
     const void *messageData, size_t messageSize, bool isReliable,
     uint32_t messageSequenceNumber) {
-  chreError error = CHRE_ERROR_NONE;
+  [[maybe_unused]] chreError error = CHRE_ERROR_NONE;
+
   if (hostEndpoint == kHostEndpointBroadcast) {
     LOGE("Received invalid message from host from broadcast endpoint");
     error = CHRE_ERROR_INVALID_ARGUMENT;
-  } else if (messageSize > ((UINT32_MAX))) {
+  } else if (messageSize > UINT32_MAX) {
     // The current CHRE API uses uint32_t to represent the message size in
     // struct chreMessageFromHostData. We don't expect to ever need to exceed
     // this, but the check ensures we're on the up and up.
     LOGE("Rejecting message of size %zu (too big)", messageSize);
     error = CHRE_ERROR_NO_MEMORY;
-  } else {
+  } else if (!isReliable || shouldSendReliableMessageToNanoapp(
+                                messageSequenceNumber, hostEndpoint)) {
     MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
         appId, hostEndpoint, messageType, messageData,
         static_cast<uint32_t>(messageSize), isReliable, messageSequenceNumber);
@@ -281,9 +289,13 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     }
   }
 
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   if (isReliable && error != CHRE_ERROR_NONE) {
-    sendMessageDeliveryStatus(messageSequenceNumber, error);
+    handleDuplicateAndSendMessageDeliveryStatus(messageSequenceNumber,
+                                                hostEndpoint, error);
   }
+  mDuplicateMessageDetector.removeOldEntries();
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
@@ -331,8 +343,10 @@ bool HostCommsManager::deliverNanoappMessageFromHost(
         CHRE_EVENT_MESSAGE_FROM_HOST, &craftedMessage->fromHostData,
         freeMessageFromHostCallback, targetInstanceId);
     if (craftedMessage->isReliable) {
-      sendMessageDeliveryStatus(craftedMessage->messageSequenceNumber,
-                                CHRE_ERROR_NONE);
+      handleDuplicateAndSendMessageDeliveryStatus(
+          craftedMessage->messageSequenceNumber,
+          craftedMessage->fromHostData.hostEndpoint,
+          CHRE_ERROR_NONE);
     }
   }
 
@@ -415,13 +429,16 @@ void HostCommsManager::onTransactionAttempt(uint32_t messageSequenceNumber,
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByInstanceId(
           nanoappInstanceId);
   if (message == nullptr || nanoapp == nullptr) {
-    LOGE("Attempted to retry reliable message %" PRIu32 " from nanoapp %" PRIu16
+    LOGE("Attempted to send reliable message %" PRIu32 " from nanoapp %" PRIu16
          " but couldn't find:%s%s",
          messageSequenceNumber, nanoappInstanceId,
          (message == nullptr) ? " msg" : "",
          (nanoapp == nullptr) ? " napp" : "");
   } else {
-    doSendMessageToHostFromNanoapp(nanoapp, message);
+    bool success = doSendMessageToHostFromNanoapp(nanoapp, message);
+    LOGD("Attempted to send reliable message %" PRIu32 " from nanoapp %" PRIu16
+         " with success: %s",
+         messageSequenceNumber, nanoappInstanceId, success ? "true" : "false");
   }
 }
 
@@ -430,6 +447,23 @@ void HostCommsManager::onTransactionFailure(uint32_t messageSequenceNumber,
   LOGE("Reliable message %" PRIu32 " from nanoapp %" PRIu16 " timed out",
        messageSequenceNumber, nanoappInstanceId);
   handleMessageDeliveryStatusSync(messageSequenceNumber, CHRE_ERROR_TIMEOUT);
+}
+
+void HostCommsManager::handleDuplicateAndSendMessageDeliveryStatus(
+    [[maybe_unused]] uint32_t messageSequenceNumber,
+    [[maybe_unused]] uint16_t hostEndpoint,
+    [[maybe_unused]] chreError error) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  bool success = mDuplicateMessageDetector.findAndSetError(
+      messageSequenceNumber, hostEndpoint, error);
+  if (!success) {
+    LOGW("Failed to set error for message with message sequence number: %"
+          PRIu32 " and host endpoint: 0x%" PRIx16,
+          messageSequenceNumber,
+          hostEndpoint);
+  }
+  sendMessageDeliveryStatus(messageSequenceNumber, error);
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 void HostCommsManager::handleMessageDeliveryStatusSync(
@@ -490,6 +524,34 @@ void HostCommsManager::onMessageToHostCompleteInternal(
       freeMessageToHost(static_cast<MessageToHost *>(msgToHost));
     }
   }
+}
+
+bool HostCommsManager::shouldSendReliableMessageToNanoapp(
+    [[maybe_unused]] uint32_t messageSequenceNumber,
+    [[maybe_unused]] uint16_t hostEndpoint) {
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  bool isDuplicate;
+  Optional<chreError> pastError = mDuplicateMessageDetector.findOrAdd(
+      messageSequenceNumber, hostEndpoint, &isDuplicate);
+
+  if (isDuplicate) {
+    bool isTransientFailure =
+        pastError.has_value() && (pastError.value() == CHRE_ERROR_BUSY ||
+                                  pastError.value() == CHRE_ERROR_TRANSIENT);
+    LOGW("Duplicate message with message sequence number: %" PRIu32
+         " and host endpoint: 0x%" PRIx16 " was detected. %s",
+         messageSequenceNumber, hostEndpoint,
+         isTransientFailure ? "Retrying." : "Not sending message to nanoapp.");
+    if (!isTransientFailure) {
+      if (pastError.has_value()) {
+        sendMessageDeliveryStatus(messageSequenceNumber, pastError.value());
+      }
+      return false;
+    }
+  }
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+
+  return true;
 }
 
 }  // namespace chre
