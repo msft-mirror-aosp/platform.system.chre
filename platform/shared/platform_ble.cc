@@ -139,14 +139,8 @@ bool PlatformBle::readRssiAsync(uint16_t connectionHandle) {
 
 void PlatformBleBase::readRssiCallback(uint8_t errorCode,
                                        uint16_t connectionHandle, int8_t rssi) {
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
   EventLoopManagerSingleton::get()->getBleRequestManager().handleReadRssi(
       errorCode, connectionHandle, rssi);
-#else
-  UNUSED_VAR(errorCode);
-  UNUSED_VAR(connectionHandle);
-  UNUSED_VAR(rssi);
-#endif
 }
 
 bool PlatformBle::flushAsync() {
