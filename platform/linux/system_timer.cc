@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <string.h>
 #include <cinttypes>
+#include <mutex>
 
 namespace chre {
 
