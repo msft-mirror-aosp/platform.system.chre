@@ -301,6 +301,8 @@ bool EventLoop::hasNoSpaceForHighPriorityEvent() {
 bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
                                  uint16_t eventType,
                                  void *eventData) {
+  CHRE_ASSERT(inEventLoopThread());
+
   Event event(eventType, eventData,
               /* freeCallback= */ nullptr,
               /* isLowPriority= */ false,
