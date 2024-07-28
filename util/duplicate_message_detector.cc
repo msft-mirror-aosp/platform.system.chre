@@ -22,15 +22,24 @@
 namespace chre {
 
 Optional<chreError> DuplicateMessageDetector::findOrAdd(
-    uint32_t messageSequenceNumber, uint16_t hostEndpoint) {
+    uint32_t messageSequenceNumber, uint16_t hostEndpoint,
+    bool *outIsDuplicate) {
   LockGuard<Mutex> lock(mMutex);
 
   DuplicateMessageDetector::ReliableMessageRecord *record =
       findLocked(messageSequenceNumber, hostEndpoint);
+  if (outIsDuplicate != nullptr) {
+    *outIsDuplicate = record != nullptr;
+  }
+
   if (record == nullptr) {
     record = addLocked(messageSequenceNumber, hostEndpoint);
     if (record == nullptr) {
-      return Optional<chreError>();
+      LOG_OOM();
+      if (outIsDuplicate != nullptr) {
+        *outIsDuplicate = true;
+      }
+      return CHRE_ERROR_NO_MEMORY;
     }
   }
   return record->error;
