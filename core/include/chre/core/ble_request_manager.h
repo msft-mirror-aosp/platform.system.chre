@@ -87,7 +87,6 @@ class BleRequestManager : public NonCopyable {
    */
   bool stopScanAsync(Nanoapp *nanoapp, const void *cookie);
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
   /**
    * Requests to read the RSSI of a peer device on the given LE connection
    * handle.
@@ -115,7 +114,6 @@ class BleRequestManager : public NonCopyable {
    */
   bool readRssiAsync(Nanoapp *nanoapp, uint16_t connectionHandle,
                      const void *cookie);
-#endif
 
   /**
    * Initiates a flush operation where all batched advertisement events will be
@@ -178,7 +176,6 @@ class BleRequestManager : public NonCopyable {
    */
   void handleRequestStateResyncCallback();
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
   /**
    * Handles a readRssi response from the BLE PAL.
    *
@@ -189,7 +186,6 @@ class BleRequestManager : public NonCopyable {
    */
   void handleReadRssi(uint8_t errorCode, uint16_t connectionHandle,
                       int8_t rssi);
-#endif
 
   /**
    * Handler for the flush complete operation. Called when a flush operation is
@@ -278,7 +274,6 @@ class BleRequestManager : public NonCopyable {
   //! The timer handle for the flush operation. Used to track a flush timeout.
   TimerHandle mFlushRequestTimerHandle = CHRE_TIMER_INVALID;
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
   // A pending request from a nanoapp
   struct BleReadRssiRequest {
     uint16_t instanceId;
@@ -290,7 +285,6 @@ class BleRequestManager : public NonCopyable {
   // present) has been dispatched to the PAL, and subsequent entries are queued.
   static constexpr size_t kMaxPendingRssiRequests = 2;
   ArrayQueue<BleReadRssiRequest, kMaxPendingRssiRequests> mPendingRssiRequests;
-#endif
 
   // Struct to hold ble request data for logging
   struct BleRequestLog {
@@ -533,7 +527,6 @@ class BleRequestManager : public NonCopyable {
    */
   static bool isValidAdType(uint8_t adType);
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
   /**
    * Handles a readRssi response from the BLE PAL.
    * Runs in the context of the CHRE thread.
@@ -580,7 +573,6 @@ class BleRequestManager : public NonCopyable {
    * @return uint8_t the error code, with CHRE_ERROR_NONE indicating success
    */
   uint8_t readRssi(uint16_t connectionHandle);
-#endif
 
   /**
    * @return true if BLE setting is enabled.
