@@ -103,18 +103,9 @@ const char *getChreFlushTaskName();
 #endif
 
 BaseType_t init() {
-  BaseType_t rc = pdPASS;
-
-  DramVoteClientSingleton::init();
-
-  rc = initLogger();
-
-  if (rc == pdPASS) {
-    rc = xTaskCreate(chreThreadEntry, getChreTaskName(),
-                     kChreTaskStackDepthWords, nullptr /* args */,
-                     kChreTaskPriority, &gChreTaskHandle);
-  }
-
+  BaseType_t rc =
+      xTaskCreate(chreThreadEntry, getChreTaskName(), kChreTaskStackDepthWords,
+                  nullptr /* args */, kChreTaskPriority, &gChreTaskHandle);
   CHRE_ASSERT(rc == pdPASS);
 
 #ifdef CHRE_ENABLE_CHPP

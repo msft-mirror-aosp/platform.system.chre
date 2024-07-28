@@ -69,9 +69,12 @@ class DuplicateMessageDetector : public NonCopyable {
   //! Finds the message with the given message sequence number and host
   //! endpoint. If the message is not found, a new message is added to the
   //! detector. Returns the error code previously recorded for the message, or
-  //! an empty Optional if the message is not a duplicate.
+  //! an empty Optional if the message is not a duplicate. If outIsDuplicate is
+  //! not nullptr, it will be set to true if the message is a duplicate (was
+  //! found), or false otherwise.
   Optional<chreError> findOrAdd(uint32_t messageSequenceNumber,
-                                uint16_t hostEndpoint);
+                                uint16_t hostEndpoint,
+                                bool *outIsDuplicate = nullptr);
 
   //! Sets the error code for a message that has already been added to the
   //! detector. Returns true if the message was found and the error code was
