@@ -176,7 +176,7 @@ class WifiRequestManager : public NonCopyable {
    * Wifi scan.
    *
    * @param pending The result of the request was successful and the results
-   *        be sent via the handleScanEvent method.
+   *        will be sent via the handleScanEvent method.
    * @param errorCode an error code that is used to indicate success or what
    *        type of error has occurred. See the chreError enum in the CHRE API
    *        for additional details.
@@ -617,8 +617,8 @@ class WifiRequestManager : public NonCopyable {
    * thread. This method is intended to be invoked on the CHRE event loop
    * thread.
    *
-   * @param enabled true if the result of the operation was an enabled scan
-   *        monitor.
+   * @param pending The result of the request was successful and the results
+   *        will be sent via the handleScanEvent method.
    * @param errorCode an error code that is provided to indicate success or what
    *        type of error has occurred. See the chreError enum in the CHRE API
    *        for additional details.

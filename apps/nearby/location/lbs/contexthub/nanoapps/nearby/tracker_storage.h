@@ -32,6 +32,8 @@ struct TrackerBatchConfig {
   uint32_t max_history_count;
   // Timeout for tracker history to be considered lost.
   uint32_t lost_timeout_ms;
+  // Time based threshold for opportunistic flush of tracker reports.
+  uint32_t opportunistic_flush_threshold_time_ms;
 };
 
 enum class TrackerState {

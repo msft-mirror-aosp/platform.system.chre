@@ -87,6 +87,11 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     public static final int CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16 = 0x16;
 
     /**
+     * The advertisement type for manufacturer data.
+     */
+    public static final int CHRE_BLE_AD_TYPE_MANUFACTURER_DATA = 0xFF;
+
+    /**
      * The BLE advertisement event ID.
      */
     public static final int CHRE_EVENT_BLE_ADVERTISEMENT = 0x0350 + 1;
@@ -96,6 +101,11 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
      */
     public static final int CHRE_BLE_CAPABILITIES_SCAN = 1 << 0;
     public static final int CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA = 1 << 7;
+
+    /**
+     * CHRE BLE test manufacturer ID.
+     */
+    private static final int CHRE_BLE_TEST_MANUFACTURER_ID = 0xEEEE;
 
     private BluetoothAdapter mBluetoothAdapter = null;
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser = null;
@@ -217,10 +227,29 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     }
 
     /**
+     * Generates a BLE scan filter that filters only for the CHRE test manufacturer ID.
+     */
+    public static ChreApiTest.ChreBleScanFilter getManufacturerDataScanFilterChre() {
+        ChreApiTest.ChreBleScanFilter.Builder builder =
+                ChreApiTest.ChreBleScanFilter.newBuilder()
+                        .setRssiThreshold(RSSI_THRESHOLD);
+        ChreApiTest.ChreBleGenericFilter manufacturerFilter =
+                ChreApiTest.ChreBleGenericFilter.newBuilder()
+                        .setType(CHRE_BLE_AD_TYPE_MANUFACTURER_DATA)
+                        .setLength(2)
+                        .setData(ByteString.copyFrom(HexFormat.of().parseHex("EEEE")))
+                        .setMask(ByteString.copyFrom(HexFormat.of().parseHex("FFFF")))
+                        .build();
+        builder = builder.addScanFilters(manufacturerFilter);
+
+        return builder.build();
+    }
+
+    /**
      * Generates a BLE scan filter that filters only for the known Google beacons:
      * Google Eddystone and Nearby Fastpair.
      */
-    public static ChreApiTest.ChreBleScanFilter getDefaultScanFilter() {
+    public static ChreApiTest.ChreBleScanFilter getServiceDataScanFilterChre() {
         return getDefaultScanFilter(true /* useEddystone */, true /* useNearbyFastpair */);
     }
 
@@ -236,7 +265,7 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
      * Google Eddystone and Nearby Fastpair. We specify the filter data in (little-endian) LE
      * here as the CHRE code will take BE input and transform it to LE.
      */
-    public static List<ScanFilter> getDefaultScanFilterHost() {
+    public static List<ScanFilter> getServiceDataScanFilterHost() {
         assertThat(CHRE_BLE_AD_TYPE_SERVICE_DATA_WITH_UUID_16)
                 .isEqualTo(ScanRecord.DATA_TYPE_SERVICE_DATA_16_BIT);
 
@@ -254,6 +283,24 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
                 .build();
 
         return ImmutableList.of(scanFilter, scanFilter2);
+    }
+
+    /**
+     * Generates a BLE scan filter that filters only for the known CHRE test specific
+     * manufacturer ID.
+     */
+    public static List<ScanFilter> getManufacturerDataScanFilterHost() {
+        assertThat(CHRE_BLE_AD_TYPE_MANUFACTURER_DATA)
+                .isEqualTo(ScanRecord.DATA_TYPE_MANUFACTURER_SPECIFIC_DATA);
+
+        ScanFilter scanFilter = new ScanFilter.Builder()
+                .setAdvertisingDataTypeWithData(
+                        ScanRecord.DATA_TYPE_MANUFACTURER_SPECIFIC_DATA,
+                        ByteString.copyFrom(HexFormat.of().parseHex("EEEE")).toByteArray(),
+                        ByteString.copyFrom(HexFormat.of().parseHex("FFFF")).toByteArray())
+                .build();
+
+        return ImmutableList.of(scanFilter);
     }
 
     /**
@@ -337,7 +384,7 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
                 .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build();
-        mBluetoothLeScanner.startScan(getDefaultScanFilterHost(),
+        mBluetoothLeScanner.startScan(getServiceDataScanFilterHost(),
                 scanSettings, mScanCallback);
     }
 
@@ -356,7 +403,7 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
             return;
         }
 
-        AdvertisingSetParameters parameters = (new AdvertisingSetParameters.Builder())
+        AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setLegacyMode(true)
                 .setConnectable(false)
                 .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
@@ -370,15 +417,44 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
                 .build();
 
         mBluetoothLeAdvertiser.startAdvertisingSet(parameters, data,
-                null, null, null, mAdvertisingSetCallback);
+                /* ownAddress= */ null, /* periodicParameters= */ null,
+                /* periodicData= */ null, mAdvertisingSetCallback);
         mAdvertisingStartLatch.await();
         assertThat(mIsAdvertising.get()).isTrue();
     }
 
     /**
-     * Stops advertising Google Eddystone from the AP.
+     * Starts broadcasting the CHRE test manufacturer Data from the AP.
      */
-    public void stopBleAdvertisingGoogleEddystone() throws InterruptedException {
+    public void startBleAdvertisingManufacturer() throws InterruptedException {
+        if (mIsAdvertising.get()) {
+            return;
+        }
+
+        AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
+                .setLegacyMode(true)
+                .setConnectable(false)
+                .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .build();
+
+        AdvertiseData data = new AdvertiseData.Builder()
+                .addManufacturerData(CHRE_BLE_TEST_MANUFACTURER_ID, new byte[] {0})
+                .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(true)
+                .build();
+
+        mBluetoothLeAdvertiser.startAdvertisingSet(parameters, data,
+                /* ownAddress= */ null, /* periodicParameters= */ null,
+                /* periodicData= */ null, mAdvertisingSetCallback);
+        mAdvertisingStartLatch.await();
+        assertThat(mIsAdvertising.get()).isTrue();
+    }
+
+    /**
+     * Stops advertising data from the AP.
+     */
+    public void stopBleAdvertising() throws InterruptedException {
         if (!mIsAdvertising.get()) {
             return;
         }
