@@ -36,9 +36,9 @@ TEST(IntrusiveList, PushReadAndPop) {
   ListIntNode nodeD(3);
   IntrusiveList<int> testLinkedList;
 
-  testLinkedList.link_back(&nodeA);
   testLinkedList.link_back(&nodeB);
   testLinkedList.link_back(&nodeC);
+  testLinkedList.link_front(&nodeA);
   EXPECT_EQ(testLinkedList.size(), 3);
 
   EXPECT_EQ(testLinkedList.front().item, nodeA.item);
@@ -118,4 +118,23 @@ TEST(IntrusiveList, AccessMiddleTest) {
                             &testListIntNodes[1]);  // add back ListIntNode(1)
   EXPECT_EQ(testListIntNodes[0].node.next, &testListIntNodes[1].node);
   EXPECT_EQ(testLinkedList.size(), 5);
+}
+
+TEST(IntrusiveList, LinkFront) {
+  typedef ListNode<int> ListIntNode;
+  ListIntNode nodeA(0);
+  ListIntNode nodeB(1);
+
+  IntrusiveList<int> testLinkedList;
+  testLinkedList.link_front(&nodeA);
+  EXPECT_EQ(testLinkedList.size(), 1);
+  EXPECT_EQ(testLinkedList.front().item, nodeA.item);
+  EXPECT_EQ(testLinkedList.back().item, nodeA.item);
+
+  testLinkedList.link_front(&nodeB);
+  EXPECT_EQ(testLinkedList.size(), 2);
+  EXPECT_EQ(testLinkedList.front().item, nodeB.item);
+  EXPECT_EQ(testLinkedList.back().item, nodeA.item);
+  EXPECT_EQ(nodeB.node.next, &nodeA.node);
+  EXPECT_EQ(nodeA.node.prev, &nodeB.node);
 }

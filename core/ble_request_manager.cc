@@ -121,7 +121,6 @@ uint32_t BleRequestManager::disableActiveScan(const Nanoapp *nanoapp) {
   return 1;
 }
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
 bool BleRequestManager::readRssiAsync(Nanoapp *nanoapp,
                                       uint16_t connectionHandle,
                                       const void *cookie) {
@@ -143,7 +142,6 @@ bool BleRequestManager::readRssiAsync(Nanoapp *nanoapp,
       BleReadRssiRequest{nanoapp->getInstanceId(), connectionHandle, cookie});
   return true;
 }
-#endif
 
 bool BleRequestManager::flushAsync(Nanoapp *nanoapp, const void *cookie) {
   CHRE_ASSERT(nanoapp);
@@ -404,7 +402,6 @@ void BleRequestManager::handleRequestStateResyncCallbackSync() {
   }
 }
 
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
 void BleRequestManager::handleReadRssi(uint8_t errorCode,
                                        uint16_t connectionHandle, int8_t rssi) {
   struct readRssiResponse {
@@ -490,7 +487,6 @@ uint8_t BleRequestManager::readRssi(uint16_t connectionHandle) {
     return CHRE_ERROR;
   }
 }
-#endif
 
 void BleRequestManager::handleFlushComplete(uint8_t errorCode) {
   if (mFlushRequestTimerHandle != CHRE_TIMER_INVALID) {

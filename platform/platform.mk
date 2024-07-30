@@ -182,7 +182,6 @@ endif
 
 SLPI_QSH_SRCS += platform/slpi/see/island_vote_client.cc
 SLPI_QSH_SRCS += platform/slpi/see/power_control_manager.cc
-SLPI_QSH_SRCS += platform/slpi/qsh/qsh_proto_shim.cc
 
 ifeq ($(CHRE_USE_BUFFERED_LOGGING), true)
 SLPI_QSH_SRCS += platform/shared/log_buffer.cc
