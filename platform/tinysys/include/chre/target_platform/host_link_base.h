@@ -105,6 +105,14 @@ class HostLinkBase {
                         size_t /*logMessageSize*/,
                         uint32_t /*num_logs_dropped*/);
 
+  /**
+   * Enqueues a NAN configuration request to be sent to the host.
+   *
+   * @param enable Requests that NAN be enabled or disabled based on the
+   *        boolean's value.
+   */
+  void sendNanConfiguration(bool enable);
+
  private:
   AtomicBool mInitialized = false;
 };

@@ -20,6 +20,7 @@
 // IWYU pragma: private, include "transaction_manager.h"
 #include "chre/util/transaction_manager.h"
 
+#include "chre/core/event_loop_common.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/hash.h"
 

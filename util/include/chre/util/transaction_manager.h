@@ -19,7 +19,6 @@
 
 #include <cstdint>
 
-#include "chre/core/timer_pool.h"
 #include "chre/util/array_queue.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
@@ -70,7 +69,7 @@ class TransactionManagerCallback {
  * with the same signature and semantics as TimerPool::setSystemTimer() and
  * TimerPool::cancelSystemTimer()
  */
-template <size_t kMaxTransactions, class TimerPoolType = TimerPool>
+template <size_t kMaxTransactions, class TimerPoolType>
 class TransactionManager : public NonCopyable {
  public:
   /**
