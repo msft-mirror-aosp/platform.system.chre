@@ -20,9 +20,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "chre/core/nanoapp.h"
+#include "chre/core/timer_pool.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/host_link.h"
 #include "chre/util/buffer.h"
+#include "chre/util/duplicate_message_detector.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/synchronized_memory_pool.h"
 #include "chre/util/time.h"
@@ -242,6 +245,15 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   static constexpr Milliseconds kReliableMessageRetryWaitTime =
       Milliseconds(250);
 
+  //! How long we'll wait before timing out a reliable message.
+  static constexpr Nanoseconds kReliableMessageTimeout =
+      kReliableMessageRetryWaitTime * kReliableMessageMaxAttempts;
+
+  //! How long we'll wait before removing a duplicate message record from the
+  //! duplicate message detector.
+  static constexpr Nanoseconds kReliableMessageDuplicateDetectorTimeout =
+      kReliableMessageTimeout * 3;
+
   //! The maximum number of messages we can have outstanding at any given time.
   static constexpr size_t kMaxOutstandingMessages = 32;
 
@@ -257,8 +269,11 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   SynchronizedMemoryPool<HostMessage, kMaxOutstandingMessages> mMessagePool;
 
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  //! The duplicate message detector for reliable messages.
+  DuplicateMessageDetector mDuplicateMessageDetector;
+
   //! The transaction manager for reliable messages.
-  TransactionManager<kMaxOutstandingMessages> mTransactionManager;
+  TransactionManager<kMaxOutstandingMessages, TimerPool> mTransactionManager;
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
   /**
@@ -350,6 +365,19 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
                             uint16_t nanoappInstanceId) final;
 
   /**
+   * Handles a duplicate message from the host by setting the error in the
+   * duplicate message detector and sends a message delivery status to the
+   * nanoapp.
+   *
+   * @param messageSequenceNumber The message sequence number.
+   * @param hostEndpoint The host endpoint.
+   * @param error The error from sending the message to the nanoapp.
+   */
+  void handleDuplicateAndSendMessageDeliveryStatus(
+      uint32_t messageSequenceNumber, uint16_t hostEndpoint,
+      chreError error);
+
+  /**
    * Called when a reliable message transaction status is reported by the host.
    *
    * The status is delivered to the nanoapp that sent the message by posting a
@@ -386,6 +414,20 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
    * transactions must have already been cleaned up.
    */
   void freeAllReliableMessagesFromNanoapp(Nanoapp &nanoapp);
+
+  /**
+   * Returns whether to send the reliable message to the nanoapp. This function
+   * returns true, indicating to the caller to send the message, when the
+   * message is not a duplicate or when the duplicate message was sent
+   * previously with a transient error. When this function returns false, the
+   * error is sent to the host using sendMessageDeliveryStatus.
+   *
+   * @param messageSequenceNumber The message sequence number.
+   * @param hostEndpoint The host endpoint.
+   * @return Whether to send the message to the nanoapp.
+   */
+  bool shouldSendReliableMessageToNanoapp(uint32_t messageSequenceNumber,
+                                          uint16_t hostEndpoint);
 };
 
 }  // namespace chre

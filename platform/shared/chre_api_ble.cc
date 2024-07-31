@@ -107,7 +107,7 @@ DLL_EXPORT bool chreBleStopScanAsync() {
 
 DLL_EXPORT bool chreBleReadRssiAsync(uint16_t connectionHandle,
                                      const void *cookie) {
-#ifdef CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
+#ifdef CHRE_BLE_SUPPORT_ENABLED
   chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()->getBleRequestManager().readRssiAsync(
@@ -116,7 +116,7 @@ DLL_EXPORT bool chreBleReadRssiAsync(uint16_t connectionHandle,
   UNUSED_VAR(connectionHandle);
   UNUSED_VAR(cookie);
   return false;
-#endif  // CHRE_BLE_READ_RSSI_SUPPORT_ENABLED
+#endif  // CHRE_BLE_SUPPORT_ENABLED
 }
 
 DLL_EXPORT bool chreBleGetScanStatus(struct chreBleScanStatus *status) {

@@ -25,9 +25,6 @@
  * implement.
  */
 
-// TODO(b/298459533): metrics_reporter_in_the_daemon ramp up -> remove old
-// code
-
 #include <atomic>
 #include <csignal>
 #include <cstdint>
