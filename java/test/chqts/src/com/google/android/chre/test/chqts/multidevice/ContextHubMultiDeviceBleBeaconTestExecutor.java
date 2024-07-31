@@ -34,6 +34,12 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
 
     private static final long TIMEOUT_IN_NS = TIMEOUT_IN_S * 1000000000L;
 
+    /**
+     * The minimum offset in bytes of a BLE advertisement report which includes the length
+     * and type of the report.
+     */
+    private static final int BLE_ADVERTISEMENT_DATA_HEADER_OFFSET = 2;
+
     public ContextHubMultiDeviceBleBeaconTestExecutor(NanoAppBinary nanoapp) {
         super(nanoapp);
     }
@@ -45,19 +51,11 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
      * there is at least one advertisement, otherwise it returns false.
      */
     public boolean gatherAndVerifyChreBleAdvertisementsForGoogleEddystone() throws Exception {
-        Future<List<ChreApiTest.GeneralEventsMessage>> eventsFuture =
-                new ChreApiTestUtil().gatherEvents(
-                        mRpcClients.get(0),
-                        Arrays.asList(CHRE_EVENT_BLE_ADVERTISEMENT),
-                        NUM_EVENTS_TO_GATHER,
-                        TIMEOUT_IN_NS);
-
-        List<ChreApiTest.GeneralEventsMessage> events = eventsFuture.get();
+        List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
         if (events == null) {
             return false;
         }
 
-        boolean foundGoogleEddystoneBleAdvertisement = false;
         for (ChreApiTest.GeneralEventsMessage event: events) {
             if (!event.hasChreBleAdvertisementEvent()) {
                 continue;
@@ -68,17 +66,64 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
             for (int i = 0; i < bleAdvertisementEvent.getReportsCount(); ++i) {
                 ChreApiTest.ChreBleAdvertisingReport report = bleAdvertisementEvent.getReports(i);
                 byte[] data = report.getData().toByteArray();
-                if (data == null || data.length < 2) {
+                if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
                     continue;
                 }
 
-                if (!searchForGoogleEddystoneAdvertisement(data)) {
-                    return false;
+                if (searchForGoogleEddystoneAdvertisement(data)) {
+                    return true;
                 }
-                foundGoogleEddystoneBleAdvertisement = true;
             }
         }
-        return foundGoogleEddystoneBleAdvertisement;
+        return false;
+    }
+
+    /**
+     * Gathers BLE advertisement events from the nanoapp for TIMEOUT_IN_NS or up to
+     * NUM_EVENTS_TO_GATHER events. This function returns true if all
+     * chreBleAdvertisingReport's contain advertisments with CHRE test manufacturer ID and
+     * there is at least one advertisement, otherwise it returns false.
+     */
+    public boolean gatherAndVerifyChreBleAdvertisementsWithManufacturerData() throws Exception {
+        List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
+        if (events == null) {
+            return false;
+        }
+
+        for (ChreApiTest.GeneralEventsMessage event: events) {
+            if (!event.hasChreBleAdvertisementEvent()) {
+                continue;
+            }
+
+            ChreApiTest.ChreBleAdvertisementEvent bleAdvertisementEvent =
+                    event.getChreBleAdvertisementEvent();
+            for (int i = 0; i < bleAdvertisementEvent.getReportsCount(); ++i) {
+                ChreApiTest.ChreBleAdvertisingReport report = bleAdvertisementEvent.getReports(i);
+                byte[] data = report.getData().toByteArray();
+                if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
+                    continue;
+                }
+
+                if (searchForManufacturerAdvertisement(data)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Gathers CHRE BLE advertisement events.
+     */
+    private List<ChreApiTest.GeneralEventsMessage> gatherChreBleEvents() throws Exception {
+        Future<List<ChreApiTest.GeneralEventsMessage>> eventsFuture =
+                new ChreApiTestUtil().gatherEvents(
+                        mRpcClients.get(0),
+                        Arrays.asList(CHRE_EVENT_BLE_ADVERTISEMENT),
+                        NUM_EVENTS_TO_GATHER,
+                        TIMEOUT_IN_NS);
+        List<ChreApiTest.GeneralEventsMessage> events = eventsFuture.get();
+        return events;
     }
 
     /**
@@ -89,6 +134,13 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
     }
 
     /**
+     * Starts a BLE scan with test manufacturer data.
+     */
+    public void chreBleStartScanSyncWithManufacturerData() throws Exception {
+        chreBleStartScanSync(getManufacturerDataScanFilterChre());
+    }
+
+     /**
      * Returns true if the data contains an advertisement for Google Eddystone,
      * otherwise returns false.
      */
@@ -103,6 +155,25 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
                 return true;
             }
         }
+        return false;
+    }
+
+    /**
+     * Returns true if the data contains an advertisement for CHRE test manufacturer data,
+     * otherwise returns false.
+     */
+    private boolean searchForManufacturerAdvertisement(byte[] data) {
+        if (data.length < 2) {
+            return false;
+        }
+
+        for (int j = 0; j < data.length - 1; ++j) {
+            if (Byte.compare(data[j], (byte) 0xEE) == 0
+                    && Byte.compare(data[j + 1], (byte) 0xEE) == 0) {
+                return true;
+            }
+        }
+
         return false;
     }
 }

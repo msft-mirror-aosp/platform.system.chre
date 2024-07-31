@@ -65,7 +65,8 @@ void Manager::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
     }
   }
 
-  if (mNumExpectedAsyncResults == 0 && mNumExpectedHostEchoMessages == 0 &&
+  if (mNumExpectedAsyncResults == 0 &&
+      mNumExpectedHostEchoMessages == 0 &&
       mNumExpectedFreeMessageCallbacks == 0) {
     completeTest(true);
   }
@@ -92,12 +93,18 @@ void Manager::completeTest(bool success, const char *message) {
 
   if (success) {
     LOGI("Test completed successfully");
-  } else {
+  } else if (message != nullptr) {
     LOGE("Test completed in error with message \"%s\"", message);
+  } else {
+    LOGE("Test completed in error");
   }
 
   mTestRunning = false;
-  chreHeapFree(mMessage);
+  if (mMessage != nullptr) {
+    chreHeapFree(mMessage);
+    mMessage = nullptr;
+  }
+
   sendTestResultWithMsgToHost(
       mHostEndpointId, chre_reliable_message_test_MessageType_TEST_RESULT,
       success, message, /* abortOnFailure= */ false);
