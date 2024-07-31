@@ -544,9 +544,6 @@ std::optional<int64_t> HalClientManager::resetPendingUnloadTransaction(
   if (isPendingTransactionMatched(clientId, transactionId,
                                   mPendingUnloadTransaction)) {
     int64_t nanoappId = mPendingUnloadTransaction->nanoappId;
-    LOGI("Clears out the pending unload transaction for nanoapp 0x%" PRIx64
-         ": client id %" PRIu16 ", transaction id %" PRIu32,
-         nanoappId, clientId, transactionId);
     mPendingUnloadTransaction.reset();
     return nanoappId;
   }

@@ -31,6 +31,12 @@
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <chrono>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <unordered_map>
+
 namespace android::hardware::contexthub::common::implementation {
 
 using namespace aidl::android::hardware::contexthub;
@@ -95,6 +101,10 @@ class MultiClientContextHubBase
   void writeToDebugFile(const char *str) override;
 
  protected:
+  // The timeout for a reliable message.
+  constexpr static std::chrono::nanoseconds kReliableMessageTimeout =
+      std::chrono::seconds(1);
+
   // The data needed by the death client to clear states of a client.
   struct HalDeathRecipientCookie {
     MultiClientContextHubBase *hal;
@@ -102,6 +112,22 @@ class MultiClientContextHubBase
     HalDeathRecipientCookie(MultiClientContextHubBase *hal, pid_t pid) {
       this->hal = hal;
       this->clientPid = pid;
+    }
+  };
+
+  // Contains information about a reliable message that has been received.
+  struct ReliableMessageRecord {
+    std::chrono::time_point<std::chrono::steady_clock> timestamp;
+    int32_t messageSequenceNumber;
+    HostEndpointId hostEndpointId;
+
+    bool isExpired() const {
+      return timestamp + kReliableMessageTimeout <
+             std::chrono::steady_clock::now();
+    }
+
+    bool operator>(const ReliableMessageRecord &other) const {
+      return timestamp > other.timestamp;
     }
   };
 
@@ -156,6 +182,12 @@ class MultiClientContextHubBase
            mSettingEnabled[setting];
   }
 
+  /**
+   * Removes messages from the reliable message queue that have been received
+   * by the host more than kReliableMessageTimeout ago.
+   */
+  void cleanupReliableMessageQueueLocked();
+
   HalClientManager::DeadClientUnlinker mDeadClientUnlinker;
 
   // HAL is the unique owner of the communication channel to CHRE.
@@ -207,6 +239,10 @@ class MultiClientContextHubBase
   std::unique_ptr<MetricsReporter> mMetricsReporter;
 
   // Used to map message sequence number to host endpoint ID
+  std::mutex mReliableMessageMutex;
+  std::deque<ReliableMessageRecord> mReliableMessageQueue;
+
+  // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;
 };
 }  // namespace android::hardware::contexthub::common::implementation
