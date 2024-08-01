@@ -274,6 +274,29 @@ TEST_F(TransactionManagerTest, TwoTransactionsSameGroupTimeout) {
   EXPECT_FALSE(mFakeTimerPool.invokeNextTimer(mTime));
 }
 
+TEST_F(TransactionManagerTest, TwoTransactionsSameGroupRemoveReverseOrder) {
+  TxnMgrF tm = defaultTxnMgrF();
+
+  uint32_t id1;
+  uint32_t id2;
+  EXPECT_TRUE(tm.add(/*groupId=*/0, &id1));
+  EXPECT_TRUE(tm.add(/*groupId=*/0, &id2));
+
+  // Only the first should start
+  ASSERT_EQ(mFakeCb.mTries.size(), 1);
+  EXPECT_EQ(mFakeCb.mTries[0], id1);
+
+  // Remove second one first
+  EXPECT_TRUE(tm.remove(id2));
+
+  // Finish the first one
+  EXPECT_TRUE(tm.remove(id1));
+  ASSERT_EQ(mFakeCb.mTries.size(), 1);
+  EXPECT_EQ(mFakeCb.mTries[0], id1);
+  EXPECT_EQ(mFakeCb.mFailures.size(), 0);
+  EXPECT_FALSE(mFakeTimerPool.invokeNextTimer(mTime));
+}
+
 TEST_F(TransactionManagerTest, MultipleTimeouts) {
   TxnMgrF tm = defaultTxnMgrF();
 
