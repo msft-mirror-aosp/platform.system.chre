@@ -66,9 +66,13 @@ bool TransactionManager<kMaxTransactions, TimerPoolType>::remove(
     Transaction &transaction = mTransactions[i];
     if (transaction.id == transactionId) {
       uint16_t groupId = transaction.groupId;
+      bool transactionWasStarted = transaction.attemptCount > 0;
       mTransactions.remove(i);
-      startNextTransactionInGroup(groupId);
-      updateTimer();
+
+      if (transactionWasStarted) {
+        startNextTransactionInGroup(groupId);
+        updateTimer();
+      }
       return true;
     }
   }
