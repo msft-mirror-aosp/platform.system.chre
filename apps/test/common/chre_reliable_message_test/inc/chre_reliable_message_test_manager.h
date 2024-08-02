@@ -81,6 +81,9 @@ class Manager {
 
   // If the test is running.
   bool mTestRunning = false;
+
+  // The timer handle for the test timeout.
+  uint32_t mTimerHandle = CHRE_TIMER_INVALID;
 };
 
 // The CHRE reliable message test manager singleton.
