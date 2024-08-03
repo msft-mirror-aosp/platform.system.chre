@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/platform_wwan.h"
 #include "chre/util/non_copyable.h"
@@ -87,6 +88,10 @@ class WwanRequestManager : public NonCopyable {
   //! that this will only be valid if the mCellInfoRequestingNanoappInstanceId
   //! is set.
   const void *mCellInfoRequestingNanoappCookie;
+
+  //! ErrorCode Histogram for collected errors, the index of this array
+  //! corresponds to the type of the errorcode
+  uint32_t mCellInfoErrorHistogram[CHRE_ERROR_SIZE] = {0};
 
   /**
    * Handles the result of a request for cell info. See handleCellInfoResult
