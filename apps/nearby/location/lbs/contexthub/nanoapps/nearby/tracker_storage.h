@@ -47,6 +47,7 @@ struct TrackerHistory {
       : found_count(1),
         first_found_time_ms(current_time_ms),
         last_found_time_ms(current_time_ms),
+        last_radio_discovery_time_ms(current_time_ms),
         lost_time_ms(0),
         state(TrackerState::kPresent) {}
   // The number of times the tracker report was found at each sampling interval
@@ -58,6 +59,9 @@ struct TrackerHistory {
   // The most recent time when the tracker report was discovered for each
   // sampling period in the Present state.
   uint32_t last_found_time_ms;
+  // The most recent time when the tracker report was discovered by the LE
+  // radio, regardless of the sampling period or the tracker state.
+  uint32_t last_radio_discovery_time_ms;
   // The time at which the tracker report was lost. Only valid when the tracker
   // state is Absent.
   uint32_t lost_time_ms;
@@ -127,15 +131,30 @@ class TrackerStorage {
 
   // Updates tracker report in pushing advertisement.
   void UpdateTrackerReport(TrackerReport &tracker_report,
-                           const TrackerBatchConfig &config);
+                           const TrackerBatchConfig &config,
+                           const chreBleAdvertisingReport &report);
 
   // Adds a new tracker report to tracker storage.
   void AddTrackerReport(const chreBleAdvertisingReport &report,
                         const TrackerBatchConfig &config);
 
-  // Returns whether advertising report is same.
-  bool IsEqualReport(const TrackerReport &tracker_report,
-                     const chreBleAdvertisingReport &report) const;
+  // Adds or updates advertising data for tracker report.
+  // For a newly added tracker report, it will allocate memory for advertising
+  // data, and copy the advertising data from the advertising report.
+  // For an existing tracker report, it will check if the advertising data is
+  // different from the previous one. If the length is the same but the payload
+  // is different, it will update the tracker report by copying the advertising
+  // data from the advertising report. If the length is different, it will
+  // update the tracker report by re-allocating memory for advertising data, and
+  // copying the advertising data from the advertising report.
+  // If the advertising data is the same as the previous one, it will not do
+  // anything.
+  void AddOrUpdateAdvertisingData(TrackerReport &tracker_report,
+                                  const chreBleAdvertisingReport &report);
+
+  // Returns whether advertising address is same.
+  bool IsEqualAddress(const TrackerReport &tracker_report,
+                      const chreBleAdvertisingReport &report) const;
 
   // Returns current time in milliseconds.
   uint32_t GetCurrentTimeMs() const;
