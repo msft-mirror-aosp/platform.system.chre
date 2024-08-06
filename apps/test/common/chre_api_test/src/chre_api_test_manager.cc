@@ -24,6 +24,7 @@
 #include "chre/util/time.h"
 
 namespace {
+
 constexpr uint64_t kSyncFunctionTimeout = 2 * chre::kOneSecondInNanoseconds;
 
 /**
@@ -32,6 +33,8 @@ constexpr uint64_t kSyncFunctionTimeout = 2 * chre::kOneSecondInNanoseconds;
 constexpr uint32_t kThreeAxisDataReadingsMaxCount = 10;
 constexpr uint32_t kChreBleAdvertisementReportMaxCount = 10;
 constexpr uint32_t kChreAudioDataEventMaxSampleBufferSize = 200;
+
+chre_rpc_GeneralEventsMessage gGeneralEventsMessage;
 
 /**
  * Closes the writer and invalidates the writer.
@@ -85,6 +88,17 @@ void sendFailureAndFinishCloseWriter(
   T message;
   message.status = false;
   sendFinishAndCloseWriter(writer, message);
+}
+
+template <>
+void sendFailureAndFinishCloseWriter<chre_rpc_GeneralEventsMessage>(
+    Optional<ChreApiTestService::ServerWriter<chre_rpc_GeneralEventsMessage>>
+        &writer) {
+  CHRE_ASSERT(writer.has_value());
+
+  std::memset(&gGeneralEventsMessage, 0, sizeof(gGeneralEventsMessage));
+  gGeneralEventsMessage.status = false;
+  sendFinishAndCloseWriter(writer, gGeneralEventsMessage);
 }
 }  // namespace
 
@@ -339,23 +353,25 @@ void ChreApiTestService::handleBleAsyncResult(const chreAsyncResult *result) {
 bool ChreApiTestService::handleChreAudioDataEvent(
     const chreAudioDataEvent *data) {
   // send the metadata
-  chre_rpc_GeneralEventsMessage metadataMessage;
-  metadataMessage.data.chreAudioDataMetadata.version = data->version;
-  metadataMessage.data.chreAudioDataMetadata.reserved =
+  std::memset(&gGeneralEventsMessage, 0, sizeof(gGeneralEventsMessage));
+  gGeneralEventsMessage.data.chreAudioDataMetadata.version = data->version;
+  gGeneralEventsMessage.data.chreAudioDataMetadata.reserved =
       0;  // Must be set to 0 always
-  metadataMessage.data.chreAudioDataMetadata.handle = data->handle;
-  metadataMessage.data.chreAudioDataMetadata.timestamp = data->timestamp;
-  metadataMessage.data.chreAudioDataMetadata.sampleRate = data->sampleRate;
-  metadataMessage.data.chreAudioDataMetadata.sampleCount = data->sampleCount;
-  metadataMessage.data.chreAudioDataMetadata.format = data->format;
-  metadataMessage.status = true;
-  metadataMessage.which_data =
+  gGeneralEventsMessage.data.chreAudioDataMetadata.handle = data->handle;
+  gGeneralEventsMessage.data.chreAudioDataMetadata.timestamp = data->timestamp;
+  gGeneralEventsMessage.data.chreAudioDataMetadata.sampleRate =
+      data->sampleRate;
+  gGeneralEventsMessage.data.chreAudioDataMetadata.sampleCount =
+      data->sampleCount;
+  gGeneralEventsMessage.data.chreAudioDataMetadata.format = data->format;
+  gGeneralEventsMessage.status = true;
+  gGeneralEventsMessage.which_data =
       chre_rpc_GeneralEventsMessage_chreAudioDataMetadata_tag;
-  sendPartialGeneralEventToHost(metadataMessage);
+  sendPartialGeneralEventToHost(gGeneralEventsMessage);
 
   // send the samples
-  chre_rpc_GeneralEventsMessage samplesMessage;
-  samplesMessage.status = false;
+  std::memset(&gGeneralEventsMessage, 0, sizeof(gGeneralEventsMessage));
+  gGeneralEventsMessage.status = false;
 
   uint32_t totalSamples = data->sampleCount;
   uint32_t maxSamplesPerMessage =
@@ -369,33 +385,34 @@ bool ChreApiTestService::handleChreAudioDataEvent(
   uint32_t numSamplesToSend = MIN(maxSamplesPerMessage, totalSamples);
   uint32_t sampleIdx = 0;
   for (int id = 0; numSamplesToSend > 0; id++) {
-    samplesMessage.data.chreAudioDataSamples.id = id;
+    gGeneralEventsMessage.data.chreAudioDataSamples.id = id;
 
     // assign data
     if (data->format == CHRE_AUDIO_DATA_FORMAT_8_BIT_U_LAW) {
-      samplesMessage.data.chreAudioDataSamples.samples.size = numSamplesToSend;
-      std::memcpy(samplesMessage.data.chreAudioDataSamples.samples.bytes,
+      gGeneralEventsMessage.data.chreAudioDataSamples.samples.size =
+          numSamplesToSend;
+      std::memcpy(gGeneralEventsMessage.data.chreAudioDataSamples.samples.bytes,
                   &data->samplesULaw8[sampleIdx], numSamplesToSend);
 
-      samplesMessage.status = true;
-      samplesMessage.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreAudioDataSamples_tag;
     } else if (data->format == CHRE_AUDIO_DATA_FORMAT_16_BIT_SIGNED_PCM) {
       // send double the bytes since each sample is 2B
-      samplesMessage.data.chreAudioDataSamples.samples.size =
+      gGeneralEventsMessage.data.chreAudioDataSamples.samples.size =
           numSamplesToSend * 2;
-      std::memcpy(samplesMessage.data.chreAudioDataSamples.samples.bytes,
+      std::memcpy(gGeneralEventsMessage.data.chreAudioDataSamples.samples.bytes,
                   &data->samplesS16[sampleIdx], numSamplesToSend * 2);
 
-      samplesMessage.status = true;
-      samplesMessage.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreAudioDataSamples_tag;
     } else {
       LOGE("Chre audio data event: format %" PRIu8 " unknown", data->format);
       return false;
     }
 
-    sendPartialGeneralEventToHost(samplesMessage);
+    sendPartialGeneralEventToHost(gGeneralEventsMessage);
 
     sampleIdx += numSamplesToSend;
     if (samplesRemainingAfterSend > maxSamplesPerMessage) {
@@ -461,38 +478,39 @@ void ChreApiTestService::handleGatheringEvent(uint16_t eventType,
   LOGD("Gather events Received matching event with type: %" PRIu16, eventType);
 
   bool messageSent = false;
-  chre_rpc_GeneralEventsMessage message;
-  message.status = false;
+  std::memset(&gGeneralEventsMessage, 0, sizeof(gGeneralEventsMessage));
+  gGeneralEventsMessage.status = false;
   switch (eventType) {
     case CHRE_EVENT_SENSOR_ACCELEROMETER_DATA: {
-      message.status = true;
-      message.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreSensorThreeAxisData_tag;
 
       const auto *data =
           static_cast<const struct chreSensorThreeAxisData *>(eventData);
-      message.data.chreSensorThreeAxisData.header.baseTimestamp =
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.header.baseTimestamp =
           data->header.baseTimestamp;
-      message.data.chreSensorThreeAxisData.header.sensorHandle =
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.header.sensorHandle =
           data->header.sensorHandle;
-      message.data.chreSensorThreeAxisData.header.readingCount =
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.header.readingCount =
           data->header.readingCount;
-      message.data.chreSensorThreeAxisData.header.accuracy =
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.header.accuracy =
           data->header.accuracy;
-      message.data.chreSensorThreeAxisData.header.reserved =
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.header.reserved =
           data->header.reserved;
 
       uint32_t numReadings =
           MIN(data->header.readingCount, kThreeAxisDataReadingsMaxCount);
-      message.data.chreSensorThreeAxisData.readings_count = numReadings;
+      gGeneralEventsMessage.data.chreSensorThreeAxisData.readings_count =
+          numReadings;
       for (uint32_t i = 0; i < numReadings; ++i) {
-        message.data.chreSensorThreeAxisData.readings[i].timestampDelta =
-            data->readings[i].timestampDelta;
-        message.data.chreSensorThreeAxisData.readings[i].x =
+        gGeneralEventsMessage.data.chreSensorThreeAxisData.readings[i]
+            .timestampDelta = data->readings[i].timestampDelta;
+        gGeneralEventsMessage.data.chreSensorThreeAxisData.readings[i].x =
             data->readings[i].x;
-        message.data.chreSensorThreeAxisData.readings[i].y =
+        gGeneralEventsMessage.data.chreSensorThreeAxisData.readings[i].y =
             data->readings[i].y;
-        message.data.chreSensorThreeAxisData.readings[i].z =
+        gGeneralEventsMessage.data.chreSensorThreeAxisData.readings[i].z =
             data->readings[i].z;
       }
       break;
@@ -500,103 +518,109 @@ void ChreApiTestService::handleGatheringEvent(uint16_t eventType,
     case CHRE_EVENT_SENSOR_SAMPLING_CHANGE: {
       const auto *data =
           static_cast<const struct chreSensorSamplingStatusEvent *>(eventData);
-      message.data.chreSensorSamplingStatusEvent.sensorHandle =
+      gGeneralEventsMessage.data.chreSensorSamplingStatusEvent.sensorHandle =
           data->sensorHandle;
-      message.data.chreSensorSamplingStatusEvent.status.interval =
+      gGeneralEventsMessage.data.chreSensorSamplingStatusEvent.status.interval =
           data->status.interval;
-      message.data.chreSensorSamplingStatusEvent.status.latency =
+      gGeneralEventsMessage.data.chreSensorSamplingStatusEvent.status.latency =
           data->status.latency;
-      message.data.chreSensorSamplingStatusEvent.status.enabled =
+      gGeneralEventsMessage.data.chreSensorSamplingStatusEvent.status.enabled =
           data->status.enabled;
 
-      message.status = true;
-      message.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreSensorSamplingStatusEvent_tag;
       break;
     }
     case CHRE_EVENT_HOST_ENDPOINT_NOTIFICATION: {
       const auto *data =
           static_cast<const struct chreHostEndpointNotification *>(eventData);
-      message.data.chreHostEndpointNotification.hostEndpointId =
+      gGeneralEventsMessage.data.chreHostEndpointNotification.hostEndpointId =
           data->hostEndpointId;
-      message.data.chreHostEndpointNotification.notificationType =
+      gGeneralEventsMessage.data.chreHostEndpointNotification.notificationType =
           data->notificationType;
 
-      message.status = true;
-      message.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreHostEndpointNotification_tag;
       break;
     }
     case CHRE_EVENT_BLE_ADVERTISEMENT: {
       const auto *data =
           static_cast<const struct chreBleAdvertisementEvent *>(eventData);
-      message.data.chreBleAdvertisementEvent.reserved = data->reserved;
+      gGeneralEventsMessage.data.chreBleAdvertisementEvent.reserved =
+          data->reserved;
 
       uint32_t numReports =
           MIN(kChreBleAdvertisementReportMaxCount, data->numReports);
-      message.data.chreBleAdvertisementEvent.reports_count = numReports;
+      gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports_count =
+          numReports;
       for (uint32_t i = 0; i < numReports; ++i) {
-        message.data.chreBleAdvertisementEvent.reports[i].timestamp =
-            data->reports[i].timestamp;
-        message.data.chreBleAdvertisementEvent.reports[i]
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .timestamp = data->reports[i].timestamp;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
             .eventTypeAndDataStatus = data->reports[i].eventTypeAndDataStatus;
-        message.data.chreBleAdvertisementEvent.reports[i].addressType =
-            data->reports[i].addressType;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .addressType = data->reports[i].addressType;
 
-        message.data.chreBleAdvertisementEvent.reports[i].address.size =
-            CHRE_BLE_ADDRESS_LEN;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .address.size = CHRE_BLE_ADDRESS_LEN;
         std::memcpy(
-            message.data.chreBleAdvertisementEvent.reports[i].address.bytes,
+            gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+                .address.bytes,
             data->reports[i].address, CHRE_BLE_ADDRESS_LEN);
 
-        message.data.chreBleAdvertisementEvent.reports[i].primaryPhy =
-            data->reports[i].primaryPhy;
-        message.data.chreBleAdvertisementEvent.reports[i].secondaryPhy =
-            data->reports[i].secondaryPhy;
-        message.data.chreBleAdvertisementEvent.reports[i].advertisingSid =
-            data->reports[i].advertisingSid;
-        message.data.chreBleAdvertisementEvent.reports[i].txPower =
-            data->reports[i].txPower;
-        message.data.chreBleAdvertisementEvent.reports[i]
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .primaryPhy = data->reports[i].primaryPhy;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .secondaryPhy = data->reports[i].secondaryPhy;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .advertisingSid = data->reports[i].advertisingSid;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .txPower = data->reports[i].txPower;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
             .periodicAdvertisingInterval =
             data->reports[i].periodicAdvertisingInterval;
-        message.data.chreBleAdvertisementEvent.reports[i].rssi =
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i].rssi =
             data->reports[i].rssi;
-        message.data.chreBleAdvertisementEvent.reports[i].directAddressType =
-            data->reports[i].directAddressType;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .directAddressType = data->reports[i].directAddressType;
 
-        message.data.chreBleAdvertisementEvent.reports[i].directAddress.size =
-            CHRE_BLE_ADDRESS_LEN;
-        std::memcpy(message.data.chreBleAdvertisementEvent.reports[i]
-                        .directAddress.bytes,
-                    data->reports[i].directAddress, CHRE_BLE_ADDRESS_LEN);
-
-        message.data.chreBleAdvertisementEvent.reports[i].data.size =
-            data->reports[i].dataLength;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .directAddress.size = CHRE_BLE_ADDRESS_LEN;
         std::memcpy(
-            message.data.chreBleAdvertisementEvent.reports[i].data.bytes,
+            gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+                .directAddress.bytes,
+            data->reports[i].directAddress, CHRE_BLE_ADDRESS_LEN);
+
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .data.size = data->reports[i].dataLength;
+        std::memcpy(
+            gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+                .data.bytes,
             data->reports[i].data, data->reports[i].dataLength);
 
-        message.data.chreBleAdvertisementEvent.reports[i].reserved =
-            data->reports[i].reserved;
+        gGeneralEventsMessage.data.chreBleAdvertisementEvent.reports[i]
+            .reserved = data->reports[i].reserved;
       }
 
-      message.status = true;
-      message.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreBleAdvertisementEvent_tag;
       break;
     }
     case CHRE_EVENT_AUDIO_SAMPLING_CHANGE: {
       const auto *data =
           static_cast<const struct chreAudioSourceStatusEvent *>(eventData);
-      message.data.chreAudioSourceStatusEvent.handle = data->handle;
-      message.data.chreAudioSourceStatusEvent.status.enabled =
+      gGeneralEventsMessage.data.chreAudioSourceStatusEvent.handle =
+          data->handle;
+      gGeneralEventsMessage.data.chreAudioSourceStatusEvent.status.enabled =
           data->status.enabled;
-      message.data.chreAudioSourceStatusEvent.status.suspended =
+      gGeneralEventsMessage.data.chreAudioSourceStatusEvent.status.suspended =
           data->status.suspended;
 
-      message.status = true;
-      message.which_data =
+      gGeneralEventsMessage.status = true;
+      gGeneralEventsMessage.which_data =
           chre_rpc_GeneralEventsMessage_chreAudioSourceStatusEvent_tag;
       break;
     }
@@ -616,13 +640,13 @@ void ChreApiTestService::handleGatheringEvent(uint16_t eventType,
     return;
   }
 
-  if (!message.status) {
+  if (!gGeneralEventsMessage.status) {
     LOGE("GatherEvents: unable to create message for event with type: %" PRIu16,
          eventType);
     return;
   }
 
-  sendGeneralEventToHost(message);
+  sendGeneralEventToHost(gGeneralEventsMessage);
 }
 
 void ChreApiTestService::handleTimerEvent(const void *cookie) {
