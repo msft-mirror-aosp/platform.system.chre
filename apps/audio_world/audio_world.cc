@@ -16,6 +16,7 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <cstddef>
 
 #include "chre/util/macros.h"
 #include "chre/util/nanoapp/audio.h"
