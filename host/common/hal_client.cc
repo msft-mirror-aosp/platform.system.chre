@@ -46,10 +46,6 @@ bool HalClient::isServiceAvailable() {
   return GetBoolProperty(kHalEnabledProperty, /* default_value= */ false);
 }
 
-bool HalClient::reduceLockHolding() {
-  return flags::bug_fix_reduce_lock_holding_period();
-}
-
 std::unique_ptr<HalClient> HalClient::create(
     const std::shared_ptr<IContextHubCallback> &callback,
     int32_t contextHubId) {
