@@ -52,6 +52,7 @@ class HalClientForTest : public HalClient {
                        ndk::SharedRefBase::make<IContextHubCallbackDefault>())
       : HalClient(callback) {
     mContextHub = contextHub;
+    mIsHalConnected = contextHub != nullptr;
     for (const HostEndpointId &endpointId : connectedEndpoints) {
       mConnectedEndpoints[endpointId] = {.hostEndpointId = endpointId};
     }

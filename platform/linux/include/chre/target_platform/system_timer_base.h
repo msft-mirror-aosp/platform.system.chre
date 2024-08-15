@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <time.h>
 #include <cinttypes>
+#include <mutex>
 
 namespace chre {
 
@@ -29,6 +30,9 @@ namespace chre {
  */
 class SystemTimerBase {
  protected:
+  //! The mutex to protect the callback and data.
+  std::mutex mMutex;
+
   //! The timer id that is generated during the initialization phase.
   timer_t mTimerId;
 
