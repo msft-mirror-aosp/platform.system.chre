@@ -822,9 +822,11 @@ bool chreSendMessageWithPermissions(void *message, size_t messageSize,
  *   then an async status is delivered to the nanoapp when the transmission
  *   completes either successfully or in error via the
  *   CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT event.
+ * - For any reliable messages pending completion at nanoapp unload:
+ *   - At least one delivery attempt will be made.
+ *   - The free callback will be invoked.
+ *   - The async result event will not be delivered.
  * - The error codes received are:
- *   - CHRE_ERROR_NANOAPP_STOPPING if the nanoapp was stopping during the
- *                                 request.
  *   - CHRE_ERROR_DESTINATION_NOT_FOUND if the destination was not found.
  *   - CHRE_ERROR if there was a permanent error.
  *   - CHRE_ERROR_TIMEOUT if there was no response from the recipient

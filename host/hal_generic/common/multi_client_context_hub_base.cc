@@ -29,6 +29,7 @@
 
 #include <android_chre_flags.h>
 #include <system/chre/core/chre_metrics.pb.h>
+#include <chrono>
 
 namespace android::hardware::contexthub::common::implementation {
 
@@ -36,6 +37,8 @@ using ::android::base::WriteStringToFd;
 using ::android::chre::FragmentedLoadTransaction;
 using ::android::chre::getStringFromByteVector;
 using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
+using ::android::chre::flags::abort_if_no_context_hub_found;
+using ::android::chre::flags::bug_fix_hal_reliable_message_record;
 using ::android::chre::flags::reliable_message_implementation;
 using ::ndk::ScopedAStatus;
 namespace fbs = ::chre::fbs;
@@ -132,6 +135,7 @@ ErrorCode toErrorCode(uint32_t chreErrorCode) {
   switch (chreErrorCode) {
     case CHRE_ERROR_NONE:
       return ErrorCode::OK;
+    case CHRE_ERROR_BUSY: // fallthrough
     case CHRE_ERROR_TRANSIENT:
       return ErrorCode::TRANSIENT_ERROR;
     case CHRE_ERROR:
@@ -186,6 +190,9 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
   } else {
     LOGE("Unable to get a valid context hub info for PID %d",
          AIBinder_getCallingPid());
+    if (abort_if_no_context_hub_found()) {
+      std::abort();
+    }
   }
   return ScopedAStatus::ok();
 }
@@ -196,7 +203,7 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  LOGI("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
+  LOGD("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
   auto nanoappBuffer =
@@ -256,7 +263,7 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
                                                            appId)) {
     return fromResult(false);
   }
-  LOGI("Unloading nanoapp 0x%" PRIx64, appId);
+  LOGD("Unloading nanoapp 0x%" PRIx64, appId);
   HalClientId clientId = mHalClientManager->getClientId(pid);
   flatbuffers::FlatBufferBuilder builder(64);
   HostProtocolHost::encodeUnloadNanoappRequest(
@@ -266,6 +273,9 @@ ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
 
   bool result = mConnection->sendMessage(builder);
   if (!result) {
+    LOGE("Failed to send an unload request for nanoapp 0x%" PRIx64
+         " transaction %" PRIi32,
+         appId, transactionId);
     mHalClientManager->resetPendingUnloadTransaction(clientId, transactionId);
   }
   return fromResult(result);
@@ -407,7 +417,25 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
   }
 
   if (reliable_message_implementation() && message.isReliable) {
-    mReliableMessageMap.insert({message.messageSequenceNumber, hostEndpointId});
+    if (bug_fix_hal_reliable_message_record()) {
+      std::lock_guard<std::mutex> lock(mReliableMessageMutex);
+      auto iter = std::find_if(
+          mReliableMessageQueue.begin(), mReliableMessageQueue.end(),
+          [&message](const ReliableMessageRecord &record) {
+            return record.messageSequenceNumber == message.messageSequenceNumber;
+          });
+      if (iter == mReliableMessageQueue.end()) {
+        mReliableMessageQueue.push_back(ReliableMessageRecord{
+            .timestamp = std::chrono::steady_clock::now(),
+            .messageSequenceNumber = message.messageSequenceNumber,
+            .hostEndpointId = hostEndpointId});
+        std::push_heap(mReliableMessageQueue.begin(), mReliableMessageQueue.end(),
+                      std::greater<ReliableMessageRecord>());
+      }
+      cleanupReliableMessageQueueLocked();
+    } else {
+      mReliableMessageMap.insert({message.messageSequenceNumber, hostEndpointId});
+    }
   }
 
   flatbuffers::FlatBufferBuilder builder(1024);
@@ -542,7 +570,7 @@ bool MultiClientContextHubBase::enableTestMode() {
   // Unload each nanoapp.
   // mTestModeNanoapps tracks nanoapps that are actually unloaded. Removing an
   // element from std::vector is O(n) but such a removal should rarely happen.
-  LOGI("Trying to unload %" PRIu64 " nanoapps to enable test mode",
+  LOGD("Trying to unload %" PRIu64 " nanoapps to enable test mode",
        mTestModeNanoapps->size());
   for (auto iter = mTestModeNanoapps->begin();
        iter != mTestModeNanoapps->end();) {
@@ -573,7 +601,7 @@ bool MultiClientContextHubBase::enableTestMode() {
     mEventLogger.logNanoappUnload(appId, success);
   }
 
-  LOGI("%" PRIu64 " nanoapps are unloaded to enable test mode",
+  LOGD("%" PRIu64 " nanoapps are unloaded to enable test mode",
        mTestModeNanoapps->size());
   mIsTestModeEnabled = true;
   mTestModeNanoapps.emplace();
@@ -587,7 +615,7 @@ void MultiClientContextHubBase::disableTestMode() {
   }
   int numOfNanoappsLoaded =
       mPreloadedNanoappLoader->loadPreloadedNanoapps(mTestModeSystemNanoapps);
-  LOGI("%d nanoapps are reloaded to recover from test mode",
+  LOGD("%d nanoapps are reloaded to recover from test mode",
        numOfNanoappsLoaded);
   mIsTestModeEnabled = false;
 }
@@ -710,6 +738,7 @@ void MultiClientContextHubBase::onDebugDumpComplete(
 
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
+  LOGD("Received a nanoapp list response for client %" PRIu16, clientId);
   {
     std::unique_lock<std::mutex> lock(mTestModeMutex);
     if (!mTestModeNanoapps.has_value()) {
@@ -839,6 +868,10 @@ void MultiClientContextHubBase::onNanoappUnloadResponse(
     mEventLogger.logNanoappUnload(*nanoappId, response.success);
     if (auto callback = mHalClientManager->getCallback(clientId);
         callback != nullptr) {
+      LOGD("Unload transaction %" PRIu32 " for nanoapp 0x%" PRIx64
+           " client id %" PRIu16 " is finished: %s",
+           response.transaction_id, *nanoappId, clientId,
+           response.success ? "success" : "failure");
       callback->handleTransactionResult(response.transaction_id,
                                         /* in_success= */ response.success);
     }
@@ -865,7 +898,15 @@ void MultiClientContextHubBase::onNanoappMessage(
     outMessage.messageSequenceNumber = 0;
   }
 
-  auto messageContentPerms =
+  std::string messageSeq = "reliable message seq=" +
+                           std::to_string(outMessage.messageSequenceNumber);
+  LOGD("Received a nanoapp message from 0x%" PRIx64 " endpoint 0x%" PRIx16
+       ": Type 0x%" PRIx32 " size %zu %s",
+       outMessage.nanoappId, outMessage.hostEndPoint, outMessage.messageType,
+       outMessage.messageBody.size(),
+       outMessage.isReliable ? messageSeq.c_str() : "");
+
+  std::vector<std::string> messageContentPerms =
       chreToAndroidPermissions(message.message_permissions);
   // broadcast message is sent to every connected endpoint
   if (message.host_endpoint == CHRE_HOST_ENDPOINT_BROADCAST) {
@@ -890,18 +931,41 @@ void MultiClientContextHubBase::onMessageDeliveryStatus(
     return;
   }
 
-  auto hostEndpointIdIter =
-      mReliableMessageMap.find(status.message_sequence_number);
-  if (hostEndpointIdIter == mReliableMessageMap.end()) {
-    LOGE(
-        "Unable to get the host endpoint ID for message sequence "
-        "number: %" PRIu32,
-        status.message_sequence_number);
-    return;
+  HostEndpointId hostEndpointId;
+  if (bug_fix_hal_reliable_message_record()) {
+    {
+      std::lock_guard<std::mutex> lock(mReliableMessageMutex);
+      auto iter = std::find_if(
+          mReliableMessageQueue.begin(), mReliableMessageQueue.end(),
+          [&status](const ReliableMessageRecord &record) {
+            return record.messageSequenceNumber == status.message_sequence_number;
+          });
+      if (iter == mReliableMessageQueue.end()) {
+        LOGE(
+            "Unable to get the host endpoint ID for message "
+            "sequence number: %" PRIu32,
+            status.message_sequence_number);
+        return;
+      }
+
+      hostEndpointId = iter->hostEndpointId;
+      cleanupReliableMessageQueueLocked();
+    }
+  } else {
+    auto hostEndpointIdIter =
+        mReliableMessageMap.find(status.message_sequence_number);
+    if (hostEndpointIdIter == mReliableMessageMap.end()) {
+      LOGE(
+          "Unable to get the host endpoint ID for message sequence "
+          "number: %" PRIu32,
+          status.message_sequence_number);
+      return;
+    }
+
+    hostEndpointId = hostEndpointIdIter->second;
+    mReliableMessageMap.erase(hostEndpointIdIter);
   }
 
-  HostEndpointId hostEndpointId = hostEndpointIdIter->second;
-  mReliableMessageMap.erase(hostEndpointIdIter);
   std::shared_ptr<IContextHubCallback> callback =
       mHalClientManager->getCallbackForEndpoint(hostEndpointId);
   if (callback == nullptr) {
@@ -926,7 +990,7 @@ void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
   LOGI("Process %d is dead. Cleaning up.", clientPid);
   if (auto endpoints = mHalClientManager->getAllConnectedEndpoints(clientPid)) {
     for (auto endpointId : *endpoints) {
-      LOGI("Sending message to remove endpoint 0x%" PRIx16, endpointId);
+      LOGD("Sending message to remove endpoint 0x%" PRIx16, endpointId);
       if (!mHalClientManager->mutateEndpointIdFromHostIfNeeded(clientPid,
                                                                endpointId)) {
         continue;
@@ -951,26 +1015,40 @@ binder_status_t MultiClientContextHubBase::dump(int fd,
   // Dump of CHRE debug data. It waits for the dump to finish before returning.
   debugDumpStart(fd);
 
+  if (!WriteStringToFd("\n-- Context Hub HAL dump --\n", fd)) {
+    LOGW("Failed to write the Context Hub HAL dump banner");
+  }
+
   // Dump debug info of HalClientManager.
   std::string dumpOfHalClientManager = mHalClientManager->debugDump();
   if (!WriteStringToFd(dumpOfHalClientManager, fd)) {
-    LOGW("Failed to write debug dump of HalClientManager. Size: %zu.",
+    LOGW("Failed to write debug dump of HalClientManager. Size: %zu",
          dumpOfHalClientManager.size());
   }
 
   // Dump the status of test mode
   std::ostringstream testModeDump;
-  testModeDump << "\n-- HAL Test Mode Status --\n\n";
   {
     std::lock_guard<std::mutex> lockGuard(mTestModeMutex);
-    testModeDump << (mIsTestModeEnabled ? "Enabled" : "Disabled") << "\n";
+    testModeDump << "\nTest mode: "
+                 << (mIsTestModeEnabled ? "Enabled" : "Disabled") << "\n";
     if (!mTestModeNanoapps.has_value()) {
       testModeDump << "\nError: Nanoapp list is left unset\n";
     }
   }
-  testModeDump << "\n-- End of HAL Test Mode Status --\n";
   if (!WriteStringToFd(testModeDump.str(), fd)) {
     LOGW("Failed to write test mode dump");
+  }
+
+  // Dump the status of ChreConnection
+  std::string chreConnectionDump = mConnection->dump();
+  if (!WriteStringToFd(chreConnectionDump, fd)) {
+    LOGW("Failed to write ChreConnection dump. Size: %zu",
+         chreConnectionDump.size());
+  }
+
+  if (!WriteStringToFd("\n-- End of Context Hub HAL dump --\n\n", fd)) {
+    LOGW("Failed to write the end dump banner");
   }
 
   return STATUS_OK;
@@ -1040,4 +1118,14 @@ void MultiClientContextHubBase::onMetricLog(
   // Reached here only if an error has occurred for a known metric id.
   LOGE("Failed to parse metric data with id %" PRIu32, metricMessage.id);
 }
+
+void MultiClientContextHubBase::cleanupReliableMessageQueueLocked() {
+  while (!mReliableMessageQueue.empty() &&
+         mReliableMessageQueue.front().isExpired()) {
+    std::pop_heap(mReliableMessageQueue.begin(), mReliableMessageQueue.end(),
+                  std::greater<ReliableMessageRecord>());
+    mReliableMessageQueue.pop_back();
+  }
+}
+
 }  // namespace android::hardware::contexthub::common::implementation

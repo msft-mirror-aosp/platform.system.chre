@@ -24,6 +24,53 @@ package {
     default_applicable_licenses: ["system_chre_license"],
 }
 
+cc_defaults {
+    name: "chre_chpp_flags",
+    cflags: [
+        "-DCHPP_CHECKSUM_ENABLED",
+        "-DCHPP_DEBUG_ASSERT_ENABLED",
+        "-DCHPP_ENABLE_WORK_MONITOR",
+        "-DCHPP_EXPECTED_SERVICE_COUNT=3",
+        "-DCHPP_MAX_REGISTERED_CLIENTS=16",
+        "-DCHPP_MAX_REGISTERED_SERVICES=16",
+
+        "-DCHPP_CLIENT_ENABLED_DISCOVERY",
+        "-DCHPP_CLIENT_ENABLED_GNSS",
+        "-DCHPP_CLIENT_ENABLED_LOOPBACK",
+        "-DCHPP_CLIENT_ENABLED_TIMESYNC",
+        "-DCHPP_CLIENT_ENABLED_TRANSPORT_LOOPBACK",
+        "-DCHPP_CLIENT_ENABLED_WIFI",
+        "-DCHPP_CLIENT_ENABLED_WWAN",
+        "-DCHPP_SERVICE_ENABLED_GNSS",
+        "-DCHPP_SERVICE_ENABLED_TRANSPORT_LOOPBACK",
+        "-DCHPP_SERVICE_ENABLED_WIFI",
+        "-DCHPP_SERVICE_ENABLED_WWAN",
+
+        "-DCHPP_GNSS_DEFAULT_CAPABILITIES=0x7",
+        "-DCHPP_WIFI_DEFAULT_CAPABILITIES=0xf",
+        "-DCHPP_WWAN_DEFAULT_CAPABILITIES=0x1",
+    ],
+    visibility: ["//visibility:override"],
+}
+
+filegroup {
+    name: "chre_chpp_core_files",
+    srcs: [
+        "app.c",
+        "clients.c",
+        "platform/linux/memory.c",
+        "platform/linux/notifier.c",
+        "platform/pal_api.c",
+        "platform/shared/crc.c",
+        "services.c",
+        "services/discovery.c",
+        "services/loopback.c",
+        "services/nonhandle.c",
+        "services/timesync.c",
+        "transport.c",
+    ],
+}
+
 // Everything needed to run CHPP on Linux, except for the link layer.
 // Note that this is cc_defaults and not a lib because modules that inherit
 // these defaults may need to change compilation flags for sources here.
@@ -31,12 +78,6 @@ cc_defaults {
     name: "chre_chpp_core_without_link",
     vendor: true,
     cflags: [
-        "-DCHPP_CLIENT_ENABLED_TRANSPORT_LOOPBACK",
-        "-DCHPP_DEBUG_ASSERT_ENABLED",
-        "-DCHPP_ENABLE_WORK_MONITOR",
-        "-DCHPP_MAX_REGISTERED_CLIENTS=3",
-        "-DCHPP_MAX_REGISTERED_SERVICES=3",
-        "-DCHPP_SERVICE_ENABLED_TRANSPORT_LOOPBACK",
         // Required for pthread_setname_np()
         "-D_GNU_SOURCE",
         // clock_gettime() requires _POSIX_C_SOURCE >= 199309L
@@ -61,22 +102,7 @@ cc_defaults {
         "-std=c11",
     ],
     srcs: [
-        "app.c",
-        "clients.c",
-        "platform/linux/memory.c",
-        "platform/linux/notifier.c",
-        "platform/pal_api.c",
-        "platform/shared/crc.c",
-        "services.c",
-        "services/discovery.c",
-        "services/loopback.c",
-        "services/nonhandle.c",
-        "services/timesync.c",
-        "transport.c",
-    ],
-    export_include_dirs: [
-        "include",
-        "platform/linux/include",
+        ":chre_chpp_core_files",
     ],
     header_libs: [
         "chre_api",
@@ -90,25 +116,8 @@ cc_defaults {
     host_supported: true,
 }
 
-// Meant to be combined with chre_chpp_core_without_link to add in the full set
-// of optional clients and services.
-cc_defaults {
-    name: "chre_chpp_clients_and_services",
-    cflags: [
-        "-DCHPP_CLIENT_ENABLED_DISCOVERY",
-        "-DCHPP_CLIENT_ENABLED_GNSS",
-        "-DCHPP_CLIENT_ENABLED_LOOPBACK",
-        "-DCHPP_CLIENT_ENABLED_TIMESYNC",
-        "-DCHPP_CLIENT_ENABLED_WIFI",
-        "-DCHPP_CLIENT_ENABLED_WWAN",
-        "-DCHPP_SERVICE_ENABLED_GNSS",
-        "-DCHPP_SERVICE_ENABLED_WIFI",
-        "-DCHPP_SERVICE_ENABLED_WWAN",
-
-        "-DCHPP_GNSS_DEFAULT_CAPABILITIES=0x7",
-        "-DCHPP_WIFI_DEFAULT_CAPABILITIES=0xf",
-        "-DCHPP_WWAN_DEFAULT_CAPABILITIES=0x1",
-    ],
+filegroup {
+    name: "chre_chpp_clients_and_services_files",
     srcs: [
         "clients/discovery.c",
         "clients/gnss.c",
@@ -127,32 +136,47 @@ cc_defaults {
     ],
 }
 
-cc_library_static {
-    name: "chre_chpp_linux",
-    defaults: [
-        "chre_chpp_clients_and_services",
-        "chre_chpp_core_without_link",
+// Meant to be combined with chre_chpp_core_without_link to add in the full set
+// of optional clients and services.
+cc_defaults {
+    name: "chre_chpp_clients_and_services",
+    srcs: [
+        ":chre_chpp_clients_and_services_files",
     ],
+}
+
+filegroup {
+    name: "chre_chpp_linux_files",
     srcs: [
         "platform/linux/link.c",
     ],
 }
 
-cc_test_host {
-    name: "chre_chpp_linux_tests",
-    // TODO(b/232537107): Evaluate if isolated can be turned on
-    isolated: false,
-    cflags: [
-        "-DCHPP_CHECKSUM_ENABLED",
-        "-DCHPP_CLIENT_ENABLED_TRANSPORT_LOOPBACK",
-        "-DCHPP_ENABLE_WORK_MONITOR",
-        "-DCHPP_MAX_REGISTERED_CLIENTS=3",
-        "-DCHPP_MAX_REGISTERED_SERVICES=3",
-
-        "-DCHPP_GNSS_DEFAULT_CAPABILITIES=0x7",
-        "-DCHPP_WIFI_DEFAULT_CAPABILITIES=0xf",
-        "-DCHPP_WWAN_DEFAULT_CAPABILITIES=0x1",
+cc_library_static {
+    name: "chre_chpp_linux",
+    defaults: [
+        "chre_chpp_clients_and_services",
+        "chre_chpp_core_without_link",
+        "chre_chpp_flags",
     ],
+    srcs: [
+        ":chre_chpp_linux_files",
+    ],
+    export_include_dirs: [
+        "include",
+        "platform/linux/include",
+    ],
+}
+
+filegroup {
+    name: "chre_chpp_linux_tests_utility_files",
+    srcs: [
+        "test/transport_util.cpp",
+    ],
+}
+
+filegroup {
+    name: "chre_chpp_linux_tests_files",
     srcs: [
         "test/app_discovery_test.cpp",
         "test/app_notification_test.cpp",
@@ -162,6 +186,19 @@ cc_test_host {
         "test/app_timeout_test.cpp",
         "test/gnss_test.cpp",
         "test/transport_test.cpp",
+    ],
+}
+
+cc_test_host {
+    name: "chre_chpp_linux_tests",
+    // TODO(b/232537107): Evaluate if isolated can be turned on
+    isolated: false,
+    defaults: [
+        "chre_chpp_flags",
+    ],
+    srcs: [
+        ":chre_chpp_linux_tests_files",
+        ":chre_chpp_linux_tests_utility_files",
     ],
     static_libs: [
         "chre_chpp_linux",
