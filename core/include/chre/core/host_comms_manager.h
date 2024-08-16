@@ -20,6 +20,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "chre/core/nanoapp.h"
+#include "chre/core/timer_pool.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/host_link.h"
 #include "chre/util/buffer.h"
@@ -245,8 +247,12 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
 
   //! How long we'll wait before timing out a reliable message.
   static constexpr Nanoseconds kReliableMessageTimeout =
-      Nanoseconds(kReliableMessageRetryWaitTime.toRawNanoseconds() *
-                  kReliableMessageMaxAttempts);
+      kReliableMessageRetryWaitTime * kReliableMessageMaxAttempts;
+
+  //! How long we'll wait before removing a duplicate message record from the
+  //! duplicate message detector.
+  static constexpr Nanoseconds kReliableMessageDuplicateDetectorTimeout =
+      kReliableMessageTimeout * 3;
 
   //! The maximum number of messages we can have outstanding at any given time.
   static constexpr size_t kMaxOutstandingMessages = 32;
@@ -267,7 +273,7 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   DuplicateMessageDetector mDuplicateMessageDetector;
 
   //! The transaction manager for reliable messages.
-  TransactionManager<kMaxOutstandingMessages> mTransactionManager;
+  TransactionManager<kMaxOutstandingMessages, TimerPool> mTransactionManager;
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 
   /**

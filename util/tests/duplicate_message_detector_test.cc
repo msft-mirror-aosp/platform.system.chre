@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "chre_api/chre.h"
 #include "gtest/gtest.h"
 
 #include "chre/platform/linux/system_time.h"
@@ -80,8 +81,19 @@ TEST(DuplicateMessageDetectorTest, RemoveOldEntriesDoesNotRemoveRecentEntries) {
                                                             CHRE_ERROR_NONE));
     }
     for (size_t i = kNumMessagesToRemove + 1; i < kNumMessages; ++i) {
+      bool isDuplicate = false;
+      EXPECT_FALSE(
+          duplicateMessageDetector.findOrAdd(i, i, &isDuplicate).has_value());
+      EXPECT_TRUE(isDuplicate);
       EXPECT_TRUE(duplicateMessageDetector.findAndSetError(i, i,
                                                            CHRE_ERROR_NONE));
+
+      isDuplicate = false;
+      Optional<chreError> error =
+          duplicateMessageDetector.findOrAdd(i, i, &isDuplicate);
+      EXPECT_TRUE(error.has_value());
+      EXPECT_EQ(error.value(), CHRE_ERROR_NONE);
+      EXPECT_TRUE(isDuplicate);
     }
   }
 }

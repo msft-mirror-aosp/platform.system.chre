@@ -20,6 +20,7 @@
 // IWYU pragma: private, include "transaction_manager.h"
 #include "chre/util/transaction_manager.h"
 
+#include "chre/core/event_loop_common.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/hash.h"
 
@@ -65,9 +66,13 @@ bool TransactionManager<kMaxTransactions, TimerPoolType>::remove(
     Transaction &transaction = mTransactions[i];
     if (transaction.id == transactionId) {
       uint16_t groupId = transaction.groupId;
+      bool transactionWasStarted = transaction.attemptCount > 0;
       mTransactions.remove(i);
-      startNextTransactionInGroup(groupId);
-      updateTimer();
+
+      if (transactionWasStarted) {
+        startNextTransactionInGroup(groupId);
+        updateTimer();
+      }
       return true;
     }
   }
