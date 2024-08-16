@@ -109,9 +109,6 @@ class HalClient {
    */
   static bool isServiceAvailable();
 
-  /** A bug fix flag guarding the lock holding reduction change. */
-  static bool reduceLockHolding();
-
   /** Returns true if this HalClient instance is connected to the HAL. */
   bool isConnected() {
     return mIsHalConnected;

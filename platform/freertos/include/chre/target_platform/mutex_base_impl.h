@@ -44,7 +44,7 @@ inline bool Mutex::try_lock() {
   TickType_t doNotBlock = static_cast<TickType_t>(0);
   BaseType_t rv = xSemaphoreTake(mSemaphoreHandle, doNotBlock);
 
-  return (rv == pdTRUE) ? true : false;
+  return rv == pdTRUE;
 }
 
 inline void Mutex::unlock() {

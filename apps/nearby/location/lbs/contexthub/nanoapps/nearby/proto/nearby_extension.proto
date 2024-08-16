@@ -107,6 +107,14 @@ message ExtConfigRequest {
 
     // Timeout for tracker history to be considered lost.
     optional uint32 lost_timeout_ms = 7 [default = 60000];
+
+    // Time based threshold for opportunistic flush of tracker reports. When
+    // the nanoapp receives host awake event, it flueshes tracker reports if
+    // the epalsed time since the previous flush (by host or opportunistic)
+    // is equal to or greater than this threshold. The default value effectively
+    // disables the opportunistic flush.
+    optional uint32 opportunistic_flush_threshold_time_ms = 8
+        [default = 4294967295];
   }
 
   message FlushTrackerReports {}
