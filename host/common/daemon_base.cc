@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// TODO(b/298459533): metrics_reporter_in_the_daemon ramp up -> remove old
-// code
-
 #include <signal.h>
 #include <cstdlib>
 #include <fstream>
@@ -48,7 +45,6 @@ using ::aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::chre::Atoms::CHRE_EVENT_QUEUE_SNAPSHOT_REPORTED;
 using ::android::chre::Atoms::CHRE_PAL_OPEN_FAILED;
 using ::android::chre::Atoms::ChrePalOpenFailed;
-using ::android::chre::flags::metrics_reporter_in_the_daemon;
 #endif  // CHRE_DAEMON_METRIC_ENABLED
 
 namespace {
@@ -169,23 +165,12 @@ void ChreDaemonBase::handleMetricLog(const ::chre::fbs::MetricLogT *metricMsg) {
       if (!metric.ParseFromArray(encodedMetric.data(), encodedMetric.size())) {
         LOGE("Failed to parse metric data");
       } else {
-        if (metrics_reporter_in_the_daemon()) {
-          ChrePalOpenFailed::ChrePalType pal =
-              static_cast<ChrePalOpenFailed::ChrePalType>(metric.pal());
-          ChrePalOpenFailed::Type type =
-              static_cast<ChrePalOpenFailed::Type>(metric.type());
-          if (!mMetricsReporter.logPalOpenFailed(pal, type)) {
-            LOGE("Could not log the PAL open failed metric");
-          }
-        } else {
-          std::vector<VendorAtomValue> values(2);
-          values[0].set<VendorAtomValue::intValue>(metric.pal());
-          values[1].set<VendorAtomValue::intValue>(metric.type());
-          const VendorAtom atom{
-              .atomId = Atoms::CHRE_PAL_OPEN_FAILED,
-              .values{std::move(values)},
-          };
-          reportMetric(atom);
+        ChrePalOpenFailed::ChrePalType pal =
+            static_cast<ChrePalOpenFailed::ChrePalType>(metric.pal());
+        ChrePalOpenFailed::Type type =
+            static_cast<ChrePalOpenFailed::Type>(metric.type());
+        if (!mMetricsReporter.logPalOpenFailed(pal, type)) {
+          LOGE("Could not log the PAL open failed metric");
         }
       }
       break;
@@ -194,36 +179,11 @@ void ChreDaemonBase::handleMetricLog(const ::chre::fbs::MetricLogT *metricMsg) {
       metrics::ChreEventQueueSnapshotReported metric;
       if (!metric.ParseFromArray(encodedMetric.data(), encodedMetric.size())) {
         LOGE("Failed to parse metric data");
-      } else {
-        if (metrics_reporter_in_the_daemon()) {
-          if (!mMetricsReporter.logEventQueueSnapshotReported(
-                  metric.snapshot_chre_get_time_ms(),
-                  metric.max_event_queue_size(), metric.mean_event_queue_size(),
-                  metric.num_dropped_events())) {
-            LOGE("Could not log the event queue snapshot metric");
-          }
-        } else {
-          std::vector<VendorAtomValue> values(6);
-          values[0].set<VendorAtomValue::intValue>(
-              metric.snapshot_chre_get_time_ms());
-          values[1].set<VendorAtomValue::intValue>(
-              metric.max_event_queue_size());
-          values[2].set<VendorAtomValue::intValue>(
-              metric.mean_event_queue_size());
-          values[3].set<VendorAtomValue::intValue>(metric.num_dropped_events());
-          // Last two values are not currently populated and will be implemented
-          // later. To avoid confusion of the interpretation, we use UINT32_MAX
-          // as a placeholder value.
-          values[4].set<VendorAtomValue::intValue>(
-              UINT32_MAX);  // max_queue_delay_us
-          values[5].set<VendorAtomValue::intValue>(
-              UINT32_MAX);  // mean_queue_delay_us
-          const VendorAtom atom{
-              .atomId = Atoms::CHRE_EVENT_QUEUE_SNAPSHOT_REPORTED,
-              .values{std::move(values)},
-          };
-          reportMetric(atom);
-        }
+      } else if (!mMetricsReporter.logEventQueueSnapshotReported(
+              metric.snapshot_chre_get_time_ms(),
+              metric.max_event_queue_size(), metric.mean_event_queue_size(),
+              metric.num_dropped_events())) {
+        LOGE("Could not log the event queue snapshot metric");
       }
       break;
     }
