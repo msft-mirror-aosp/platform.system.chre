@@ -74,3 +74,13 @@ flag {
   description: "Fixes API check errors in Context Hub classes"
   bug: "340880058"
 }
+
+flag {
+  name: "refactor_hal_xport_agnostic"
+  namespace: "contex_hub"
+  description: "Flag guarding refactor of ContextHub HAL to be transport agnostic"
+  bug: "360926711"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
