@@ -15,14 +15,16 @@
 
 package {
     default_team: "trendy_team_context_hub",
-    // See: http://go/android-license-faq
-    // A large-scale-change added 'default_applicable_licenses' to import
-    // all of the 'license_kinds' from "system_chre_license"
-    // to get the below license kinds:
-    //   SPDX-license-identifier-Apache-2.0
     default_applicable_licenses: ["system_chre_license"],
 }
 
+// The rc and xml files are removed from the definition of
+// android.hardware.contexthub-service.tinysys to accommodate the various
+// needs of tinysys platform setup scenarios. These files can be installed
+// back by adding items below:
+//
+//   init_rc: ["android.hardware.contexthub-service.tinysys.rc"],
+//   vintf_fragments: ["android.hardware.contexthub-service.tinysys.xml"],
 cc_binary {
     name: "android.hardware.contexthub-service.tinysys",
     cpp_std: "c++20",
@@ -43,7 +45,6 @@ cc_binary {
         "system/chre/platform/shared/include/",
         "system/chre/util/include/",
     ],
-    init_rc: ["android.hardware.contexthub-service.tinysys.rc"],
     cflags: [
         "-DCHRE_HOST_DEFAULT_FRAGMENT_SIZE=2048",
         "-DCHRE_IS_HOST_BUILD",
@@ -59,6 +60,7 @@ cc_binary {
         "android.media.soundtrigger.types-V1-ndk",
         "chre_atoms_log",
         "chremetrics-cpp",
+        "libaconfig_storage_read_api_cc",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -68,7 +70,6 @@ cc_binary {
         "libprotobuf-cpp-lite",
         "libutils",
         "server_configurable_flags",
-        "libaconfig_storage_read_api_cc",
     ],
     header_libs: [
         "chre_api",
@@ -83,5 +84,4 @@ cc_binary {
         "pw_span",
         "pw_varint",
     ],
-    vintf_fragments: ["android.hardware.contexthub-service.tinysys.xml"],
 }
