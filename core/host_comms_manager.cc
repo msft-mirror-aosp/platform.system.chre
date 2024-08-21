@@ -97,8 +97,9 @@ bool HostCommsManager::completeTransaction(
         .handleMessageDeliveryStatusSync(txnId, err);
   };
   EventLoopManagerSingleton::get()->deferCallback(
-      SystemCallbackType::ReliableMessageEvent, NestedDataPtr(transactionId),
-      callback, NestedDataPtr(errorCode));
+      SystemCallbackType::ReliableMessageEvent,
+      NestedDataPtr<uint32_t>(transactionId), callback,
+      NestedDataPtr<uint8_t>(errorCode));
   return true;
 #else
   return false;
