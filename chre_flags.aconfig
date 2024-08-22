@@ -77,7 +77,7 @@ flag {
 
 flag {
   name: "refactor_hal_xport_agnostic"
-  namespace: "contex_hub"
+  namespace: "context_hub"
   description: "Flag guarding refactor of ContextHub HAL to be transport agnostic"
   bug: "360926711"
   metadata {
