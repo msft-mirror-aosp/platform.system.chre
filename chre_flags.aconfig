@@ -94,3 +94,17 @@ flag {
     purpose: PURPOSE_BUGFIX
   }
 }
+
+flag {
+  name: "unified_metrics_reporting_api"
+  namespace: "context_hub"
+  description: "The API for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
+}
+
+flag {
+  name: "unified_metrics_reporting_implementation"
+  namespace: "context_hub"
+  description: "The implementation for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
+}
