@@ -17,14 +17,14 @@
 #ifndef CHRE_PLATFORM_LINUX_NOTIFIER_IMPL_H_
 #define CHRE_PLATFORM_LINUX_NOTIFIER_IMPL_H_
 
-#include "chre/platform/notifier.h"
-
 #include <pthread.h>
 
 #include <cinttypes>
 #include <mutex>
 
+#include "chre/platform/assert.h"
 #include "chre/platform/log.h"
+#include "chre/platform/notifier.h"
 #include "chre/platform/thread_handle.h"
 
 namespace chre {
