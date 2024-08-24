@@ -32,6 +32,7 @@
 
 namespace chre {
 namespace {
+using namespace std::chrono_literals;
 
 CREATE_CHRE_TEST_EVENT(SCAN_REQUEST, 20);
 
@@ -49,13 +50,13 @@ class WifiScanRequestQueueTestBase : public TestBase {
     TestBase::SetUp();
     // Add delay to make sure the requests are queued.
     chrePalWifiDelayResponse(PalWifiAsyncRequestTypes::SCAN,
-                             std::chrono::seconds(1));
+                             /* milliseconds= */ 100ms);
   }
 
   void TearDown() {
     TestBase::TearDown();
     chrePalWifiDelayResponse(PalWifiAsyncRequestTypes::SCAN,
-                             std::chrono::seconds(0));
+                             /* milliseconds= */ 0ms);
   }
 };
 
