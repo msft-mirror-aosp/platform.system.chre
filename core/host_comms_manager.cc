@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 
 #include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
@@ -40,7 +41,7 @@ namespace {
 /**
  * Checks if the message can be send from the nanoapp to the host.
  *
- * @see sendMessageToHostFromNanoapp for a description of the parameter.
+ * @see sendMessageToHostFromNanoapp for a description of the parameters.
  *
  * @return Whether the message can be send to the host.
  */
@@ -179,28 +180,6 @@ void HostCommsManager::resetBlameForNanoappHostWakeup() {
   mIsNanoappBlamedForWakeup = false;
 }
 
-void HostCommsManager::sendDeferredMessageToNanoappFromHost(
-    MessageFromHost *craftedMessage) {
-  CHRE_ASSERT_LOG(craftedMessage != nullptr,
-                  "Deferred message from host is a NULL pointer");
-
-  if (!deliverNanoappMessageFromHost(craftedMessage)) {
-    LOGE("Dropping deferred message; destination app ID 0x%016" PRIx64
-         " still not found",
-         craftedMessage->appId);
-    if (craftedMessage->isReliable) {
-      handleDuplicateAndSendMessageDeliveryStatus(
-          craftedMessage->messageSequenceNumber,
-          craftedMessage->fromHostData.hostEndpoint,
-          CHRE_ERROR_DESTINATION_NOT_FOUND);
-    }
-    mMessagePool.deallocate(craftedMessage);
-  } else {
-    LOGD("Deferred message to app ID 0x%016" PRIx64 " delivered",
-         craftedMessage->appId);
-  }
-}
-
 bool HostCommsManager::sendMessageToHostFromNanoapp(
     Nanoapp *nanoapp, void *messageData, size_t messageSize,
     uint32_t messageType, uint16_t hostEndpoint, uint32_t messagePermissions,
@@ -249,54 +228,40 @@ void HostCommsManager::sendMessageToNanoappFromHost(
     uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
     const void *messageData, size_t messageSize, bool isReliable,
     uint32_t messageSequenceNumber) {
-  [[maybe_unused]] chreError error = CHRE_ERROR_NONE;
+  std::pair<chreError, MessageFromHost *> output =
+      validateAndCraftMessageFromHostToNanoapp(
+          appId, messageType, hostEndpoint, messageData, messageSize,
+          isReliable, messageSequenceNumber);
+  chreError error = output.first;
+  MessageFromHost *craftedMessage = output.second;
 
-  if (hostEndpoint == kHostEndpointBroadcast) {
-    LOGE("Received invalid message from host from broadcast endpoint");
-    error = CHRE_ERROR_INVALID_ARGUMENT;
-  } else if (messageSize > UINT32_MAX) {
-    // The current CHRE API uses uint32_t to represent the message size in
-    // struct chreMessageFromHostData. We don't expect to ever need to exceed
-    // this, but the check ensures we're on the up and up.
-    LOGE("Rejecting message of size %zu (too big)", messageSize);
-    error = CHRE_ERROR_NO_MEMORY;
-  } else if (!isReliable || shouldSendReliableMessageToNanoapp(
-                                messageSequenceNumber, hostEndpoint)) {
-    MessageFromHost *craftedMessage = craftNanoappMessageFromHost(
-        appId, hostEndpoint, messageType, messageData,
-        static_cast<uint32_t>(messageSize), isReliable, messageSequenceNumber);
-    if (craftedMessage == nullptr) {
-      LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
-           "(size %zu)",
-           appId, messageSize);
-      error = CHRE_ERROR_NO_MEMORY;
-    } else if (!deliverNanoappMessageFromHost(craftedMessage)) {
-      LOGV("Deferring message; destination app ID 0x%016" PRIx64
-           " not found at this time",
-           appId);
+  if (error == CHRE_ERROR_NONE) {
+    auto callback = [](uint16_t /*type*/, void *data, void* /* extraData */) {
+      MessageFromHost *craftedMessage = static_cast<MessageFromHost *>(data);
+      EventLoopManagerSingleton::get()
+          ->getHostCommsManager()
+          .deliverNanoappMessageFromHost(craftedMessage);
+    };
 
-      auto callback = [](uint16_t /*type*/, void *data, void * /*extraData*/) {
-        EventLoopManagerSingleton::get()
-            ->getHostCommsManager()
-            .sendDeferredMessageToNanoappFromHost(
-                static_cast<MessageFromHost *>(data));
-      };
-      if (!EventLoopManagerSingleton::get()->deferCallback(
-              SystemCallbackType::DeferredMessageToNanoappFromHost,
-              craftedMessage, callback)) {
-        error = CHRE_ERROR_BUSY;
-        mMessagePool.deallocate(craftedMessage);
-      }
+    if (!EventLoopManagerSingleton::get()->deferCallback(
+            SystemCallbackType::DeferredMessageToNanoappFromHost,
+            craftedMessage, callback)) {
+      LOGE("Failed to defer callback to send message to nanoapp from host");
+      error = CHRE_ERROR_BUSY;
     }
   }
 
+  if (error != CHRE_ERROR_NONE) {
 #ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
-  if (isReliable && error != CHRE_ERROR_NONE) {
-    handleDuplicateAndSendMessageDeliveryStatus(messageSequenceNumber,
-                                                hostEndpoint, error);
-  }
-  mDuplicateMessageDetector.removeOldEntries();
+    if (isReliable) {
+      sendMessageDeliveryStatus(messageSequenceNumber, error);
+    }
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+
+    if (craftedMessage != nullptr) {
+      mMessagePool.deallocate(craftedMessage);
+    }
+  }
 }
 
 MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
@@ -328,30 +293,81 @@ MessageFromHost *HostCommsManager::craftNanoappMessageFromHost(
   return msgFromHost;
 }
 
-bool HostCommsManager::deliverNanoappMessageFromHost(
-    MessageFromHost *craftedMessage) {
-  const EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
-  uint16_t targetInstanceId;
-  bool nanoappFound = false;
+/**
+ * Checks if the message can be send to the nanoapp from the host. Crafts
+ * the message to the nanoapp.
+ *
+ * @see sendMessageToNanoappFromHost for a description of the parameters.
+ *
+ * @return the error code and the crafted message
+ */
+std::pair<chreError, MessageFromHost *>
+HostCommsManager::validateAndCraftMessageFromHostToNanoapp(
+    uint64_t appId, uint32_t messageType, uint16_t hostEndpoint,
+    const void *messageData, size_t messageSize, bool isReliable,
+    uint32_t messageSequenceNumber) {
+  chreError error = CHRE_ERROR_NONE;
+  MessageFromHost *craftedMessage = nullptr;
 
+  if (hostEndpoint == kHostEndpointBroadcast) {
+    LOGE("Received invalid message from host from broadcast endpoint");
+    error = CHRE_ERROR_INVALID_ARGUMENT;
+  } else if (messageSize > UINT32_MAX) {
+    // The current CHRE API uses uint32_t to represent the message size in
+    // struct chreMessageFromHostData. We don't expect to ever need to exceed
+    // this, but the check ensures we're on the up and up.
+    LOGE("Rejecting message of size %zu (too big)", messageSize);
+    error = CHRE_ERROR_INVALID_ARGUMENT;
+  } else {
+    craftedMessage = craftNanoappMessageFromHost(
+        appId, hostEndpoint, messageType, messageData,
+        static_cast<uint32_t>(messageSize), isReliable,
+        messageSequenceNumber);
+    if (craftedMessage == nullptr) {
+      LOGE("Out of memory - rejecting message to app ID 0x%016" PRIx64
+            "(size %zu)",
+            appId, messageSize);
+      error = CHRE_ERROR_NO_MEMORY;
+    }
+  }
+  return std::make_pair(error, craftedMessage);
+}
+
+void HostCommsManager::deliverNanoappMessageFromHost(
+    MessageFromHost *craftedMessage) {
   CHRE_ASSERT_LOG(craftedMessage != nullptr,
                   "Cannot deliver NULL pointer nanoapp message from host");
 
-  if (eventLoop.findNanoappInstanceIdByAppId(craftedMessage->appId,
-                                             &targetInstanceId)) {
-    nanoappFound = true;
-    EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-        CHRE_EVENT_MESSAGE_FROM_HOST, &craftedMessage->fromHostData,
-        freeMessageFromHostCallback, targetInstanceId);
-    if (craftedMessage->isReliable) {
-      handleDuplicateAndSendMessageDeliveryStatus(
-          craftedMessage->messageSequenceNumber,
-          craftedMessage->fromHostData.hostEndpoint,
-          CHRE_ERROR_NONE);
-    }
+  Optional<chreError> error;
+  uint16_t targetInstanceId;
+
+  bool foundNanoapp = EventLoopManagerSingleton::get()
+                          ->getEventLoop()
+                          .findNanoappInstanceIdByAppId(craftedMessage->appId,
+                                                        &targetInstanceId);
+  bool shouldDeliverMessage = !craftedMessage->isReliable ||
+                                shouldSendReliableMessageToNanoapp(
+                                    craftedMessage->messageSequenceNumber,
+                                    craftedMessage->fromHostData.hostEndpoint);
+  if (!foundNanoapp) {
+    error = CHRE_ERROR_DESTINATION_NOT_FOUND;
+  } else if (shouldDeliverMessage) {
+    EventLoopManagerSingleton::get()->getEventLoop().deliverEventSync(
+        targetInstanceId, CHRE_EVENT_MESSAGE_FROM_HOST,
+        &craftedMessage->fromHostData);
+    error = CHRE_ERROR_NONE;
   }
 
-  return nanoappFound;
+  if (craftedMessage->isReliable && error.has_value()) {
+    handleDuplicateAndSendMessageDeliveryStatus(
+        craftedMessage->messageSequenceNumber,
+        craftedMessage->fromHostData.hostEndpoint, error.value());
+  }
+  mMessagePool.deallocate(craftedMessage);
+
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+  mDuplicateMessageDetector.removeOldEntries();
+#endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
 }
 
 bool HostCommsManager::doSendMessageToHostFromNanoapp(
@@ -402,25 +418,6 @@ void HostCommsManager::freeMessageToHost(MessageToHost *msgToHost) {
   }
 #endif  // CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
   mMessagePool.deallocate(msgToHost);
-}
-
-void HostCommsManager::freeMessageFromHostCallback(uint16_t /*type*/,
-                                                   void *data) {
-  // We pass the chreMessageFromHostData structure to the nanoapp as the event's
-  // data pointer, but we need to return to the enclosing HostMessage pointer.
-  // As long as HostMessage is standard-layout, and fromHostData is the first
-  // field, we can convert between these two pointers via reinterpret_cast.
-  // These static assertions ensure this assumption is held.
-  static_assert(std::is_standard_layout<HostMessage>::value,
-                "HostMessage* is derived from HostMessage::fromHostData*, "
-                "therefore it must be standard layout");
-  static_assert(offsetof(MessageFromHost, fromHostData) == 0,
-                "fromHostData must be the first field in HostMessage");
-
-  auto *eventData = static_cast<chreMessageFromHostData *>(data);
-  auto *msgFromHost = reinterpret_cast<MessageFromHost *>(eventData);
-  auto &hostCommsMgr = EventLoopManagerSingleton::get()->getHostCommsManager();
-  hostCommsMgr.mMessagePool.deallocate(msgFromHost);
 }
 
 void HostCommsManager::onTransactionAttempt(uint32_t messageSequenceNumber,
