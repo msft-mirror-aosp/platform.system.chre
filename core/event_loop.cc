@@ -93,7 +93,7 @@ bool populateNanoappInfo(const Nanoapp *app, struct chreNanoappInfo *info) {
 bool isNonNanoappLowPriorityEvent(Event *event, void * /* data */,
                                   void * /* extraData */) {
   CHRE_ASSERT_NOT_NULL(event);
-  return event->isLowPriority && event->senderInstanceId != kSystemInstanceId;
+  return event->isLowPriority && event->senderInstanceId == kSystemInstanceId;
 }
 
 void deallocateFromMemoryPool(Event *event, void *memoryPool) {
