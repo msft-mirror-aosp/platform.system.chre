@@ -77,10 +77,34 @@ flag {
 
 flag {
   name: "refactor_hal_xport_agnostic"
-  namespace: "contex_hub"
+  namespace: "context_hub"
   description: "Flag guarding refactor of ContextHub HAL to be transport agnostic"
   bug: "360926711"
   metadata {
     purpose: PURPOSE_BUGFIX
   }
+}
+
+flag {
+  name: "remove_old_context_hub_apis"
+  namespace: "context_hub"
+  description: "Removes the implementation of the deprecated old ContextHub APIs"
+  bug: "359925548"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "unified_metrics_reporting_api"
+  namespace: "context_hub"
+  description: "The API for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
+}
+
+flag {
+  name: "unified_metrics_reporting_implementation"
+  namespace: "context_hub"
+  description: "The implementation for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
 }
