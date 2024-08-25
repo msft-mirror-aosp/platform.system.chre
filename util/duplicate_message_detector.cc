@@ -15,7 +15,8 @@
  */
 
 #include "chre/util/duplicate_message_detector.h"
-#include "chre/util/lock_guard.h"
+
+#include "chre/platform/system_time.h"
 
 #include <cstdint>
 
@@ -24,8 +25,6 @@ namespace chre {
 Optional<chreError> DuplicateMessageDetector::findOrAdd(
     uint32_t messageSequenceNumber, uint16_t hostEndpoint,
     bool *outIsDuplicate) {
-  LockGuard<Mutex> lock(mMutex);
-
   DuplicateMessageDetector::ReliableMessageRecord *record =
       findLocked(messageSequenceNumber, hostEndpoint);
   if (outIsDuplicate != nullptr) {
@@ -45,11 +44,9 @@ Optional<chreError> DuplicateMessageDetector::findOrAdd(
   return record->error;
 }
 
-bool DuplicateMessageDetector::findAndSetError(
-    uint32_t messageSequenceNumber, uint16_t hostEndpoint,
-    chreError error) {
-  LockGuard<Mutex> lock(mMutex);
-
+bool DuplicateMessageDetector::findAndSetError(uint32_t messageSequenceNumber,
+                                               uint16_t hostEndpoint,
+                                               chreError error) {
   DuplicateMessageDetector::ReliableMessageRecord *record =
       findLocked(messageSequenceNumber, hostEndpoint);
   if (record == nullptr) {
@@ -61,8 +58,6 @@ bool DuplicateMessageDetector::findAndSetError(
 }
 
 void DuplicateMessageDetector::removeOldEntries() {
-  LockGuard<Mutex> lock(mMutex);
-
   Nanoseconds now = SystemTime::getMonotonicTime();
   while (!mReliableMessageRecordQueue.empty()) {
     ReliableMessageRecord &record = mReliableMessageRecordQueue.top();

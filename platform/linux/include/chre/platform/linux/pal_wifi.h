@@ -40,10 +40,10 @@ bool chrePalWifiIsScanMonitoringActive();
  * to CHRE.
  *
  * @param requestType select one request type to modify its behavior.
- * @param seconds delayed response time.
+ * @param milliseconds delayed response time.
  */
 void chrePalWifiDelayResponse(PalWifiAsyncRequestTypes requestType,
-                              std::chrono::seconds seconds);
+                              std::chrono::milliseconds milliseconds);
 
 /**
  * Sets if PAL should send back async request result for each async request.

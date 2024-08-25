@@ -84,16 +84,16 @@ bool populateNanoappInfo(const Nanoapp *app, struct chreNanoappInfo *info) {
 
 #ifndef CHRE_STATIC_EVENT_LOOP
 /**
- * @return true if a event is a low priority event.
+ * @return true if a event is a low priority event and is not from nanoapp.
  * Note: data and extraData are needed here to match the
  * matching function signature. Both are not used here, but
  * are used in other applications of
  * SegmentedQueue::removeMatchedFromBack.
  */
-bool isLowPriorityEvent(Event *event, void * /* data */,
-                        void * /* extraData */) {
+bool isNonNanoappLowPriorityEvent(Event *event, void * /* data */,
+                                  void * /* extraData */) {
   CHRE_ASSERT_NOT_NULL(event);
-  return event->isLowPriority;
+  return event->isLowPriority && event->senderInstanceId == kSystemInstanceId;
 }
 
 void deallocateFromMemoryPool(Event *event, void *memoryPool) {
@@ -274,7 +274,8 @@ bool EventLoop::unloadNanoapp(uint16_t instanceId,
   return unloaded;
 }
 
-bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNum) {
+bool EventLoop::removeNonNanoappLowPriorityEventsFromBack(
+    [[maybe_unused]] size_t removeNum) {
 #ifdef CHRE_STATIC_EVENT_LOOP
   return false;
 #else
@@ -282,10 +283,10 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
     return true;
   }
 
-  size_t numRemovedEvent =
-      mEvents.removeMatchedFromBack(isLowPriorityEvent, /* data= */ nullptr,
-                                    /* extraData= */ nullptr, removeNum,
-                                    deallocateFromMemoryPool, &mEventPool);
+  size_t numRemovedEvent = mEvents.removeMatchedFromBack(
+      isNonNanoappLowPriorityEvent, /* data= */ nullptr,
+      /* extraData= */ nullptr, removeNum, deallocateFromMemoryPool,
+      &mEventPool);
   if (numRemovedEvent == 0 || numRemovedEvent == SIZE_MAX) {
     LOGW("Cannot remove any low priority event");
   } else {
@@ -296,8 +297,8 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
 }
 
 bool EventLoop::hasNoSpaceForHighPriorityEvent() {
-  return mEventPool.full() &&
-         !removeLowPriorityEventsFromBack(targetLowPriorityEventRemove);
+  return mEventPool.full() && !removeNonNanoappLowPriorityEventsFromBack(
+                                  targetLowPriorityEventRemove);
 }
 
 bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
