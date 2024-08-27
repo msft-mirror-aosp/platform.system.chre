@@ -912,6 +912,12 @@ class WifiRequestManager : public NonCopyable {
    * has responded in the expected time window.
    */
   TimerHandle setScanRequestTimer();
+
+  /**
+   * Clears the system timer tracking timeout of the scan request. Should be
+   * called after scan response and all pending data have been delivered.
+   */
+  void cancelScanRequestTimer();
 };
 
 }  // namespace chre
