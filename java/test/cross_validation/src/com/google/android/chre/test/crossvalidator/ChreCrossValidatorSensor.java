@@ -144,9 +144,10 @@ public class ChreCrossValidatorSensor
             }
         }
 
-        Assume.assumeTrue(String.format("Sensor could not be instantiated for sensor type %d.",
-                apSensorType),
-                mSensorList.size() > 0);
+        Assume.assumeTrue(
+            String.format("Sensor could not be instantiated for sensor type %d, " +
+                              "skipping this test", apSensorType),
+            mSensorList.size() > 0);
     }
 
     @Override
