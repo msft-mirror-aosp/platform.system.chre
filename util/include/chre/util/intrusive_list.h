@@ -60,6 +60,15 @@ struct ListNode {
   ~ListNode() {
     CHRE_ASSERT(node.prev == nullptr && node.next == nullptr);
   }
+
+  /**
+   * Checks if this list node is linked in a list.
+   *
+   * @return true if the list node is part of a list.
+   */
+  bool isLinked() const {
+    return node.prev != nullptr && node.next != nullptr;
+  }
 };
 
 /**
