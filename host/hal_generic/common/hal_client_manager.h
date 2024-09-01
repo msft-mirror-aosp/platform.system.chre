@@ -24,6 +24,7 @@
 
 #include <sys/types.h>
 #include <cstddef>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -307,10 +308,11 @@ class HalClientManager {
   /**
    * Gets all the connected endpoints for the client identified by the @p pid.
    *
-   * @return the pointer to the endpoint id set if the client is identifiable,
-   * otherwise nullptr.
+   * @return copy of the endpoint id set if the client is identifiable,
+   * otherwise empty optional.
    */
-  const std::unordered_set<HostEndpointId> *getAllConnectedEndpoints(pid_t pid);
+  std::optional<std::unordered_set<HostEndpointId>> getAllConnectedEndpoints(
+      pid_t pid);
 
   /** Sends a message to every connected endpoints. */
   void sendMessageForAllCallbacks(
