@@ -138,3 +138,15 @@ TEST(IntrusiveList, LinkFront) {
   EXPECT_EQ(nodeB.node.next, &nodeA.node);
   EXPECT_EQ(nodeA.node.prev, &nodeB.node);
 }
+
+TEST(IntrusiveList, IsLinked) {
+  ListNode<int> node(0);
+  EXPECT_EQ(node.isLinked(), false);
+
+  IntrusiveList<int> list;
+  list.link_front(&node);
+  EXPECT_EQ(node.isLinked(), true);
+
+  list.unlink_front();
+  EXPECT_EQ(node.isLinked(), false);
+}
