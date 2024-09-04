@@ -43,11 +43,9 @@
 #include "chpp/transport.h"
 #include "chre/pal/wwan.h"
 
-namespace {
+namespace chpp::test {
 
-// Preamble as separate bytes for testing
-constexpr uint8_t kChppPreamble0 = 0x68;
-constexpr uint8_t kChppPreamble1 = 0x43;
+namespace {
 
 // Max size of payload sent to chppRxDataCb (bytes)
 constexpr size_t kMaxChunkSize = 20000;
@@ -59,10 +57,12 @@ constexpr size_t kMaxPacketSize =
 constexpr int kChunkSizes[] = {0, 1, 2, 3, 4, 21, 100, 1000, 10001, 20000};
 
 // Number of services
-constexpr int kServiceCount = 3;
+constexpr int kServiceCount = CHPP_EXPECTED_SERVICE_COUNT;
 
 // State of the link layer.
 struct ChppLinuxLinkState gChppLinuxLinkContext;
+
+}  // namespace
 
 /*
  * Test suite for the CHPP Transport Layer
@@ -99,255 +99,6 @@ class TransportTests : public testing::TestWithParam<int> {
   ChppAppState mAppContext = {};
   uint8_t mBuf[kMaxPacketSize] = {};
 };
-
-/**
- * Wait for chppTransportDoWork() to finish after it is notified by
- * chppEnqueueTxPacket to run.
- */
-void WaitForTransport(struct ChppTransportState *transportContext) {
-  // Start sending data out.
-  cycleSendThread();
-  // Wait for data to be received and processed.
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-  // Should have reset loc and length for next packet / datagram
-  EXPECT_EQ(transportContext->rxStatus.locInDatagram, 0);
-  EXPECT_EQ(transportContext->rxDatagram.length, 0);
-}
-
-/**
- * Validates a ChppTestResponse. Since the error field within the
- * ChppAppHeader struct is optional (and not used for common services), this
- * function returns the error field to be checked if desired, depending on the
- * service.
- *
- * @param buf Buffer containing response.
- * @param ackSeq Ack sequence to be verified.
- * @param handle Handle number to be verified
- * @param transactionID Transaction ID to be verified.
- *
- * @return The error field within the ChppAppHeader struct that is used by some
- * but not all services.
- */
-uint8_t validateChppTestResponse(void *buf, uint8_t ackSeq, uint8_t handle,
-                                 uint8_t transactionID) {
-  struct ChppTestResponse *response = (ChppTestResponse *)buf;
-
-  // Check preamble
-  EXPECT_EQ(response->preamble0, kChppPreamble0);
-  EXPECT_EQ(response->preamble1, kChppPreamble1);
-
-  // Check response transport headers
-  EXPECT_EQ(response->transportHeader.packetCode, CHPP_TRANSPORT_ERROR_NONE);
-  EXPECT_EQ(response->transportHeader.ackSeq, ackSeq);
-
-  // Check response app headers
-  EXPECT_EQ(response->appHeader.handle, handle);
-  EXPECT_EQ(response->appHeader.type, CHPP_MESSAGE_TYPE_SERVICE_RESPONSE);
-  EXPECT_EQ(response->appHeader.transaction, transactionID);
-
-  // Return optional response error to be checked if desired
-  return response->appHeader.error;
-}
-
-/**
- * Aborts a packet and validates state.
- *
- * @param transportcontext Maintains status for each transport layer instance.
- */
-void endAndValidatePacket(struct ChppTransportState *transportContext) {
-  chppRxPacketCompleteCb(transportContext);
-  EXPECT_EQ(transportContext->rxStatus.state, CHPP_STATE_PREAMBLE);
-  EXPECT_EQ(transportContext->rxStatus.locInDatagram, 0);
-  EXPECT_EQ(transportContext->rxDatagram.length, 0);
-}
-
-/**
- * Adds a preamble to a certain location in a buffer, and increases the location
- * accordingly, to account for the length of the added preamble.
- *
- * @param buf Buffer.
- * @param location Location to add the preamble, which its value will be
- * increased accordingly.
- */
-void addPreambleToBuf(uint8_t *buf, size_t *location) {
-  buf[(*location)++] = kChppPreamble0;
-  buf[(*location)++] = kChppPreamble1;
-}
-
-/**
- * Adds a transport header (with default values) to a certain location in a
- * buffer, and increases the location accordingly, to account for the length of
- * the added transport header.
- *
- * @param buf Buffer.
- * @param location Location to add the transport header, which its value will be
- * increased accordingly.
- *
- * @return Pointer to the added transport header (e.g. to modify its fields).
- */
-ChppTransportHeader *addTransportHeaderToBuf(uint8_t *buf, size_t *location) {
-  size_t oldLoc = *location;
-
-  // Default values for initial, minimum size request packet
-  ChppTransportHeader transHeader = {};
-  transHeader.flags = CHPP_TRANSPORT_FLAG_FINISHED_DATAGRAM;
-  transHeader.packetCode = CHPP_TRANSPORT_ERROR_NONE;
-  transHeader.ackSeq = 1;
-  transHeader.seq = 0;
-  transHeader.length = sizeof(ChppAppHeader);
-  transHeader.reserved = 0;
-
-  memcpy(&buf[*location], &transHeader, sizeof(transHeader));
-  *location += sizeof(transHeader);
-
-  return (ChppTransportHeader *)&buf[oldLoc];
-}
-
-/**
- * Adds an app header (with default values) to a certain location in a buffer,
- * and increases the location accordingly, to account for the length of the
- * added app header.
- *
- * @param buf Buffer.
- * @param location Location to add the app header, which its value will be
- * increased accordingly.
- *
- * @return Pointer to the added app header (e.g. to modify its fields).
- */
-ChppAppHeader *addAppHeaderToBuf(uint8_t *buf, size_t *location) {
-  size_t oldLoc = *location;
-
-  // Default values - to be updated later as necessary
-  ChppAppHeader appHeader = {};
-  appHeader.handle = CHPP_HANDLE_NEGOTIATED_RANGE_START;
-  appHeader.type = CHPP_MESSAGE_TYPE_CLIENT_REQUEST;
-  appHeader.transaction = 0;
-  appHeader.error = CHPP_APP_ERROR_NONE;
-  appHeader.command = 0;
-
-  memcpy(&buf[*location], &appHeader, sizeof(appHeader));
-  *location += sizeof(appHeader);
-
-  return (ChppAppHeader *)&buf[oldLoc];
-}
-
-/**
- * Adds a transport footer to a certain location in a buffer, and increases the
- * location accordingly, to account for the length of the added preamble.
- *
- * @param buf Buffer.
- * @param location Location to add the footer. The value of location will be
- * increased accordingly.
- *
- */
-void addTransportFooterToBuf(uint8_t *buf, size_t *location) {
-  uint32_t *checksum = (uint32_t *)&buf[*location];
-
-  *checksum = chppCrc32(0, &buf[CHPP_PREAMBLE_LEN_BYTES],
-                        *location - CHPP_PREAMBLE_LEN_BYTES);
-
-  *location += sizeof(ChppTransportFooter);
-}
-
-/**
- * Opens a service and checks to make sure it was opened correctly.
- *
- * @param transportContext Transport layer context.
- * @param buf Buffer.
- * @param ackSeq Ack sequence of the packet to be sent out
- * @param seq Sequence number of the packet to be sent out.
- * @param handle Handle of the service to be opened.
- * @param transactionID Transaction ID for the open request.
- * @param command Open command.
- */
-void openService(ChppTransportState *transportContext, uint8_t *buf,
-                 uint8_t ackSeq, uint8_t seq, uint8_t handle,
-                 uint8_t transactionID, uint16_t command) {
-  size_t len = 0;
-
-  addPreambleToBuf(buf, &len);
-
-  ChppTransportHeader *transHeader = addTransportHeaderToBuf(buf, &len);
-  transHeader->ackSeq = ackSeq;
-  transHeader->seq = seq;
-
-  ChppAppHeader *appHeader = addAppHeaderToBuf(buf, &len);
-  appHeader->handle = handle;
-  appHeader->transaction = transactionID;
-  appHeader->command = command;
-
-  addTransportFooterToBuf(buf, &len);
-
-  // Send header + payload (if any) + footer
-  EXPECT_TRUE(chppRxDataCb(transportContext, buf, len));
-
-  // Check for correct state
-  uint8_t nextSeq = transHeader->seq + 1;
-  EXPECT_EQ(transportContext->rxStatus.expectedSeq, nextSeq);
-  EXPECT_EQ(transportContext->rxStatus.state, CHPP_STATE_PREAMBLE);
-
-  // Wait for response
-  WaitForTransport(transportContext);
-
-  // Validate common response fields
-  EXPECT_EQ(validateChppTestResponse(gChppLinuxLinkContext.buf, nextSeq, handle,
-                                     transactionID),
-            CHPP_APP_ERROR_NONE);
-
-  // Check response length
-  EXPECT_EQ(sizeof(ChppTestResponse), CHPP_PREAMBLE_LEN_BYTES +
-                                          sizeof(ChppTransportHeader) +
-                                          sizeof(ChppAppHeader));
-  EXPECT_EQ(transportContext->linkBufferSize,
-            sizeof(ChppTestResponse) + sizeof(ChppTransportFooter));
-}
-
-/**
- * Sends a command to a service and checks for errors.
- *
- * @param transportContext Transport layer context.
- * @param buf Buffer.
- * @param ackSeq Ack sequence of the packet to be sent out
- * @param seq Sequence number of the packet to be sent out.
- * @param handle Handle of the service to be opened.
- * @param transactionID Transaction ID for the open request.
- * @param command Command to be sent.
- */
-void sendCommandToService(ChppTransportState *transportContext, uint8_t *buf,
-                          uint8_t ackSeq, uint8_t seq, uint8_t handle,
-                          uint8_t transactionID, uint16_t command) {
-  size_t len = 0;
-
-  addPreambleToBuf(buf, &len);
-
-  ChppTransportHeader *transHeader = addTransportHeaderToBuf(buf, &len);
-  transHeader->ackSeq = ackSeq;
-  transHeader->seq = seq;
-
-  ChppAppHeader *appHeader = addAppHeaderToBuf(buf, &len);
-  appHeader->handle = handle;
-  appHeader->transaction = transactionID;
-  appHeader->command = command;
-
-  addTransportFooterToBuf(buf, &len);
-
-  // Send header + payload (if any) + footer
-  EXPECT_TRUE(chppRxDataCb(transportContext, buf, len));
-
-  // Check for correct state
-  uint8_t nextSeq = transHeader->seq + 1;
-  EXPECT_EQ(transportContext->rxStatus.expectedSeq, nextSeq);
-  EXPECT_EQ(transportContext->rxStatus.state, CHPP_STATE_PREAMBLE);
-
-  // Wait for response
-  WaitForTransport(transportContext);
-
-  // Validate common response fields
-  EXPECT_EQ(validateChppTestResponse(gChppLinuxLinkContext.buf, nextSeq, handle,
-                                     transactionID),
-            CHPP_APP_ERROR_NONE);
-}
 
 /**
  * A series of zeros shouldn't change state from CHPP_STATE_PREAMBLE
@@ -838,14 +589,16 @@ TEST_F(TransportTests, WwanOpen) {
   uint8_t transactionID = 0;
   size_t len = 0;
 
+  EXPECT_EQ(findServiceHandle(&mAppContext, "WWAN", &handle), true);
+
   openService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-              transactionID++, CHPP_WWAN_OPEN);
+              transactionID++, CHPP_WWAN_OPEN, gChppLinuxLinkContext);
 
   addPreambleToBuf(mBuf, &len);
 
   uint16_t command = CHPP_WWAN_GET_CAPABILITIES;
   sendCommandToService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-                       transactionID++, command);
+                       transactionID++, command, gChppLinuxLinkContext);
 
   size_t responseLoc = sizeof(ChppTestResponse);
 
@@ -878,12 +631,14 @@ TEST_F(TransportTests, WifiOpen) {
   uint8_t handle = CHPP_HANDLE_NEGOTIATED_RANGE_START + 1;
   uint8_t transactionID = 0;
 
+  EXPECT_EQ(findServiceHandle(&mAppContext, "WiFi", &handle), true);
+
   openService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-              transactionID++, CHPP_WIFI_OPEN);
+              transactionID++, CHPP_WIFI_OPEN, gChppLinuxLinkContext);
 
   uint16_t command = CHPP_WIFI_GET_CAPABILITIES;
   sendCommandToService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-                       transactionID++, command);
+                       transactionID++, command, gChppLinuxLinkContext);
 
   size_t responseLoc = sizeof(ChppTestResponse);
 
@@ -921,14 +676,16 @@ TEST_F(TransportTests, GnssOpen) {
   uint8_t transactionID = 0;
   size_t len = 0;
 
+  EXPECT_EQ(findServiceHandle(&mAppContext, "GNSS", &handle), true);
+
   openService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-              transactionID++, CHPP_GNSS_OPEN);
+              transactionID++, CHPP_GNSS_OPEN, gChppLinuxLinkContext);
 
   addPreambleToBuf(mBuf, &len);
 
   uint16_t command = CHPP_GNSS_GET_CAPABILITIES;
   sendCommandToService(&mTransportContext, mBuf, ackSeq++, seq++, handle,
-                       transactionID++, command);
+                       transactionID++, command, gChppLinuxLinkContext);
 
   size_t responseLoc = sizeof(ChppTestResponse);
 
@@ -1096,7 +853,8 @@ void messageToInvalidHandle(ChppTransportState *transportContext,
 
   ChppAppHeader *appHeader = addAppHeaderToBuf(buf, &len);
   appHeader->handle =
-      CHPP_HANDLE_NEGOTIATED_RANGE_START + CHPP_MAX_REGISTERED_CLIENTS;
+      CHPP_HANDLE_NEGOTIATED_RANGE_START +
+      MAX(CHPP_MAX_REGISTERED_CLIENTS, CHPP_MAX_REGISTERED_SERVICES);
   appHeader->type = type;
   len = sizeof(struct ChppAppHeader);
 
@@ -1137,4 +895,5 @@ TEST_F(TransportTests, WorkMonitorInvoked) {
 
 INSTANTIATE_TEST_SUITE_P(TransportTestRange, TransportTests,
                          testing::ValuesIn(kChunkSizes));
-}  // namespace
+
+}  // namespace chpp::test

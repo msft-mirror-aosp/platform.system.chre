@@ -121,8 +121,10 @@ bool RpcServer::handleMessageFromHost(const void *eventData) {
   }
 
   mHostOutput.setHostEndpoint(hostMessage->hostEndpoint);
-  mServer.OpenChannel(result.value(), mHostOutput);
-
+  if (!mServer.OpenChannel(result.value(), mHostOutput).ok()) {
+    LOGE("Failed to open channel");
+    return false;
+  }
   pw::Status status = mServer.ProcessPacket(packet);
 
   if (status != pw::OkStatus()) {
@@ -153,7 +155,10 @@ bool RpcServer::handleMessageFromNanoapp(uint32_t senderInstanceId,
   chreConfigureNanoappInfoEvents(true);
 
   mNanoappOutput.setClient(senderInstanceId);
-  mServer.OpenChannel(result.value(), mNanoappOutput);
+  if (!mServer.OpenChannel(result.value(), mNanoappOutput).ok()) {
+    LOGE("Failed to open channel");
+    return false;
+  }
 
   pw::Status success = mServer.ProcessPacket(packet);
 
@@ -176,8 +181,10 @@ void RpcServer::handleHostClientNotification(const void *eventData) {
   if (notif->notificationType == HOST_ENDPOINT_NOTIFICATION_TYPE_DISCONNECT) {
     size_t hostIndex = mConnectedHosts.find(notif->hostEndpointId);
     if (hostIndex != mConnectedHosts.size()) {
-      mServer.CloseChannel(kChannelIdHostClient |
-                           static_cast<uint32_t>(notif->hostEndpointId));
+      mServer
+          .CloseChannel(kChannelIdHostClient |
+                        static_cast<uint32_t>(notif->hostEndpointId))
+          .IgnoreError();
       mConnectedHosts.erase(hostIndex);
     }
   }
@@ -188,8 +195,8 @@ void RpcServer::handleNanoappStopped(const void *eventData) {
 
   if (info->instanceId > kRpcNanoappMaxId) {
     LOGE("Invalid nanoapp Id 0x%08" PRIx32, info->instanceId);
-  } else {
-    mServer.CloseChannel(info->instanceId);
+  } else if (!mServer.CloseChannel(info->instanceId).ok()) {
+    LOGE("Failed to close channel for nanoapp 0x%08" PRIx32, info->instanceId);
   }
 }
 
