@@ -779,3 +779,54 @@ TEST(DynamicVector, Resize) {
   EXPECT_EQ(vector.size(), 99);
   EXPECT_EQ(vector.capacity(), 99);
 }
+
+/**
+ * A test class that exceeds the default max alignment and is not trivial.
+ */
+struct alignas(64) ExceedsMaxAlignNotTrivial {
+  ExceedsMaxAlignNotTrivial() {
+    value = 1000;
+  }
+
+  int value;
+};
+
+/**
+ * A test class that exceeds the default max alignment and is trivial.
+ */
+struct alignas(64) ExceedsMaxAlignIsTrivial {
+  int value;
+};
+
+static_assert(alignof(ExceedsMaxAlignNotTrivial) > alignof(std::max_align_t));
+static_assert(!std::is_trivial<ExceedsMaxAlignNotTrivial>::value);
+static_assert(alignof(ExceedsMaxAlignIsTrivial) > alignof(std::max_align_t));
+static_assert(std::is_trivial<ExceedsMaxAlignIsTrivial>::value);
+
+TEST(DynamicVector, AlignedAllocExceedsMaxAlignNotTrivial) {
+  for (size_t i = 0; i < 10; ++i) {
+    chre::DynamicVector<ExceedsMaxAlignNotTrivial> vector;
+    for (size_t j = 0; j < i; ++j) {
+      ExceedsMaxAlignNotTrivial exceedsMaxAlignNotTrivial;
+      EXPECT_TRUE(vector.push_back(exceedsMaxAlignNotTrivial));
+      EXPECT_NE(vector.data(), nullptr);
+      EXPECT_EQ(reinterpret_cast<uint64_t>(vector.data()) %
+                    alignof(ExceedsMaxAlignNotTrivial),
+                0);
+    }
+  }
+}
+
+TEST(DynamicVector, AlignedAllocExceedsMaxAlignIsTrivial) {
+  for (size_t i = 0; i < 10; ++i) {
+    chre::DynamicVector<ExceedsMaxAlignIsTrivial> vector;
+    for (size_t j = 0; j < i; ++j) {
+      ExceedsMaxAlignIsTrivial exceedsMaxAlignIsTrivial;
+      EXPECT_TRUE(vector.push_back(exceedsMaxAlignIsTrivial));
+      EXPECT_NE(vector.data(), nullptr);
+      EXPECT_EQ(reinterpret_cast<uint64_t>(vector.data()) %
+                    alignof(ExceedsMaxAlignIsTrivial),
+                0);
+    }
+  }
+}

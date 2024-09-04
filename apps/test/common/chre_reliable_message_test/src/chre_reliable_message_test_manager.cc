@@ -25,6 +25,7 @@
 #include "chre/util/nanoapp/log.h"
 #include "chre/util/nested_data_ptr.h"
 #include "chre/util/optional.h"
+#include "chre/util/time.h"
 #include "chre_api/chre.h"
 #include "send_message.h"
 
@@ -63,12 +64,24 @@ void Manager::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
       handleAsyncMessageStatus(result);
       break;
     }
+    case CHRE_EVENT_TIMER: {
+      mTimerHandle = CHRE_TIMER_INVALID;
+      completeTest(true);
+      break;
+    }
   }
 
   if (mNumExpectedAsyncResults == 0 &&
       mNumExpectedHostEchoMessages == 0 &&
       mNumExpectedFreeMessageCallbacks == 0) {
-    completeTest(true);
+    // Wait for 2s (twice reliable message timeout) to detect duplicates
+    constexpr Seconds kTimeoutForTestComplete(2);
+    mTimerHandle = chreTimerSet(kTimeoutForTestComplete.toRawNanoseconds(),
+                                /* cookie= */ nullptr, /* oneShot= */ true);
+    if (mTimerHandle == CHRE_TIMER_INVALID) {
+      LOGE("Failed to set the timer for test complete");
+      completeTest(false, "Failed to set the timer for test complete");
+    }
   }
 }
 
