@@ -17,6 +17,7 @@
 #include "chre/core/event_loop.h"
 #include <cinttypes>
 #include <cstdint>
+#include <type_traits>
 
 #include "chre/core/event.h"
 #include "chre/core/event_loop_manager.h"
@@ -30,6 +31,7 @@
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/stats_container.h"
+#include "chre/util/throttle.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 
@@ -82,16 +84,16 @@ bool populateNanoappInfo(const Nanoapp *app, struct chreNanoappInfo *info) {
 
 #ifndef CHRE_STATIC_EVENT_LOOP
 /**
- * @return true if a event is a low priority event.
+ * @return true if a event is a low priority event and is not from nanoapp.
  * Note: data and extraData are needed here to match the
  * matching function signature. Both are not used here, but
  * are used in other applications of
  * SegmentedQueue::removeMatchedFromBack.
  */
-bool isLowPriorityEvent(Event *event, void * /* data */,
-                        void * /* extraData */) {
+bool isNonNanoappLowPriorityEvent(Event *event, void * /* data */,
+                                  void * /* extraData */) {
   CHRE_ASSERT_NOT_NULL(event);
-  return event->isLowPriority;
+  return event->isLowPriority && event->senderInstanceId == kSystemInstanceId;
 }
 
 void deallocateFromMemoryPool(Event *event, void *memoryPool) {
@@ -272,7 +274,8 @@ bool EventLoop::unloadNanoapp(uint16_t instanceId,
   return unloaded;
 }
 
-bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNum) {
+bool EventLoop::removeNonNanoappLowPriorityEventsFromBack(
+    [[maybe_unused]] size_t removeNum) {
 #ifdef CHRE_STATIC_EVENT_LOOP
   return false;
 #else
@@ -280,10 +283,10 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
     return true;
   }
 
-  size_t numRemovedEvent =
-      mEvents.removeMatchedFromBack(isLowPriorityEvent, /* data= */ nullptr,
-                                    /* extraData= */ nullptr, removeNum,
-                                    deallocateFromMemoryPool, &mEventPool);
+  size_t numRemovedEvent = mEvents.removeMatchedFromBack(
+      isNonNanoappLowPriorityEvent, /* data= */ nullptr,
+      /* extraData= */ nullptr, removeNum, deallocateFromMemoryPool,
+      &mEventPool);
   if (numRemovedEvent == 0 || numRemovedEvent == SIZE_MAX) {
     LOGW("Cannot remove any low priority event");
   } else {
@@ -294,8 +297,8 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
 }
 
 bool EventLoop::hasNoSpaceForHighPriorityEvent() {
-  return mEventPool.full() &&
-         !removeLowPriorityEventsFromBack(targetLowPriorityEventRemove);
+  return mEventPool.full() && !removeNonNanoappLowPriorityEventsFromBack(
+                                  targetLowPriorityEventRemove);
 }
 
 bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
@@ -483,6 +486,29 @@ bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
 }
 
 void EventLoop::deliverNextEvent(const UniquePtr<Nanoapp> &app, Event *event) {
+  constexpr Seconds kLatencyThreshold = Seconds(1);
+  constexpr Seconds kThrottleInterval(1);
+  constexpr uint16_t kThrottleCount = 10;
+
+  // Handle time rollover. If Event ever changes the type used to store the
+  // received time, this will need to be updated.
+  uint32_t now = Event::getTimeMillis();
+  static_assert(
+      std::is_same<decltype(event->receivedTimeMillis), const uint16_t>::value);
+  if (now < event->receivedTimeMillis) {
+    now += UINT16_MAX + 1;
+  }
+  Milliseconds latency(now - event->receivedTimeMillis);
+
+  if (latency >= kLatencyThreshold) {
+    CHRE_THROTTLE(LOGW("Delayed event 0x%" PRIx16 " from instanceId %" PRIu16
+                       "->%" PRIu16 " took %" PRIu64 "ms to deliver",
+                       event->eventType, event->senderInstanceId,
+                       event->targetInstanceId, latency.getMilliseconds()),
+                  kThrottleInterval, kThrottleCount,
+                  SystemTime::getMonotonicTime());
+  }
+
   // TODO: cleaner way to set/clear this? RAII-style?
   mCurrentApp = app.get();
   app->processEvent(event);
