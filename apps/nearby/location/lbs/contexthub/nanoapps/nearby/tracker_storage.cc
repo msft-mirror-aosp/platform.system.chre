@@ -18,8 +18,8 @@ namespace nearby {
 void TrackerStorage::Push(const chreBleAdvertisingReport &report,
                           const TrackerBatchConfig &config) {
   for (auto &tracker_report : tracker_reports_) {
-    if (IsEqualReport(tracker_report, report)) {
-      UpdateTrackerReport(tracker_report, config);
+    if (IsEqualAddress(tracker_report, report)) {
+      UpdateTrackerReport(tracker_report, config, report);
       return;
     }
   }
@@ -40,15 +40,22 @@ void TrackerStorage::Refresh(const TrackerBatchConfig &config) {
     if (back.state != TrackerState::kPresent) {
       continue;
     }
-    if (current_time_ms >= back.last_found_time_ms + config.lost_timeout_ms) {
+    if (current_time_ms >=
+        back.last_radio_discovery_time_ms + config.lost_timeout_ms) {
       back.state = TrackerState::kAbsent;
       back.lost_time_ms = current_time_ms;
     }
   }
 }
 
-void TrackerStorage::UpdateTrackerReport(TrackerReport &tracker_report,
-                                         const TrackerBatchConfig &config) {
+void TrackerStorage::UpdateTrackerReport(
+    TrackerReport &tracker_report, const TrackerBatchConfig &config,
+    const chreBleAdvertisingReport &report) {
+  LOGD_SENSITIVE_INFO(
+      "Received tracker report, tracker address: %02X:%02X:%02X:%02X:%02X:%02X",
+      tracker_report.header.address[0], tracker_report.header.address[1],
+      tracker_report.header.address[2], tracker_report.header.address[3],
+      tracker_report.header.address[4], tracker_report.header.address[5]);
   uint32_t current_time_ms = GetCurrentTimeMs();
   if (tracker_report.historian.empty() ||
       tracker_report.historian.back().state != TrackerState::kPresent) {
@@ -61,7 +68,12 @@ void TrackerStorage::UpdateTrackerReport(TrackerReport &tracker_report,
       tracker_report.historian.back().found_count++;
       tracker_report.historian.back().last_found_time_ms = current_time_ms;
     }
+    // Updates the last radio discovery time in the history without sampling.
+    tracker_report.historian.back().last_radio_discovery_time_ms =
+        current_time_ms;
   }
+  // Updates the advertising data if it is different from the previous one.
+  AddOrUpdateAdvertisingData(tracker_report, report);
   if (tracker_report.historian.size() > config.max_history_count) {
     LOGW(
         "Discarding old tracker history. Tracker history count %zu max history "
@@ -94,20 +106,8 @@ void TrackerStorage::AddTrackerReport(const chreBleAdvertisingReport &report,
   }
   // Creates a new key report and copies header.
   TrackerReport new_report;
-  new_report.header = report;
-  // Allocates advertise data and copy it as well.
-  uint16_t dataLength = report.dataLength;
-  if (dataLength > 0) {
-    chre::UniquePtr<uint8_t[]> data =
-        chre::MakeUniqueArray<uint8_t[]>(dataLength);
-    if (data == nullptr) {
-      LOGE("Memory allocation failed!");
-      return;
-    }
-    memcpy(data.get(), report.data, dataLength);
-    new_report.data = std::move(data);
-    new_report.header.data = new_report.data.get();
-  }
+  // Adds the advertising data to the new tracker report.
+  AddOrUpdateAdvertisingData(new_report, report);
   // For the new report, add a tracker history.
   new_report.historian.reserve(kDefaultTrackerHistorySize);
   new_report.historian.emplace_back(TrackerHistory(GetCurrentTimeMs()));
@@ -119,15 +119,42 @@ void TrackerStorage::AddTrackerReport(const chreBleAdvertisingReport &report,
        config.max_tracker_count);
 }
 
-bool TrackerStorage::IsEqualReport(
+void TrackerStorage::AddOrUpdateAdvertisingData(
+    TrackerReport &tracker_report, const chreBleAdvertisingReport &report) {
+  uint16_t dataLength = report.dataLength;
+  if (dataLength <= 0) {
+    LOGW("Empty advertising data found in advertising report");
+    return;
+  }
+  if (tracker_report.data == nullptr ||
+      tracker_report.header.dataLength != dataLength) {
+    tracker_report.header = report;
+    // Allocates advertise data and copy it as well.
+    chre::UniquePtr<uint8_t[]> data =
+        chre::MakeUniqueArray<uint8_t[]>(dataLength);
+    if (data == nullptr) {
+      LOGE("Memory allocation failed!");
+      return;
+    }
+    memcpy(data.get(), report.data, dataLength);
+    tracker_report.data = std::move(data);
+    tracker_report.header.data = tracker_report.data.get();
+  } else if (tracker_report.header.dataLength == dataLength &&
+             memcmp(tracker_report.data.get(), report.data,
+                    tracker_report.header.dataLength) != 0) {
+    tracker_report.header = report;
+    memcpy(tracker_report.data.get(), report.data,
+           tracker_report.header.dataLength);
+    tracker_report.header.data = tracker_report.data.get();
+  }
+}
+
+bool TrackerStorage::IsEqualAddress(
     const TrackerReport &tracker_report,
     const chreBleAdvertisingReport &report) const {
   return (tracker_report.header.addressType == report.addressType &&
           memcmp(tracker_report.header.address, report.address,
-                 CHRE_BLE_ADDRESS_LEN) == 0 &&
-          tracker_report.header.dataLength == report.dataLength &&
-          memcmp(tracker_report.data.get(), report.data,
-                 tracker_report.header.dataLength) == 0);
+                 CHRE_BLE_ADDRESS_LEN) == 0);
 }
 
 uint32_t TrackerStorage::GetCurrentTimeMs() const {

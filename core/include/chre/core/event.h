@@ -115,6 +115,9 @@ class Event : public NonCopyable {
     }
   }
 
+  //! @return Monotonic time reference for initializing receivedTimeMillis
+  static uint16_t getTimeMillis();
+
   const uint16_t eventType;
 
   //! This value can serve as a proxy for how fast CHRE is processing events
@@ -149,9 +152,6 @@ class Event : public NonCopyable {
 
  private:
   uint8_t mRefCount = 0;
-
-  //! @return Monotonic time reference for initializing receivedTimeMillis
-  static uint16_t getTimeMillis();
 };
 
 }  // namespace chre
