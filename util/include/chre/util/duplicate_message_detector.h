@@ -17,8 +17,6 @@
 #ifndef CHRE_UTIL_DUPLICATE_MESSAGE_DETECTOR_H_
 #define CHRE_UTIL_DUPLICATE_MESSAGE_DETECTOR_H_
 
-#include "chre/platform/mutex.h"
-#include "chre/platform/system_time.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
 #include "chre/util/priority_queue.h"
@@ -33,7 +31,7 @@ namespace chre {
  * This class is used to detect duplicate reliable messages. It keeps a record
  * of all reliable messages that have been sent from the host. If a message with
  * the same message sequence number and host endpoint is sent again, it is
- * considered a duplicate. This class is thread-safe.
+ * considered a duplicate. This class is not thread-safe.
  *
  * A typical usage of this class would be as follows:
  *
@@ -90,9 +88,6 @@ class DuplicateMessageDetector : public NonCopyable {
   //! The timeout specified in the constructor. This should be the reliable
   //! message timeout.
   Nanoseconds kTimeout;
-
-  //! The mutex used to protect the queue.
-  Mutex mMutex;
 
   //! The queue of reliable message records.
   PriorityQueue<ReliableMessageRecord, std::greater<ReliableMessageRecord>>
