@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,23 @@
  * limitations under the License.
  */
 
-SECTION_DATA_PROLOGUE(_CHRE_SECTION,,)
-{
-	KEEP(*(".unstable_id"));
-} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#ifndef CHRE_PLATFORM_LINUX_THREAD_HANDLE_BASE_H_
+#define CHRE_PLATFORM_LINUX_THREAD_HANDLE_BASE_H_
+
+#include <pthread.h>
+
+namespace chre {
+
+/**
+ * Storage for the Linux implementation of a thread handle.
+ */
+class ThreadHandleBase {
+ protected:
+  using NativeHandle = pthread_t;
+
+  NativeHandle mHandle;
+};
+
+}  // namespace chre
+
+#endif  // CHRE_PLATFORM_LINUX_THREAD_HANDLE_BASE_H_
