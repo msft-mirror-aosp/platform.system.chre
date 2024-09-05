@@ -31,7 +31,7 @@ inline T *memoryAlignedAlloc() {
 }
 
 template <typename T>
-inline T *memoryAlignedAllocArray() {
+inline T *memoryAlignedAllocArray([[maybe_unused]] size_t count) {
   static_assert(AlwaysFalse<T>::value,
                 "memoryAlignedAlloc is unsupported on this platform");
   return nullptr;
