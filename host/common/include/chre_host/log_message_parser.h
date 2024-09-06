@@ -20,12 +20,14 @@
 #include <endian.h>
 #include <cinttypes>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include "chre/util/time.h"
 #include "chre_host/bt_snoop_log_parser.h"
 #include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/nanoapp_load_listener.h"
 
+#include <android-base/thread_annotations.h>
 #include <android/log.h>
 
 #include "pw_tokenizer/detokenize.h"
@@ -94,7 +96,8 @@ class LogMessageParser : public INanoappLoadListener {
    * @param removeBinary Remove the nanoapp binary associated with the app ID if
    * true.
    */
-  void removeNanoappDetokenizerAndBinary(uint64_t appId);
+  void removeNanoappDetokenizerAndBinary(uint64_t appId)
+      EXCLUDES(mNanoappMutex);
 
   /**
    * Reset all nanoapp log detokenizers.
@@ -176,14 +179,19 @@ class LogMessageParser : public INanoappLoadListener {
   };
 
   //! Maps nanoapp instance IDs to the corresponding app ID and pigweed
-  //! detokenizer.
+  //! detokenizer. Guarded by mNanoappMutex.
   std::unordered_map<uint16_t /*instanceId*/, NanoappDetokenizer>
-      mNanoappDetokenizers;
+      mNanoappDetokenizers GUARDED_BY(mNanoappMutex);
 
   //! This is used to find the binary associated with a nanoapp with its app ID.
+  //! Guarded by mNanoappMutex.
   std::unordered_map<uint64_t /*appId*/,
                      std::shared_ptr<const std::vector<uint8_t>>>
-      mNanoappAppIdToBinary;
+      mNanoappAppIdToBinary GUARDED_BY(mNanoappMutex);
+
+  //! The mutex used to guard operations of mNanoappAppIdtoBinary and
+  //! mNanoappDetokenizers.
+  std::mutex mNanoappMutex;
 
   static android_LogPriority chreLogLevelToAndroidLogPriority(uint8_t level);
 
@@ -297,13 +305,27 @@ class LogMessageParser : public INanoappLoadListener {
   bool checkTokenDatabaseOverflow(uint32_t databaseOffset, size_t databaseSize,
                                   size_t binarySize);
 
-  /*
+  /**
    * Helper function that returns the log type of a log message.
    */
   LogType extractLogType(const LogMessageV2 *message) {
     return static_cast<LogType>((message->metadata & kLogTypeMask) >>
                                 kLogTypeBitOffset);
   }
+
+  /**
+   * Helper function that returns the nanoapp binary from its appId.
+   */
+  std::shared_ptr<const std::vector<uint8_t>> fetchNanoappBinary(uint64_t appId)
+      EXCLUDES(mNanoappMutex);
+
+  /**
+   * Helper function that registers a nanoapp detokenizer with its appID and
+   * instanceID.
+   */
+  void registerDetokenizer(uint64_t appId, uint16_t instanceId,
+                           pw::Result<Detokenizer> nanoappDetokenizer)
+      EXCLUDES(mNanoappMutex);
 };
 
 }  // namespace chre

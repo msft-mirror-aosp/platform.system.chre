@@ -18,6 +18,7 @@
 #define CHRE_PLATFORM_MEMORY_H_
 
 #include <cstddef>
+#include <cstdint>
 
 namespace chre {
 
@@ -33,9 +34,17 @@ void *memoryAlloc(size_t size);
  *
  * This implementation is optional and is not typically needed.
  */
-
 template <typename T>
 T *memoryAlignedAlloc();
+
+/**
+ * A platform abstraction for aligned memory allocation for an array. The
+ * semantics are the same as aligned_malloc.
+ *
+ * This implementation is optional and is not typically needed.
+ */
+template <typename T>
+T *memoryAlignedAllocArray(size_t count);
 
 /**
  * A platform abstraction for memory free. The semantics are the same as free.
