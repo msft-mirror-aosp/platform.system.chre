@@ -60,6 +60,12 @@ void deleteOpOverride(void* /* ptr */, unsigned int size) {
   FATAL_ERROR("Nanoapp: delete(void *, unsigned int) override : sz = %u", size);
 }
 
+#ifdef __clang__
+void deleteOp2Override(void*) {
+  FATAL_ERROR("Nanoapp: delete(void *)");
+}
+#endif
+
 int atexitInternal(struct AtExitCallback &cb) {
   if (gCurrentlyLoadingNanoapp == nullptr) {
     CHRE_ASSERT_LOG(false,
@@ -107,6 +113,10 @@ double floorOverride(double value) {
   return floor(value);
 }
 
+double ceilOverride(double value) {
+  return ceil(value);
+}
+
 double sinOverride(double rad) {
   return sin(rad);
 }
@@ -150,6 +160,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_SYMBOL(atan2Override, "atan2"),
     ADD_EXPORTED_SYMBOL(cosOverride, "cos"),
     ADD_EXPORTED_SYMBOL(floorOverride, "floor"),
+    ADD_EXPORTED_SYMBOL(ceilOverride, "ceil"),
     ADD_EXPORTED_SYMBOL(fmaxOverride, "fmax"),
     ADD_EXPORTED_SYMBOL(fminOverride, "fmin"),
     ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
@@ -185,6 +196,9 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_SYMBOL(cxaAtexitOverride, "__cxa_atexit"),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOpOverride, "_ZdlPvj"),
+#ifdef __clang__
+    ADD_EXPORTED_SYMBOL(deleteOp2Override, "_ZdlPv"),
+#endif
     ADD_EXPORTED_C_SYMBOL(dlsym),
     ADD_EXPORTED_C_SYMBOL(isgraph),
     ADD_EXPORTED_C_SYMBOL(memcmp),
@@ -661,6 +675,7 @@ NanoappLoader::ElfSym *NanoappLoader::getDynamicSymbol(
     return reinterpret_cast<ElfSym *>(
         &mDynamicSymbolTablePtr[posInSymbolTable * sizeof(ElfSym)]);
   }
+  LOGE("Symbol index %zu is out of bound %zu", posInSymbolTable, numElements);
   return nullptr;
 }
 
@@ -779,7 +794,7 @@ void NanoappLoader::callTerminatorArray() {
   }
 }
 
-bool NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
+void NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
                                                 size_t *size) {
   // Find token database.
   SectionHeader *pwTokenTableHeader = getSectionHeader(kTokenTableName);
@@ -787,12 +802,15 @@ bool NanoappLoader::getTokenDatabaseSectionInfo(uint32_t *offset,
     if (pwTokenTableHeader->sh_size != 0) {
       *size = pwTokenTableHeader->sh_size;
       *offset = pwTokenTableHeader->sh_offset;
-      return true;
     } else {
       LOGE("Found empty token database");
+      *size = 0;
+      *offset = 0;
     }
+  } else {
+    *size = 0;
+    *offset = 0;
   }
-  return false;
 }
 
 }  // namespace chre

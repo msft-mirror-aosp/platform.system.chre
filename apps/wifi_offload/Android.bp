@@ -54,12 +54,12 @@ cc_library_static {
         "libutils",
     ],
     header_libs: [
-        "chre_flatbuffers",
         "chre_api",
+        "chre_flatbuffers",
     ],
     export_header_lib_headers: [
-        "chre_flatbuffers",
         "chre_api",
+        "chre_flatbuffers",
     ],
     vendor: true,
     proprietary: true,

@@ -21,11 +21,20 @@
 #include <ctime>
 
 #include "chre/platform/assert.h"
-#include "chre/platform/log.h"
+#include "chre/util/optional.h"
 
 namespace chre {
+namespace {
+
+chre::Optional<Nanoseconds> gTimeOverride;
+
+}  // anonymous namespace
 
 Nanoseconds SystemTime::getMonotonicTime() {
+  if (gTimeOverride.has_value()) {
+    return gTimeOverride.value();
+  }
+
   struct timespec timeNow;
   if (clock_gettime(CLOCK_MONOTONIC, &timeNow)) {
     CHRE_ASSERT_LOG(false, "Failed to obtain time with error: %s",
@@ -44,4 +53,15 @@ int64_t SystemTime::getEstimatedHostTimeOffset() {
   return 0;
 }
 
+namespace platform_linux {
+
+void overrideMonotonicTime(Nanoseconds ns) {
+  gTimeOverride = ns;
+}
+
+void clearMonotonicTimeOverride(void) {
+  gTimeOverride.reset();
+}
+
+}  // namespace platform_linux
 }  // namespace chre

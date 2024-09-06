@@ -27,6 +27,7 @@ TARGET_CFLAGS += -DGTEST
 # Ignore sign comparison warnings triggered by EXPECT/ASSERT macros in tests
 # (typically, unsigned value vs. implicitly signed literal)
 TARGET_CFLAGS += -Wno-sign-compare
+TARGET_CFLAGS += -Wvla-extension
 
 # Ignore missing field initializers as googletest will not compile with this
 # warning enabled.

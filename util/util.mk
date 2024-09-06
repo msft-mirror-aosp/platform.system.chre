@@ -11,6 +11,7 @@ COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 
 COMMON_SRCS += $(CHRE_PREFIX)/util/buffer_base.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/dynamic_vector_base.cc
+COMMON_SRCS += $(CHRE_PREFIX)/util/hash.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/intrusive_list_base.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/audio.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/ble.cc

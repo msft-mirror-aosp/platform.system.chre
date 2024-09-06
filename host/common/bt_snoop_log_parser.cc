@@ -20,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fstream>
+#include <optional>
 
 #include "chre/util/time.h"
 #include "chre_host/daemon_base.h"
@@ -57,6 +58,11 @@ constexpr uint32_t BTSNOOP_DATALINK_TYPE =
 // Epoch in microseconds since 01/01/0000.
 constexpr uint64_t kBtSnoopEpochDelta = 0x00dcddb30f2f8000ULL;
 
+// The number of bytes in bluetooth snoop log entry in addition to the log
+// payload. The value indicate the size of the uint8_t direction and packetSize
+// field.
+constexpr size_t kBtSnoopLogOffset = 2;
+
 struct FileHeaderType {
   uint8_t identification_pattern[8];
   uint32_t version_number;
@@ -79,11 +85,20 @@ uint64_t htonll(uint64_t ll) {
 
 }  // namespace
 
-size_t BtSnoopLogParser::log(const char *buffer) {
+std::optional<size_t> BtSnoopLogParser::log(const char *buffer,
+                                            size_t maxLogMessageLen) {
   const auto *message = reinterpret_cast<const BtSnoopLog *>(buffer);
-  capture(message->packet, static_cast<size_t>(message->packetSize),
-          static_cast<BtSnoopDirection>(message->direction));
-  return message->packetSize + 2 * sizeof(uint8_t);
+  size_t logMessageSize = message->packetSize + kBtSnoopLogOffset;
+  if (logMessageSize > maxLogMessageLen) {
+    LOGE(
+        "Dropping bt snoop log due to log message size exceeds the end of log "
+        "buffer");
+    return std::nullopt;
+  } else {
+    capture(message->packet, static_cast<size_t>(message->packetSize),
+            static_cast<BtSnoopDirection>(message->direction));
+  }
+  return logMessageSize;
 }
 
 void BtSnoopLogParser::capture(const uint8_t *packet, size_t packetSize,

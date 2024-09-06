@@ -40,12 +40,12 @@ bool PresenceCryptoV1Impl::decrypt(const ByteArray &input,
 
   // Generate a 32 bytes decryption key from authenticity_key
   uint8_t decryption_key[kEncryptionKeySize] = {0};
-  hkdf(kAkIv, ARRAY_SIZE(kAkIv), key.data, key.length, decryption_key,
-       ARRAY_SIZE(decryption_key));
+  hkdf(kAkIv, ARRAY_SIZE(kAkIv), key.data, key.length, nullptr /*info*/,
+       0 /*infoLen*/, decryption_key, ARRAY_SIZE(decryption_key));
   // Decrypt the input cipher text using the decryption key
   uint8_t a_salt[kAesCtrIvSize] = {0};
-  hkdf(kAsaltIv, ARRAY_SIZE(kAsaltIv), salt.data, salt.length, a_salt,
-       ARRAY_SIZE(a_salt));
+  hkdf(kAsaltIv, ARRAY_SIZE(kAsaltIv), salt.data, salt.length, nullptr /*info*/,
+       0 /*infoLen*/, a_salt, ARRAY_SIZE(a_salt));
   struct AesCtrContext ctx;
   if (aesCtrInit(&ctx, decryption_key, a_salt, AES_256_KEY_TYPE) < 0) {
     LOGE("aesCtrInit() is failed");
@@ -71,12 +71,12 @@ bool PresenceCryptoV1Impl::verify(const ByteArray &input, const ByteArray &key,
   }
   // Generates a 16 bytes HMAC key from authenticity_key
   uint8_t hmac_key[kAesCtrIvSize] = {0};
-  hkdf(kHkIv, ARRAY_SIZE(kHkIv), key.data, key.length, hmac_key,
-       ARRAY_SIZE(hmac_key));
+  hkdf(kHkIv, ARRAY_SIZE(kHkIv), key.data, key.length, nullptr /*info*/,
+       0 /*infoLen*/, hmac_key, ARRAY_SIZE(hmac_key));
   // Generates a 16 bytes HMAC tag from the data
   uint8_t hmac_tag[kHmacTagSize] = {0};
-  hkdf(hmac_key, ARRAY_SIZE(hmac_key), input.data, input.length, hmac_tag,
-       ARRAY_SIZE(hmac_tag));
+  hkdf(hmac_key, ARRAY_SIZE(hmac_key), input.data, input.length,
+       nullptr /*info*/, 0 /*infoLen*/, hmac_tag, ARRAY_SIZE(hmac_tag));
   // Verify the generated HMAC tag matching the signature
   return memcmp(hmac_tag, signature.data, signature.length) == 0;
 }

@@ -18,6 +18,7 @@
 #define CHRE_UTIL_NANOAPP_BLE_H_
 
 #include <inttypes.h>
+#include <cstdint>
 
 #include "chre_api/chre.h"
 
@@ -35,26 +36,32 @@ constexpr int8_t kRssiThreshold = -128;
  */
 constexpr uint16_t kGoogleUuidDataLength = 2;
 
-/**
- * The mask to get the UUID from the data in the BLE packet.
- */
+/** The mask to get the UUID from the data in the BLE packet. */
 constexpr uint8_t kGoogleUuidMask[kGoogleUuidDataLength] = {0xFF, 0xFF};
 
-/**
- * The Google Eddystone BLE beacon UUID.
- */
+/** The Google Eddystone BLE beacon UUID. */
 constexpr uint8_t kGoogleEddystoneUuid[kGoogleUuidDataLength] = {0xAA, 0xFE};
 
-/**
- * The Google Nearby Fastpair BLE beacon UUID.
- */
+/** The Google Nearby Fastpair BLE beacon UUID. */
 constexpr uint8_t kGoogleNearbyFastpairUuid[kGoogleUuidDataLength] = {0x2C,
                                                                       0xFE};
+/** Length of Google manufacturer data filter. */
+constexpr uint16_t kGoogleManufactureDataLength = 4;
 
-/**
- * The number of generic filters (equal to the number of known beacons).
- */
+/** The Google manufacturer ID followed by some data. */
+constexpr uint8_t kGoogleManufactureData[kGoogleManufactureDataLength] = {
+    0xE0, 0x00, 0xAA, 0xFE};
+
+/** Manufacturer data filter mask. */
+constexpr uint8_t kGoogleManufactureDataMask[kGoogleManufactureDataLength] = {
+    0xFF, 0xFF, 0xFF, 0xFF};
+
+/** The number of generic filters (equal to the number of known beacons). */
 constexpr uint8_t kNumScanFilters = 2;
+
+/** The number of manufacturer data filters. */
+constexpr uint8_t kNumManufacturerDataFilters = 1;
+
 }  // namespace ble_constants
 
 /**
@@ -95,6 +102,21 @@ bool createBleScanFilterForKnownBeacons(struct chreBleScanFilter &filter,
 bool createBleScanFilterForKnownBeaconsV1_9(
     struct chreBleScanFilterV1_9 &filter, chreBleGenericFilter *genericFilters,
     uint8_t numGenericFilters);
+
+/**
+ * Creates a chreBleScanFilterV1_9 that filters for advertisements with the
+ * manufacturer data in kGoogleManufactureData.
+ *
+ * @param numGenericFilters         The size of the generic filters array. Must
+ * be >= kNumManufacturerDataFilters.
+ * @param genericFilters            (out) The output generic filters.
+ * @param filter                    (out) The output filter.
+ *
+ * @return true if the filter was created successfully.
+ */
+bool createBleManufacturerDataFilter(uint8_t numGenericFilters,
+                                     chreBleGenericFilter *genericFilters,
+                                     struct chreBleScanFilterV1_9 &filter);
 
 }  // namespace chre
 

@@ -29,7 +29,6 @@ bool MatchPresenceV0(const nearby_BleFilter &filter,
 
 bool MatchPresenceV1(const nearby_BleFilter &filter,
                      const BleScanRecord &scan_record, const Crypto &crypto,
-                     const Crypto &identity_crypto,
                      nearby_BleFilterResult *result);
 
 }  // namespace nearby

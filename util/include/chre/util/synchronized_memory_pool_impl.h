@@ -38,6 +38,13 @@ void SynchronizedMemoryPool<ElementType, kSize>::deallocate(
 }
 
 template <typename ElementType, size_t kSize>
+ElementType *SynchronizedMemoryPool<ElementType, kSize>::find(
+    MatchingFunction *matchingFunction, void *data) {
+  LockGuard<Mutex> lock(mMutex);
+  return mMemoryPool.find(matchingFunction, data);
+}
+
+template <typename ElementType, size_t kSize>
 size_t SynchronizedMemoryPool<ElementType, kSize>::getFreeBlockCount() {
   LockGuard<Mutex> lock(mMutex);
   return mMemoryPool.getFreeBlockCount();

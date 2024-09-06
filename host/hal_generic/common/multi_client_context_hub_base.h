@@ -40,7 +40,7 @@ using ::ndk::ScopedAStatus;
 /**
  * The base class of multiclient HAL.
  *
- * A subclass should initiate mConnection, mHalClientManager and
+ * <p>A subclass should initiate mConnection, mHalClientManager and
  * mPreloadedNanoappLoader in its constructor.
  */
 class MultiClientContextHubBase
@@ -54,7 +54,7 @@ class MultiClientContextHubBase
 
   MultiClientContextHubBase();
 
-  // functions implementing IContextHub
+  // Functions implementing IContextHub.
   ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *contextHubInfos) override;
   ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -84,12 +84,12 @@ class MultiClientContextHubBase
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
 
-  // The callback function implementing ChreConnectionCallback
+  // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
 
-  // The functions for dumping debug information
+  // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
   bool requestDebugDump() override;
   void writeToDebugFile(const char *str) override;
@@ -132,15 +132,7 @@ class MultiClientContextHubBase
       const ::chre::fbs::DebugDumpResponseT & /* response */);
   void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
   void handleClientDeath(pid_t pid);
-
-  /**
-   * Returns true to allow metrics to be reported to stats service.
-   *
-   * <p>Subclasses can override to turn it off.
-   */
-  virtual bool isMetricEnabled() {
-    return true;
-  }
+  void handleLogMessageV2(const ::chre::fbs::LogMessageV2T &logMessage);
 
   /**
    * Enables test mode by unloading all the nanoapps except the system nanoapps.
@@ -211,7 +203,8 @@ class MultiClientContextHubBase
   // The parser of buffered logs from CHRE
   LogMessageParser mLogger;
 
-  MetricsReporter mMetricsReporter;
+  // Metrics reporter that will report metrics if it is initialized to non-null.
+  std::unique_ptr<MetricsReporter> mMetricsReporter;
 
   // Used to map message sequence number to host endpoint ID
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;

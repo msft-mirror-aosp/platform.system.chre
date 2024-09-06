@@ -17,11 +17,13 @@
 #ifndef CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 #define CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 
+#include <algorithm>
 #include <type_traits>
 #include <utility>
 
 #include "chre/util/container_support.h"
 #include "chre/util/segmented_queue.h"
+#include "chre/util/unique_ptr.h"
 
 namespace chre {
 
@@ -171,8 +173,8 @@ bool SegmentedQueue<ElementType, kBlockSize>::remove(size_t index) {
 
 template <typename ElementType, size_t kBlockSize>
 size_t SegmentedQueue<ElementType, kBlockSize>::searchMatches(
-    MatchingFunction *matchFunc, size_t foundIndicesLen,
-    size_t foundIndices[]) {
+    MatchingFunction *matchFunc, void *data, void *extraData,
+    size_t foundIndicesLen, size_t foundIndices[]) {
   size_t foundCount = 0;
   size_t searchIndex = advanceOrWrapAround(mTail);
   bool firstRound = true;
@@ -188,7 +190,7 @@ size_t SegmentedQueue<ElementType, kBlockSize>::searchMatches(
          foundCount != foundIndicesLen) {
     searchIndex = subtractOrWrapAround(searchIndex, 1 /* steps */);
     firstRound = false;
-    if (matchFunc(locateDataAddress(searchIndex))) {
+    if (matchFunc(locateDataAddress(searchIndex), data, extraData)) {
       foundIndices[foundCount] = searchIndex;
       ++foundCount;
     }
@@ -244,13 +246,26 @@ void SegmentedQueue<ElementType, kBlockSize>::fillGaps(
 
 template <typename ElementType, size_t kBlockSize>
 size_t SegmentedQueue<ElementType, kBlockSize>::removeMatchedFromBack(
-    MatchingFunction *matchFunc, size_t maxNumOfElementsRemoved,
-    FreeFunction *freeFunction, void *extraDataForFreeFunction) {
-  size_t removeIndex[maxNumOfElementsRemoved];
-  size_t removedItemCount =
-      searchMatches(matchFunc, maxNumOfElementsRemoved, removeIndex);
+    MatchingFunction *matchFunc, void *data, void *extraData,
+    size_t maxNumOfElementsRemoved, FreeFunction *freeFunction,
+    void *extraDataForFreeFunction) {
+  constexpr size_t kRemoveItemInOneIter = 5;
+  size_t removeIndex[kRemoveItemInOneIter];
+  size_t currentRemoveCount =
+      std::min(maxNumOfElementsRemoved, kRemoveItemInOneIter);
+  size_t totalRemovedItemCount = 0;
 
-  if (removedItemCount != 0) {
+  while (currentRemoveCount != 0) {
+    // TODO(b/343282484): We will search the same elements multiple times, make sure we start
+    // from a unsearch index in the next iteration.
+    size_t removedItemCount = searchMatches(matchFunc, data, extraData,
+                                            currentRemoveCount, removeIndex);
+    totalRemovedItemCount += removedItemCount;
+
+    if (removedItemCount == 0) {
+      break;
+    }
+
     for (size_t i = 0; i < removedItemCount; ++i) {
       if (freeFunction == nullptr) {
         doRemove(removeIndex[i]);
@@ -260,15 +275,18 @@ size_t SegmentedQueue<ElementType, kBlockSize>::removeMatchedFromBack(
                      extraDataForFreeFunction);
       }
     }
-
     if (mSize == 0) {
       resetEmptyQueue();
     } else {
       fillGaps(removedItemCount, removeIndex);
     }
+
+    maxNumOfElementsRemoved -= removedItemCount;
+    currentRemoveCount =
+        std::min(maxNumOfElementsRemoved, kRemoveItemInOneIter);
   }
 
-  return removedItemCount;
+  return totalRemovedItemCount;
 }
 
 template <typename ElementType, size_t kBlockSize>
@@ -303,9 +321,6 @@ bool SegmentedQueue<ElementType, kBlockSize>::insertBlock(size_t blockIndex) {
       }
     }
   }
-  if (!success) {
-    LOG_OOM();
-  }
   return success;
 }
 
@@ -329,10 +344,6 @@ template <typename ElementType, size_t kBlockSize>
 void SegmentedQueue<ElementType, kBlockSize>::pullForward(size_t gapIndex) {
   CHRE_ASSERT(gapIndex < mSize);
 
-  if (gapIndex < mSize / 2) {
-    LOGD("Consider using pullBackward for better performance");
-  }
-
   size_t gapAbsolute = relativeIndexToAbsolute(gapIndex);
   size_t tailSize = absoluteIndexToRelative(mTail) - gapIndex;
   size_t nextAbsolute = advanceOrWrapAround(gapAbsolute);
@@ -349,10 +360,6 @@ void SegmentedQueue<ElementType, kBlockSize>::pullForward(size_t gapIndex) {
 template <typename ElementType, size_t kBlockSize>
 void SegmentedQueue<ElementType, kBlockSize>::pullBackward(size_t gapIndex) {
   CHRE_ASSERT(gapIndex < mSize);
-
-  if (gapIndex > mSize / 2) {
-    LOGD("Consider using pullForward for better performance");
-  }
 
   size_t headSize = gapIndex;
   size_t gapAbsolute = relativeIndexToAbsolute(gapIndex);
@@ -404,9 +411,7 @@ size_t SegmentedQueue<ElementType, kBlockSize>::absoluteIndexToRelative(
 template <typename ElementType, size_t kBlockSize>
 bool SegmentedQueue<ElementType, kBlockSize>::prepareForPush() {
   bool success = false;
-  if (full()) {
-    LOG_OOM();
-  } else {
+  if (!full()) {
     if (mSize == capacity()) {
       // TODO(b/258771255): index-based insert block should go away when we
       // have a ArrayQueue based container.
@@ -419,12 +424,13 @@ bool SegmentedQueue<ElementType, kBlockSize>::prepareForPush() {
       mTail = advanceOrWrapAround(mTail);
     }
   }
+
   return success;
 }
 
 template <typename ElementType, size_t kBlockSize>
 void SegmentedQueue<ElementType, kBlockSize>::clear() {
-  if (!std::is_trivially_destructible<ElementType>::value) {
+  if constexpr (!std::is_trivially_destructible<ElementType>::value) {
     while (!empty()) {
       pop_front();
     }

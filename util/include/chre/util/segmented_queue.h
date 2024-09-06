@@ -180,7 +180,8 @@ class SegmentedQueue : public NonCopyable {
   using MatchingFunction =
       typename std::conditional<std::is_pointer<ElementType>::value ||
                                     std::is_fundamental<ElementType>::value,
-                                bool(ElementType), bool(ElementType &)>::type;
+                                bool(ElementType, void *, void *),
+                                bool(ElementType &, void *, void *)>::type;
 
   using FreeFunction =
       typename std::conditional<std::is_pointer<ElementType>::value ||
@@ -197,14 +198,15 @@ class SegmentedQueue : public NonCopyable {
    * @param matchFunc                Function used to decide if an item should
    *                                 be removed. Should return true if this
    *                                 item needs to be removed.
+   * @param data                     The data to be passed to the matchFunc.
+   * @param extraData                The extra data to be passed to the
+   *                                 matchFunc.
    * @param maxNumOfElementsRemoved  Number of elements to remove, also the
    *                                 size of removedElements. It is not
    *                                 guaranteed that the actual number of items
    *                                 removed will equal to this parameter since
    *                                 it will depend on the number of items that
    *                                 matches the condition.
-   * @param removedElements          Stores the pointers that has been
-   *                                 removed. This cannot be a nullptr.
    * @param freeFunction             Function to execute before the matched item
    *                                 is removed. If not supplied, the destructor
    *                                 of the element will be invoked.
@@ -215,8 +217,8 @@ class SegmentedQueue : public NonCopyable {
    *                                 out. Returns SIZE_MAX if removedElement is
    *                                 a nullptr as error.
    */
-  size_t removeMatchedFromBack(MatchingFunction *matchFunction,
-                               size_t maxNumOfElementsRemoved,
+  size_t removeMatchedFromBack(MatchingFunction *matchFunction, void *data,
+                               void *extraData, size_t maxNumOfElementsRemoved,
                                FreeFunction *freeFunction = nullptr,
                                void *extraDataForFreeFunction = nullptr);
 
@@ -370,6 +372,8 @@ class SegmentedQueue : public NonCopyable {
    * @param matchFunc          Function used to decide if an item should be
    *                           returned. Should return true if this item need
    *                           to be returned.
+   * @param data               The data to be passed to the matchFunc.
+   * @param extraData          The extra data to be passed to the matchFunc.
    * @param foundIndicesLen    Length of foundIndices indicating how many index
    *                           is targeted.
    * @param foundIndices       Indices that contains the element that matches
@@ -379,8 +383,8 @@ class SegmentedQueue : public NonCopyable {
    *                           end.
    * @return                   the number of element that matches.
    */
-  size_t searchMatches(MatchingFunction *matchFunc, size_t foundIndicesLen,
-                       size_t foundIndices[]);
+  size_t searchMatches(MatchingFunction *matchFunc, void *data, void *extraData,
+                       size_t foundIndicesLen, size_t foundIndices[]);
 
   /**
    * Move elements in this queue to fill the gaps.

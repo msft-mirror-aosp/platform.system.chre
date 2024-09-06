@@ -35,8 +35,8 @@ cc_fuzz {
     ],
     fuzz_config: {
         cc: [
-            "stange@google.com",
             "rahmati@google.com",
+            "stange@google.com",
         ],
         componentid: 156070,
         fuzz_on_haiku_host: true,

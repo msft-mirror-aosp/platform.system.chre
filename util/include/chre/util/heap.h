@@ -65,6 +65,6 @@ void remove_heap(ContainerType &container, size_t index,
 
 }  // namespace chre
 
-#include "chre/util/heap_impl.h"
+#include "chre/util/heap_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_HEAP_H_

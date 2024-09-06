@@ -161,9 +161,16 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
   }
 
   /**
+   * Link a new node to the front of the linked list.
+   *
+   * @param newNode: the node to push to the front of the linked list.
+   */
+  void link_front(ListNode<ElementType> *newNode);
+
+  /**
    * Link a new node to the end of the linked list.
    *
-   * @param newNode: the node to push to the pack of the linked list.
+   * @param newNode: the node to push to the back of the linked list.
    */
   void link_back(ListNode<ElementType> *newNode);
 
