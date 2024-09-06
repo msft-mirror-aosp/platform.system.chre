@@ -195,6 +195,7 @@ LogMessageParser::parseAndEmitTokenizedLogMessageAndGetSize(
 std::optional<size_t>
 LogMessageParser::parseAndEmitNanoappTokenizedLogMessageAndGetSize(
     const LogMessageV2 *message, size_t maxLogMessageLen) {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
   auto *tokenizedLog =
       reinterpret_cast<const NanoappTokenizedLog *>(message->logMessage);
   auto detokenizerIter = mNanoappDetokenizers.find(tokenizedLog->instanceId);
@@ -307,49 +308,67 @@ void LogMessageParser::addNanoappDetokenizer(uint64_t appId,
                                              uint16_t instanceId,
                                              uint64_t databaseOffset,
                                              size_t databaseSize) {
-  auto appBinaryIter = mNanoappAppIdToBinary.find(appId);
-  if (appBinaryIter == mNanoappAppIdToBinary.end()) {
+  std::shared_ptr<const std::vector<uint8_t>> appBinary =
+      fetchNanoappBinary(appId);
+  if (!appBinary) {
     LOGE(
         "Binary not in cache, can't extract log token database for app ID "
         "0x%016" PRIx64,
         appId);
-  } else if (databaseSize == kInvalidTokenDatabaseSize) {
-    // Remove and free the nanoapp binary.
-    mNanoappAppIdToBinary.erase(appId);
-  } else if (checkTokenDatabaseOverflow(databaseOffset, databaseSize,
-                                        appBinaryIter->second->size())) {
-    LOGE(
-        "Token database fails memory bounds check for nanoapp with app ID "
-        "0x%016" PRIx64 ". Token database offset received: %" PRIu32
-        "; size received: %zu; Size of the appBinary: %zu.",
-        appId, databaseOffset, databaseSize, appBinaryIter->second->size());
   } else {
-    const uint8_t *tokenDatabaseBinaryStart =
-        appBinaryIter->second->data() + kImageHeaderSize + databaseOffset;
-
-    pw::span<const uint8_t> tokenEntries(tokenDatabaseBinaryStart,
-                                         databaseSize);
-    pw::Result<Detokenizer> nanoappDetokenizer =
-        pw::tokenizer::Detokenizer::FromElfSection(tokenEntries);
-
-    // Clear out any stale detokenizer instance and clean up memory.
-    appBinaryIter->second.reset();
     removeNanoappDetokenizerAndBinary(appId);
+    if (databaseSize != kInvalidTokenDatabaseSize) {
+      if (checkTokenDatabaseOverflow(databaseOffset, databaseSize,
+                                     appBinary->size())) {
+        LOGE(
+            "Token database fails memory bounds check for nanoapp with app ID "
+            "0x%016" PRIx64 ". Token database offset received: %" PRIu32
+            "; size received: %zu; Size of the appBinary: %zu.",
+            appId, databaseOffset, databaseSize, appBinary->size());
+      } else {
+        const uint8_t *tokenDatabaseBinaryStart =
+            appBinary->data() + kImageHeaderSize + databaseOffset;
 
-    if (nanoappDetokenizer.ok()) {
-      NanoappDetokenizer detokenizer;
-      detokenizer.appId = appId;
-      detokenizer.detokenizer =
-          std::make_unique<Detokenizer>(std::move(*nanoappDetokenizer));
-      mNanoappDetokenizers[instanceId] = std::move(detokenizer);
-    } else {
-      LOGE("Unable to parse log detokenizer for app with ID: 0x%016" PRIx64,
-           appId);
+        pw::span<const uint8_t> tokenEntries(tokenDatabaseBinaryStart,
+                                             databaseSize);
+        pw::Result<Detokenizer> nanoappDetokenizer =
+            pw::tokenizer::Detokenizer::FromElfSection(tokenEntries);
+
+        registerDetokenizer(appId, instanceId, std::move(nanoappDetokenizer));
+      }
     }
   }
 }
 
+void LogMessageParser::registerDetokenizer(
+    uint64_t appId, uint16_t instanceId,
+    pw::Result<Detokenizer> nanoappDetokenizer) {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
+
+  if (nanoappDetokenizer.ok()) {
+    NanoappDetokenizer detokenizer;
+    detokenizer.appId = appId;
+    detokenizer.detokenizer =
+        std::make_unique<Detokenizer>(std::move(*nanoappDetokenizer));
+    mNanoappDetokenizers[instanceId] = std::move(detokenizer);
+  } else {
+    LOGE("Unable to parse log detokenizer for app with ID: 0x%016" PRIx64,
+         appId);
+  }
+}
+
+std::shared_ptr<const std::vector<uint8_t>>
+LogMessageParser::fetchNanoappBinary(uint64_t appId) {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
+  auto appBinaryIter = mNanoappAppIdToBinary.find(appId);
+  if (appBinaryIter != mNanoappAppIdToBinary.end()) {
+    return appBinaryIter->second;
+  }
+  return nullptr;
+}
+
 void LogMessageParser::removeNanoappDetokenizerAndBinary(uint64_t appId) {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
   for (const auto &item : mNanoappDetokenizers) {
     if (item.second.appId == appId) {
       mNanoappDetokenizers.erase(item.first);
@@ -359,12 +378,14 @@ void LogMessageParser::removeNanoappDetokenizerAndBinary(uint64_t appId) {
 }
 
 void LogMessageParser::resetNanoappDetokenizerState() {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
   mNanoappDetokenizers.clear();
   mNanoappAppIdToBinary.clear();
 }
 
 void LogMessageParser::onNanoappLoadStarted(
     uint64_t appId, std::shared_ptr<const std::vector<uint8_t>> nanoappBinary) {
+  std::lock_guard<std::mutex> lock(mNanoappMutex);
   mNanoappAppIdToBinary[appId] = nanoappBinary;
 }
 
