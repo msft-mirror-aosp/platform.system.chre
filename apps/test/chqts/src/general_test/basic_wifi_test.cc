@@ -351,6 +351,13 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
       handleChreWifiAsyncEvent(static_cast<const chreAsyncResult *>(eventData));
       break;
     case CHRE_EVENT_WIFI_SCAN_RESULT: {
+      if (mScanMonitorEnabled && !mNextScanResultWasRequested) {
+        LOGI(
+            "Ignoring scan monitor scan result while waiting on requested scan"
+            " result");
+        break;
+      }
+
       if (!scanEventExpected()) {
         sendFatalFailureToHost("WiFi scan event received when not requested");
       }
@@ -422,15 +429,18 @@ void BasicWifiTest::handleChreWifiAsyncEvent(const chreAsyncResult *result) {
   LOGI("Received a wifi async event. request type: %" PRIu8
        " error code: %" PRIu8,
        result->requestType, result->errorCode);
-  if (result->requestType == CHRE_WIFI_REQUEST_TYPE_REQUEST_SCAN &&
-      !result->success && mNumScanRetriesRemaining > 0) {
-    LOGI("Wait for %" PRIu64 " seconds and try again",
-         kOnDemandScanTimeoutNs / chre::kOneSecondInNanoseconds);
-    mNumScanRetriesRemaining--;
-    mScanTimeoutTimerHandle = chreTimerSet(
-        /* duration= */ kOnDemandScanTimeoutNs, &mScanTimeoutTimerHandle,
-        /* oneShot= */ true);
-    return;
+  if (result->requestType == CHRE_WIFI_REQUEST_TYPE_REQUEST_SCAN) {
+    if (result->success) {
+      mNextScanResultWasRequested = true;
+    } else if (mNumScanRetriesRemaining > 0) {
+      LOGI("Wait for %" PRIu64 " seconds and try again",
+           kOnDemandScanTimeoutNs / chre::kOneSecondInNanoseconds);
+      mNumScanRetriesRemaining--;
+      mScanTimeoutTimerHandle = chreTimerSet(
+          /* duration= */ kOnDemandScanTimeoutNs, &mScanTimeoutTimerHandle,
+          /* oneShot= */ true);
+      return;
+    }
   }
   validateChreAsyncResult(result, mCurrentWifiRequest.value());
   processChreWifiAsyncResult(result);
@@ -451,11 +461,17 @@ void BasicWifiTest::processChreWifiAsyncResult(const chreAsyncResult *result) {
       break;
     case CHRE_WIFI_REQUEST_TYPE_CONFIGURE_SCAN_MONITOR:
       if (mCurrentWifiRequest->cookie == &kDisableScanMonitoringCookie) {
+        if (result->success) {
+          mScanMonitorEnabled = false;
+        }
         mTestSuccessMarker.markStageAndSuccessOnFinish(
             BASIC_WIFI_TEST_STAGE_SCAN_MONITOR);
         mStartTimestampNs = chreGetTime();
         startRangingAsyncTestStage();
       } else {
+        if (result->success) {
+          mScanMonitorEnabled = true;
+        }
         startScanAsyncTestStage();
       }
       break;
@@ -570,6 +586,7 @@ void BasicWifiTest::validateWifiScanEvent(const chreWifiScanEvent *eventData) {
 
   if (mWiFiScanResultRemaining == 0) {
     mNextExpectedIndex = 0;
+    mNextScanResultWasRequested = false;
     mTestSuccessMarker.markStageAndSuccessOnFinish(
         BASIC_WIFI_TEST_STAGE_SCAN_ASYNC);
     if (mWifiCapabilities & CHRE_WIFI_CAPABILITIES_SCAN_MONITORING) {
