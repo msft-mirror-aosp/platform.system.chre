@@ -48,6 +48,18 @@ inline void *memoryAlloc(size_t size) {
 }
 
 /**
+ * Returns memory of suitable alignment to hold a given object of the
+ * type T, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
+template <typename T>
+inline T *memoryAlignedAlloc() {
+  return memoryAlignedAlloc<T>(/* count= */1);
+}
+
+/**
  * Returns memory of suitable alignment to hold an array of the given object
  * type, which may exceed alignment of std::max_align_t and therefore cannot
  * use memoryAlloc().
@@ -69,18 +81,6 @@ inline T *memoryAlignedAllocArray([[maybe_unused]] size_t count) {
                 "memoryAlignedAlloc is unsupported on this platform");
   return nullptr;
 #endif  // CHRE_STANDALONE_POSIX_ALIGNED_ALLOC
-}
-
-/**
- * Returns memory of suitable alignment to hold a given object of the
- * type T, which may exceed alignment of std::max_align_t and therefore cannot
- * use memoryAlloc().
- *
- * @return a pointer to allocated memory or nullptr if allocation failed.
- */
-template <typename T>
-inline T *memoryAlignedAlloc() {
-  return memoryAlignedAllocArray<T>(/* count= */ 1);
 }
 
 /**
@@ -113,6 +113,18 @@ inline void *memoryAlloc(size_t size) {
 }
 
 /**
+ * Returns memory of suitable alignment to hold a given object of the
+ * type T, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
+template <typename T>
+inline T *memoryAlignedAlloc() {
+  return memoryAlignedAlloc<T>(/* count= */1);
+}
+
+/**
  * Returns memory of suitable alignment to hold an array of the given object
  * type, which may exceed alignment of std::max_align_t and therefore cannot
  * use memoryAlloc().
@@ -128,18 +140,6 @@ inline T *memoryAlignedAllocArray(size_t count) {
     ptr = nullptr;
   }
   return static_cast<T *>(ptr);
-}
-
-/**
- * Returns memory of suitable alignment to hold a given object of the
- * type T, which may exceed alignment of std::max_align_t and therefore cannot
- * use memoryAlloc().
- *
- * @return a pointer to allocated memory or nullptr if allocation failed.
- */
-template <typename T>
-inline T *memoryAlignedAlloc() {
-  return memoryAlignedAllocArray<T>(/* count= */1);
 }
 
 /**
