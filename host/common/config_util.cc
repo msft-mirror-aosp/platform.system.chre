@@ -17,11 +17,34 @@
 #include "chre_host/config_util.h"
 #include "chre_host/log.h"
 
+#include <dirent.h>
 #include <json/json.h>
+#include <filesystem>
 #include <fstream>
+#include <regex>
 
 namespace android {
 namespace chre {
+
+bool findAllNanoappsInFolder(const std::string &path,
+                             std::vector<std::string> &outNanoapps) {
+  DIR *dir = opendir(path.c_str());
+  if (dir == nullptr) {
+    LOGE("Failed to open nanoapp folder %s", path.c_str());
+    return false;
+  }
+  std::regex regex("(\\w+)\\.napp_header");
+  std::cmatch match;
+  for (struct dirent *entry; (entry = readdir(dir)) != nullptr;) {
+    if (!std::regex_match(entry->d_name, match, regex)) {
+      continue;
+    }
+    LOGD("Found nanoapp: %s", match[1]);
+    outNanoapps.push_back(match[1]);
+  }
+  closedir(dir);
+  return true;
+}
 
 bool getPreloadedNanoappsFromConfigFile(const std::string &configFilePath,
                                         std::string &outDirectory,
@@ -31,8 +54,15 @@ bool getPreloadedNanoappsFromConfigFile(const std::string &configFilePath,
   Json::CharReaderBuilder builder;
   Json::Value config;
   if (!configFileStream) {
-    LOGE("Failed to open config file '%s'", configFilePath.c_str());
-    return false;
+    // TODO(b/350102369) to deprecate preloaded_nanoapps.json
+    // During the transition, fall back to the old behavior if the json
+    // file exists. But if the json file does not exist, do the new behavior
+    // to load all nanoapps in /vendor/etc/chre or where ever the location.
+    LOGI("Failed to open config file '%s' load all nanoapps in folder ",
+         configFilePath.c_str());
+    std::filesystem::path path(configFilePath);
+    outDirectory = path.parent_path().string();
+    return findAllNanoappsInFolder(outDirectory, outNanoapps);
   } else if (!Json::parseFromStream(builder, configFileStream, &config,
                                     /* errs = */ nullptr)) {
     LOGE("Failed to parse nanoapp config file");
