@@ -168,6 +168,12 @@ class BasicWifiTest : public Test {
   //! Start timestamp used to timing an event.
   uint64_t mStartTimestampNs = 0;
 
+  // Used to track if scan monitoring is currently enabled
+  bool mScanMonitorEnabled = false;
+
+  // Used to filter scan results unrelated to the test.
+  bool mNextScanResultWasRequested = false;
+
   //! Expected sequence number for an event within a series of events
   //! comprising a complete scan result.
   uint32_t mNextExpectedIndex = 0;
