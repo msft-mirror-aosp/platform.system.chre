@@ -36,6 +36,9 @@
 #include "chpp/macros.h"
 #include "chpp/notifier.h"
 #include "chpp/pal_api.h"
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+#include "chpp/platform/vendor_clients.h"
+#endif
 #ifdef CHPP_SERVICE_ENABLED_VENDOR
 #include "chpp/platform/vendor_services.h"
 #endif
@@ -645,6 +648,9 @@ void chppAppInitWithClientServiceSet(
 
 #ifdef CHPP_CLIENT_ENABLED
   chppRegisterCommonClients(appContext);
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+  chppRegisterVendorClients(appContext);
+#endif
   chppInitBasicClients(appContext);
 #endif
 }
@@ -656,6 +662,9 @@ void chppAppDeinit(struct ChppAppState *appContext) {
   chppDeinitMatchedClients(appContext);
   chppDeinitBasicClients(appContext);
   chppDeregisterCommonClients(appContext);
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+  chppDeregisterVendorClients(appContext);
+#endif
 #endif
 
 #ifdef CHPP_SERVICE_ENABLED
