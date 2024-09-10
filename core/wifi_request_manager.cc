@@ -332,6 +332,14 @@ TimerHandle WifiRequestManager::setScanRequestTimer() {
       Nanoseconds(CHRE_WIFI_SCAN_RESULT_TIMEOUT_NS));
 }
 
+void WifiRequestManager::cancelScanRequestTimer() {
+  if (mScanRequestTimeoutHandle != CHRE_TIMER_INVALID) {
+    EventLoopManagerSingleton::get()->cancelDelayedCallback(
+        mScanRequestTimeoutHandle);
+    mScanRequestTimeoutHandle = CHRE_TIMER_INVALID;
+  }
+}
+
 bool WifiRequestManager::nanoappHasPendingScanRequest(
     uint16_t instanceId) const {
   for (const auto &scanRequest : mPendingScanRequests) {
@@ -698,7 +706,8 @@ void WifiRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     debugDump.print("  ts=%" PRIu64 " nappId=%" PRIu16 " scanType=%" PRIu8
                     " maxScanAge(ms)=%" PRIu64 "\n",
                     log.timestamp.toRawNanoseconds(), log.instanceId,
-                    log.scanType, log.maxScanAgeMs.getMilliseconds());
+                    static_cast<uint8_t>(log.scanType),
+                    log.maxScanAgeMs.getMilliseconds());
   }
 
   debugDump.print(" Last scan event @ %" PRIu64 " ms\n",
@@ -972,12 +981,6 @@ void WifiRequestManager::handleScanResponseSync(bool pending,
     LOGE("handleScanResponseSync called with no outstanding request");
   }
 
-  if (mScanRequestTimeoutHandle != CHRE_TIMER_INVALID) {
-    EventLoopManagerSingleton::get()->cancelDelayedCallback(
-        mScanRequestTimeoutHandle);
-    mScanRequestTimeoutHandle = CHRE_TIMER_INVALID;
-  }
-
   // TODO: raise this to CHRE_ASSERT_LOG
   if (!pending && errorCode == CHRE_ERROR_NONE) {
     LOGE("Invalid wifi scan response");
@@ -1012,6 +1015,7 @@ void WifiRequestManager::handleScanResponseSync(bool pending,
       // If the scan results are not pending, pop the first event since it's no
       // longer waiting for anything. Otherwise, wait for the results to be
       // delivered and then pop the first request.
+      cancelScanRequestTimer();
       mPendingScanRequests.pop();
       dispatchQueuedScanRequests(true /* postAsyncResult */);
     }
@@ -1162,6 +1166,7 @@ void WifiRequestManager::handleFreeWifiScanEvent(chreWifiScanEvent *scanEvent) {
     if (mScanEventResultCountAccumulator >= scanEvent->resultTotal) {
       mScanEventResultCountAccumulator = 0;
       mScanRequestResultsArePending = false;
+      cancelScanRequestTimer();
     }
 
     if (!mScanRequestResultsArePending && !mPendingScanRequests.empty()) {
