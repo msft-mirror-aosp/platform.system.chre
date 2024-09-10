@@ -162,20 +162,6 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   void resetBlameForNanoappHostWakeup();
 
   /**
-   * This function is used by sendMessageToNanoappFromHost() for sending
-   * deferred messages. Messages are deferred when the destination nanoapp is
-   * not yet loaded.
-   *
-   * By the time this function is called through deferCallback, nanoapp load
-   * requests in the queue will have been processed and therefore all nanoapps
-   * are expected to be ready.
-   *
-   * @param craftedMessage Deferred message from host to be delivered to the
-   * destination nanoapp
-   */
-  void sendDeferredMessageToNanoappFromHost(MessageFromHost *craftedMessage);
-
-  /**
    * Formulates a MessageToHost using the supplied message contents and
    * passes it to HostLink for transmission to the host.
    *
@@ -293,20 +279,32 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
       uint32_t messageSequenceNumber);
 
   /**
+   * Checks if the message could be sent to the nanoapp from the host. Crafts
+   * the message to the nanoapp.
+   *
+   * @see sendMessageToNanoappFromHost for a description of the parameters.
+   *
+   * @return the error code and the crafted message. The message is dynamically
+   *         allocated and must be freed by the caller.
+   */
+  std::pair<chreError, MessageFromHost *>
+  validateAndCraftMessageFromHostToNanoapp(uint64_t appId, uint32_t messageType,
+                                           uint16_t hostEndpoint,
+                                           const void *messageData,
+                                           size_t messageSize, bool isReliable,
+                                           uint32_t messageSequenceNumber);
+
+  /**
    * Posts a crafted event, craftedMessage, to a nanoapp for processing, and
    * deallocates it afterwards.
    *
-   * Used to implement sendMessageToNanoappFromHost() and
-   * sendDeferredMessageToNanoappFromHost(). They allocate and populated the
-   * event using craftNanoappMessageFromHost().
+   * Used to implement sendMessageToNanoappFromHost(). It allocates and
+   * populates the event using craftNanoappMessageFromHost().
    *
-   * @param craftedMessage Message from host to be delivered to the destination
-   * nanoapp
-   *
-   * @return true if the message was delivered to the event queue (i.e.
-   *         destination app ID exists in the system)
+   * @param craftedMessage Message from host to be delivered to the
+   * destination nanoapp
    */
-  bool deliverNanoappMessageFromHost(MessageFromHost *craftedMessage);
+  void deliverNanoappMessageFromHost(MessageFromHost *craftedMessage);
 
   /**
    * Sends a message to the host from a nanoapp. This method also
@@ -341,15 +339,6 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   void freeMessageToHost(MessageToHost *msgToHost);
 
   /**
-   * Event free callback used to release memory allocated to deliver a message
-   * to a nanoapp from the host.
-   *
-   * @param type Event type
-   * @param data Event data
-   */
-  static void freeMessageFromHostCallback(uint16_t type, void *data);
-
-  /**
    * Callback used to send a reliable message.
    * @see TransactionManagerCallback
    */
@@ -357,8 +346,8 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
                             uint16_t nanoappInstanceId) final;
 
   /**
-   * Callback invoked when a transaction has timed out after the maximum number
-   * of retries.
+   * Callback invoked when a transaction has timed out after the maximum
+   * number of retries.
    * @see TransactionManagerCallback
    */
   void onTransactionFailure(uint32_t messageSequenceNumber,
@@ -374,11 +363,11 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
    * @param error The error from sending the message to the nanoapp.
    */
   void handleDuplicateAndSendMessageDeliveryStatus(
-      uint32_t messageSequenceNumber, uint16_t hostEndpoint,
-      chreError error);
+      uint32_t messageSequenceNumber, uint16_t hostEndpoint, chreError error);
 
   /**
-   * Called when a reliable message transaction status is reported by the host.
+   * Called when a reliable message transaction status is reported by the
+   * host.
    *
    * The status is delivered to the nanoapp that sent the message by posting a
    * CHRE_EVENT_RELIABLE_MSG_ASYNC_STATUS event.
@@ -398,13 +387,14 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
    *
    * This function is thread-safe.
    *
-   * @param message A message pointer previously given to HostLink::sendMessage
+   * @param message A message pointer previously given to
+   * HostLink::sendMessage
    */
   void onMessageToHostCompleteInternal(const MessageToHost *msgToHost);
 
   /**
-   * Calls TransactionManager::remove for all pending reliable messages sent by
-   * this nanoapp, normally used as part of nanoapp unload flow.
+   * Calls TransactionManager::remove for all pending reliable messages sent
+   * by this nanoapp, normally used as part of nanoapp unload flow.
    */
   void removeAllTransactionsFromNanoapp(const Nanoapp &nanoapp);
 
@@ -416,9 +406,9 @@ class HostCommsManager : public HostLink, private TransactionManagerCallback {
   void freeAllReliableMessagesFromNanoapp(Nanoapp &nanoapp);
 
   /**
-   * Returns whether to send the reliable message to the nanoapp. This function
-   * returns true, indicating to the caller to send the message, when the
-   * message is not a duplicate or when the duplicate message was sent
+   * Returns whether to send the reliable message to the nanoapp. This
+   * function returns true, indicating to the caller to send the message, when
+   * the message is not a duplicate or when the duplicate message was sent
    * previously with a transient error. When this function returns false, the
    * error is sent to the host using sendMessageDeliveryStatus.
    *

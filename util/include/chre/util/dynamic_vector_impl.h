@@ -19,6 +19,7 @@
 
 #include "chre/util/dynamic_vector.h"
 
+#include <cstddef>
 #include <memory>
 #include <new>
 #include <utility>
@@ -105,6 +106,10 @@ bool DynamicVector<ElementType>::push_back(const ElementType &element) {
 template <typename ElementType>
 bool DynamicVector<ElementType>::doPushBack(const ElementType &element,
                                             std::true_type) {
+  if constexpr (alignof(ElementType) > alignof(std::max_align_t)) {
+    // This type requires aligned allocation, so use the non-trivial doPushBack.
+    return doPushBack(element, std::false_type());
+  }
   return DynamicVectorBase::doPushBack(static_cast<const void *>(&element),
                                        sizeof(ElementType));
 }
@@ -132,7 +137,7 @@ bool DynamicVector<ElementType>::push_back(ElementType &&element) {
 
 template <typename ElementType>
 template <typename... Args>
-bool DynamicVector<ElementType>::emplace_back(Args &&... args) {
+bool DynamicVector<ElementType>::emplace_back(Args &&...args) {
   bool spaceAvailable = prepareForPush();
   if (spaceAvailable) {
     new (&data()[mSize++]) ElementType(std::forward<Args>(args)...);
@@ -178,6 +183,10 @@ bool DynamicVector<ElementType>::reserve(size_type newCapacity) {
 template <typename ElementType>
 bool DynamicVector<ElementType>::doReserve(size_type newCapacity,
                                            std::true_type) {
+  if constexpr (alignof(ElementType) > alignof(std::max_align_t)) {
+    // This type requires aligned allocation, so use the non-trivial reserve.
+    return doReserve(newCapacity, std::false_type());
+  }
   return DynamicVectorBase::doReserve(newCapacity, sizeof(ElementType));
 }
 
@@ -186,8 +195,14 @@ bool DynamicVector<ElementType>::doReserve(size_type newCapacity,
                                            std::false_type) {
   bool success = (newCapacity <= mCapacity);
   if (!success) {
-    ElementType *newData = static_cast<ElementType *>(
-        memoryAlloc(newCapacity * sizeof(ElementType)));
+    ElementType *newData;
+    if constexpr (alignof(ElementType) > alignof(std::max_align_t)) {
+      newData = memoryAlignedAllocArray<ElementType>(newCapacity);
+    } else {
+      newData = static_cast<ElementType *>(
+          memoryAlloc(newCapacity * sizeof(ElementType)));
+    }
+
     if (newData != nullptr) {
       if (data() != nullptr) {
         uninitializedMoveOrCopy(data(), mSize, newData);
@@ -347,6 +362,11 @@ bool DynamicVector<ElementType>::prepareForPush() {
 
 template <typename ElementType>
 bool DynamicVector<ElementType>::doPrepareForPush(std::true_type) {
+  if constexpr (alignof(ElementType) > alignof(std::max_align_t)) {
+    // This type requires aligned allocation, so use the non-trivial
+    // doPrepareForPush.
+    return doPrepareForPush(std::false_type());
+  }
   return DynamicVectorBase::doPrepareForPush(sizeof(ElementType));
 }
 

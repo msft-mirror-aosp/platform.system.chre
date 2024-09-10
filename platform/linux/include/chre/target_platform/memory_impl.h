@@ -32,6 +32,16 @@ inline T *memoryAlignedAlloc() {
   return static_cast<T *>(ptr);
 }
 
+template <typename T>
+inline T *memoryAlignedAllocArray(size_t count) {
+  void *ptr;
+  int result = posix_memalign(&ptr, alignof(T), sizeof(T) * count);
+  if (result != 0) {
+    ptr = nullptr;
+  }
+  return static_cast<T *>(ptr);
+}
+
 }  // namespace chre
 
 #endif  // CHRE_PLATFORM_LINUX_MEMORY_IMPL_H_
