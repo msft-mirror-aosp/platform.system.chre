@@ -67,8 +67,6 @@ class SendMessageToHostTest : public Test {
   static constexpr size_t kSmallMessageTestCount = 4;
   static uint8_t sSmallMessageData[kSmallMessageTestCount][kSmallMessageSize];
 
-  static constexpr uint32_t kLargeSizes[2] = {CHRE_MESSAGE_TO_HOST_MAX_SIZE + 1,
-                                              CHRE_MESSAGE_TO_HOST_MAX_SIZE};
   static void *sLargeMessageData[2];
 
   // Catch if CHRE implementation illegally reenters nanoapp code.

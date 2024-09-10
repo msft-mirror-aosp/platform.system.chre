@@ -27,8 +27,7 @@
 #include "location/lbs/contexthub/nanoapps/nearby/ble_scan_record.h"
 #include "location/lbs/contexthub/nanoapps/nearby/fast_pair_filter.h"
 #ifdef ENABLE_PRESENCE
-#include "location/lbs/contexthub/nanoapps/nearby/presence_crypto_identity_v1.h"
-#include "location/lbs/contexthub/nanoapps/nearby/presence_crypto_v1.h"
+#include "location/lbs/contexthub/nanoapps/nearby/presence_crypto_mic.h"
 #include "location/lbs/contexthub/nanoapps/nearby/presence_filter.h"
 #endif
 #include "third_party/contexthub/chre/util/include/chre/util/nanoapp/log.h"
@@ -125,8 +124,7 @@ void Filter::MatchBle(
 #ifdef ENABLE_PRESENCE
     if (MatchPresenceV0(ble_filters_.filter[filter_index], record, &result) ||
         MatchPresenceV1(ble_filters_.filter[filter_index], record,
-                        PresenceCryptoV1Impl(), PresenceCryptoIdentityV1Impl(),
-                        &result)) {
+                        PresenceCryptoMicImpl(), &result)) {
       LOGD("Filter result TX power %" PRId32 ", RSSI %" PRId32, result.tx_power,
            result.rssi);
 

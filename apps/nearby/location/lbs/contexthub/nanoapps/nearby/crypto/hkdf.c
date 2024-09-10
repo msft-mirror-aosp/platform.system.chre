@@ -16,13 +16,14 @@
 
 #include "location/lbs/contexthub/nanoapps/nearby/crypto/hkdf.h"
 
+#include <stdint.h>
 #include <string.h>
 
 #include "location/lbs/contexthub/nanoapps/nearby/crypto/hmac.h"
 #include "location/lbs/contexthub/nanoapps/nearby/crypto/sha2.h"
 
-static void hkdfExpand(const void *inPrk, const size_t prkLen, void *outKm,
-                       const size_t okmLen) {
+static void hkdfExpand(const void *inPrk, const size_t prkLen, const void *info,
+                       size_t infoLen, void *outKm, const size_t okmLen) {
   uint8_t buf[SHA2_HASH_SIZE + 1];
   uint8_t exp_hmac[SHA2_HASH_SIZE];
   memset(buf, 0, sizeof(buf));
@@ -57,9 +58,13 @@ static void hkdfExpand(const void *inPrk, const size_t prkLen, void *outKm,
       memcpy(buf, exp_hmac, sizeof(exp_hmac));
       block_input_len = sizeof(exp_hmac);
     }
-    *(buf + block_input_len++) = (uint8_t)(i + 1);
     // initializes hash context without refreshing HMAC keys
+    uint8_t counter = (uint8_t)(i + 1);
     hmacUpdateHashInit(&hmacCtx, buf, block_input_len);
+    if (info != NULL && infoLen != 0) {
+      hmacUpdate(&hmacCtx, info, infoLen);
+    }
+    hmacUpdate(&hmacCtx, &counter, sizeof(counter));
     hmacFinish(&hmacCtx, exp_hmac, sizeof(exp_hmac));
 
     if (SHA2_HASH_SIZE < okmLen - i * SHA2_HASH_SIZE) {
@@ -71,16 +76,14 @@ static void hkdfExpand(const void *inPrk, const size_t prkLen, void *outKm,
   }
 }
 
-void hkdf(const void *inSalt, const size_t saltLen, const void *inKm,
-          const size_t ikmLen, void *outKm, const size_t okmLen) {
+void hkdf(const void *inSalt, size_t saltLen, const void *inKm, size_t ikmLen,
+          const void *info, size_t infoLen, void *outKm, size_t okmLen) {
   // refers to hkdf implementation in key master
   // https://source.corp.google.com/aosp-android11/system/keymaster/km_openssl/hkdf.cpp
-
   if (outKm == NULL || okmLen == 0) return;
 
   // pseudorandom key
   uint8_t prk_hmac[SHA2_HASH_SIZE];
-
   /**
    * Step 1. Extract: PRK = HMAC-SHA256(salt, IKM)
    * https://tools.ietf.org/html/rfc5869#section-2.2
@@ -91,7 +94,6 @@ void hkdf(const void *inSalt, const size_t saltLen, const void *inKm,
   /**
    * Step 2. Expand: OUTPUT = HKDF-Expand(PRK, L)
    * https://tools.ietf.org/html/rfc5869#section-2.3
-   * Note: the optional info is not used for Nearby
    */
-  hkdfExpand(prk_hmac, sizeof(prk_hmac), outKm, okmLen);
+  hkdfExpand(prk_hmac, sizeof(prk_hmac), info, infoLen, outKm, okmLen);
 }

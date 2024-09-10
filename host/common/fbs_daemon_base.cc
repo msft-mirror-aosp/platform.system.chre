@@ -117,23 +117,21 @@ void FbsDaemonBase::onMessageReceived(const unsigned char *messageBuffer,
     hostClientId = ::chre::kHostClientIdUnspecified;
   }
 
+  std::unique_ptr<fbs::MessageContainerT> container =
+      fbs::UnPackMessageContainer(messageBuffer);
+
   if (messageType == fbs::ChreMessage::LogMessage) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *logMessage = container->message.AsLogMessage();
     const std::vector<int8_t> &logData = logMessage->buffer;
 
     getLogger().log(reinterpret_cast<const uint8_t *>(logData.data()),
                     logData.size());
   } else if (messageType == fbs::ChreMessage::LogMessageV2) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *logMessage = container->message.AsLogMessageV2();
     const std::vector<int8_t> &logDataBuffer = logMessage->buffer;
     const auto *logData =
         reinterpret_cast<const uint8_t *>(logDataBuffer.data());
     uint32_t numLogsDropped = logMessage->num_logs_dropped;
-
     getLogger().logV2(logData, logDataBuffer.size(), numLogsDropped);
   } else if (messageType == fbs::ChreMessage::TimeSyncRequest) {
     sendTimeSync(true /* logOnError */);
@@ -143,14 +141,10 @@ void FbsDaemonBase::onMessageReceived(const unsigned char *messageBuffer,
     configureLpma(false /* enabled */);
   } else if (messageType == fbs::ChreMessage::MetricLog) {
 #ifdef CHRE_DAEMON_METRIC_ENABLED
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *metricMsg = container->message.AsMetricLog();
     handleMetricLog(metricMsg);
 #endif  // CHRE_DAEMON_METRIC_ENABLED
   } else if (messageType == fbs::ChreMessage::NanConfigurationRequest) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     handleNanConfigurationRequest(
         container->message.AsNanConfigurationRequest());
   } else if (messageType == fbs::ChreMessage::NanoappTokenDatabaseInfo) {

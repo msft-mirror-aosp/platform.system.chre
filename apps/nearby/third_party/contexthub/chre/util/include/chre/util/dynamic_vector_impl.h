@@ -189,9 +189,11 @@ bool DynamicVector<ElementType>::doReserve(size_type newCapacity,
     ElementType *newData = static_cast<ElementType *>(
         memoryAlloc(newCapacity * sizeof(ElementType)));
     if (newData != nullptr) {
-      uninitializedMoveOrCopy(data(), mSize, newData);
-      destroy(data(), mSize);
-      memoryFree(data());
+      if (data() != nullptr) {
+        uninitializedMoveOrCopy(data(), mSize, newData);
+        destroy(data(), mSize);
+        memoryFree(data());
+      }
       mData = newData;
       mCapacity = newCapacity;
       success = true;
@@ -243,7 +245,7 @@ bool DynamicVector<ElementType>::prepareInsert(size_type index) {
   // Insertions are not allowed to create a sparse array.
   CHRE_ASSERT(index <= mSize);
 
-  // This can be optimized in the case where we need to grow the vector to
+  // TODO: this can be optimized in the case where we need to grow the vector to
   // do the shift when transferring the values from the old array to the new.
   bool readyForInsert = (index <= mSize && prepareForPush());
   if (readyForInsert) {
@@ -290,7 +292,7 @@ void DynamicVector<ElementType>::doErase(size_type index, std::false_type) {
 template <typename ElementType>
 typename DynamicVector<ElementType>::size_type DynamicVector<ElementType>::find(
     const ElementType &element) const {
-  // Consider adding iterator support and making this a free function.
+  // TODO: Consider adding iterator support and making this a free function.
   size_type i;
   for (i = 0; i < size(); i++) {
     if (data()[i] == element) {
