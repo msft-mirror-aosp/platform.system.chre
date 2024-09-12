@@ -109,11 +109,9 @@ class HalClient {
    */
   static bool isServiceAvailable();
 
-  /** A bug fix flag guarding the lock holding reduction change. */
-  static bool reduceLockHolding();
-
   /** Returns true if this HalClient instance is connected to the HAL. */
   bool isConnected() {
+    std::lock_guard<std::shared_mutex> lock(mConnectionLock);
     return mContextHub != nullptr;
   }
 
@@ -135,9 +133,8 @@ class HalClient {
   }
 
   ScopedAStatus queryNanoapps() {
-    return callIfConnected([&](const std::shared_ptr<IContextHub> &hub) {
-      return hub->queryNanoapps(mContextHubId);
-    });
+    return callIfConnected(
+        [&]() { return mContextHub->queryNanoapps(mContextHubId); });
   }
 
   /** Sends a message to a Nanoapp. */
@@ -231,36 +228,27 @@ class HalClient {
   /** Reconnect previously connected endpoints after CHRE or HAL restarts. */
   static void tryReconnectEndpoints(HalClient *halClient);
 
-  ScopedAStatus callIfConnected(
-      const std::function<
-          ScopedAStatus(const std::shared_ptr<IContextHub> &hub)> &func) {
-    std::shared_ptr<IContextHub> hub;
-    {
-      // Make a copy of mContextHub so that even if HAL is disconnected and
-      // mContextHub is set to null the copy is kept as non-null to avoid crash.
-      // Still guard the copy by a shared lock to avoid torn writes.
-      std::shared_lock<std::shared_mutex> sharedLock(mConnectionLock);
-      hub = mContextHub;
-    }
-    if (hub == nullptr) {
+  ScopedAStatus callIfConnected(const std::function<ScopedAStatus()> &func) {
+    std::shared_lock<std::shared_mutex> sharedLock(mConnectionLock);
+    if (mContextHub == nullptr) {
       return fromHalError(HalError::BINDER_DISCONNECTED);
     }
-    return func(hub);
+    return func();
   }
 
   bool isEndpointConnected(HostEndpointId hostEndpointId) {
-    std::shared_lock<std::shared_mutex> sharedLock(mConnectedEndpointsLock);
+    std::shared_lock<std::shared_mutex> lock(mConnectedEndpointsLock);
     return mConnectedEndpoints.find(hostEndpointId) !=
            mConnectedEndpoints.end();
   }
 
   void insertConnectedEndpoint(const HostEndpointInfo &hostEndpointInfo) {
-    std::lock_guard<std::shared_mutex> lockGuard(mConnectedEndpointsLock);
+    std::lock_guard<std::shared_mutex> lock(mConnectedEndpointsLock);
     mConnectedEndpoints[hostEndpointInfo.hostEndpointId] = hostEndpointInfo;
   }
 
   void removeConnectedEndpoint(HostEndpointId hostEndpointId) {
-    std::lock_guard<std::shared_mutex> lockGuard(mConnectedEndpointsLock);
+    std::lock_guard<std::shared_mutex> lock(mConnectedEndpointsLock);
     mConnectedEndpoints.erase(hostEndpointId);
   }
 
@@ -278,7 +266,7 @@ class HalClient {
   std::shared_mutex mConnectedEndpointsLock;
   std::unordered_map<HostEndpointId, HostEndpointInfo> mConnectedEndpoints{};
 
-  // The lock guarding the init connection flow.
+  // The lock guarding mContextHub.
   std::shared_mutex mConnectionLock;
   std::shared_ptr<IContextHub> mContextHub;
 
