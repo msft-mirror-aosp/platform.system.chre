@@ -30,6 +30,13 @@ inline T *memoryAlignedAlloc() {
   return nullptr;
 }
 
+template <typename T>
+inline T *memoryAlignedAllocArray([[maybe_unused]] size_t count) {
+  static_assert(AlwaysFalse<T>::value,
+                "memoryAlignedAlloc is unsupported on this platform");
+  return nullptr;
+}
+
 }  // namespace chre
 
 #endif  // CHRE_SHARED_ALIGNED_ALLOC_UNSUPPORTED_MEMORY_IMPL_H_

@@ -17,8 +17,6 @@
 #ifndef CHRE_UTIL_DUPLICATE_MESSAGE_DETECTOR_H_
 #define CHRE_UTIL_DUPLICATE_MESSAGE_DETECTOR_H_
 
-#include "chre/platform/mutex.h"
-#include "chre/platform/system_time.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
 #include "chre/util/priority_queue.h"
@@ -33,7 +31,7 @@ namespace chre {
  * This class is used to detect duplicate reliable messages. It keeps a record
  * of all reliable messages that have been sent from the host. If a message with
  * the same message sequence number and host endpoint is sent again, it is
- * considered a duplicate. This class is thread-safe.
+ * considered a duplicate. This class is not thread-safe.
  *
  * A typical usage of this class would be as follows:
  *
@@ -69,9 +67,12 @@ class DuplicateMessageDetector : public NonCopyable {
   //! Finds the message with the given message sequence number and host
   //! endpoint. If the message is not found, a new message is added to the
   //! detector. Returns the error code previously recorded for the message, or
-  //! an empty Optional if the message is not a duplicate.
+  //! an empty Optional if the message is not a duplicate. If outIsDuplicate is
+  //! not nullptr, it will be set to true if the message is a duplicate (was
+  //! found), or false otherwise.
   Optional<chreError> findOrAdd(uint32_t messageSequenceNumber,
-                                uint16_t hostEndpoint);
+                                uint16_t hostEndpoint,
+                                bool *outIsDuplicate = nullptr);
 
   //! Sets the error code for a message that has already been added to the
   //! detector. Returns true if the message was found and the error code was
@@ -87,9 +88,6 @@ class DuplicateMessageDetector : public NonCopyable {
   //! The timeout specified in the constructor. This should be the reliable
   //! message timeout.
   Nanoseconds kTimeout;
-
-  //! The mutex used to protect the queue.
-  Mutex mMutex;
 
   //! The queue of reliable message records.
   PriorityQueue<ReliableMessageRecord, std::greater<ReliableMessageRecord>>
