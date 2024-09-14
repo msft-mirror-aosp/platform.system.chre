@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
 #define CHRE_UTIL_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
 
+// IWYU pragma: private
 #include <algorithm>
 
 #include "chre/util/lock_guard.h"
