@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_FIXED_SIZE_VECTOR_IMPL_H_
 #define CHRE_UTIL_FIXED_SIZE_VECTOR_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/fixed_size_vector.h"
 
 #include <new>
