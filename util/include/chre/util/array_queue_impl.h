@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_ARRAY_QUEUE_IMPL_H_
 #define CHRE_UTIL_ARRAY_QUEUE_IMPL_H_
 
+// IWYU pragma: private
 #include <new>
 #include <utility>
 
