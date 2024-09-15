@@ -16,6 +16,8 @@
 
 #ifndef CHRE_UTIL_FRAGMENTATION_MANAGER_IMPL
 #define CHRE_UTIL_FRAGMENTATION_MANAGER_IMPL
+
+// IWYU pragma: private
 #include "chre/util/fragmentation_manager.h"
 #include "chre/util/optional.h"
 

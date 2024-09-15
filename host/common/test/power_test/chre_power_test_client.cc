@@ -481,6 +481,7 @@ inline uint64_t getId(std::vector<string> &args) {
 const string searchPath(const string &name) {
   const string kAdspPath = "vendor/dsp/adsp/" + name;
   const string kSdspPath = "vendor/dsp/sdsp/" + name;
+  const string kEtcTestPath = "vendor/etc/chre/test/" + name;
   const string kEtcPath = "vendor/etc/chre/" + name;
 
   struct stat buf;
@@ -488,6 +489,8 @@ const string searchPath(const string &name) {
     return kAdspPath;
   } else if (stat(kSdspPath.c_str(), &buf) == 0) {
     return kSdspPath;
+  } else if (stat(kEtcTestPath.c_str(), &buf) == 0) {
+    return kEtcTestPath;
   } else {
     return kEtcPath;
   }
