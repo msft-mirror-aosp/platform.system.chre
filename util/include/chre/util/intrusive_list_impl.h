@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_INTRUSIVE_LIST_IMPL_H_
 #define CHRE_UTIL_INTRUSIVE_LIST_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/intrusive_list.h"
 
 #include "chre/util/container_support.h"

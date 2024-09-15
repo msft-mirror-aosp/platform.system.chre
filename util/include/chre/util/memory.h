@@ -78,6 +78,6 @@ void memoryFreeAndDestroy(T *element);
 
 }  // namespace chre
 
-#include "chre/util/memory_impl.h"
+#include "chre/util/memory_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_MEMORY_H
