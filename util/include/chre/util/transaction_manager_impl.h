@@ -17,7 +17,7 @@
 #ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 #define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
 
-// IWYU pragma: private, include "transaction_manager.h"
+// IWYU pragma: private
 #include "chre/util/transaction_manager.h"
 
 #include "chre/core/event_loop_common.h"
