@@ -7,9 +7,15 @@ include $(CHRE_PREFIX)/build/clean_build_template_args.mk
 TARGET_NAME = aosp_riscv55e03_tinysys
 ifneq ($(filter $(TARGET_NAME)% all, $(MAKECMDGOALS)),)
 
-ifeq ($(RISCV_TINYSYS_PREFIX),)
-$(error "The tinysys code directory needs to be exported as the RISCV_TINYSYS_PREFIX \
-         environment variable")
+ifneq ($(IS_NANOAPP_BUILD),)
+  # Inline functions of ctype.h for nanoapps
+  COMMON_CFLAGS += -DUSE_CHARSET_ASCII
+else
+  # only enforce RISCV_TINYSYS_PREFIX when building CHRE
+  ifeq ($(RISCV_TINYSYS_PREFIX),)
+  $(error "The tinysys code directory needs to be exported as the RISCV_TINYSYS_PREFIX \
+           environment variable")
+  endif
 endif
 
 TARGET_CFLAGS = $(TINYSYS_CFLAGS)
@@ -20,6 +26,12 @@ TARGET_SO_LATE_LIBS = $(AOSP_RISCV_TINYSYS_LATE_LIBS)
 TARGET_PLATFORM_ID = 0x476f6f676c003000
 
 # Macros #######################################################################
+TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
+TINYSYS_CFLAGS += $(MBEDTLS_CFLAGS)
+
+TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
+TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
+TINYSYS_CFLAGS += -DCHRE_NANOAPP_LOAD_ALIGNMENT=4096
 
 TINYSYS_CFLAGS += -D__riscv
 TINYSYS_CFLAGS += -DMRV55
