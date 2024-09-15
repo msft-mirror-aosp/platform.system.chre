@@ -32,6 +32,8 @@ import com.google.android.chre.nanoapp.proto.ChreTestCommon;
 import com.google.android.utils.chre.ContextHubServiceTestHelper;
 import com.google.protobuf.InvalidProtocolBufferException;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -105,6 +107,7 @@ public class ContextHubReliableMessageTestExecutor {
         AtomicReference<String> testMessage = new AtomicReference<>("");
         CountDownLatch testLatch = new CountDownLatch(1);
         ContextHubClient client;
+        Set<Integer> messageSequenceNumberSet = new HashSet<Integer>();
 
         ContextHubClientCallback callback = new ContextHubClientCallback() {
             @Override
@@ -127,6 +130,16 @@ public class ContextHubReliableMessageTestExecutor {
                             }
                             break;
                         case ChreReliableMessageTest.MessageType.HOST_ECHO_MESSAGE_VALUE:
+                            if (messageSequenceNumberSet.contains(
+                                        message.getMessageSequenceNumber())) {
+                                testSuccess.set(false);
+                                testMessage.set("Duplicate message with sequence number: "
+                                        + message.getMessageSequenceNumber() + " detected");
+                                testLatch.countDown();
+                                break;
+                            }
+
+                            messageSequenceNumberSet.add(message.getMessageSequenceNumber());
                             NanoAppMessage echo = NanoAppMessage.createMessageToNanoApp(
                                     message.getNanoAppId(), message.getMessageType(),
                                     message.getMessageBody());

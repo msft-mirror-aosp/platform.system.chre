@@ -26,14 +26,20 @@
 #include <utility>
 
 #include "chre_connection.h"
+
 #include "chre_host/generated/host_messages_generated.h"
+#include "chre_host/log_message_parser.h"
+#include "chre_host/metrics_reporter.h"
+#include "chre_host/nanoapp_load_listener.h"
 #include "chre_host/napp_header.h"
+#include "event_logger.h"
 #include "fragmented_load_transaction.h"
 #include "hal_client_id.h"
 
 namespace android::chre {
 
 using namespace ::android::hardware::contexthub::common::implementation;
+using ::aidl::android::hardware::contexthub::EventLogger;
 
 /**
  * A class loads preloaded nanoapps.
@@ -46,8 +52,15 @@ using namespace ::android::hardware::contexthub::common::implementation;
 class PreloadedNanoappLoader {
  public:
   explicit PreloadedNanoappLoader(ChreConnection *connection,
-                                  std::string configPath)
-      : mConnection(connection), mConfigPath(std::move(configPath)) {}
+                                  EventLogger &eventLogger,
+                                  MetricsReporter *metricsReporter,
+                                  std::string configPath,
+                                  INanoappLoadListener *nanoappLoadListener)
+      : mConnection(connection),
+        mEventLogger(eventLogger),
+        mMetricsReporter(metricsReporter),
+        mConfigPath(std::move(configPath)),
+        mNanoappLoadListener(nanoappLoadListener) {}
 
   ~PreloadedNanoappLoader() = default;
   /**
@@ -88,9 +101,6 @@ class PreloadedNanoappLoader {
     size_t fragmentId;
   };
 
-  /** Timeout value of waiting for the response of a fragmented load */
-  static constexpr auto kTimeoutInMs = std::chrono::milliseconds(2000);
-
   /**
    * Loads a preloaded nanoapp.
    *
@@ -116,8 +126,8 @@ class PreloadedNanoappLoader {
       ::android::chre::FragmentedLoadRequest &request);
 
   /** Verifies the future returned by sendFragmentedLoadRequest(). */
-  [[nodiscard]] static bool waitAndVerifyFuture(
-      std::future<bool> &future, const FragmentedLoadRequest &request);
+  [[nodiscard]] bool waitAndVerifyFuture(std::future<bool> &future,
+                                         const FragmentedLoadRequest &request);
 
   /** Verifies the response of a loading request. */
   [[nodiscard]] bool verifyFragmentLoadResponse(
@@ -134,7 +144,11 @@ class PreloadedNanoappLoader {
   std::atomic_bool mIsPreloadingOngoing = false;
 
   ChreConnection *mConnection;
+  EventLogger &mEventLogger;
+  MetricsReporter *mMetricsReporter;
   std::string mConfigPath;
+
+  INanoappLoadListener *mNanoappLoadListener;
 };
 
 }  // namespace android::chre

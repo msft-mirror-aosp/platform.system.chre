@@ -60,9 +60,8 @@ class TestEventLogger : public EventLogger {
 TEST(EventLogger, keepTheMostRecentNanoappLoads) {
   TestEventLogger log;
   for (int i = 0; i < EventLogger::kMaxNanoappEvents + 10; ++i) {
-    NanoappBinary app;
-    app.nanoappId = i;
-    log.logNanoappLoad(app, true);
+    log.logNanoappLoad(/* appId= */ i, /* appSize= */ 0, /* appVersion= */ 0,
+                       /* success= */ true);
   }
 
   EXPECT_EQ(log.nanoappLoads().size(), EventLogger::kMaxNanoappEvents);
@@ -133,11 +132,8 @@ TEST(EventLogger, dumpTheEventsAsString) {
   TestEventLogger log;
 
   log.setNowMs(10);
-  NanoappBinary app;
-  app.nanoappId = 1;
-  app.nanoappVersion = 2;
-  app.customBinary = {1, 2, 3};
-  log.logNanoappLoad(app, true);
+  log.logNanoappLoad(/* appId= */ 1, /* appSize= */ 2, /* appVersion= */ 3,
+                     /* success= */ true);
 
   log.setNowMs(20);
   log.logNanoappUnload(2, true);

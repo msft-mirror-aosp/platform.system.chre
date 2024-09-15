@@ -17,6 +17,7 @@
 #include "chre/platform/shared/host_protocol_common.h"
 
 #include <string.h>
+#include <cstdint>
 
 #include "chre/platform/shared/generated/host_messages_generated.h"
 

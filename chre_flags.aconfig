@@ -37,7 +37,39 @@ flag {
 }
 
 flag {
+  name: "abort_if_no_context_hub_found"
+  namespace: "context_hub"
+  description: "Abort the HAL process if no context hub info found. For debug purpose only."
+  bug: "344642685"
+}
+
+flag {
+  name: "reduce_lock_holding_period"
+  namespace: "context_hub"
+  description: "A flag guarding the change of reducing lock holding period to avoid deadlock."
+  bug: "347392749"
+}
+
+flag {
+  name: "reconnect_host_endpoints_after_hal_restart"
+  namespace: "context_hub"
+  description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
+  bug: "348253728"
+}
+
+flag {
+  name: "bug_fix_reduce_lock_holding_period"
+  namespace: "context_hub"
+  description: "A flag guarding the fix of reducing lock holding period to avoid deadlock."
+  bug: "347392749"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "reliable_message"
+  is_exported: true
   namespace: "context_hub"
   description: "Enable the reliable message APIs"
   bug: "314081414"
@@ -48,4 +80,25 @@ flag {
   namespace: "context_hub"
   description: "Enable support for reliable messages in CHRE"
   bug: "314081414"
+}
+
+flag {
+  name: "reliable_message_duplicate_detection_service"
+  namespace: "context_hub"
+  description: "Enable duplicate detection for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_retry_support_service"
+  namespace: "context_hub"
+  description: "Enable retries for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_test_mode_behavior"
+  namespace: "context_hub"
+  description: "Enables test mode behaviors in the Context Hub Service for reliable messages"
+  bug: "333567339"
 }

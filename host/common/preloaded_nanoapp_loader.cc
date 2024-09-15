@@ -21,14 +21,19 @@
 #include "chre_host/file_stream.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/log.h"
+#include "chre_host/nanoapp_load_listener.h"
 #include "hal_client_id.h"
 
 namespace android::chre {
 
-using android::chre::readFileContents;
-using android::hardware::contexthub::common::implementation::kHalId;
-
 namespace {
+
+/** Timeout value of waiting for the response of a loading fragment. */
+constexpr auto kTimeoutInMs = std::chrono::milliseconds(2000);
+
+using ::android::chre::readFileContents;
+using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
+using ::android::hardware::contexthub::common::implementation::kHalId;
 
 bool getNanoappHeaderFromFile(const char *headerFileName,
                               std::vector<uint8_t> &headerBuffer) {
@@ -101,12 +106,18 @@ int PreloadedNanoappLoader::loadPreloadedNanoapps(
         reinterpret_cast<const NanoAppBinaryHeader *>(headerBuffer.data());
     // check if the app should be skipped
     if (shouldSkipNanoapp(skippedNanoappIds, header->appId)) {
-      LOGI("Loading of %s is skipped.", headerFilename.c_str());
+      LOGI("Loading of %s is skipped.", nanoappFilename.c_str());
       continue;
     }
     // load the binary
-    if (loadNanoapp(header, nanoappFilename, i)) {
+    if (loadNanoapp(header, nanoappFilename, /* transactionId= */ i)) {
       numOfNanoappsLoaded++;
+    } else {
+      LOGE("Failed to load nanoapp 0x%" PRIx64 " in preloaded nanoapp loader",
+           header->appId);
+      if (mNanoappLoadListener != nullptr) {
+        mNanoappLoadListener->onNanoappLoadFailed(header->appId);
+      }
     }
   }
   mIsPreloadingOngoing.store(false);
@@ -117,18 +128,24 @@ bool PreloadedNanoappLoader::loadNanoapp(const NanoAppBinaryHeader *appHeader,
                                          const std::string &nanoappFileName,
                                          uint32_t transactionId) {
   // parse the binary
-  std::vector<uint8_t> nanoappBuffer;
-  if (!readFileContents(nanoappFileName.c_str(), nanoappBuffer)) {
+  auto nanoappBuffer = std::make_shared<std::vector<uint8_t>>();
+  if (!readFileContents(nanoappFileName.c_str(), *nanoappBuffer)) {
     LOGE("Unable to read %s.", nanoappFileName.c_str());
     return false;
+  }
+  if (mNanoappLoadListener != nullptr) {
+    mNanoappLoadListener->onNanoappLoadStarted(appHeader->appId, nanoappBuffer);
   }
   // Build the target API version from major and minor.
   uint32_t targetApiVersion = (appHeader->targetChreApiMajorVersion << 24) |
                               (appHeader->targetChreApiMinorVersion << 16);
-  return sendFragmentedLoadAndWaitForEachResponse(
+  bool success = sendFragmentedLoadAndWaitForEachResponse(
       appHeader->appId, appHeader->appVersion, appHeader->flags,
-      targetApiVersion, nanoappBuffer.data(), nanoappBuffer.size(),
+      targetApiVersion, nanoappBuffer->data(), nanoappBuffer->size(),
       transactionId);
+  mEventLogger.logNanoappLoad(appHeader->appId, nanoappBuffer->size(),
+                              appHeader->appVersion, success);
+  return success;
 }
 
 bool PreloadedNanoappLoader::sendFragmentedLoadAndWaitForEachResponse(
@@ -152,25 +169,32 @@ bool PreloadedNanoappLoader::sendFragmentedLoadAndWaitForEachResponse(
 
 bool PreloadedNanoappLoader::waitAndVerifyFuture(
     std::future<bool> &future, const FragmentedLoadRequest &request) {
+  bool success = false;
+  auto failureReason =
+      ChreHalNanoappLoadFailed::Reason::REASON_CONNECTION_ERROR;
   if (!future.valid()) {
     LOGE("Failed to send out the fragmented load fragment");
-    return false;
-  }
-  if (future.wait_for(kTimeoutInMs) != std::future_status::ready) {
+  } else if (future.wait_for(kTimeoutInMs) != std::future_status::ready) {
     LOGE(
         "Waiting for response of fragment %zu transaction %d times out "
         "after %lld ms",
         request.fragmentId, request.transactionId, kTimeoutInMs.count());
-    return false;
-  }
-  if (!future.get()) {
+  } else if (!future.get()) {
     LOGE(
         "Received a failure result for loading fragment %zu of "
         "transaction %d",
         request.fragmentId, request.transactionId);
-    return false;
+    failureReason = ChreHalNanoappLoadFailed::Reason::REASON_ERROR_GENERIC;
+  } else {
+    success = true;
   }
-  return true;
+
+  if (!success && mMetricsReporter != nullptr) {
+    mMetricsReporter->logNanoappLoadFailed(
+        request.appId, ChreHalNanoappLoadFailed::Type::TYPE_PRELOADED,
+        failureReason);
+  }
+  return success;
 }
 
 bool PreloadedNanoappLoader::verifyFragmentLoadResponse(
@@ -178,16 +202,6 @@ bool PreloadedNanoappLoader::verifyFragmentLoadResponse(
   if (!response.success) {
     LOGE("Loading nanoapp binary fragment %d of transaction %u failed.",
          response.fragment_id, response.transaction_id);
-    // TODO(b/247124878): Report metrics.
-    return false;
-  }
-  if (mPreloadedNanoappPendingTransaction.transactionId !=
-      response.transaction_id) {
-    LOGE(
-        "Fragmented load response with transactionId %u but transactionId "
-        "%u is expected",
-        response.transaction_id,
-        mPreloadedNanoappPendingTransaction.transactionId);
     return false;
   }
   if (mPreloadedNanoappPendingTransaction.fragmentId != response.fragment_id) {
@@ -211,9 +225,18 @@ bool PreloadedNanoappLoader::onLoadNanoappResponse(
         response.transaction_id, response.fragment_id);
     return false;
   }
-  // set value for the future instance
+  if (mPreloadedNanoappPendingTransaction.transactionId !=
+      response.transaction_id) {
+    LOGE(
+        "Fragmented load response with transactionId %u but transactionId "
+        "%u is expected. Ignored.",
+        response.transaction_id,
+        mPreloadedNanoappPendingTransaction.transactionId);
+    return false;
+  }
+  // set value for the future instance.
   mFragmentedLoadPromise->set_value(verifyFragmentLoadResponse(response));
-  // reset the promise as the value can only be retrieved once from it
+  // reset the promise as the value can only be retrieved once from it.
   mFragmentedLoadPromise = std::nullopt;
   return true;
 }
@@ -227,6 +250,7 @@ std::future<bool> PreloadedNanoappLoader::sendFragmentedLoadRequest(
       builder, request, /* respondBeforeStart= */ true);
   HostProtocolHost::mutateHostClientId(builder.GetBufferPointer(),
                                        builder.GetSize(), kHalId);
+
   std::unique_lock<std::mutex> lock(mPreloadedNanoappsMutex);
   if (!mConnection->sendMessage(builder.GetBufferPointer(),
                                 builder.GetSize())) {

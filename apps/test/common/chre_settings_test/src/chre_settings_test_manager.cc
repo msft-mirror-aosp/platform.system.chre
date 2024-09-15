@@ -234,11 +234,10 @@ void Manager::handleMessageFromHost(uint32_t senderInstanceId,
       }
     }
   }
-
   if (!success) {
     test_shared::sendTestResultToHost(
         hostData->hostEndpoint, chre_settings_test_MessageType_TEST_RESULT,
-        false /* success */);
+        /*success=*/false, /*abortOnFailure=*/false);
   }
 }
 
@@ -248,7 +247,7 @@ void Manager::handleStartTestMessage(uint16_t hostEndpointId, Feature feature,
   if (!isTestSupported() || !isFeatureSupported(feature)) {
     LOGW("Skipping test - TestSupported: %u, FeatureSupported: %u",
          isTestSupported(), isFeatureSupported(feature));
-    sendTestResult(hostEndpointId, true /* success */);
+    sendTestResult(hostEndpointId, /*success=*/true);
   } else {
     bool success = false;
     if (step == TestStep::SETUP) {
@@ -263,7 +262,7 @@ void Manager::handleStartTestMessage(uint16_t hostEndpointId, Feature feature,
     }
 
     if (!success) {
-      sendTestResult(hostEndpointId, false /* success */);
+      sendTestResult(hostEndpointId, /*success=*/false);
     } else {
       mTestSession = TestSession(hostEndpointId, feature, state, step);
     }
@@ -335,13 +334,13 @@ bool Manager::startTestForFeature(Feature feature) {
     }
 
     case Feature::GNSS_LOCATION:
-      success = chreGnssLocationSessionStartAsync(1000 /* minIntervalMs */,
-                                                  0 /* minTimeToNextFixMs */,
+      success = chreGnssLocationSessionStartAsync(/*minIntervalMs=*/1000,
+                                                  /*minTimeToNextFixMs=*/0,
                                                   &kGnssLocationCookie);
       break;
 
     case Feature::GNSS_MEASUREMENT:
-      success = chreGnssMeasurementSessionStartAsync(1000 /* minIntervalMs */,
+      success = chreGnssMeasurementSessionStartAsync(/*minIntervalMs=*/1000,
                                                      &kGnssMeasurementCookie);
       break;
 
@@ -352,7 +351,7 @@ bool Manager::startTestForFeature(Feature feature) {
     case Feature::AUDIO: {
       struct chreAudioSource source;
       if ((success = chreAudioGetSource(kAudioHandle, &source))) {
-        success = chreAudioConfigureSource(kAudioHandle, true /* enable */,
+        success = chreAudioConfigureSource(kAudioHandle, /*enable=*/true,
                                            source.minBufferDuration,
                                            source.minBufferDuration);
       }
@@ -363,8 +362,8 @@ bool Manager::startTestForFeature(Feature feature) {
       struct chreBleScanFilter filter;
       chreBleGenericFilter uuidFilters[kNumScanFilters];
       createBleScanFilterForKnownBeacons(filter, uuidFilters, kNumScanFilters);
-      success = chreBleStartScanAsync(CHRE_BLE_SCAN_MODE_FOREGROUND /* mode */,
-                                      0 /* reportDelayMs */, &filter);
+      success = chreBleStartScanAsync(/*mode=*/CHRE_BLE_SCAN_MODE_FOREGROUND,
+                                      /*reportDelayMs=*/0, &filter);
       break;
     }
 
@@ -446,7 +445,7 @@ void Manager::handleWifiScanResult(const chreWifiScanEvent *result) {
       mTestSession->step == TestStep::SETUP) {
     if (result->resultCount == 0) {
       LOGE("Received empty WiFi scan result");
-      sendTestResult(mTestSession->hostEndpointId, false /* success */);
+      sendTestResult(mTestSession->hostEndpointId, /*success=*/false);
     } else {
       mReceivedScanResults += result->resultCount;
       chreWifiRangingTarget target;
@@ -569,7 +568,7 @@ void Manager::handleAudioSourceStatusEvent(
         const uint64_t duration =
             source.minBufferDuration + kOneSecondInNanoseconds;
         gAudioDataTimerHandle =
-            chreTimerSet(duration, &kAudioDataTimerCookie, true /* oneShot */);
+            chreTimerSet(duration, &kAudioDataTimerCookie, /*oneShot=*/true);
 
         if (gAudioDataTimerHandle == CHRE_TIMER_INVALID) {
           LOGE("Failed to set data check timer");
@@ -590,7 +589,7 @@ void Manager::handleAudioSourceStatusEvent(
       LOGW("Source wasn't suspended when Mic Access disabled, waiting 2 sec");
       gAudioStatusTimerHandle =
           chreTimerSet(2 * kOneSecondInNanoseconds, &kAudioStatusTimerCookie,
-                       true /* oneShot */);
+                       /*oneShot=*/true);
       if (gAudioStatusTimerHandle == CHRE_TIMER_INVALID) {
         LOGE("Failed to set audio status check timer");
       } else {
@@ -621,9 +620,9 @@ void Manager::handleAudioDataEvent(const struct chreAudioDataEvent *event) {
     } else if (gGotSourceEnabledEvent) {
       success = true;
     }
-    chreAudioConfigureSource(kAudioHandle, false /* enable */,
-                             0 /* minBufferDuration */,
-                             0 /* maxbufferDuration */);
+    chreAudioConfigureSource(kAudioHandle, /*enable=*/false,
+                             /*minBufferDuration=*/0,
+                             /*maxbufferDuration=*/0);
     sendTestResult(mTestSession->hostEndpointId, success);
   }
 }
@@ -646,8 +645,8 @@ void Manager::handleTimeout(const void *eventData) {
   } else {
     LOGE("Invalid timer cookie: %" PRIx32, *cookie);
   }
-  chreAudioConfigureSource(0 /*handle*/, false /*enable*/,
-                           0 /*minBufferDuration*/, 0 /*maxBufferDuration*/);
+  chreAudioConfigureSource(/*handle=*/0, /*enable=*/false,
+                           /*minBufferDuration=*/0, /*maxBufferDuration=*/0);
   sendTestResult(mTestSession->hostEndpointId, testSuccess);
 }
 
@@ -671,8 +670,9 @@ void Manager::handleBleAsyncResult(const chreAsyncResult *result) {
 }
 
 void Manager::sendTestResult(uint16_t hostEndpointId, bool success) {
-  test_shared::sendTestResultToHost(
-      hostEndpointId, chre_settings_test_MessageType_TEST_RESULT, success);
+  test_shared::sendTestResultToHost(hostEndpointId,
+                                    chre_settings_test_MessageType_TEST_RESULT,
+                                    success, /*abortOnFailure=*/false);
   mTestSession.reset();
   mCachedRangingTarget.reset();
 }

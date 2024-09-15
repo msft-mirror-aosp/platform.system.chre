@@ -22,12 +22,18 @@
 #include "chre/platform/log.h"
 #endif  // CHRE_IS_NANOAPP_BUILD
 
-#include <cctype>
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
 
 namespace chre {
+
+namespace {
+/** Returns true if `ch` is `[A-Za-z0-9]` or punctuation. */
+inline bool isgraph(int ch) {
+  return (ch >= '!' && ch <= '~');
+}
+}  // namespace
 
 void logChreWifiResult(const chreWifiScanResult &result, bool logSsidOnly) {
   const char *ssidStr = "<non-printable>";

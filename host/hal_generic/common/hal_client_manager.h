@@ -128,6 +128,19 @@ class HalClientManager {
     std::unordered_set<HostEndpointId> endpointIds{};
   };
 
+  // A snapshot of the nanoapp being loaded, for logging purpose.
+  struct PendingLoadNanoappInfo {
+    PendingLoadNanoappInfo(uint64_t appId, size_t appSize,
+                           uint32_t appVersion) {
+      this->appId = static_cast<int64_t>(appId);
+      this->appSize = appSize;
+      this->appVersion = static_cast<int32_t>(appVersion);
+    }
+    int64_t appId;
+    size_t appSize;
+    int32_t appVersion;
+  };
+
   // The endpoint id is from a vendor client if the highest bit is set to 1.
   static constexpr HostEndpointId kVendorEndpointIdBitMask = 0x8000;
   static constexpr uint8_t kNumOfBitsForEndpointId = 6;
@@ -197,15 +210,12 @@ class HalClientManager {
       pid_t pid, std::unique_ptr<chre::FragmentedLoadTransaction> transaction);
 
   /**
-   * Returns true if the load transaction matches the arguments provided.
+   * Returns a snapshot of the nanoapp being loaded if possible.
    */
-  bool isPendingLoadTransactionExpected(HalClientId clientId,
-                                        uint32_t transactionId,
-                                        uint32_t currentFragmentId) {
-    const std::lock_guard<std::mutex> lock(mLock);
-    return isPendingLoadTransactionMatched(clientId, transactionId,
-                                           currentFragmentId);
-  }
+  std::optional<PendingLoadNanoappInfo>
+  getNanoappInfoFromPendingLoadTransaction(HalClientId clientId,
+                                           uint32_t transactionId,
+                                           uint32_t currentFragmentId);
 
   /**
    * Clears the pending load transaction.
@@ -220,9 +230,13 @@ class HalClientManager {
    * Gets the next FragmentedLoadRequest from PendingLoadTransaction if it's
    * available.
    *
+   * This function assumes mPendingLoadTransaction has a valid value. So either
+   * registerPendingLoadTransaction or getNanoappInfoFromPendingLoadTransaction
+   * should be called to make sure this precondition is satisfied before calling
+   * this function.
+   *
    * @return an optional FragmentedLoadRequest, std::nullopt if unavailable.
    */
-
   std::optional<chre::FragmentedLoadRequest> getNextFragmentedLoadRequest();
 
   /**
@@ -233,10 +247,12 @@ class HalClientManager {
    *
    * @param pid process id of the current client
    * @param transaction the transaction being registered
+   * @param nanoappId id of the nanoapp
    *
    * @return true if success, otherwise false.
    */
-  bool registerPendingUnloadTransaction(pid_t pid, uint32_t transactionId);
+  bool registerPendingUnloadTransaction(pid_t pid, uint32_t transactionId,
+                                        int64_t nanoappId);
 
   /**
    * Clears the pending unload transaction.
@@ -248,10 +264,11 @@ class HalClientManager {
    * @param clientId the client id of the caller.
    * @param transactionId unique id of the transaction.
    *
-   * @return true if the pending transaction is cleared, otherwise false.
+   * @return the nanoapp id of the pending unload transaction being cleared for
+   * logging purpose if a transaction is matched.
    */
-  bool resetPendingUnloadTransaction(HalClientId clientId,
-                                     uint32_t transactionId);
+  std::optional<int64_t> resetPendingUnloadTransaction(HalClientId clientId,
+                                                       uint32_t transactionId);
 
   /**
    * Registers an endpoint id when it is connected to HAL.
@@ -317,9 +334,9 @@ class HalClientManager {
   std::string debugDump();
 
  protected:
-  /** Pseudo names used before uuid is enabled. */
   static constexpr char kSystemServerUuid[] =
       "9a17008d6bf1445a90116d21bd985b6c";
+  /** Pseudo name shared among vendor clients when uuid is unavailable. */
   static constexpr char kVendorClientUuid[] = "vendor-client";
 
   /** Keys used in chre_hal_clients.json. */
@@ -361,12 +378,26 @@ class HalClientManager {
     uint32_t currentFragmentId;  // the fragment id being sent out.
     std::unique_ptr<chre::FragmentedLoadTransaction> transaction;
 
+    [[nodiscard]] PendingLoadNanoappInfo getNanoappInfo() const {
+      return PendingLoadNanoappInfo{transaction->getNanoappId(),
+                                    transaction->getNanoappTotalSize(),
+                                    transaction->getNanoappVersion()};
+    }
+
     [[nodiscard]] std::string toString() const {
       using android::internal::ToString;
       return "[Load transaction: client id " + ToString(clientId) +
              ", Transaction id " + ToString(transaction->getTransactionId()) +
              ", fragment id " + ToString(currentFragmentId) + "]";
     }
+  };
+
+  struct PendingUnloadTransaction : public PendingTransaction {
+    PendingUnloadTransaction(HalClientId clientId, uint32_t transactionId,
+                             int64_t registeredTimeMs, int64_t appId)
+        : PendingTransaction(clientId, transactionId, registeredTimeMs),
+          nanoappId{appId} {}
+    int64_t nanoappId;
   };
 
   /**
@@ -399,14 +430,6 @@ class HalClientManager {
   }
 
   /**
-   * Returns true if the load transaction is expected.
-   */
-  bool isPendingLoadTransactionMatched(HalClientId clientId,
-                                       uint32_t transactionId,
-                                       uint32_t currentFragmentId)
-      REQUIRES(mLock);
-
-  /**
    * Checks if the transaction registration is allowed and clears out any stale
    * pending transaction if possible.
    *
@@ -432,14 +455,20 @@ class HalClientManager {
   /** Updates the mapping file. */
   void updateClientIdMappingFile() REQUIRES(mLock);
 
-  // TODO(b/290375569): isSystemServerConnected) is a temporary solution
-  //  to get a pseudo-uuid. Remove it after flag
-  //  context_hub_callback_uuid_enabled is ramped up.
-  inline bool isSystemServerConnected() REQUIRES(mLock) {
-    Client *client = getClientByUuid(kSystemServerUuid);
-    return client != nullptr && client->pid != Client::kPidUnset;
-  }
-
+  /**
+   * Gets the uuid of a client from its callback.
+   *
+   * <p> IContextHubCallback versions before 3 lack the getUuid() API. For
+   * compatibility, the first client connecting to HAL is assumed to be the
+   * system server, and kVendorClientUuid is returned thereafter.
+   *
+   * @warning:
+   * The backward compatibility creates a race condition that a client
+   * connecting before the system server will be treated as the system server,
+   * potentially breaking endpoint mutation logic. Therefore this compatibility
+   * workaround is mainly for manually executed command-line tools used after
+   * system fully boots up.
+   */
   std::string getUuid(const std::shared_ptr<IContextHubCallback> &callback)
       REQUIRES(mLock);
 
@@ -471,7 +500,7 @@ class HalClientManager {
   // States tracking pending transactions
   std::optional<PendingLoadTransaction> mPendingLoadTransaction
       GUARDED_BY(mLock) = std::nullopt;
-  std::optional<PendingTransaction> mPendingUnloadTransaction
+  std::optional<PendingUnloadTransaction> mPendingUnloadTransaction
       GUARDED_BY(mLock) = std::nullopt;
 };
 }  // namespace android::hardware::contexthub::common::implementation

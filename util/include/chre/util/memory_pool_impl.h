@@ -18,6 +18,7 @@
 #define CHRE_UTIL_MEMORY_POOL_IMPL_H_
 
 #include <cinttypes>
+#include <type_traits>
 #include <utility>
 
 #include "chre/util/container_support.h"
@@ -30,8 +31,12 @@ MemoryPool<ElementType, kSize>::MemoryPool() {
   // block points to the next as being empty. The mFreeBlockCount is used to
   // ensure that we never allocate out of bounds so we don't need to worry about
   // the last block referring to one that is non-existent.
-  for (size_t i = 0; i < kSize; i++) {
+  for (size_t i = 0; i < kSize; ++i) {
     blocks()[i].mNextFreeBlockIndex = i + 1;
+  }
+
+  for (size_t i = 0; i < kNumActiveTrackerBlocks; ++i) {
+    mActiveTrackerBlocks[i] = 0;
   }
 }
 
@@ -45,6 +50,7 @@ ElementType *MemoryPool<ElementType, kSize>::allocate(Args &&... args) {
   size_t blockIndex = mNextFreeBlockIndex;
   mNextFreeBlockIndex = blocks()[blockIndex].mNextFreeBlockIndex;
   mFreeBlockCount--;
+  setBlockActiveStatus(blockIndex, /* isActive= */ true);
 
   return new (&blocks()[blockIndex].mElement)
       ElementType(std::forward<Args>(args)...);
@@ -59,12 +65,35 @@ void MemoryPool<ElementType, kSize>::deallocate(ElementType *element) {
   blocks()[blockIndex].mNextFreeBlockIndex = mNextFreeBlockIndex;
   mNextFreeBlockIndex = blockIndex;
   mFreeBlockCount++;
+  setBlockActiveStatus(blockIndex, /* isActive= */ false);
 }
 
 template <typename ElementType, size_t kSize>
 bool MemoryPool<ElementType, kSize>::containsAddress(ElementType *element) {
   size_t temp;
   return getBlockIndex(element, &temp);
+}
+
+template <typename ElementType, size_t kSize>
+ElementType *MemoryPool<ElementType, kSize>::find(
+    MatchingFunction *matchingFunction, void *data) {
+  if (matchingFunction == nullptr) {
+    return nullptr;
+  }
+
+  for (size_t i = 0; i < kNumActiveTrackerBlocks; ++i) {
+    for (size_t j = 0; j < kBitSizeOfUInt32; ++j) {
+      size_t blockIndex = (i * kBitSizeOfUInt32) + j;
+      if (blockIndex < kSize) {
+        bool isElementActive = (mActiveTrackerBlocks[i] >> j) % 2 > 0;
+        ElementType *element = &blocks()[blockIndex].mElement;
+        if (isElementActive && matchingFunction(element, data)) {
+          return element;
+        }
+      }
+    }
+  }
+  return nullptr;
 }
 
 template <typename ElementType, size_t kSize>
@@ -78,6 +107,22 @@ bool MemoryPool<ElementType, kSize>::getBlockIndex(ElementType *element,
          elementAddress <=
              reinterpret_cast<uintptr_t>(&blocks()[kSize - 1].mElement) &&
          ((elementAddress - baseAddress) % sizeof(MemoryPoolBlock) == 0);
+}
+
+template <typename ElementType, size_t kSize>
+void MemoryPool<ElementType, kSize>::setBlockActiveStatus(size_t blockIndex,
+                                                          bool isActive) {
+  size_t activeTrackerBlockIndex = blockIndex / kBitSizeOfUInt32;
+  size_t indexInsideActiveTrackerBlock =
+      blockIndex - (activeTrackerBlockIndex * kBitSizeOfUInt32);
+
+  if (isActive) {
+    mActiveTrackerBlocks[activeTrackerBlockIndex] |=
+        (1 << indexInsideActiveTrackerBlock);
+  } else {
+    mActiveTrackerBlocks[activeTrackerBlockIndex] &=
+        (static_cast<uint32_t>(-1) - (1 << indexInsideActiveTrackerBlock));
+  }
 }
 
 template <typename ElementType, size_t kSize>

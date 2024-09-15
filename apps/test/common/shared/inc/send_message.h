@@ -29,7 +29,7 @@ namespace test_shared {
  * uses the free callback specified in chre/util/nanoapp/callbacks.h
  */
 void sendTestResultToHost(uint16_t hostEndpointId, uint32_t messageType,
-                          bool success);
+                          bool success, bool abortOnFailure = true);
 
 /**
  * Sends a test result to the host using the chre_test_common.TestResult

@@ -64,6 +64,17 @@ class HostLink : public HostLinkBase, public NonCopyable {
   bool sendMessage(const MessageToHost *message);
 
   /**
+   * Sends a transaction status to the host.
+   *
+   * @param messageSequenceNumber The message sequence number.
+   * @param errorCode The error code from enum chreError.
+   *
+   * @return whether the status was successfully sent.
+   */
+  bool sendMessageDeliveryStatus(uint32_t messageSequenceNumber,
+                                 uint8_t errorCode);
+
+  /**
    * Sends a metric message to the host.
    *
    * @param metricId The ID of the metric being sent.

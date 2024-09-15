@@ -20,20 +20,24 @@
 #include <endian.h>
 #include <cinttypes>
 #include <memory>
+#include <optional>
 #include "chre/util/time.h"
 #include "chre_host/bt_snoop_log_parser.h"
+#include "chre_host/generated/host_messages_generated.h"
+#include "chre_host/nanoapp_load_listener.h"
 
 #include <android/log.h>
 
 #include "pw_tokenizer/detokenize.h"
 
+using chre::fbs::LogType;
 using pw::tokenizer::DetokenizedString;
 using pw::tokenizer::Detokenizer;
 
 namespace android {
 namespace chre {
 
-class LogMessageParser {
+class LogMessageParser : public INanoappLoadListener {
  public:
   LogMessageParser();
 
@@ -46,8 +50,11 @@ class LogMessageParser {
   /**
    * Initializes the log message parser by reading the log token database,
    * and instantiates a detokenizer to handle encoded log messages.
+   *
+   * @param nanoappImageHeaderSize Offset in bytes between the address of the
+   * nanoapp binary and the real start of the ELF header.
    */
-  void init();
+  void init(size_t nanoappImageHeaderSize = 0);
 
   //! Logs from a log buffer containing one or more log messages (version 1)
   void log(const uint8_t *logBuffer, size_t logBufferSize);
@@ -66,8 +73,49 @@ class LogMessageParser {
    */
   void dump(const uint8_t *logBuffer, size_t logBufferSize);
 
+  /**
+   * Stores a pigweed detokenizer for decoding logs from a given nanoapp.
+   *
+   * @param appId The app ID associated with the nanoapp.
+   * @param instanceId The instance ID assigned to this nanoapp by the CHRE
+   * event loop.
+   * @param databaseOffset The size offset of the token database from the start
+   * of the address of the ELF binary in bytes.
+   * @param databaseSize The size of the token database section in the ELF
+   * binary in bytes.
+   */
+  void addNanoappDetokenizer(uint64_t appId, uint16_t instanceId,
+                             uint64_t databaseOffset, size_t databaseSize);
+
+  /**
+   * Remove an existing detokenizer associated with a nanoapp if it exists.
+   *
+   * @param appId The app ID associated with the nanoapp.
+   * @param removeBinary Remove the nanoapp binary associated with the app ID if
+   * true.
+   */
+  void removeNanoappDetokenizerAndBinary(uint64_t appId);
+
+  /**
+   * Reset all nanoapp log detokenizers.
+   */
+  void resetNanoappDetokenizerState();
+
+  // Functions from INanoappLoadListener.
+  void onNanoappLoadStarted(
+      uint64_t appId,
+      std::shared_ptr<const std::vector<uint8_t>> nanoappBinary) override;
+
+  void onNanoappLoadFailed(uint64_t appId) override;
+
+  void onNanoappUnloaded(uint64_t appId) override;
+
  private:
   static constexpr char kHubLogFormatStr[] = "@ %3" PRIu32 ".%03" PRIu32 ": %s";
+
+  // Constants used to extract the log type from log metadata.
+  static constexpr uint8_t kLogTypeMask = 0xF0;
+  static constexpr uint8_t kLogTypeBitOffset = 4;
 
   enum LogLevel : uint8_t {
     ERROR = 1,
@@ -101,43 +149,82 @@ class LogMessageParser {
     char data[];
   };
 
+  /**
+   * Helper struct for readable decoding of a tokenized log message from a
+   * nanoapp.
+   */
+  struct NanoappTokenizedLog {
+    uint16_t instanceId;
+    uint8_t size;
+    char data[];
+  } __attribute__((packed));
+
   bool mVerboseLoggingEnabled;
 
-  //! The number of logs dropped since CHRE start
+  //! The number of logs dropped since CHRE start.
   uint32_t mNumLogsDropped = 0;
 
-  std::unique_ptr<Detokenizer> mDetokenizer;
+  //! Log detokenizer used for CHRE system logs.
+  std::unique_ptr<Detokenizer> mSystemDetokenizer;
+
+  /**
+   * Helper struct for keep track of nanoapp's log detokenizer with appIDs.
+   */
+  struct NanoappDetokenizer {
+    std::unique_ptr<Detokenizer> detokenizer;
+    uint64_t appId;
+  };
+
+  //! Maps nanoapp instance IDs to the corresponding app ID and pigweed
+  //! detokenizer.
+  std::unordered_map<uint16_t /*instanceId*/, NanoappDetokenizer>
+      mNanoappDetokenizers;
+
+  //! This is used to find the binary associated with a nanoapp with its app ID.
+  std::unordered_map<uint64_t /*appId*/,
+                     std::shared_ptr<const std::vector<uint8_t>>>
+      mNanoappAppIdToBinary;
 
   static android_LogPriority chreLogLevelToAndroidLogPriority(uint8_t level);
 
   BtSnoopLogParser mBtLogParser;
 
+  //! Offset in bytes between the address of the nanoapp binary and the real
+  //! start of the ELF header.
+  size_t mNanoappImageHeaderSize = 0;
+
   void updateAndPrintDroppedLogs(uint32_t numLogsDropped);
 
   //! Method for parsing unencoded (string) log messages.
-  void parseAndEmitLogMessage(const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitStringLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   /**
    * Parses and emits an encoded log message while also returning the size of
    * the parsed message for buffer index bookkeeping.
    *
-   * @return Size of the encoded log message payload. Note that the size
-   * includes the 1 byte header that we use for encoded log messages to track
-   * message size.
+   * @param message Buffer containing the log metadata and log payload.
+   * @param maxLogMessageLen The max size allowed for the log payload.
+   * @return Size of the encoded log message payload, std::nullopt if the
+   * message format is invalid. Note that the size includes the 1 byte header
+   * that we use for encoded log messages to track message size.
    */
-  size_t parseAndEmitTokenizedLogMessageAndGetSize(const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitTokenizedLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   /**
    * Similar to parseAndEmitTokenizedLogMessageAndGetSize, but used for encoded
    * log message from nanoapps.
    *
-   * @return Size of the encoded log message payload. Note that the size
-   * includes the 1 byte header that we use for encoded log messages to track
-   * message size, and the 2 byte instance ID that the host uses to find the
-   * correct detokenizer.
+   * @param message Buffer containing the log metadata and log payload.
+   * @param maxLogMessageLen The max size allowed for the log payload.
+   * @return Size of the encoded log message payload, std::nullopt if the
+   * message format is invalid. Note that the size includes the 1 byte header
+   * that we use for encoded log messages to track message size, and the 2 byte
+   * instance ID that the host uses to find the correct detokenizer.
    */
-  size_t parseAndEmitNanoappTokenizedLogMessageAndGetSize(
-      const LogMessageV2 *message);
+  std::optional<size_t> parseAndEmitNanoappTokenizedLogMessageAndGetSize(
+      const LogMessageV2 *message, size_t maxLogMessageLen);
 
   void emitLogMessage(uint8_t level, uint32_t timestampMillis,
                       const char *logMessage);
@@ -194,6 +281,29 @@ class LogMessageParser {
    * @return true if the log message is tokenzied and sent from a nanoapp.
    */
   bool isNanoappTokenizedLogMessage(uint8_t metadata);
+
+  /**
+   * Helper function to check nanoapp log token database for memory overflow and
+   * wraparound.
+   *
+   * @param databaseOffset The size offset of the token database from the start
+   * of the address of the ELF binary in bytes.
+   * @param databaseSize The size of the token database section in the ELF
+   * binary in bytes.
+   * @param binarySize. The size of the nanoapp binary in bytes.
+   *
+   * @return True if the token database passes memory bounds checks.
+   */
+  bool checkTokenDatabaseOverflow(uint32_t databaseOffset, size_t databaseSize,
+                                  size_t binarySize);
+
+  /*
+   * Helper function that returns the log type of a log message.
+   */
+  LogType extractLogType(const LogMessageV2 *message) {
+    return static_cast<LogType>((message->metadata & kLogTypeMask) >>
+                                kLogTypeBitOffset);
+  }
 };
 
 }  // namespace chre

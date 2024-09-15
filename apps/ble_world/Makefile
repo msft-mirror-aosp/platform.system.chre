@@ -36,6 +36,10 @@ COMMON_CFLAGS += -DCHRE_ASSERTIONS_ENABLED
 # Uncomment this line to test batching
 # COMMON_CFLAGS += -DBLE_WORLD_ENABLE_BATCHING
 
+# Specify which filter to test using BLE_FILTER_TYPE. Available filter types can
+# be found in ble_world.cc
+COMMON_CFLAGS += -DBLE_FILTER_TYPE=BLE_FILTER_TYPE_SERVICE_DATA
+
 # Common Source Files ##########################################################
 
 COMMON_SRCS += ble_world.cc
