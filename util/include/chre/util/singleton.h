@@ -90,6 +90,6 @@ class Singleton : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/singleton_impl.h"
+#include "chre/util/singleton_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_SINGLETON_H_
