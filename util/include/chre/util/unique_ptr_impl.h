@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_UNIQUE_PTR_IMPL_H_
 #define CHRE_UTIL_UNIQUE_PTR_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/unique_ptr.h"
 
 #include <string.h>
