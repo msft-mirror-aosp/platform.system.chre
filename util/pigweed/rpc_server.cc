@@ -22,6 +22,7 @@
 #include "chre/util/nanoapp/log.h"
 #include "chre/util/pigweed/rpc_helper.h"
 #include "chre_api/chre.h"
+#include "pw_status/status.h"
 
 #ifndef LOG_TAG
 #define LOG_TAG "[RpcServer]"
@@ -121,12 +122,13 @@ bool RpcServer::handleMessageFromHost(const void *eventData) {
   }
 
   mHostOutput.setHostEndpoint(hostMessage->hostEndpoint);
-  if (!mServer.OpenChannel(result.value(), mHostOutput).ok()) {
+  pw::Status status = mServer.OpenChannel(result.value(), mHostOutput);
+  if (status != pw::OkStatus() && status != pw::Status::AlreadyExists()) {
     LOGE("Failed to open channel");
     return false;
   }
-  pw::Status status = mServer.ProcessPacket(packet);
 
+  status = mServer.ProcessPacket(packet);
   if (status != pw::OkStatus()) {
     LOGE("Failed to process the packet");
     return false;
@@ -155,14 +157,14 @@ bool RpcServer::handleMessageFromNanoapp(uint32_t senderInstanceId,
   chreConfigureNanoappInfoEvents(true);
 
   mNanoappOutput.setClient(senderInstanceId);
-  if (!mServer.OpenChannel(result.value(), mNanoappOutput).ok()) {
+  pw::Status status = mServer.OpenChannel(result.value(), mNanoappOutput);
+  if (status != pw::OkStatus() && status != pw::Status::AlreadyExists()) {
     LOGE("Failed to open channel");
     return false;
   }
 
-  pw::Status success = mServer.ProcessPacket(packet);
-
-  if (success != pw::OkStatus()) {
+  status = mServer.ProcessPacket(packet);
+  if (status != pw::OkStatus()) {
     LOGE("Failed to process the packet");
     return false;
   }
