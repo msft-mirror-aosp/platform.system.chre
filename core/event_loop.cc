@@ -432,8 +432,6 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
                   mEventPoolUsage.getMax(), kMaxEventCount);
   debugDump.print("  Number of low priority events dropped: %" PRIu32 "\n",
                   mNumDroppedLowPriEvents);
-  debugDump.print("  Mean event pool usage: %" PRIu32 "/%zu\n",
-                  mEventPoolUsage.getMean(), kMaxEventCount);
 
   Nanoseconds timeSince =
       SystemTime::getMonotonicTime() - mTimeLastWakeupBucketCycled;
