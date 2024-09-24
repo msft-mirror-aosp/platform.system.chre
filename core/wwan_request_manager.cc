@@ -67,7 +67,12 @@ void WwanRequestManager::handleCellInfoResultSync(
   if (mCellInfoRequestingNanoappInstanceId.has_value()) {
     result->cookie = mCellInfoRequestingNanoappCookie;
 
-    mCellInfoErrorHistogram[result->errorCode]++;
+    uint8_t errorCode = result->errorCode;
+    if (errorCode < CHRE_ERROR_SIZE) {
+      mCellInfoErrorHistogram[errorCode]++;
+    } else {
+      LOGE("Undefined error in cellInfoResult: %" PRIu8, errorCode);
+    }
 
     EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
         CHRE_EVENT_WWAN_CELL_INFO_RESULT, result, freeCellInfoResultCallback,
