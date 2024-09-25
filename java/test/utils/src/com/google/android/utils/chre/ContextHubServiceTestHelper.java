@@ -26,8 +26,6 @@ import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.hardware.location.NanoAppBinary;
 import android.hardware.location.NanoAppState;
-import android.os.Build.VERSION;
-import android.os.Build.VERSION_CODES;
 
 import java.util.HashMap;
 import java.util.List;
@@ -63,18 +61,6 @@ public class ContextHubServiceTestHelper {
     public void init() {
         // Registers a client to record a hub reset.
         registerHubResetClient();
-    }
-
-    public void initAndUnloadAllNanoApps() throws InterruptedException, TimeoutException {
-        init();
-
-        // We only need to unload all nanoapps when the device has version < U, so the
-        // tests remain the same on those devices. On newer devices, test mode will
-        // handle this.
-        if (VERSION.SDK_INT < VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Unload all nanoapps to ensure test starts at a clean state.
-            unloadAllNanoApps();
-        }
     }
 
     public void deinit() {
