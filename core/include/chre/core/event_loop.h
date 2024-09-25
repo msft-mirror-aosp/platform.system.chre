@@ -172,8 +172,15 @@ class EventLoop : public NonCopyable {
   void stop();
 
   /**
-   * Synchronously deliver an event to a nanoapp. The event is sent from the
-   * system to the nanoapp with instance ID nanoappInstanceId.
+   * Synchronously distributes an event to all nanoapps that should receive it.
+   * The event is sent from the system to a specific nanoapp if targetInstanceId
+   * matches the nanoappId, or to all registered nanoapps if targetInstanceId
+   * is set to kBroadcastInstanceId
+   *
+   * This is intended to be used by the function provided to
+   * EventLoopManager::deferCallback in cases where pre- and post-processing are
+   * required around event delivery. This closes the gaps around event delivery
+   * and can remove the need for posting multiple events.
    *
    * This must only be used from the EventLoop thread, and must only be used in
    * rare circumstances where one of the postEvent functions cannot be used. In
@@ -181,16 +188,18 @@ class EventLoop : public NonCopyable {
    * ordering guarantees and trigger subtle bugs in nanoapps, so use with
    * caution.
    *
-   * freeCallback is guaranteed to be called before returning.
+   * No freeCallback is provided. The caller is expected to manage the memory
+   * for eventData, and handle any cleanup.
    *
-   * @param nanoappInstanceId The instance ID of the destination of this event
    * @param eventType Event type identifier, which implies the type of eventData
    * @param eventData The data being posted
-   * @return true if the event was successfully delivered, false otherwise.
+   * @param targetInstanceId The instance ID of the destination of this event
+   * @param targetGroupMask Mask used to limit the recipients that are
+   *        registered to receive this event
    */
-  bool deliverEventSync(uint16_t nanoappInstanceId,
-                        uint16_t eventType,
-                        void *eventData);
+  bool distributeEventSync(uint16_t eventType, void *eventData,
+                           uint16_t targetInstanceId = kBroadcastInstanceId,
+                           uint16_t targetGroupMask = kDefaultTargetGroupMask);
 
   /**
    * Posts an event to a nanoapp that is currently running (or all nanoapps if
@@ -487,6 +496,16 @@ class EventLoop : public NonCopyable {
    * @param event The Event to distribute to Nanoapps
    */
   void distributeEvent(Event *event);
+
+  /**
+   * Shared functionality to distributeEvent and distributeEventSync. Should
+   * only be called by those functions. Hnadles event distribution and logging
+   * without any pre- or post-processing.
+   *
+   * @param event The Event to distribute to Nanoapps
+   * @return True if the event was delivered to any nanoapps, otherwise false
+   */
+  bool distributeEventCommon(Event *event);
 
   /**
    * Distribute all events pending in the inbound event queue. Note that this
