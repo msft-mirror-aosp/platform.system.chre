@@ -352,9 +352,9 @@ void HostCommsManager::deliverNanoappMessageFromHost(
   if (!foundNanoapp) {
     error = CHRE_ERROR_DESTINATION_NOT_FOUND;
   } else if (shouldDeliverMessage) {
-    EventLoopManagerSingleton::get()->getEventLoop().deliverEventSync(
-        targetInstanceId, CHRE_EVENT_MESSAGE_FROM_HOST,
-        &craftedMessage->fromHostData);
+    EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
+        CHRE_EVENT_MESSAGE_FROM_HOST, &craftedMessage->fromHostData,
+        targetInstanceId);
     error = CHRE_ERROR_NONE;
   }
 
@@ -485,8 +485,8 @@ void HostCommsManager::handleMessageDeliveryStatusSync(
     asyncResult.cookie = message->cookie;
 
     onMessageToHostCompleteInternal(message);
-    eventLoop.deliverEventSync(
-        nanoappInstanceId, CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT, &asyncResult);
+    eventLoop.distributeEventSync(CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT,
+                                  &asyncResult, nanoappInstanceId);
   }
 }
 
