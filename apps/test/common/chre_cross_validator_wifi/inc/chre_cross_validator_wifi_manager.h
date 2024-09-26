@@ -69,6 +69,10 @@ class Manager {
   // CHRE to receive more result.
   uint8_t mExpectedMaxChreResultCanHandle = 100;
 
+  // Bool for tracking if we have seen the start of a scan result series. Used
+  // to avoid catching the tail end of a previous scan result.
+  bool mScanStartSeen = false;
+
   //! Bools indicating that data collection is complete for each side
   bool mApDataCollectionDone = false;
   bool mChreDataCollectionDone = false;

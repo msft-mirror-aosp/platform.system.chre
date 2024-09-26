@@ -512,12 +512,20 @@ void EventLoop::distributeEvent(Event *event) {
 
 bool EventLoop::distributeEventCommon(Event *event) {
   bool eventDelivered = false;
-  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if ((event->targetInstanceId == chre::kBroadcastInstanceId &&
-         app->isRegisteredForBroadcastEvent(event)) ||
-        event->targetInstanceId == app->getInstanceId()) {
-      eventDelivered = true;
-      deliverNextEvent(app, event);
+  if (event->targetInstanceId == kBroadcastInstanceId) {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (app->isRegisteredForBroadcastEvent(event)) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+      }
+    }
+  } else {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (event->targetInstanceId == app->getInstanceId()) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+        break;
+      }
     }
   }
   // Log if an event unicast to a nanoapp isn't delivered, as this is could be
