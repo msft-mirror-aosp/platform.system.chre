@@ -93,8 +93,8 @@ bool TinysysChreConnection::init() {
   auto chreFd = chreConnection->getChreFileDescriptor();
   while (true) {
     {
-      ssize_t payloadSize = TEMP_FAILURE_RETRY(
-          read(chreFd, chreConnection->mPayload.get(), kMaxPayloadBytes));
+      ssize_t payloadSize = TEMP_FAILURE_RETRY(read(
+          chreFd, chreConnection->mPayload.get(), kMaxReceivingPayloadBytes));
       if (payloadSize == 0) {
         // Payload size 0 is a fake signal from kernel which is normal if the
         // device is in sleep.
