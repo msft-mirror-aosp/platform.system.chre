@@ -23,14 +23,9 @@ import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.hardware.location.NanoAppBinary;
 import android.hardware.location.NanoAppMessage;
-import android.hardware.location.NanoAppState;
-import android.os.Build.VERSION;
-import android.os.Build.VERSION_CODES;
-import android.util.Log;
 
 import com.google.android.utils.chre.ChreTestUtil;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -99,9 +94,6 @@ abstract class ChreCrossValidatorBase {
     /**
      * Validate the data from AP and CHRE according to the parameters passed to this cross
      * validator. Should be called in @Test methods of tests.
-     *
-     * @param samplingDurationInMs The amount of time in milliseconds to collect samples from AP and
-     * CHRE.
      */
     public abstract void validate() throws AssertionError, InterruptedException;
 
@@ -117,28 +109,6 @@ abstract class ChreCrossValidatorBase {
                 mContextHubManager, mContextHubInfo, mNappBinary.getNanoAppId());
         closeContextHubConnection();
         unregisterApDataListener();
-    }
-
-    /**
-    * Unloads all nanoapps from device. Call before validating data to ensure no inconsistencies
-    * with data received.
-    */
-    private void unloadAllNanoApps() {
-        // We only need to unload all nanoapps when the device has version < U, so the
-        // tests remain the same on those devices. On newer devices, test mode will
-        // handle this.
-        if (VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            return;
-        }
-
-        List<NanoAppState> nanoAppStateList =
-                ChreTestUtil.queryNanoAppsAssertSuccess(mContextHubManager, mContextHubInfo);
-
-        for (NanoAppState state : nanoAppStateList) {
-            ChreTestUtil.unloadNanoAppAssertSuccess(
-                    mContextHubManager, mContextHubInfo, state.getNanoAppId());
-            Log.d(TAG, String.format("Unloaded napp: 0x%X", state.getNanoAppId()));
-        }
     }
 
     /**
@@ -163,28 +133,20 @@ abstract class ChreCrossValidatorBase {
     * @return the name of the context hub result.
     */
     protected static String contextHubTransactionResultToString(int result) {
-        switch (result) {
-            case ContextHubTransaction.RESULT_SUCCESS:
-                return "RESULT_SUCCESS";
-            case ContextHubTransaction.RESULT_FAILED_UNKNOWN:
-                return "RESULT_FAILED_UNKNOWN";
-            case ContextHubTransaction.RESULT_FAILED_BAD_PARAMS:
-                return "RESULT_FAILED_BAD_PARAMS";
-            case ContextHubTransaction.RESULT_FAILED_UNINITIALIZED:
-                return "RESULT_FAILED_UNINITIALIZED";
-            case ContextHubTransaction.RESULT_FAILED_BUSY:
-                return "RESULT_FAILED_BUSY";
-            case ContextHubTransaction.RESULT_FAILED_AT_HUB:
-                return "RESULT_FAILED_AT_HUB";
-            case ContextHubTransaction.RESULT_FAILED_TIMEOUT:
-                return "RESULT_FAILED_TIMEOUT";
-            case ContextHubTransaction.RESULT_FAILED_SERVICE_INTERNAL_FAILURE:
-                return "RESULT_FAILED_SERVICE_INTERNAL_FAILURE";
-            case ContextHubTransaction.RESULT_FAILED_HAL_UNAVAILABLE:
-                return "RESULT_FAILED_HAL_UNAVAILABLE";
-            default:
-                return "UNKNOWN_RESULT";
-        }
+        return switch (result) {
+            case ContextHubTransaction.RESULT_SUCCESS -> "RESULT_SUCCESS";
+            case ContextHubTransaction.RESULT_FAILED_UNKNOWN -> "RESULT_FAILED_UNKNOWN";
+            case ContextHubTransaction.RESULT_FAILED_BAD_PARAMS -> "RESULT_FAILED_BAD_PARAMS";
+            case ContextHubTransaction.RESULT_FAILED_UNINITIALIZED -> "RESULT_FAILED_UNINITIALIZED";
+            case ContextHubTransaction.RESULT_FAILED_BUSY -> "RESULT_FAILED_BUSY";
+            case ContextHubTransaction.RESULT_FAILED_AT_HUB -> "RESULT_FAILED_AT_HUB";
+            case ContextHubTransaction.RESULT_FAILED_TIMEOUT -> "RESULT_FAILED_TIMEOUT";
+            case ContextHubTransaction.RESULT_FAILED_SERVICE_INTERNAL_FAILURE ->
+                    "RESULT_FAILED_SERVICE_INTERNAL_FAILURE";
+            case ContextHubTransaction.RESULT_FAILED_HAL_UNAVAILABLE ->
+                    "RESULT_FAILED_HAL_UNAVAILABLE";
+            default -> "UNKNOWN_RESULT";
+        };
     }
 
     /**
