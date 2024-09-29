@@ -151,6 +151,11 @@ void Manager::handleDataMessage(const chreMessageFromHostData *hostData) {
 }
 
 void Manager::handleWifiScanResult(const chreWifiScanEvent *event) {
+  if (!mScanStartSeen && event->eventIndex != 0) {
+    LOGD("Dropping chreWifiScanEvent because we haven't seen eventIndex=0");
+    return;
+  }
+  mScanStartSeen = true;
   for (uint8_t i = 0; i < event->resultCount; i++) {
     mChreScanResults.push_back(event->results[i]);
   }
