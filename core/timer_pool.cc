@@ -362,11 +362,9 @@ void TimerPool::handleTimerExpiredCallback(uint16_t /* type */, void *data,
     }
   }
 
-  if (!EventLoopManagerSingleton::get()->getEventLoop()
-        .deliverEventSync(
-            currentTimerRequest.instanceId,
-            CHRE_EVENT_TIMER,
-            const_cast<void*>(currentTimerRequest.cookie))) {
+  if (!EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
+          CHRE_EVENT_TIMER, const_cast<void *>(currentTimerRequest.cookie),
+          currentTimerRequest.instanceId)) {
     LOGW("Failed to deliver timer event");
   }
 }
