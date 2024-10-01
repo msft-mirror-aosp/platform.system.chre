@@ -51,7 +51,7 @@ public class ContextHubBroadcastReceiver extends BroadcastReceiver {
         }
         Log.d(TAG, "Received intent event: " + event);
 
-        Assert.assertEquals("Received too many Intent events", sQueue.size(), 0);
+        Assert.assertEquals("Received too many Intent events", /* expected= */ 0, sQueue.size());
         sQueue.add(event);
     }
 
