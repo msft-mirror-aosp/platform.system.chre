@@ -118,3 +118,17 @@ flag {
     purpose: PURPOSE_BUGFIX
   }
 }
+
+flag {
+  name: "offload_api"
+  namespace: "context_hub"
+  description: "Enables the generic offload APIs"
+  bug: "361573382"
+}
+
+flag {
+  name: "offload_implementation"
+  namespace: "context_hub"
+  description: "Enables support for generic offload"
+  bug: "361573382"
+}
