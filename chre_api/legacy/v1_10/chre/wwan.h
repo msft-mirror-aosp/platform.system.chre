@@ -58,16 +58,10 @@ extern "C" {
  */
 
 //! No WWAN APIs are supported
-#define CHRE_WWAN_CAPABILITIES_NONE       UINT32_C(0)
+#define CHRE_WWAN_CAPABILITIES_NONE  UINT32_C(0)
 
 //! Current cell information can be queried via chreWwanGetCellInfoAsync()
-#define CHRE_WWAN_GET_CELL_INFO           UINT32_C(1 << 0)
-
-//! The chreWwanCellInfoResult from chreWwanGetCellInfoAsync() will include
-//! all available chreWwanCellInfo as entries in cells, not just a single
-//! primary result.
-//! @since v1.11 - Neighbor support in prior versions of the API is unspecified.
-#define CHRE_WWAN_GET_CELL_NEIGHBOR_INFO  UINT32_C(1 << 1)
+#define CHRE_WWAN_GET_CELL_INFO      UINT32_C(1 << 0)
 
 /** @} */
 
