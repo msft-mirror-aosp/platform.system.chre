@@ -96,20 +96,6 @@ flag {
 }
 
 flag {
-  name: "unified_metrics_reporting_api"
-  namespace: "context_hub"
-  description: "The API for unified metrics reporting in the Context Hub Service"
-  bug: "361804033"
-}
-
-flag {
-  name: "unified_metrics_reporting_implementation"
-  namespace: "context_hub"
-  description: "The implementation for unified metrics reporting in the Context Hub Service"
-  bug: "361804033"
-}
-
-flag {
   name: "reduce_locking_context_hub_transaction_manager"
   namespace: "context_hub"
   description: "Reduces locking in the ContextHubTransactionManager"
