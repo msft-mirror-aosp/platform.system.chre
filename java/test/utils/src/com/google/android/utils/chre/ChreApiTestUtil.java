@@ -548,7 +548,7 @@ public class ChreApiTestUtil {
      */
     public static void writeDataToFile(byte[] data, String filename,
                 Context context) throws Exception {
-        File file = new File(context.getExternalFilesDir(null), filename);
+        File file = new File(context.getFilesDir(), filename);
         ByteSink sink = Files.asByteSink(file);
         sink.write(data);
     }
