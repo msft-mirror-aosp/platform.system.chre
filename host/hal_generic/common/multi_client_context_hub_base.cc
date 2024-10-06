@@ -203,7 +203,8 @@ ScopedAStatus MultiClientContextHubBase::loadNanoapp(
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  LOGD("Loading nanoapp 0x%" PRIx64, appBinary.nanoappId);
+  LOGD("Loading nanoapp 0x%" PRIx64 ", transaction id=%" PRIi32,
+       appBinary.nanoappId, transactionId);
   uint32_t targetApiVersion = (appBinary.targetChreApiMajorVersion << 24) |
                               (appBinary.targetChreApiMinorVersion << 16);
   auto nanoappBuffer =
