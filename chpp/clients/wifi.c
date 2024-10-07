@@ -376,17 +376,12 @@ static void chppWifiClientNotifyReset(void *clientContext) {
                               false /* clearOnly */);
   chppCheckWifiScanEventNotificationReset();
 
-  if (wifiClientContext->client.openState != CHPP_OPEN_STATE_OPENED &&
-      !wifiClientContext->client.pseudoOpen) {
-    CHPP_LOGW("WiFi client reset but wasn't open");
-  } else {
-    CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
-              wifiClientContext->client.openState);
-    chppClientSendOpenRequest(&wifiClientContext->client,
-                              &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
-                              CHPP_WIFI_OPEN,
-                              /*blocking=*/false);
-  }
+  CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
+            wifiClientContext->client.openState);
+  chppClientSendOpenRequest(&wifiClientContext->client,
+                            &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
+                            CHPP_WIFI_OPEN,
+                            /*blocking=*/false);
 }
 
 /**
