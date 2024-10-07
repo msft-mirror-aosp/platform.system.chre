@@ -38,20 +38,11 @@ extern "C" {
  ***********************************************/
 
 /**
- * CHPP Transport layer reset timeout in ns. The transport layer will attempt
- * another reset if the previous reset is not acked in time.
- */
-#ifndef CHPP_TRANSPORT_RESET_TIMEOUT_NS
-#define CHPP_TRANSPORT_RESET_TIMEOUT_NS \
-  (UINT64_C(1500) * CHPP_NSEC_PER_MSEC)  // 1500 ms
-#endif
-
-/**
  * CHPP Transport layer timeout for tx packets.
  */
 #ifndef CHPP_TRANSPORT_TX_TIMEOUT_NS
 #define CHPP_TRANSPORT_TX_TIMEOUT_NS \
-  (UINT64_C(100) * CHPP_NSEC_PER_MSEC)  // 100 ms
+  (UINT64_C(500) * CHPP_NSEC_PER_MSEC)  // 500 ms
 #endif
 
 /**
@@ -68,6 +59,15 @@ extern "C" {
  */
 #ifndef CHPP_TRANSPORT_MAX_RETX
 #define CHPP_TRANSPORT_MAX_RETX UINT16_C(4)
+#endif
+
+/**
+ * CHPP Transport layer reset timeout in ns. The transport layer will attempt
+ * another reset if the previous reset is not acked in time.
+ */
+#ifndef CHPP_TRANSPORT_RESET_TIMEOUT_NS
+#define CHPP_TRANSPORT_RESET_TIMEOUT_NS \
+  (UINT64_C(1) * CHPP_TRANSPORT_TX_TIMEOUT_NS * (CHPP_TRANSPORT_MAX_RETX + 1))
 #endif
 
 /**
