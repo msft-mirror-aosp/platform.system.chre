@@ -74,3 +74,57 @@ flag {
   description: "Fixes API check errors in Context Hub classes"
   bug: "340880058"
 }
+
+flag {
+  name: "refactor_hal_xport_agnostic"
+  namespace: "context_hub"
+  description: "Flag guarding refactor of ContextHub HAL to be transport agnostic"
+  bug: "360926711"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "remove_old_context_hub_apis"
+  namespace: "context_hub"
+  description: "Removes the implementation of the deprecated old ContextHub APIs"
+  bug: "359925548"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "reduce_locking_context_hub_transaction_manager"
+  namespace: "context_hub"
+  description: "Reduces locking in the ContextHubTransactionManager"
+  bug: "362299144"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "offload_api"
+  namespace: "context_hub"
+  description: "Enables the generic offload APIs"
+  bug: "361573382"
+}
+
+flag {
+  name: "offload_implementation"
+  namespace: "context_hub"
+  description: "Enables support for generic offload"
+  bug: "361573382"
+}
+
+flag {
+  name: "efw_xport_rewind_on_error"
+  namespace: "context_hub"
+  description: "Flag guarding the AOC-dependent behavior to rewind to the last good message"
+  bug: "371057943"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}

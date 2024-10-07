@@ -25,7 +25,13 @@
 #include "chre/util/lock_guard.h"
 #include "chre/util/nested_data_ptr.h"
 
+#include <cstdint>
+
 namespace chre {
+
+namespace {
+constexpr uint64_t kTimerAlreadyFiredExpiration = UINT64_MAX;
+}  // anonymous namespace
 
 TimerPool::TimerPool() {
   if (!mSystemTimer.init()) {
@@ -276,11 +282,14 @@ bool TimerPool::handleExpiredTimersAndScheduleNextLocked() {
 
       rescheduleAndRemoveExpiredTimersLocked(currentTimerRequest);
     } else {
-      // Update the system timer to reflect the duration until the closest
-      // expiry (mTimerRequests is sorted by expiry, so we just do this for
-      // the first timer found which has not expired yet)
-      Nanoseconds duration = currentTimerRequest.expirationTime - currentTime;
-      mSystemTimer.set(handleSystemTimerCallback, this, duration);
+      if (currentTimerRequest.expirationTime.toRawNanoseconds() <
+          kTimerAlreadyFiredExpiration) {
+        // Update the system timer to reflect the duration until the closest
+        // expiry (mTimerRequests is sorted by expiry, so we just do this for
+        // the first timer found which has not expired yet)
+        Nanoseconds duration = currentTimerRequest.expirationTime - currentTime;
+        mSystemTimer.set(handleSystemTimerCallback, this, duration);
+      }
       break;
     }
   }
@@ -294,9 +303,9 @@ void TimerPool::rescheduleAndRemoveExpiredTimersLocked(
     popTimerRequestLocked();
   } else {
     TimerRequest copyRequest = request;
-    copyRequest.expirationTime = request.isOneShot
-        ? Nanoseconds(UINT64_MAX)
-        : request.expirationTime + request.duration;
+    copyRequest.expirationTime =
+        request.isOneShot ? Nanoseconds(kTimerAlreadyFiredExpiration)
+                          : request.expirationTime + request.duration;
     popTimerRequestLocked();
     CHRE_ASSERT(insertTimerRequestLocked(copyRequest));
   }
@@ -353,11 +362,9 @@ void TimerPool::handleTimerExpiredCallback(uint16_t /* type */, void *data,
     }
   }
 
-  if (!EventLoopManagerSingleton::get()->getEventLoop()
-        .deliverEventSync(
-            currentTimerRequest.instanceId,
-            CHRE_EVENT_TIMER,
-            const_cast<void*>(currentTimerRequest.cookie))) {
+  if (!EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
+          CHRE_EVENT_TIMER, const_cast<void *>(currentTimerRequest.cookie),
+          currentTimerRequest.instanceId)) {
     LOGW("Failed to deliver timer event");
   }
 }

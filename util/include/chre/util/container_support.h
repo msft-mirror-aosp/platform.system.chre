@@ -47,11 +47,19 @@ inline void *memoryAlloc(size_t size) {
   return chreHeapAlloc(static_cast<uint32_t>(size));
 }
 
+/**
+ * Returns memory of suitable alignment to hold an array of the given object
+ * type, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @param count the number of elements to allocate.
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
 template <typename T>
-inline T *memoryAlignedAlloc() {
+inline T *memoryAlignedAllocArray([[maybe_unused]] size_t count) {
 #ifdef CHRE_STANDALONE_POSIX_ALIGNED_ALLOC
   void *ptr;
-  int result = posix_memalign(&ptr, alignof(T), sizeof(T));
+  int result = posix_memalign(&ptr, alignof(T), sizeof(T) * count);
   if (result != 0) {
     ptr = nullptr;
   }
@@ -61,6 +69,18 @@ inline T *memoryAlignedAlloc() {
                 "memoryAlignedAlloc is unsupported on this platform");
   return nullptr;
 #endif  // CHRE_STANDALONE_POSIX_ALIGNED_ALLOC
+}
+
+/**
+ * Returns memory of suitable alignment to hold a given object of the
+ * type T, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
+template <typename T>
+inline T *memoryAlignedAlloc() {
+  return memoryAlignedAllocArray<T>(/* count= */ 1);
 }
 
 /**
@@ -81,20 +101,53 @@ inline void memoryFree(void *pointer) {
 
 namespace chre {
 
+/**
+ * Provides the memoryAlloc function that is normally provided by the CHRE
+ * runtime. It maps into malloc.
+ *
+ * @param size the size of the allocation to make.
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
 inline void *memoryAlloc(size_t size) {
   return malloc(size);
 }
 
+/**
+ * Returns memory of suitable alignment to hold an array of the given object
+ * type, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @param count the number of elements to allocate.
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
 template <typename T>
-inline T *memoryAlignedAlloc() {
+inline T *memoryAlignedAllocArray(size_t count) {
   void *ptr;
-  int result = posix_memalign(&ptr, alignof(T), sizeof(T));
+  int result = posix_memalign(&ptr, alignof(T), sizeof(T) * count);
   if (result != 0) {
     ptr = nullptr;
   }
   return static_cast<T *>(ptr);
 }
 
+/**
+ * Returns memory of suitable alignment to hold a given object of the
+ * type T, which may exceed alignment of std::max_align_t and therefore cannot
+ * use memoryAlloc().
+ *
+ * @return a pointer to allocated memory or nullptr if allocation failed.
+ */
+template <typename T>
+inline T *memoryAlignedAlloc() {
+  return memoryAlignedAllocArray<T>(/* count= */1);
+}
+
+/**
+ * Provides the memoryFree function that is normally provided by the CHRE
+ * runtime. It maps into free.
+ *
+ * @param pointer the allocation to release.
+ */
 inline void memoryFree(void *pointer) {
   free(pointer);
 }

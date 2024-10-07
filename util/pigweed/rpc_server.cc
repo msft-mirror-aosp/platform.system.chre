@@ -22,6 +22,7 @@
 #include "chre/util/nanoapp/log.h"
 #include "chre/util/pigweed/rpc_helper.h"
 #include "chre_api/chre.h"
+#include "pw_status/status.h"
 
 #ifndef LOG_TAG
 #define LOG_TAG "[RpcServer]"
@@ -101,8 +102,9 @@ bool RpcServer::handleMessageFromHost(const void *eventData) {
                   hostMessage->messageSize);
 
   pw::Result<uint32_t> result = pw::rpc::ExtractChannelId(packet);
-  if (result.status() != PW_STATUS_OK) {
-    LOGE("Unable to extract channel ID from packet");
+  if (!result.status().ok()) {
+    LOGE("Unable to extract channel ID from packet: %" PRIu8,
+         static_cast<uint8_t>(result.status().code()));
     return false;
   }
 
@@ -121,12 +123,15 @@ bool RpcServer::handleMessageFromHost(const void *eventData) {
   }
 
   mHostOutput.setHostEndpoint(hostMessage->hostEndpoint);
-  mServer.OpenChannel(result.value(), mHostOutput);
+  pw::Status status = mServer.OpenChannel(result.value(), mHostOutput);
+  if (status != pw::OkStatus() && status != pw::Status::AlreadyExists()) {
+    LOGE("Failed to open channel: %" PRIu8, static_cast<uint8_t>(status.code()));
+    return false;
+  }
 
-  pw::Status status = mServer.ProcessPacket(packet);
-
-  if (status != pw::OkStatus()) {
-    LOGE("Failed to process the packet");
+  status = mServer.ProcessPacket(packet);
+  if (!status.ok()) {
+    LOGE("Failed to process the packet: %" PRIu8, static_cast<uint8_t>(status.code()));
     return false;
   }
 
@@ -141,8 +146,9 @@ bool RpcServer::handleMessageFromNanoapp(uint32_t senderInstanceId,
                   data->msgSize);
 
   pw::Result<uint32_t> result = pw::rpc::ExtractChannelId(packet);
-  if (result.status() != PW_STATUS_OK) {
-    LOGE("Unable to extract channel ID from packet");
+  if (!result.status().ok()) {
+    LOGE("Unable to extract channel ID from packet: %" PRIu8,
+         static_cast<uint8_t>(result.status().code()));
     return false;
   }
 
@@ -153,12 +159,15 @@ bool RpcServer::handleMessageFromNanoapp(uint32_t senderInstanceId,
   chreConfigureNanoappInfoEvents(true);
 
   mNanoappOutput.setClient(senderInstanceId);
-  mServer.OpenChannel(result.value(), mNanoappOutput);
+  pw::Status status = mServer.OpenChannel(result.value(), mNanoappOutput);
+  if (status != pw::OkStatus() && status != pw::Status::AlreadyExists()) {
+    LOGE("Failed to open channel: %" PRIu8, static_cast<uint8_t>(status.code()));
+    return false;
+  }
 
-  pw::Status success = mServer.ProcessPacket(packet);
-
-  if (success != pw::OkStatus()) {
-    LOGE("Failed to process the packet");
+  status = mServer.ProcessPacket(packet);
+  if (!status.ok()) {
+    LOGE("Failed to process the packet: %" PRIu8, static_cast<uint8_t>(status.code()));
     return false;
   }
 
@@ -189,9 +198,12 @@ void RpcServer::handleNanoappStopped(const void *eventData) {
   auto info = static_cast<const struct chreNanoappInfo *>(eventData);
 
   if (info->instanceId > kRpcNanoappMaxId) {
-    LOGE("Invalid nanoapp Id 0x%08" PRIx32, info->instanceId);
-  } else {
-    mServer.CloseChannel(info->instanceId);
+    LOGE("Invalid nanoapp instance ID %" PRIu32, info->instanceId);
+  } else if (pw::Status status = mServer.CloseChannel(info->instanceId);
+             !status.ok()) {
+    LOGE("Failed to close channel for nanoapp with instance ID %"
+         PRIu32 ": %" PRIu8, info->instanceId,
+         static_cast<uint8_t>(status.code()));
   }
 }
 

@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_MEMORY_POOL_IMPL_H_
 #define CHRE_UTIL_MEMORY_POOL_IMPL_H_
 
+// IWYU pragma: private
 #include <cinttypes>
 #include <type_traits>
 #include <utility>

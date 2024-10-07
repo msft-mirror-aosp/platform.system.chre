@@ -84,16 +84,16 @@ bool populateNanoappInfo(const Nanoapp *app, struct chreNanoappInfo *info) {
 
 #ifndef CHRE_STATIC_EVENT_LOOP
 /**
- * @return true if a event is a low priority event.
+ * @return true if a event is a low priority event and is not from nanoapp.
  * Note: data and extraData are needed here to match the
  * matching function signature. Both are not used here, but
  * are used in other applications of
  * SegmentedQueue::removeMatchedFromBack.
  */
-bool isLowPriorityEvent(Event *event, void * /* data */,
-                        void * /* extraData */) {
+bool isNonNanoappLowPriorityEvent(Event *event, void * /* data */,
+                                  void * /* extraData */) {
   CHRE_ASSERT_NOT_NULL(event);
-  return event->isLowPriority;
+  return event->isLowPriority && event->senderInstanceId == kSystemInstanceId;
 }
 
 void deallocateFromMemoryPool(Event *event, void *memoryPool) {
@@ -274,7 +274,8 @@ bool EventLoop::unloadNanoapp(uint16_t instanceId,
   return unloaded;
 }
 
-bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNum) {
+bool EventLoop::removeNonNanoappLowPriorityEventsFromBack(
+    [[maybe_unused]] size_t removeNum) {
 #ifdef CHRE_STATIC_EVENT_LOOP
   return false;
 #else
@@ -282,10 +283,10 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
     return true;
   }
 
-  size_t numRemovedEvent =
-      mEvents.removeMatchedFromBack(isLowPriorityEvent, /* data= */ nullptr,
-                                    /* extraData= */ nullptr, removeNum,
-                                    deallocateFromMemoryPool, &mEventPool);
+  size_t numRemovedEvent = mEvents.removeMatchedFromBack(
+      isNonNanoappLowPriorityEvent, /* data= */ nullptr,
+      /* extraData= */ nullptr, removeNum, deallocateFromMemoryPool,
+      &mEventPool);
   if (numRemovedEvent == 0 || numRemovedEvent == SIZE_MAX) {
     LOGW("Cannot remove any low priority event");
   } else {
@@ -296,29 +297,20 @@ bool EventLoop::removeLowPriorityEventsFromBack([[maybe_unused]] size_t removeNu
 }
 
 bool EventLoop::hasNoSpaceForHighPriorityEvent() {
-  return mEventPool.full() &&
-         !removeLowPriorityEventsFromBack(targetLowPriorityEventRemove);
+  return mEventPool.full() && !removeNonNanoappLowPriorityEventsFromBack(
+                                  targetLowPriorityEventRemove);
 }
 
-bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
-                                 uint16_t eventType,
-                                 void *eventData) {
+bool EventLoop::distributeEventSync(uint16_t eventType, void *eventData,
+                                    uint16_t targetInstanceId,
+                                    uint16_t targetGroupMask) {
   CHRE_ASSERT(inEventLoopThread());
-
   Event event(eventType, eventData,
               /* freeCallback= */ nullptr,
               /* isLowPriority= */ false,
-              /* senderInstanceId= */ kSystemInstanceId,
-              /* targetInstanceId= */ nanoappInstanceId,
-              kDefaultTargetGroupMask);
-  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if (app->getInstanceId() == nanoappInstanceId) {
-      deliverNextEvent(app, &event);
-      return true;
-    }
-  }
-
-  return false;
+              /* senderInstanceId= */ kSystemInstanceId, targetInstanceId,
+              targetGroupMask);
+  return distributeEventCommon(&event);
 }
 
 // TODO(b/264108686): Refactor this function and postSystemEvent
@@ -431,8 +423,6 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
                   mEventPoolUsage.getMax(), kMaxEventCount);
   debugDump.print("  Number of low priority events dropped: %" PRIu32 "\n",
                   mNumDroppedLowPriEvents);
-  debugDump.print("  Mean event pool usage: %" PRIu32 "/%zu\n",
-                  mEventPoolUsage.getMean(), kMaxEventCount);
 
   Nanoseconds timeSince =
       SystemTime::getMonotonicTime() - mTimeLastWakeupBucketCycled;
@@ -515,13 +505,27 @@ void EventLoop::deliverNextEvent(const UniquePtr<Nanoapp> &app, Event *event) {
 }
 
 void EventLoop::distributeEvent(Event *event) {
+  distributeEventCommon(event);
+  CHRE_ASSERT(event->isUnreferenced());
+  freeEvent(event);
+}
+
+bool EventLoop::distributeEventCommon(Event *event) {
   bool eventDelivered = false;
-  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if ((event->targetInstanceId == chre::kBroadcastInstanceId &&
-         app->isRegisteredForBroadcastEvent(event)) ||
-        event->targetInstanceId == app->getInstanceId()) {
-      eventDelivered = true;
-      deliverNextEvent(app, event);
+  if (event->targetInstanceId == kBroadcastInstanceId) {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (app->isRegisteredForBroadcastEvent(event)) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+      }
+    }
+  } else {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (event->targetInstanceId == app->getInstanceId()) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+        break;
+      }
     }
   }
   // Log if an event unicast to a nanoapp isn't delivered, as this is could be
@@ -534,8 +538,7 @@ void EventLoop::distributeEvent(Event *event) {
     LOGW("Dropping event 0x%" PRIx16 " from instanceId %" PRIu16 "->%" PRIu16,
          event->eventType, event->senderInstanceId, event->targetInstanceId);
   }
-  CHRE_ASSERT(event->isUnreferenced());
-  freeEvent(event);
+  return eventDelivered;
 }
 
 void EventLoop::flushInboundEventQueue() {

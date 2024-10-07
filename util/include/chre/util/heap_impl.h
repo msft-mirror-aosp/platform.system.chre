@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-// IWYU pragma: private, include "heap.h"
 #ifndef CHRE_UTIL_HEAP_IMPL_H_
 #define CHRE_UTIL_HEAP_IMPL_H_
 
+// IWYU pragma: private
 #include <utility>
 
 #include "chre/util/container_support.h"
