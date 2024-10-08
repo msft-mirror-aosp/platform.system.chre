@@ -631,7 +631,7 @@ void AppManager::HandleHostAwakeEvent() {
       chre::kOneMillisecondInNanoseconds;
   if (current_time - last_tracker_report_flush_time_nanosec_ >=
       flush_threshold_nanosec) {
-    LOGI("Flush tracker reports by host awake event.");
+    LOGD("Flush tracker reports by host awake event.");
     SendTrackerReportsToHost(tracker_storage_.GetBatchReports());
     tracker_storage_.Clear();
   }
