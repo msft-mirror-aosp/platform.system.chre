@@ -59,10 +59,15 @@ TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/common/platform/i
 # nanoapp list.
 COMMON_CFLAGS += -DCHRE_VARIANT_SUPPLIES_STATIC_NANOAPP_LIST
 
+# Enable nanoapp authentication by default
+TINYSYS_CFLAGS += -DCHRE_NAPP_AUTHENTICATION_ENABLED
+
 # CHRE event count #############################################################
 
 TINYSYS_CFLAGS += -DCHRE_EVENT_PER_BLOCK=32
 TINYSYS_CFLAGS += -DCHRE_MAX_EVENT_BLOCKS=4
+TINYSYS_CFLAGS += -DCHRE_UNSCHEDULED_EVENT_PER_BLOCK=32
+TINYSYS_CFLAGS += -DCHRE_MAX_UNSCHEDULED_EVENT_BLOCKS=4
 
 # Optional Features ############################################################
 

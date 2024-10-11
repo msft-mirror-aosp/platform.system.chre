@@ -115,6 +115,19 @@ message ExtConfigRequest {
     // disables the opportunistic flush.
     optional uint32 opportunistic_flush_threshold_time_ms = 8
         [default = 4294967295];
+
+    // Active interval for tracker scan filter. The tracker scan filter is
+    // enabled at the beginning of the active interval and disabled at the end
+    // of the active window. This creates a toggle effect for the tracker scan
+    // filter and reduces the BLE scan power consumption. If the interval and
+    // window are not set by host, the default values are 0, and the tracker
+    // scan filter is always enabled.
+    // The active interval must be greater than the active window so that the
+    // scan toggling can function properly.
+    optional uint32 active_interval_ms = 9 [default = 0];
+
+    // Active window for tracker scan filter.
+    optional uint32 active_window_ms = 10 [default = 0];
   }
 
   message FlushTrackerReports {}
