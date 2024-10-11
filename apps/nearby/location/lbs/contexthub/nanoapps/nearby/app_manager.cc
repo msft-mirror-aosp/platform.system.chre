@@ -114,9 +114,7 @@ void AppManager::HandleEvent(uint32_t sender_instance_id, uint16_t event_type,
       HandleMatchAdvReports(adv_reports_cache_);
       break;
     case CHRE_EVENT_TIMER:
-      if (event_data == &ble_scan_keep_alive_timer_id) {
-        tracker_storage_.Refresh(tracker_filter_.GetBatchConfig());
-      }
+      HandleTimerEvent(event_data);
       break;
     case CHRE_EVENT_HOST_AWAKE:
       HandleHostAwakeEvent();
@@ -213,7 +211,8 @@ void AppManager::HandleMessageFromHost(const chreMessageFromHostData *event) {
 }
 
 void AppManager::UpdateBleScanState() {
-  if (!filter_.IsEmpty() || !tracker_filter_.IsEmpty() ||
+  if (!filter_.IsEmpty() ||
+      (!tracker_filter_.IsEmpty() && tracker_filter_.IsActive()) ||
       !filter_extension_.IsEmpty()) {
     ble_scanner_.Restart();
   } else {
@@ -637,6 +636,36 @@ void AppManager::HandleHostAwakeEvent() {
   }
 }
 
+void AppManager::HandleTimerEvent(const void *event_data) {
+  if (event_data == &ble_scan_keep_alive_timer_id) {
+    tracker_storage_.Refresh(tracker_filter_.GetBatchConfig());
+  } else if (event_data ==
+             tracker_filter_.GetActiveIntervalTimer().GetTimerId()) {
+    // When receive the active interval timer event, set the active state for
+    // tracker scan filter, start the oneshot active window timer, and set the
+    // tracker scan filters from the BLE scanner. Then update the BLE scan state
+    // so that the tracker scan can start properly. The tracker scan will stop
+    // when receive the oneshot active window timer event.
+    tracker_filter_.SetActiveState();
+    tracker_filter_.GetActiveWindowTimer().StartTimer();
+    ble_scanner_.SetTrackerFilters();
+    UpdateBleScanState();
+  } else if (event_data ==
+             tracker_filter_.GetActiveWindowTimer().GetTimerId()) {
+    // When receive the active window timer event, clear the active state for
+    // tracker scan filter, clear the tracker scan filters from the BLE scanner,
+    // and update the BLE scan state so that the tracker scan can stop properly.
+    // The tracker scan will restart when receive the next active interval timer
+    // event. If the tracker filter is empty, no action is needed as the tracker
+    // scan has completely stopped at this point.
+    if (!tracker_filter_.IsEmpty()) {
+      tracker_filter_.ClearActiveState();
+      ble_scanner_.ClearTrackerFilters();
+      UpdateBleScanState();
+    }
+  }
+}
+
 void AppManager::OnTrackerStorageFullEvent() {
   SendTrackerStorageFullEventToHost();
 }
@@ -651,6 +680,12 @@ bool AppManager::HandleExtTrackerFilterConfig(
     return false;
   }
   ble_scanner_.UpdateTrackerFilters(generic_filters);
+  // Set or clear tracker scan filter state before updating BLE scan state.
+  if (tracker_filter_.IsEmpty()) {
+    ble_scanner_.ClearTrackerFilters();
+  } else {
+    ble_scanner_.SetTrackerFilters();
+  }
   UpdateBleScanState();
   // Send tracker reports to host before clearing the tracker storage if the
   // host stops the tracker filter.
