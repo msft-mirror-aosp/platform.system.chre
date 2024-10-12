@@ -46,6 +46,9 @@ ifneq ($(filter $(TARGET_NAME)% all, $(MAKECMDGOALS)),)
   TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
   TINYSYS_CFLAGS += -DCHRE_NANOAPP_LOAD_ALIGNMENT=4096
 
+  TINYSYS_CFLAGS += -DCFG_TASK_MULTINOTIFY_SUPPORT
+  TINYSYS_CFLAGS += -mllvm -enable-printf-opt=false
+
   TINYSYS_CFLAGS += -D__riscv
   TINYSYS_CFLAGS += -DMRV55
   TINYSYS_CFLAGS += -D_LIBCPP_HAS_NO_LONG_LONG
@@ -53,12 +56,14 @@ ifneq ($(filter $(TARGET_NAME)% all, $(MAKECMDGOALS)),)
   # Word size for this architecture
   TARGET_CFLAGS += -DCHRE_32_BIT_WORD_SIZE
 
-  # chre platform
+  # CHRE platform
   TARGET_CFLAGS += -DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_7
   TARGET_CFLAGS += -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096
   TARGET_CFLAGS += -DCHRE_USE_BUFFERED_LOGGING
-  # enable static allocation in freertos
+
+  # Enable static allocation in freertos
   TINYSYS_CFLAGS += -DCFG_STATIC_ALLOCATE
+  TINYSYS_CFLAGS += -DconfigSUPPORT_STATIC_ALLOCATION=1
 
   # Compiling flags ##############################################################
 
