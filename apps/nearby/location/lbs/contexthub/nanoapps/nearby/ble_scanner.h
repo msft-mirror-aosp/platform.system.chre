@@ -115,6 +115,16 @@ class BleScanner {
     is_default_generic_filter_enabled_ = false;
   }
 
+  // Sets tracker filters.
+  void SetTrackerFilters() {
+    is_tracker_filter_enabled_ = true;
+  }
+
+  // Clears tracker filters.
+  void ClearTrackerFilters() {
+    is_tracker_filter_enabled_ = false;
+  }
+
   // Returns whether the filter list contains the given filter.
   bool ContainsFilter(const chre::DynamicVector<chreBleGenericFilter> &filters,
                       const chreBleGenericFilter &src);
@@ -145,6 +155,9 @@ class BleScanner {
 
   // Whether default generic filter is enabled.
   bool is_default_generic_filter_enabled_ = false;
+
+  // Whether tracker filter is enabled.
+  bool is_tracker_filter_enabled_ = false;
 
   // Current report delay for BLE batch scan
   uint32_t report_delay_ms_ = 0;

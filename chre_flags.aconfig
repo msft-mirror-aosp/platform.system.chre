@@ -128,3 +128,10 @@ flag {
     purpose: PURPOSE_BUGFIX
   }
 }
+
+flag {
+  name: "efw_xport_in_context_hub"
+  namespace: "context_hub"
+  description: "Flag guarding the use of the new EFW transport for ContextHub <-> CHRE comms"
+  bug: "369883034"
+}
