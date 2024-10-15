@@ -178,6 +178,7 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(fmaxf),
     ADD_EXPORTED_C_SYMBOL(fminf),
     ADD_EXPORTED_C_SYMBOL(fmodf),
+    ADD_EXPORTED_C_SYMBOL(ldexpf),
     ADD_EXPORTED_C_SYMBOL(log10f),
     ADD_EXPORTED_C_SYMBOL(log1pf),
     ADD_EXPORTED_C_SYMBOL(log2f),
