@@ -56,16 +56,16 @@ extern "C" {
  * @{
  */
 //! No BLE APIs are supported
-#define CHRE_BLE_CAPABILITIES_NONE UINT32_C(0)
+#define CHRE_BLE_CAPABILITIES_NONE (UINT32_C(0))
 
 //! CHRE supports BLE scanning
-#define CHRE_BLE_CAPABILITIES_SCAN UINT32_C(1 << 0)
+#define CHRE_BLE_CAPABILITIES_SCAN (UINT32_C(1) << 0)
 
 //! CHRE BLE supports batching of scan results, either through Android-specific
 //! HCI (OCF: 0x156), or by the CHRE framework, internally.
 //! @since v1.7 Platforms with this capability must also support flushing scan
 //! results during a batched scan.
-#define CHRE_BLE_CAPABILITIES_SCAN_RESULT_BATCHING UINT32_C(1 << 1)
+#define CHRE_BLE_CAPABILITIES_SCAN_RESULT_BATCHING (UINT32_C(1) << 1)
 
 //! CHRE BLE scan supports best-effort hardware filtering. If filtering is
 //! available, chreBleGetFilterCapabilities() returns a bitmap indicating the
@@ -74,10 +74,10 @@ extern "C" {
 //! must be met for this flag:
 //! If only one nanoapp is requesting BLE scans and there are no BLE scans from
 //! the AP, only filtered results will be provided to the nanoapp.
-#define CHRE_BLE_CAPABILITIES_SCAN_FILTER_BEST_EFFORT UINT32_C(1 << 2)
+#define CHRE_BLE_CAPABILITIES_SCAN_FILTER_BEST_EFFORT (UINT32_C(1) << 2)
 
 //! CHRE BLE supports reading the RSSI of a specified LE-ACL connection handle.
-#define CHRE_BLE_CAPABILITIES_READ_RSSI UINT32_C(1 << 3)
+#define CHRE_BLE_CAPABILITIES_READ_RSSI (UINT32_C(1) << 3)
 /** @} */
 
 /**
@@ -95,24 +95,24 @@ extern "C" {
  * @{
  */
 //! No CHRE BLE filters are supported
-#define CHRE_BLE_FILTER_CAPABILITIES_NONE UINT32_C(0)
+#define CHRE_BLE_FILTER_CAPABILITIES_NONE (UINT32_C(0))
 
 //! CHRE BLE supports RSSI filters
-#define CHRE_BLE_FILTER_CAPABILITIES_RSSI UINT32_C(1 << 1)
+#define CHRE_BLE_FILTER_CAPABILITIES_RSSI (UINT32_C(1) << 1)
 
 //! CHRE BLE supports Broadcaster Address filters (Corresponding HCI OCF:
 //! 0x0157, Sub-command: 0x02)
 //! @since v1.9
-#define CHRE_BLE_FILTER_CAPABILITIES_BROADCASTER_ADDRESS UINT32_C(1 << 2)
+#define CHRE_BLE_FILTER_CAPABILITIES_BROADCASTER_ADDRESS (UINT32_C(1) << 2)
 
 //! CHRE BLE supports Manufacturer Data filters (Corresponding HCI OCF: 0x0157,
 //! Sub-command: 0x06)
 //! @since v1.8
-#define CHRE_BLE_FILTER_CAPABILITIES_MANUFACTURER_DATA UINT32_C(1 << 6)
+#define CHRE_BLE_FILTER_CAPABILITIES_MANUFACTURER_DATA (UINT32_C(1) << 6)
 
 //! CHRE BLE supports Service Data filters (Corresponding HCI OCF: 0x0157,
 //! Sub-command: 0x07)
-#define CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA UINT32_C(1 << 7)
+#define CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA (UINT32_C(1) << 7)
 /** @} */
 
 /**
