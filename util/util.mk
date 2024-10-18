@@ -12,7 +12,8 @@ PIGWEED_CHRE_DIR = $(ANDROID_BUILD_TOP)/system/chre/external/pigweed
 # Include paths.
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 
-# Pigweed include paths.
+# Pigweed ######################################################################
+
 COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_log_nanoapp/public_overrides
 COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_assert_nanoapp/public_overrides
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_allocator/public
@@ -27,6 +28,8 @@ COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_span/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_status/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/fit/include
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/include
+
+COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/unique_ptr.cc
 
 # Common Source Files ##########################################################
 
