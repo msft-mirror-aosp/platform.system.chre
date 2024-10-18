@@ -18,7 +18,6 @@
 #include <cstring>
 #include <optional>
 
-#include "chre/platform/assert.h"
 #include "chre/platform/log.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/message_common.h"
@@ -26,35 +25,58 @@
 
 namespace chre::message {
 
+MessageRouter::MessageHub::MessageHub()
+    : mRouter(nullptr), mHubId(MESSAGE_HUB_ID_INVALID) {}
+
 MessageRouter::MessageHub::MessageHub(MessageRouter &router, MessageHubId id)
-    : mRouter(router), kHubId(id) {}
+    : mRouter(&router), mHubId(id) {}
+
+MessageRouter::MessageHub::MessageHub(MessageHub &&other)
+    : mRouter(other.mRouter), mHubId(other.mHubId) {
+  other.mRouter = nullptr;
+  other.mHubId = MESSAGE_HUB_ID_INVALID;
+}
+
+MessageRouter::MessageHub &MessageRouter::MessageHub::operator=(
+    MessageHub &&other) {
+  mRouter = other.mRouter;
+  mHubId = other.mHubId;
+  other.mRouter = nullptr;
+  other.mHubId = MESSAGE_HUB_ID_INVALID;
+  return *this;
+}
 
 SessionId MessageRouter::MessageHub::openSession(EndpointId fromEndpointId,
                                                  MessageHubId toMessageHubId,
                                                  EndpointId toEndpointId) {
-  return mRouter.openSession(kHubId, fromEndpointId, toMessageHubId,
-                             toEndpointId);
+  return mRouter == nullptr
+             ? SESSION_ID_INVALID
+             : mRouter->openSession(mHubId, fromEndpointId, toMessageHubId,
+                                    toEndpointId);
 }
 
 bool MessageRouter::MessageHub::closeSession(SessionId sessionId) {
-  return mRouter.closeSession(kHubId, sessionId);
+  return mRouter == nullptr ? false : mRouter->closeSession(mHubId, sessionId);
 }
 
 std::optional<Session> MessageRouter::MessageHub::getSessionWithId(
     SessionId sessionId) {
-  return mRouter.getSessionWithId(kHubId, sessionId);
+  return mRouter == nullptr ? std::nullopt
+                            : mRouter->getSessionWithId(mHubId, sessionId);
 }
 
 bool MessageRouter::MessageHub::sendMessage(pw::UniquePtr<std::byte[]> &&data,
                                             size_t length, uint32_t messageType,
                                             uint32_t messagePermissions,
                                             SessionId sessionId) {
-  return mRouter.sendMessage(std::move(data), length, messageType,
-                             messagePermissions, sessionId, kHubId);
+  return mRouter == nullptr
+             ? false
+             : mRouter->sendMessage(std::move(data), length, messageType,
+                                    messagePermissions, sessionId, mHubId);
 }
 
 MessageHubId MessageRouter::MessageHub::getId() {
-  return kHubId;
+  return mHubId;
 }
 
 std::optional<typename MessageRouter::MessageHub>
@@ -83,7 +105,7 @@ MessageRouter::registerMessageHub(
 
   MessageHubRecord messageHubRecord = {
       .info = {.id = id, .name = name},
-      .callback = callback,
+      .callback = &callback,
   };
   mMessageHubs.push_back(std::move(messageHubRecord));
   return MessageHub(*this, id);
@@ -123,6 +145,24 @@ void MessageRouter::forEachMessageHub(
   for (MessageHubRecord &messageHubRecord : mMessageHubs) {
     function(messageHubRecord.info);
   }
+}
+
+bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
+  LockGuard<Mutex> lock(mMutex);
+
+  // Sessions will be cleaned up asynchronously when an operation is called
+  // using them. We do not clean them up here to avoid a race condition where
+  // the hub is being destructed but the lock is not held due to calling the
+  // callback. We prefer to not copy sessions and callbacks in some dynamic
+  // structure and instead prefer to let the session close asynchronously.
+
+  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+    if (messageHubRecord.info.id == fromMessageHubId) {
+      mMessageHubs.erase(&messageHubRecord);
+      return true;
+    }
+  }
+  return false;
 }
 
 SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
@@ -207,9 +247,12 @@ bool MessageRouter::closeSession(MessageHubId fromMessageHubId,
     mSessions.erase(&mSessions[*index]);
   }
 
-  CHRE_ASSERT(initiatorCallback != nullptr && peerCallback != nullptr);
-  initiatorCallback->onSessionClosed(session);
-  peerCallback->onSessionClosed(session);
+  if (initiatorCallback != nullptr) {
+    initiatorCallback->onSessionClosed(session);
+  }
+  if (peerCallback != nullptr) {
+    peerCallback->onSessionClosed(session);
+  }
   return true;
 }
 
@@ -248,10 +291,12 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
             : session.initiator.messageHubId);
   }
 
-  CHRE_ASSERT(receiverCallback != nullptr);
-  bool success = receiverCallback->onMessageReceived(
-      std::move(data), length, messageType, messagePermissions, session,
-      session.initiator.messageHubId == fromMessageHubId);
+  bool success = false;
+  if (receiverCallback != nullptr) {
+    success = receiverCallback->onMessageReceived(
+        std::move(data), length, messageType, messagePermissions, session,
+        session.initiator.messageHubId == fromMessageHubId);
+  }
 
   if (!success) {
     closeSession(fromMessageHubId, sessionId);
@@ -299,7 +344,7 @@ MessageRouter::MessageHubCallback *
 MessageRouter::getCallbackFromMessageHubIdLocked(MessageHubId messageHubId) {
   const MessageHubRecord *messageHubRecord =
       getMessageHubRecordLocked(messageHubId);
-  return messageHubRecord != nullptr ? &messageHubRecord->callback : nullptr;
+  return messageHubRecord == nullptr ? nullptr : messageHubRecord->callback;
 }
 
 bool MessageRouter::checkIfEndpointExists(
