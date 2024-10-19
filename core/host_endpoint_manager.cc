@@ -88,12 +88,11 @@ auto HostEndpointManager::getHostNotificationCallback() {
 bool HostEndpointManager::getHostEndpointInfo(
     uint16_t hostEndpointId, struct chreHostEndpointInfo *info) {
   size_t index;
-  if (isHostEndpointConnected(hostEndpointId, &index)) {
+  bool isConnected = isHostEndpointConnected(hostEndpointId, &index);
+  if (isConnected) {
     *info = mHostEndpoints[index];
-    return true;
-  } else {
-    return false;
   }
+  return isConnected;
 }
 
 void HostEndpointManager::postHostEndpointConnected(
