@@ -77,47 +77,50 @@ struct Session {
 
 //! Represents a message sent using the MessageRouter
 struct Message {
+  Endpoint sender;
+  Endpoint recipient;
+  SessionId sessionId;
   pw::UniquePtr<std::byte[]> data;
   size_t length;
   uint32_t messageType;
   uint32_t messagePermissions;
-  SessionId sessionId;
-  bool sentBySessionInitiator;
 
   Message()
-      : data(nullptr),
+      : sessionId(SESSION_ID_INVALID),
+        data(nullptr),
         length(0),
         messageType(0),
-        messagePermissions(0),
-        sessionId(SESSION_ID_INVALID),
-        sentBySessionInitiator(false) {}
+        messagePermissions(0) {}
   Message(pw::UniquePtr<std::byte[]> &&data, size_t length,
-          uint32_t messageType, uint32_t messagePermissions,
-          SessionId sessionId, bool sentBySessionInitiator)
-      : data(std::move(data)),
+          uint32_t messageType, uint32_t messagePermissions, Session session,
+          bool sentBySessionInitiator)
+      : sender(sentBySessionInitiator ? session.initiator : session.peer),
+        recipient(sentBySessionInitiator ? session.peer : session.initiator),
+        sessionId(session.sessionId),
+        data(std::move(data)),
         length(length),
         messageType(messageType),
-        messagePermissions(messagePermissions),
-        sessionId(sessionId),
-        sentBySessionInitiator(sentBySessionInitiator) {}
+        messagePermissions(messagePermissions) {}
   Message(Message &&other)
-      : data(std::move(other.data)),
+      : sender(other.sender),
+        recipient(other.recipient),
+        sessionId(other.sessionId),
+        data(std::move(other.data)),
         length(other.length),
         messageType(other.messageType),
-        messagePermissions(other.messagePermissions),
-        sessionId(other.sessionId),
-        sentBySessionInitiator(other.sentBySessionInitiator) {}
+        messagePermissions(other.messagePermissions) {}
 
   Message(const Message &) = delete;
   Message &operator=(const Message &) = delete;
 
   Message &operator=(Message &&other) {
+    sender = other.sender;
+    recipient = other.recipient;
+    sessionId = other.sessionId;
     data = std::move(other.data);
     length = other.length;
     messageType = other.messageType;
     messagePermissions = other.messagePermissions;
-    sessionId = other.sessionId;
-    sentBySessionInitiator = other.sentBySessionInitiator;
     return *this;
   }
 };
