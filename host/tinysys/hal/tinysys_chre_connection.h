@@ -44,7 +44,7 @@ class TinysysChreConnection : public ChreConnection {
  public:
   TinysysChreConnection(ChreConnectionCallback *callback)
       : mCallback(callback), mLpmaHandler(/* allowed= */ true) {
-    mPayload = std::make_unique<uint8_t[]>(kMaxPayloadBytes);
+    mPayload = std::make_unique<uint8_t[]>(kMaxReceivingPayloadBytes);
   };
 
   ~TinysysChreConnection() override {
