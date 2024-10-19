@@ -121,12 +121,15 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
                          const Session &session,
                          bool sentBySessionInitiator) override {
     if (mMessage != nullptr) {
+      mMessage->sender = sentBySessionInitiator ? session.initiator
+                                                : session.peer;
+      mMessage->recipient =
+          sentBySessionInitiator ? session.peer : session.initiator;
+      mMessage->sessionId = session.sessionId;
       mMessage->data = std::move(data);
       mMessage->length = length;
       mMessage->messageType = messageType;
       mMessage->messagePermissions = messagePermissions;
-      mMessage->sessionId = session.sessionId;
-      mMessage->sentBySessionInitiator = sentBySessionInitiator;
     }
     return true;
   }
@@ -634,7 +637,10 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
   EXPECT_EQ(messageFromCallback2.sessionId, sessionId);
-  EXPECT_TRUE(messageFromCallback2.sentBySessionInitiator);
+  EXPECT_EQ(messageFromCallback2.sender.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback2.sender.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback2.recipient.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback2.recipient.endpointId, kEndpointInfos[1].id);
   EXPECT_EQ(messageFromCallback2.messageType, 1);
   EXPECT_EQ(messageFromCallback2.messagePermissions, 0);
   EXPECT_EQ(messageFromCallback2.length, kMessageSize);
@@ -652,7 +658,10 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
                                        /* messageType= */ 2,
                                        /* messagePermissions= */ 3, sessionId));
   EXPECT_EQ(messageFromCallback1.sessionId, sessionId);
-  EXPECT_FALSE(messageFromCallback1.sentBySessionInitiator);
+  EXPECT_EQ(messageFromCallback1.sender.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback1.sender.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback1.recipient.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback1.recipient.endpointId, kEndpointInfos[0].id);
   EXPECT_EQ(messageFromCallback1.messageType, 2);
   EXPECT_EQ(messageFromCallback1.messagePermissions, 3);
   EXPECT_EQ(messageFromCallback1.length, kMessageSize);
