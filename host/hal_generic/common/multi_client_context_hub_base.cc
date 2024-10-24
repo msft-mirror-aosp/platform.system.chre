@@ -39,7 +39,6 @@ using ::android::chre::getStringFromByteVector;
 using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
 using ::android::chre::flags::abort_if_no_context_hub_found;
 using ::android::chre::flags::bug_fix_hal_reliable_message_record;
-using ::android::chre::flags::reliable_message_implementation;
 using ::ndk::ScopedAStatus;
 namespace fbs = ::chre::fbs;
 
@@ -417,7 +416,7 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
     return fromResult(false);
   }
 
-  if (reliable_message_implementation() && message.isReliable) {
+  if (message.isReliable) {
     if (bug_fix_hal_reliable_message_record()) {
       std::lock_guard<std::mutex> lock(mReliableMessageMutex);
       auto iter = std::find_if(
@@ -440,19 +439,12 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
   }
 
   flatbuffers::FlatBufferBuilder builder(1024);
-  if (reliable_message_implementation()) {
-    HostProtocolHost::encodeNanoappMessage(
-        builder, message.nanoappId, message.messageType, hostEndpointId,
-        message.messageBody.data(), message.messageBody.size(),
-        /* permissions= */ 0,
-        /* messagePermissions= */ 0,
-        /* wokeHost= */ false, message.isReliable,
-        message.messageSequenceNumber);
-  } else {
-    HostProtocolHost::encodeNanoappMessage(
-        builder, message.nanoappId, message.messageType, hostEndpointId,
-        message.messageBody.data(), message.messageBody.size());
-  }
+  HostProtocolHost::encodeNanoappMessage(
+      builder, message.nanoappId, message.messageType, hostEndpointId,
+      message.messageBody.data(), message.messageBody.size(),
+      /* permissions= */ 0,
+      /* messagePermissions= */ 0,
+      /* wokeHost= */ false, message.isReliable, message.messageSequenceNumber);
 
   bool success = mConnection->sendMessage(builder);
   mEventLogger.logMessageToNanoapp(message, success);
@@ -524,10 +516,6 @@ ScopedAStatus MultiClientContextHubBase::setTestMode(bool enable) {
 
 ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
     int32_t contextHubId, const MessageDeliveryStatus &messageDeliveryStatus) {
-  if (!reliable_message_implementation()) {
-    return ScopedAStatus::ok();
-  }
-
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -712,7 +700,7 @@ void MultiClientContextHubBase::handleHubInfoResponse(
   mContextHubInfo->supportedPermissions = kSupportedPermissions;
 
   mContextHubInfo->supportsReliableMessages =
-      reliable_message_implementation() && response.supports_reliable_messages;
+      response.supports_reliable_messages;
 
   mHubInfoCondition.notify_all();
 }
@@ -890,14 +878,8 @@ void MultiClientContextHubBase::onNanoappMessage(
   outMessage.messageType = message.message_type;
   outMessage.messageBody = message.message;
   outMessage.permissions = chreToAndroidPermissions(message.permissions);
-
-  if (reliable_message_implementation()) {
-    outMessage.isReliable = message.is_reliable;
-    outMessage.messageSequenceNumber = message.message_sequence_number;
-  } else {
-    outMessage.isReliable = false;
-    outMessage.messageSequenceNumber = 0;
-  }
+  outMessage.isReliable = message.is_reliable;
+  outMessage.messageSequenceNumber = message.message_sequence_number;
 
   std::string messageSeq = "reliable message seq=" +
                            std::to_string(outMessage.messageSequenceNumber);
@@ -928,10 +910,6 @@ void MultiClientContextHubBase::onNanoappMessage(
 
 void MultiClientContextHubBase::onMessageDeliveryStatus(
     const ::chre::fbs::MessageDeliveryStatusT &status) {
-  if (!reliable_message_implementation()) {
-    return;
-  }
-
   HostEndpointId hostEndpointId;
   if (bug_fix_hal_reliable_message_record()) {
     {

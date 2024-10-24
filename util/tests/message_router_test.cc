@@ -121,12 +121,15 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
                          const Session &session,
                          bool sentBySessionInitiator) override {
     if (mMessage != nullptr) {
+      mMessage->sender = sentBySessionInitiator ? session.initiator
+                                                : session.peer;
+      mMessage->recipient =
+          sentBySessionInitiator ? session.peer : session.initiator;
+      mMessage->sessionId = session.sessionId;
       mMessage->data = std::move(data);
       mMessage->length = length;
       mMessage->messageType = messageType;
       mMessage->messagePermissions = messagePermissions;
-      mMessage->sessionId = session.sessionId;
-      mMessage->sentBySessionInitiator = sentBySessionInitiator;
     }
     return true;
   }
@@ -272,6 +275,56 @@ TEST_F(MessageRouterTest, RegisterMessageHubGetListOfHubs) {
   EXPECT_EQ(messageHubs[2].id, messageHub3->getId());
 }
 
+TEST_F(MessageRouterTest, RegisterMessageHubGetListOfHubsWithUnregister) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub1 =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub1.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback);
+  EXPECT_TRUE(messageHub2.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub3 =
+      router.registerMessageHub("hub3", /* id= */ 3, callback);
+  EXPECT_TRUE(messageHub3.has_value());
+
+  DynamicVector<MessageHubInfo> messageHubs;
+  router.forEachMessageHub(
+      [&messageHubs](const MessageHubInfo &messageHubInfo) {
+        messageHubs.push_back(messageHubInfo);
+        return false;
+      });
+  EXPECT_EQ(messageHubs.size(), 3);
+  EXPECT_EQ(messageHubs[0].name, "hub1");
+  EXPECT_EQ(messageHubs[1].name, "hub2");
+  EXPECT_EQ(messageHubs[2].name, "hub3");
+  EXPECT_EQ(messageHubs[0].id, 1);
+  EXPECT_EQ(messageHubs[1].id, 2);
+  EXPECT_EQ(messageHubs[2].id, 3);
+  EXPECT_EQ(messageHubs[0].id, messageHub1->getId());
+  EXPECT_EQ(messageHubs[1].id, messageHub2->getId());
+  EXPECT_EQ(messageHubs[2].id, messageHub3->getId());
+
+  // Clear messageHubs and reset messageHub2
+  messageHubs.clear();
+  messageHub2.reset();
+
+  router.forEachMessageHub(
+      [&messageHubs](const MessageHubInfo &messageHubInfo) {
+        messageHubs.push_back(messageHubInfo);
+        return false;
+      });
+  EXPECT_EQ(messageHubs.size(), 2);
+  EXPECT_EQ(messageHubs[0].name, "hub1");
+  EXPECT_EQ(messageHubs[1].name, "hub3");
+  EXPECT_EQ(messageHubs[0].id, 1);
+  EXPECT_EQ(messageHubs[1].id, 3);
+  EXPECT_EQ(messageHubs[0].id, messageHub1->getId());
+  EXPECT_EQ(messageHubs[1].id, messageHub3->getId());
+}
+
 TEST_F(MessageRouterTest, RegisterMessageHubTooManyFails) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   static_assert(kMaxMessageHubs == 3);
@@ -279,10 +332,12 @@ TEST_F(MessageRouterTest, RegisterMessageHubTooManyFails) {
 
   MessageHubCallbackStoreData callback(/* message= */ nullptr,
                                        /* session= */ nullptr);
+  MessageRouter::MessageHub messageHubs[kMaxMessageHubs];
   for (size_t i = 0; i < kMaxMessageHubs; ++i) {
     std::optional<MessageRouter::MessageHub> messageHub =
         router.registerMessageHub(kNames[i], /* id= */ i, callback);
     EXPECT_TRUE(messageHub.has_value());
+    messageHubs[i] = std::move(*messageHub);
   }
 
   std::optional<MessageRouter::MessageHub> messageHub =
@@ -634,7 +689,10 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
   EXPECT_EQ(messageFromCallback2.sessionId, sessionId);
-  EXPECT_TRUE(messageFromCallback2.sentBySessionInitiator);
+  EXPECT_EQ(messageFromCallback2.sender.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback2.sender.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback2.recipient.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback2.recipient.endpointId, kEndpointInfos[1].id);
   EXPECT_EQ(messageFromCallback2.messageType, 1);
   EXPECT_EQ(messageFromCallback2.messagePermissions, 0);
   EXPECT_EQ(messageFromCallback2.length, kMessageSize);
@@ -652,7 +710,10 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
                                        /* messageType= */ 2,
                                        /* messagePermissions= */ 3, sessionId));
   EXPECT_EQ(messageFromCallback1.sessionId, sessionId);
-  EXPECT_FALSE(messageFromCallback1.sentBySessionInitiator);
+  EXPECT_EQ(messageFromCallback1.sender.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback1.sender.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback1.recipient.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback1.recipient.endpointId, kEndpointInfos[0].id);
   EXPECT_EQ(messageFromCallback1.messageType, 2);
   EXPECT_EQ(messageFromCallback1.messagePermissions, 3);
   EXPECT_EQ(messageFromCallback1.length, kMessageSize);
@@ -812,6 +873,124 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   EXPECT_FALSE(wasMessageReceivedCalled1);
   EXPECT_FALSE(wasMessageReceivedCalled2);
   EXPECT_FALSE(wasMessageReceivedCalled3);
+}
+
+TEST_F(MessageRouterTest, SendMessageToSessionResetHubCausesSessionClose) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  constexpr size_t kMessageSize = 5;
+  pw::UniquePtr<std::byte[]> messageData =
+      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  Message messageFromCallback1;
+  Message messageFromCallback2;
+  Message messageFromCallback3;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  Session sessionFromCallback3;
+  MessageHubCallbackStoreData callback(&messageFromCallback1,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(&messageFromCallback2,
+                                        &sessionFromCallback2);
+  MessageHubCallbackStoreData callback3(&messageFromCallback3,
+                                        &sessionFromCallback3);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub3 =
+      router.registerMessageHub("hub3", /* id= */ 3, callback3);
+  EXPECT_TRUE(messageHub3.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Open session from messageHub2:2 to messageHub3:3
+  SessionId sessionId2 = messageHub2->openSession(
+      kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Open session from messageHub3:3 to messageHub1:1
+  SessionId sessionId3 = messageHub3->openSession(
+      kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Send message from messageHub:1 to messageHub2:2
+  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData), kMessageSize,
+                                      /* messageType= */ 1,
+                                      /* messagePermissions= */ 0, sessionId));
+  EXPECT_EQ(messageFromCallback2.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback2.sender.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback2.sender.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback2.recipient.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback2.recipient.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback2.messageType, 1);
+  EXPECT_EQ(messageFromCallback2.messagePermissions, 0);
+  EXPECT_EQ(messageFromCallback2.length, kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
+  }
+
+  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  // Send message from messageHub2:2 to messageHub:1
+  ASSERT_TRUE(messageHub2->sendMessage(std::move(messageData), kMessageSize,
+                                       /* messageType= */ 2,
+                                       /* messagePermissions= */ 3, sessionId));
+  EXPECT_EQ(messageFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback1.sender.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback1.sender.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback1.recipient.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback1.recipient.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback1.messageType, 2);
+  EXPECT_EQ(messageFromCallback1.messagePermissions, 3);
+  EXPECT_EQ(messageFromCallback1.length, kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback1.data[i], static_cast<std::byte>(i + 1));
+  }
+
+  // Reset messageHub2
+  messageHub2.reset();
+
+  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  // Send message from messageHub:1 to messageHub2:2
+  EXPECT_FALSE(messageHub->sendMessage(std::move(messageData), kMessageSize,
+                                       /* messageType= */ 1,
+                                       /* messagePermissions= */ 0, sessionId));
+
+  // Try to get session 1 - should be invalid
+  EXPECT_FALSE(messageHub->getSessionWithId(sessionId).has_value());
+
+  // Session 2 should still be valid as no operation has been performed
+  EXPECT_TRUE(messageHub3->getSessionWithId(sessionId2).has_value());
+
+  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  // Send message from messageHub3:3 to messageHub2:2
+  EXPECT_FALSE(messageHub3->sendMessage(std::move(messageData), kMessageSize,
+                                        /* messageType= */ 2,
+                                        /* messagePermissions= */ 3,
+                                        sessionId2));
+
+  // Session 2 should be invalid now
+  EXPECT_FALSE(messageHub3->getSessionWithId(sessionId2).has_value());
 }
 
 TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
