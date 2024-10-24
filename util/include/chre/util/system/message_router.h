@@ -179,8 +179,7 @@ class MessageRouter {
 
   //! Executes the function for each endpoint connected to this MessageHub.
   //! If function return true, the iteration will stop.
-  //! Returns false if the MessageHub is not found
-  //! @return true if the function was called for each endpoint
+  //! @return true if the MessageHub is found, false otherwise
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
       const pw::Function<bool(const EndpointInfo &)> &function);
