@@ -84,7 +84,7 @@ public class ContextHubPendingIntentTestExecutor {
     }
 
     public void init() throws InterruptedException, TimeoutException {
-        mTestHelper.initAndUnloadAllNanoApps();
+        mTestHelper.init();
     }
 
     /**

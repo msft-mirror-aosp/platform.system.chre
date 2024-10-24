@@ -50,6 +50,6 @@ class ScopeTimer : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/scope_timer_impl.h"
+#include "chre/util/scope_timer_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_SCOPE_TIMER_H_
