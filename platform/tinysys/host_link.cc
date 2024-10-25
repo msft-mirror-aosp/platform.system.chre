@@ -133,6 +133,7 @@ enum class PendingMessageType {
   PulseRequest,
   PulseResponse,
   NanoappTokenDatabaseInfo,
+  MessageDeliveryStatus,
 };
 
 struct PendingMessage {
@@ -244,26 +245,9 @@ DRAM_REGION_FUNCTION bool dequeueMessage(PendingMessage pendingMsg) {
     case PendingMessageType::HubInfoResponse:
       result = generateHubInfoResponse(pendingMsg.data.hostClientId);
       break;
-
-    case PendingMessageType::NanoappListResponse:
-    case PendingMessageType::LoadNanoappResponse:
-    case PendingMessageType::UnloadNanoappResponse:
-    case PendingMessageType::DebugDumpData:
-    case PendingMessageType::DebugDumpResponse:
-    case PendingMessageType::TimeSyncRequest:
-    case PendingMessageType::LowPowerMicAccessRequest:
-    case PendingMessageType::LowPowerMicAccessRelease:
-    case PendingMessageType::EncodedLogMessage:
-    case PendingMessageType::SelfTestResponse:
-    case PendingMessageType::MetricLog:
-    case PendingMessageType::NanConfigurationRequest:
-    case PendingMessageType::PulseResponse:
-    case PendingMessageType::NanoappTokenDatabaseInfo:
+    default:
       result = generateMessageFromBuilder(pendingMsg.data.builder);
       break;
-
-    default:
-      CHRE_ASSERT_LOG(false, "Unexpected pending message type");
   }
   return result;
 }
@@ -681,9 +665,21 @@ DRAM_REGION_FUNCTION bool HostLink::sendMessage(HostMessage const *message) {
   return success;
 }
 
-bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
-                                         uint8_t /* errorCode */) {
-  return false;
+DRAM_REGION_FUNCTION bool HostLink::sendMessageDeliveryStatus(
+    uint32_t messageSequenceNumber, uint8_t errorCode) {
+  struct DeliveryStatusData {
+    uint32_t messageSequenceNumber;
+    uint8_t errorCode;
+  } args{messageSequenceNumber, errorCode};
+
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void *cookie) {
+    auto args = static_cast<const DeliveryStatusData *>(cookie);
+    HostProtocolChre::encodeMessageDeliveryStatus(
+        builder, args->messageSequenceNumber, args->errorCode);
+  };
+
+  return buildAndEnqueueMessage(PendingMessageType::MessageDeliveryStatus,
+                                /* initialBufferSize= */ 64, msgBuilder, &args);
 }
 
 // TODO(b/285219398): HostMessageHandlers member function implementations are
@@ -705,7 +701,9 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
 }
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
+    uint32_t messageSequenceNumber, uint8_t errorCode) {
+  getHostCommsManager().completeTransaction(messageSequenceNumber, errorCode);
+}
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
     uint16_t hostClientId) {
