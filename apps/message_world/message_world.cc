@@ -16,6 +16,7 @@
 
 #include <cinttypes>
 
+#include "chre/util/macros.h"
 #include "chre/util/nanoapp/log.h"
 #include "chre_api/chre.h"
 
@@ -28,17 +29,21 @@ namespace {
 
 namespace {
 
-constexpr uint32_t kMessageType = 1234;
-uint8_t gMessageData[CHRE_MESSAGE_TO_HOST_MAX_SIZE] = {1, 2, 3, 4, 5, 6, 7, 8};
+enum MessageType { kDefault = 1, kCustomReplyMessageSize = 2 };
+
+#ifdef CHRE_RELIABLE_MESSAGE_SUPPORT_ENABLED
+constexpr uint32_t gMaxReplyMessageSize = CHRE_LARGE_PAYLOAD_MAX_SIZE;
+#else
+constexpr uint32_t gMaxReplyMessageSize = CHRE_MESSAGE_TO_HOST_MAX_SIZE;
+#endif
+
+uint8_t gMessageData[gMaxReplyMessageSize] = {};
 
 void messageFreeCallback(void *message, size_t messageSize) {
-  LOGI(
-      "Got message free callback for message @ %p (match? %d) size %zu (match?"
-      " %d)",
-      message, (message == gMessageData), messageSize,
-      (messageSize == sizeof(gMessageData)));
-  if (!chreSendEvent(CHRE_EVENT_FIRST_USER_VALUE, nullptr, nullptr,
-                     chreGetInstanceId())) {
+  LOGI("Got message free callback for message @ %p (%s) size %zu", message,
+       (message == gMessageData) ? "matched" : "unmatched", messageSize);
+  if (!chreSendEvent(CHRE_EVENT_FIRST_USER_VALUE, /* eventData= */ nullptr,
+                     /* freeCallback= */ nullptr, chreGetInstanceId())) {
     LOGE("Failed to send event");
   }
 }
@@ -47,31 +52,43 @@ void messageFreeCallback(void *message, size_t messageSize) {
 
 bool nanoappStart() {
   LOGI("App started as instance %" PRIu32, chreGetInstanceId());
-
+  // initialize gMessageData
+  for (uint32_t i = 0; i < gMaxReplyMessageSize; ++i) {
+    gMessageData[i] = i % 10;
+  }
   bool success = chreSendMessageToHostEndpoint(
-      gMessageData, sizeof(gMessageData), kMessageType,
+      gMessageData, sizeof(gMessageData), MessageType::kDefault,
       CHRE_HOST_ENDPOINT_BROADCAST, messageFreeCallback);
-  LOGI("Sent message to host from start callback, result %d", success);
+  LOGI("Sent message of size %zu to host from start callback: %s",
+       sizeof(gMessageData), success ? "success" : "failure");
   return true;
 }
 
 void nanoappHandleEvent(uint32_t senderInstanceId, uint16_t eventType,
                         const void *eventData) {
-  if (eventType == CHRE_EVENT_MESSAGE_FROM_HOST) {
-    auto *msg = static_cast<const chreMessageFromHostData *>(eventData);
-    LOGI("Got message from host with type %" PRIu32 " size %" PRIu32
-         " data @ %p hostEndpoint 0x%" PRIx16,
-         msg->messageType, msg->messageSize, msg->message, msg->hostEndpoint);
-    if (senderInstanceId != CHRE_INSTANCE_ID) {
-      LOGE("Message from host came from unexpected instance ID %" PRIu32,
-           senderInstanceId);
-    }
-
-    bool success = chreSendMessageToHostEndpoint(
-        gMessageData, sizeof(gMessageData), kMessageType,
-        CHRE_HOST_ENDPOINT_BROADCAST, messageFreeCallback);
-    LOGI("Result of sending reply: %d", success);
+  if (eventType != CHRE_EVENT_MESSAGE_FROM_HOST) {
+    return;
   }
+  auto *msg = static_cast<const chreMessageFromHostData *>(eventData);
+  LOGI("Got message from host with type %" PRIu32 " size %" PRIu32
+       " data @ %p hostEndpoint 0x%" PRIx16,
+       msg->messageType, msg->messageSize, msg->message, msg->hostEndpoint);
+  if (senderInstanceId != CHRE_INSTANCE_ID) {
+    LOGE("Message from host came from unexpected instance ID %" PRIu32,
+         senderInstanceId);
+  }
+
+  uint32_t messageSize = gMaxReplyMessageSize;
+  if (msg->messageType == MessageType::kCustomReplyMessageSize) {
+    messageSize =
+        MIN(messageSize, *(static_cast<const uint32_t *>(msg->message)));
+  }
+
+  bool success = chreSendMessageToHostEndpoint(
+      gMessageData, messageSize, MessageType::kDefault, msg->hostEndpoint,
+      messageFreeCallback);
+  LOGI("Result of sending reply (size=%" PRIu32 "): %s", messageSize,
+       success ? "success" : "failure");
 }
 
 void nanoappEnd() {
