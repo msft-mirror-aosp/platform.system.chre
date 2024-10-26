@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
-#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
+#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
 
 #include <pw_allocator/unique_ptr.h>
 #include <pw_containers/vector.h>
@@ -36,7 +36,7 @@ namespace chre::message {
 //! register a callback to handle messages sent to its endpoints and other
 //! functions to provide information about the endpoints connected to it.
 //!
-//! The MessageRouter is thread-safe.
+//! MessageRouter is thread-safe.
 //!
 //! Usage:
 //! 1. Create a MessageRouter instance.
@@ -179,8 +179,7 @@ class MessageRouter {
 
   //! Executes the function for each endpoint connected to this MessageHub.
   //! If function return true, the iteration will stop.
-  //! Returns false if the MessageHub is not found
-  //! @return true if the function was called for each endpoint
+  //! @return true if the MessageHub is found, false otherwise
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
       const pw::Function<bool(const EndpointInfo &)> &function);
@@ -284,4 +283,4 @@ class MessageRouterWithStorage : public MessageRouter {
 
 }  // namespace chre::message
 
-#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
