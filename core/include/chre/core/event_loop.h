@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_EVENT_LOOP_H_
 #define CHRE_CORE_EVENT_LOOP_H_
 
+#include <pw_function/function.h>
+
 #include "chre/core/event.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/timer_pool.h"
@@ -323,6 +325,17 @@ class EventLoop : public NonCopyable {
   Nanoapp *findNanoappByInstanceId(uint16_t instanceId) const;
 
   /**
+   * Searches the set of nanoapps managed by this EventLoop for one with the
+   * given nanoapp ID.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param appId The nanoapp ID to search for.
+   * @return a pointer to the found nanoapp or nullptr if no match was found.
+   */
+  Nanoapp *findNanoappByAppId(uint64_t appId) const;
+
+  /**
    * Looks for an app with the given ID and if found, populates info with its
    * metadata. Safe to call from any thread.
    *
@@ -354,6 +367,17 @@ class EventLoop : public NonCopyable {
    *     into one of the buffers.
    */
   void logStateToBuffer(DebugDumpWrapper &debugDump) const;
+
+  /**
+   * Executes function for each nanoapp in the event loop. If function
+   * returns true, the iteration will stop.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param function The function to execute for each nanoapp.
+   */
+  void findFirstMatchingNanoapp(
+      const pw::Function<bool(const Nanoapp &)> &function);
 
   /**
    * Returns a reference to the power control manager. This allows power
