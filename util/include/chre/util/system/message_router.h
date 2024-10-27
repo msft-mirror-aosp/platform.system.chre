@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
-#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
+#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
 
 #include <pw_allocator/unique_ptr.h>
 #include <pw_containers/vector.h>
@@ -36,7 +36,7 @@ namespace chre::message {
 //! register a callback to handle messages sent to its endpoints and other
 //! functions to provide information about the endpoints connected to it.
 //!
-//! The MessageRouter is thread-safe.
+//! MessageRouter is thread-safe.
 //!
 //! Usage:
 //! 1. Create a MessageRouter instance.
@@ -86,12 +86,27 @@ class MessageRouter {
   //! The API returned when registering a MessageHub with the MessageRouter.
   class MessageHub {
    public:
-    MessageHub() = delete;
+    //! Creates an empty MessageHub that is not usable, similar to a moved-from
+    //! MessageHub. Attempting to call any method on this object results in
+    //! undefined behavior.
+    MessageHub();
+
+    ~MessageHub() {
+      if (mRouter != nullptr) {
+        mRouter->unregisterMessageHub(mHubId);
+      }
+    }
+    // There can only be one live MessageHub instance for a given hub ID, so
+    // only move operations are supported.
+    MessageHub(const MessageHub &) = delete;
+    MessageHub &operator=(const MessageHub &) = delete;
+    MessageHub(MessageHub &&other);
+    MessageHub &operator=(MessageHub &&other);
 
     //! Opens a session from an endpoint connected to the current MessageHub
     //! to the listed MessageHub ID and endpoint ID
-    //! @return The session ID or SESSION_ID_INVALID if the session could not be
-    //! opened
+    //! @return The session ID or SESSION_ID_INVALID if the session could
+    //! not be opened
     SessionId openSession(EndpointId fromEndpointId,
                           MessageHubId toMessageHubId, EndpointId toEndpointId);
 
@@ -130,16 +145,16 @@ class MessageRouter {
     MessageHub(MessageRouter &router, MessageHubId id);
 
     //! The MessageRouter that this MessageHub is connected to
-    MessageRouter &mRouter;
+    MessageRouter *mRouter;
 
     //! The id of this message hub
-    const MessageHubId kHubId;
+    MessageHubId mHubId;
   };
 
   //! Represents a MessageHub and its connected endpoints
   struct MessageHubRecord {
     MessageHubInfo info;
-    MessageHubCallback &callback;
+    MessageHubCallback *callback;
   };
 
   MessageRouter() = delete;
@@ -151,7 +166,8 @@ class MessageRouter {
   //! The provided name must be unique and not registered before and be a valid
   //! C string. The data underlying name must outlive the MessageHub. The
   //! callback must outlive the MessageHub. The ID must be unique and not
-  //! registered before.
+  //! registered before. When the returned MessageHub is destroyed, it will
+  //! unregister itself from the MessageRouter.
   //! @param name The name of the MessageHub
   //! @param id The ID of the MessageHub
   //! @param callback The callback to handle messages sent to the MessageHub
@@ -163,8 +179,7 @@ class MessageRouter {
 
   //! Executes the function for each endpoint connected to this MessageHub.
   //! If function return true, the iteration will stop.
-  //! Returns false if the MessageHub is not found
-  //! @return true if the function was called for each endpoint
+  //! @return true if the MessageHub is found, false otherwise
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
       const pw::Function<bool(const EndpointInfo &)> &function);
@@ -180,6 +195,11 @@ class MessageRouter {
       const pw::Function<bool(const MessageHubInfo &)> &function);
 
  private:
+  //! Unregisters a MessageHub from the MessageRouter.
+  //! @return true if the MessageHub was unregistered, false if the MessageHub
+  //! was not found.
+  bool unregisterMessageHub(MessageHubId fromMessageHubId);
+
   //! Opens a session from an endpoint connected to the current MessageHub
   //! to the listed MessageHub ID and endpoint ID
   //! @return The session ID or SESSION_ID_INVALID if the session could not be
@@ -263,4 +283,4 @@ class MessageRouterWithStorage : public MessageRouter {
 
 }  // namespace chre::message
 
-#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
