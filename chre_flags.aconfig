@@ -1,12 +1,19 @@
 package: "android.chre.flags"
 container: "system"
 
+# Exported flags should remain here indefinitely
+# Flags guarding APIs are exported
+# Begin removed exported flags (keep flag definition)
+
 flag {
-  name: "context_hub_callback_uuid_enabled"
+  name: "reliable_message"
+  is_exported: true
   namespace: "context_hub"
-  description: "Call IContextHubCallback.getUuid() to retrieve the UUID when this flag is on"
-  bug: "247124878"
+  description: "Enable the reliable message APIs"
+  bug: "314081414"
 }
+
+# End removed exported flags (keep flag definition)
 
 flag {
   name: "abort_if_no_context_hub_found"
@@ -20,21 +27,6 @@ flag {
   namespace: "context_hub"
   description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
   bug: "348253728"
-}
-
-flag {
-  name: "reliable_message"
-  is_exported: true
-  namespace: "context_hub"
-  description: "Enable the reliable message APIs"
-  bug: "314081414"
-}
-
-flag {
-  name: "reliable_message_implementation"
-  namespace: "context_hub"
-  description: "Enable support for reliable messages in CHRE"
-  bug: "314081414"
 }
 
 flag {
