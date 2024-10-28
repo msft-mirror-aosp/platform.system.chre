@@ -132,6 +132,8 @@ enum class PendingMessageType {
   NanConfigurationRequest,
   PulseRequest,
   PulseResponse,
+  NanoappTokenDatabaseInfo,
+  MessageDeliveryStatus,
 };
 
 struct PendingMessage {
@@ -243,25 +245,9 @@ DRAM_REGION_FUNCTION bool dequeueMessage(PendingMessage pendingMsg) {
     case PendingMessageType::HubInfoResponse:
       result = generateHubInfoResponse(pendingMsg.data.hostClientId);
       break;
-
-    case PendingMessageType::NanoappListResponse:
-    case PendingMessageType::LoadNanoappResponse:
-    case PendingMessageType::UnloadNanoappResponse:
-    case PendingMessageType::DebugDumpData:
-    case PendingMessageType::DebugDumpResponse:
-    case PendingMessageType::TimeSyncRequest:
-    case PendingMessageType::LowPowerMicAccessRequest:
-    case PendingMessageType::LowPowerMicAccessRelease:
-    case PendingMessageType::EncodedLogMessage:
-    case PendingMessageType::SelfTestResponse:
-    case PendingMessageType::MetricLog:
-    case PendingMessageType::NanConfigurationRequest:
-    case PendingMessageType::PulseResponse:
+    default:
       result = generateMessageFromBuilder(pendingMsg.data.builder);
       break;
-
-    default:
-      CHRE_ASSERT_LOG(false, "Unexpected pending message type");
   }
   return result;
 }
@@ -607,18 +593,17 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
     LOGE("chre ipi send fail(%d)", ret);
   } else {
     /* check ack data for make sure IPI wasn't busy */
-    LOGV("chre ipi send, check ack data: 0x%x", gChreIpiAckFromHost[0]);
     if (gChreIpiAckFromHost[0] == IPI_ACTION_DONE) {
       LOGV("chre ipi send done, you can send another IPI");
     } else if (gChreIpiAckFromHost[0] == IPI_PIN_BUSY) {
       /* you may have to re-send the IPI, or drop this one */
-      LOGV(
+      LOGW(
           "chre ipi send busy, user thread has not wait the IPI until job "
           "finished");
     } else if (gChreIpiAckFromHost[0] == IPI_NO_MEMORY) {
-      LOGV("chre ipi send with wrong size(%zu)", dataLen);
+      LOGW("chre ipi send with wrong size(%zu)", dataLen);
     } else {
-      LOGV("chre ipi send unknown case");
+      LOGW("chre ipi send unknown case: 0x%x", gChreIpiAckFromHost[0]);
     }
   }
 
@@ -680,9 +665,21 @@ DRAM_REGION_FUNCTION bool HostLink::sendMessage(HostMessage const *message) {
   return success;
 }
 
-bool HostLink::sendMessageDeliveryStatus(uint32_t /* messageSequenceNumber */,
-                                         uint8_t /* errorCode */) {
-  return false;
+DRAM_REGION_FUNCTION bool HostLink::sendMessageDeliveryStatus(
+    uint32_t messageSequenceNumber, uint8_t errorCode) {
+  struct DeliveryStatusData {
+    uint32_t messageSequenceNumber;
+    uint8_t errorCode;
+  } args{messageSequenceNumber, errorCode};
+
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void *cookie) {
+    auto args = static_cast<const DeliveryStatusData *>(cookie);
+    HostProtocolChre::encodeMessageDeliveryStatus(
+        builder, args->messageSequenceNumber, args->errorCode);
+  };
+
+  return buildAndEnqueueMessage(PendingMessageType::MessageDeliveryStatus,
+                                /* initialBufferSize= */ 64, msgBuilder, &args);
 }
 
 // TODO(b/285219398): HostMessageHandlers member function implementations are
@@ -704,7 +701,9 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanoappMessage(
 }
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleMessageDeliveryStatus(
-    uint32_t /* messageSequenceNumber */, uint8_t /* errorCode */) {}
+    uint32_t messageSequenceNumber, uint8_t errorCode) {
+  getHostCommsManager().completeTransaction(messageSequenceNumber, errorCode);
+}
 
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleHubInfoRequest(
     uint16_t hostClientId) {
@@ -817,19 +816,25 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleUnloadNanoappRequest(
 DRAM_REGION_FUNCTION void HostLinkBase::sendNanoappTokenDatabaseInfo(
     uint64_t appId, uint32_t tokenDatabaseOffset, size_t tokenDatabaseSize) {
   constexpr size_t kInitialBufferSize = 56;
-  ChreFlatBufferBuilder builder(kInitialBufferSize);
-  uint16_t instanceId;
-  EventLoopManagerSingleton::get()->getEventLoop().findNanoappInstanceIdByAppId(
-      appId, &instanceId);
-  HostProtocolChre::encodeNanoappTokenDatabaseInfo(
-      builder, instanceId, appId, tokenDatabaseOffset, tokenDatabaseSize);
+  struct DatabaseInfoArgs {
+    uint64_t appId;
+    uint32_t tokenDatabaseOffset;
+    size_t tokenDatabaseSize;
+  } args{appId, tokenDatabaseOffset, tokenDatabaseSize};
 
-  if (!getHostCommsManager().send(builder.GetBufferPointer(),
-                                  builder.GetSize())) {
-    LOGE("Failed to send nanoapp token database info for AppID: 0x%016" PRIx64
-         " InstanceID: %" PRIu16,
-         appId, instanceId);
-  }
+  auto msgBuilder = [](ChreFlatBufferBuilder &builder, void *cookie) {
+    DatabaseInfoArgs *args = static_cast<DatabaseInfoArgs *>(cookie);
+    uint16_t instanceId;
+    EventLoopManagerSingleton::get()
+        ->getEventLoop()
+        .findNanoappInstanceIdByAppId(args->appId, &instanceId);
+    HostProtocolChre::encodeNanoappTokenDatabaseInfo(
+        builder, instanceId, args->appId, args->tokenDatabaseOffset,
+        args->tokenDatabaseSize);
+  };
+
+  buildAndEnqueueMessage(PendingMessageType::NanoappTokenDatabaseInfo,
+                         kInitialBufferSize, msgBuilder, &args);
 }
 
 DRAM_REGION_FUNCTION void HostLink::flushMessagesSentByNanoapp(
