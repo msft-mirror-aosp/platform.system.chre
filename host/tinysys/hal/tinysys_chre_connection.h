@@ -104,7 +104,7 @@ class TinysysChreConnection : public ChreConnection {
   static constexpr char kWakeLock[] = "tinysys_chre_hal_wakelock";
 
   // Max payload size that can be sent to CHRE
-  static constexpr uint32_t kMaxPayloadBytes = 4224;  // 4096 + 128
+  static constexpr uint32_t kMaxSendingPayloadBytes = 0x8000;  // 32K
 
   // Max payload size that can be received from CHRE
   static constexpr uint32_t kMaxReceivingPayloadBytes = 0x8000;  // 32K
@@ -125,10 +125,10 @@ class TinysysChreConnection : public ChreConnection {
     // security check for proper use of the device node.
     uint32_t magic = 0x67728269;
     uint32_t payloadSize = 0;
-    uint8_t payload[kMaxPayloadBytes];
+    uint8_t payload[kMaxSendingPayloadBytes];
 
     ChreConnectionMessage(void *data, size_t length) {
-      assert(length <= kMaxPayloadBytes);
+      assert(length <= kMaxSendingPayloadBytes);
       memcpy(payload, data, length);
       payloadSize = static_cast<uint32_t>(length);
     }
