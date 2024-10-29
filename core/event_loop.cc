@@ -399,6 +399,11 @@ Nanoapp *EventLoop::findNanoappByInstanceId(uint16_t instanceId) const {
   return lookupAppByInstanceId(instanceId);
 }
 
+Nanoapp *EventLoop::findNanoappByAppId(uint64_t appId) const {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+  return lookupAppByAppId(appId);
+}
+
 bool EventLoop::populateNanoappInfoForAppId(
     uint64_t appId, struct chreNanoappInfo *info) const {
   ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
@@ -449,6 +454,17 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     mNanoapps[0]->logMessageHistoryHeader(debugDump);
     for (const UniquePtr<Nanoapp> &app : mNanoapps) {
       app->logMessageHistoryEntry(debugDump);
+    }
+  }
+}
+
+void EventLoop::findFirstMatchingNanoapp(
+    const pw::Function<bool(const Nanoapp &)> &function) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+
+  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+    if (function(*app.get())) {
+      break;
     }
   }
 }
