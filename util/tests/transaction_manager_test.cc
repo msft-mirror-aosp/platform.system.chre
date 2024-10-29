@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "chre/util/transaction_manager.h"
+#include "chre/util/system/transaction_manager.h"
 
 #include <algorithm>
 #include <map>
