@@ -140,4 +140,9 @@ class MemoryManager : public NonCopyable {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/memory_manager_impl.h")
+#include "chre/target_platform/memory_manager_impl.h"
+#endif  // __has_include("chre/target_platform/memory_manager_impl.h")
+
 #endif  // CHRE_PLATFORM_MEMORY_MANAGER_H_
