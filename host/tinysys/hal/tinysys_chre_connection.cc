@@ -70,8 +70,8 @@ unsigned getRequestCode(ChreState chreState) {
 
 bool TinysysChreConnection::init() {
   // Make sure the payload size is large enough for nanoapp binary fragment
-  static_assert(kMaxPayloadBytes > CHRE_HOST_DEFAULT_FRAGMENT_SIZE &&
-                kMaxPayloadBytes - CHRE_HOST_DEFAULT_FRAGMENT_SIZE >
+  static_assert(kMaxSendingPayloadBytes > CHRE_HOST_DEFAULT_FRAGMENT_SIZE &&
+                kMaxSendingPayloadBytes - CHRE_HOST_DEFAULT_FRAGMENT_SIZE >
                     kMaxPayloadOverheadBytes);
   mChreFileDescriptor =
       TEMP_FAILURE_RETRY(open(kChreFileDescriptorPath, O_RDWR));
@@ -161,7 +161,7 @@ bool TinysysChreConnection::init() {
 }
 
 bool TinysysChreConnection::sendMessage(void *data, size_t length) {
-  if (length <= 0 || length > kMaxPayloadBytes) {
+  if (length <= 0 || length > kMaxSendingPayloadBytes) {
     LOGE("length %zu is not within the accepted range.", length);
     return false;
   }
