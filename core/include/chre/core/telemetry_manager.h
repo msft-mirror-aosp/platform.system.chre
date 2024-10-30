@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_TELEMETRY_MANAGER_H_
 #define CHRE_CORE_TELEMETRY_MANAGER_H_
 
+#ifdef CHRE_TELEMETRY_SUPPORT_ENABLED
+
 #include <cinttypes>
 
 #include "chre/util/non_copyable.h"
@@ -63,5 +65,7 @@ class TelemetryManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_TELEMETRY_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_TELEMETRY_MANAGER_H_
