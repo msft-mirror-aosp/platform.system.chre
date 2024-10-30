@@ -21,9 +21,9 @@
 #include <cstdint>
 
 #include "chre/core/nanoapp.h"
+#include "chre/platform/heap_block_header.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/debug_dump.h"
-#include "heap_block_header.h"
 
 // This default value can be overridden in the variant-specific makefile.
 #ifndef CHRE_MAX_ALLOCATION_BYTES
