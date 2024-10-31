@@ -64,29 +64,29 @@ extern "C" {
  */
 
 //! No WiFi APIs are supported
-#define CHRE_WIFI_CAPABILITIES_NONE              UINT32_C(0)
+#define CHRE_WIFI_CAPABILITIES_NONE              (UINT32_C(0))
 
 //! Listening to scan results is supported, as enabled via
 //! chreWifiConfigureScanMonitorAsync()
-#define CHRE_WIFI_CAPABILITIES_SCAN_MONITORING   UINT32_C(1 << 0)
+#define CHRE_WIFI_CAPABILITIES_SCAN_MONITORING   (UINT32_C(1) << 0)
 
 //! Requesting WiFi scans on-demand is supported via chreWifiRequestScanAsync()
-#define CHRE_WIFI_CAPABILITIES_ON_DEMAND_SCAN    UINT32_C(1 << 1)
+#define CHRE_WIFI_CAPABILITIES_ON_DEMAND_SCAN    (UINT32_C(1) << 1)
 
 //! Specifying the radio chain preference in on-demand scan requests, and
 //! reporting it in scan events is supported
 //! @since v1.2
-#define CHRE_WIFI_CAPABILITIES_RADIO_CHAIN_PREF  UINT32_C(1 << 2)
+#define CHRE_WIFI_CAPABILITIES_RADIO_CHAIN_PREF  (UINT32_C(1) << 2)
 
 //! Requesting RTT ranging is supported via chreWifiRequestRangingAsync()
 //! @since v1.2
-#define CHRE_WIFI_CAPABILITIES_RTT_RANGING       UINT32_C(1 << 3)
+#define CHRE_WIFI_CAPABILITIES_RTT_RANGING       (UINT32_C(1) << 3)
 
 //! Specifies if WiFi NAN service subscription is supported. If a platform
 //! supports subscriptions, then it must also support RTT ranging for NAN
 //! services via chreWifiNanRequestRangingAsync()
 //! @since v1.6
-#define CHRE_WIFI_CAPABILITIES_NAN_SUB           UINT32_C(1 << 4)
+#define CHRE_WIFI_CAPABILITIES_NAN_SUB           (UINT32_C(1) << 4)
 
 /** @} */
 
@@ -226,8 +226,8 @@ extern "C" {
  * @{
  */
 
-#define CHRE_WIFI_BAND_MASK_2_4_GHZ  UINT8_C(1 << 0)  //!< 2.4 GHz
-#define CHRE_WIFI_BAND_MASK_5_GHZ    UINT8_C(1 << 1)  //!< 5 GHz
+#define CHRE_WIFI_BAND_MASK_2_4_GHZ  (UINT8_C(1) << 0)  //!< 2.4 GHz
+#define CHRE_WIFI_BAND_MASK_5_GHZ    (UINT8_C(1) << 1)  //!< 5 GHz
 
 /** @} */
 
@@ -237,17 +237,17 @@ extern "C" {
  * @{
  */
 
-#define CHRE_WIFI_SCAN_RESULT_FLAGS_NONE                         UINT8_C(0)
+#define CHRE_WIFI_SCAN_RESULT_FLAGS_NONE                       UINT8_C(0)
 
 //! Element ID 61 (HT Operation) is present (see HT 7.3.2)
-#define CHRE_WIFI_SCAN_RESULT_FLAGS_HT_OPS_PRESENT               UINT8_C(1 << 0)
+#define CHRE_WIFI_SCAN_RESULT_FLAGS_HT_OPS_PRESENT             (UINT8_C(1) << 0)
 
 //! Element ID 192 (VHT Operation) is present (see VHT 8.4.2)
-#define CHRE_WIFI_SCAN_RESULT_FLAGS_VHT_OPS_PRESENT              UINT8_C(1 << 1)
+#define CHRE_WIFI_SCAN_RESULT_FLAGS_VHT_OPS_PRESENT            (UINT8_C(1) << 1)
 
 //! Element ID 127 (Extended Capabilities) is present, and bit 70 (Fine Timing
 //! Measurement Responder) is set to 1 (see IEEE Std 802.11-2016 9.4.2.27)
-#define CHRE_WIFI_SCAN_RESULT_FLAGS_IS_FTM_RESPONDER             UINT8_C(1 << 2)
+#define CHRE_WIFI_SCAN_RESULT_FLAGS_IS_FTM_RESPONDER           (UINT8_C(1) << 2)
 
 //! Retained for backwards compatibility
 //! @see CHRE_WIFI_SCAN_RESULT_FLAGS_IS_FTM_RESPONDER
@@ -256,12 +256,13 @@ extern "C" {
 
 //! HT Operation element indicates that a secondary channel is present
 //! (see HT 7.3.2.57)
-#define CHRE_WIFI_SCAN_RESULT_FLAGS_HAS_SECONDARY_CHANNEL_OFFSET UINT8_C(1 << 3)
+#define CHRE_WIFI_SCAN_RESULT_FLAGS_HAS_SECONDARY_CHANNEL_OFFSET \
+                                                               (UINT8_C(1) << 3)
 
 //! HT Operation element indicates that the secondary channel is below the
 //! primary channel (see HT 7.3.2.57)
 #define CHRE_WIFI_SCAN_RESULT_FLAGS_SECONDARY_CHANNEL_OFFSET_IS_BELOW  \
-                                                                 UINT8_C(1 << 4)
+                                                               (UINT8_C(1) << 4)
 
 /** @} */
 
@@ -273,23 +274,23 @@ extern "C" {
  * @{
  */
 
-#define CHRE_WIFI_SECURITY_MODE_UNKNOWN  UINT8_C(0)
+#define CHRE_WIFI_SECURITY_MODE_UNKNOWN  (UINT8_C(0))
 //! @deprecated since v1.10. Use CHRE_WIFI_SECURITY_MODE_UNKNOWN instead.
-#define CHRE_WIFI_SECURITY_MODE_UNKONWN CHRE_WIFI_SECURITY_MODE_UNKNOWN
+#define CHRE_WIFI_SECURITY_MODE_UNKONWN  CHRE_WIFI_SECURITY_MODE_UNKNOWN
 
-#define CHRE_WIFI_SECURITY_MODE_OPEN  UINT8_C(1 << 0)  //!< No auth/security
-#define CHRE_WIFI_SECURITY_MODE_WEP   UINT8_C(1 << 1)
-#define CHRE_WIFI_SECURITY_MODE_PSK   UINT8_C(1 << 2)  //!< WPA-PSK or WPA2-PSK
-#define CHRE_WIFI_SECURITY_MODE_EAP   UINT8_C(1 << 3)  //!< WPA-EAP or WPA2-EAP
-
-//! @since v1.5
-#define CHRE_WIFI_SECURITY_MODE_SAE   UINT8_C(1 << 4)
+#define CHRE_WIFI_SECURITY_MODE_OPEN (UINT8_C(1) << 0)  //!< No auth/security
+#define CHRE_WIFI_SECURITY_MODE_WEP  (UINT8_C(1) << 1)
+#define CHRE_WIFI_SECURITY_MODE_PSK  (UINT8_C(1) << 2)  //!< WPA-PSK or WPA2-PSK
+#define CHRE_WIFI_SECURITY_MODE_EAP  (UINT8_C(1) << 3)  //!< WPA-EAP or WPA2-EAP
 
 //! @since v1.5
-#define CHRE_WIFI_SECURITY_MODE_EAP_SUITE_B  UINT8_C(1 << 5)
+#define CHRE_WIFI_SECURITY_MODE_SAE  (UINT8_C(1) << 4)
 
 //! @since v1.5
-#define CHRE_WIFI_SECURITY_MODE_OWE   UINT8_C(1 << 6)
+#define CHRE_WIFI_SECURITY_MODE_EAP_SUITE_B  (UINT8_C(1) << 5)
+
+//! @since v1.5
+#define CHRE_WIFI_SECURITY_MODE_OWE  (UINT8_C(1) << 6)
 
 /** @} */
 
@@ -300,9 +301,9 @@ extern "C" {
  * @{
  */
 
-#define CHRE_WIFI_RADIO_CHAIN_UNKNOWN  UINT8_C(0)
-#define CHRE_WIFI_RADIO_CHAIN_0        UINT8_C(1 << 0)
-#define CHRE_WIFI_RADIO_CHAIN_1        UINT8_C(1 << 1)
+#define CHRE_WIFI_RADIO_CHAIN_UNKNOWN  (UINT8_C(0))
+#define CHRE_WIFI_RADIO_CHAIN_0        (UINT8_C(1) << 0)
+#define CHRE_WIFI_RADIO_CHAIN_1        (UINT8_C(1) << 1)
 
 /** @} */
 
@@ -320,7 +321,7 @@ extern "C" {
 
 //! If set, the nested chreWifiLci structure is populated; otherwise it is
 //! invalid and must be ignored
-#define CHRE_WIFI_RTT_RESULT_HAS_LCI  UINT8_C(1 << 0)
+#define CHRE_WIFI_RTT_RESULT_HAS_LCI  (UINT8_C(1) << 0)
 
 /** @} */
 
