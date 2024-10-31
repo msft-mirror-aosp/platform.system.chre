@@ -428,6 +428,6 @@ class ArrayQueueIterator {
 
 }  // namespace chre
 
-#include "chre/util/array_queue_impl.h"
+#include "chre/util/array_queue_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_ARRAY_QUEUE_H_

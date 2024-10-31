@@ -94,6 +94,6 @@ class SynchronizedMemoryPool : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/synchronized_memory_pool_impl.h"
+#include "chre/util/synchronized_memory_pool_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_H_

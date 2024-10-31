@@ -204,13 +204,15 @@ $(PW_RPC_GENERATOR_COMPILED_PROTO): $(PW_RPC_GENERATOR_PROTO)
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --out-dir=$(PW_RPC_GEN_PATH)/py/pw_rpc/internal \
 	  --compile-dir=$(dir $<) --sources $(PW_RPC_GENERATOR_PROTO) \
-	  --language python
+	  --language python \
+	  --no-experimental-editions
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_protobuf/py/pw_protobuf/plugin.py \
 	  --compile-dir=$(dir $<) --sources $(PW_RPC_GENERATOR_PROTO) \
-	  --language pwpb
+	  --language pwpb \
+	  --no-experimental-editions
 
 # Generated PW RPC Files #######################################################
 
@@ -266,7 +268,7 @@ COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/inc
 
 # Pigweed RPC sources
 COMMON_SRCS += $(PIGWEED_DIR)/pw_assert_log/assert_log.cc
-COMMON_SRCS += $(PIGWEED_DIR)/pw_containers/intrusive_list.cc
+COMMON_SRCS += $(PIGWEED_DIR)/pw_containers/intrusive_item.cc
 COMMON_SRCS += $(PIGWEED_DIR)/pw_protobuf/decoder.cc
 COMMON_SRCS += $(PIGWEED_DIR)/pw_protobuf/encoder.cc
 COMMON_SRCS += $(PIGWEED_DIR)/pw_protobuf/stream_decoder.cc
@@ -326,26 +328,31 @@ $(PW_RPC_GEN_PATH)/%.pb.c \
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(NANOPB_PROTOC) \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language nanopb \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_protobuf/py/pw_protobuf/plugin.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language pwpb \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_nanopb.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language nanopb_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_raw.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language raw_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_pwpb.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language pwpb_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 $(PW_RPC_GEN_PATH)/%.pb.c \
@@ -359,26 +366,31 @@ $(PW_RPC_GEN_PATH)/%.pb.c \
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(NANOPB_PROTOC) \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language nanopb \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_protobuf/py/pw_protobuf/plugin.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language pwpb \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_nanopb.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language nanopb_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_raw.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language raw_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 	$(V)$(PW_RPC_GENERATOR_CMD) $(PW_RPC_PROTO_GENERATOR) \
 	  --plugin-path=$(PIGWEED_DIR)/pw_rpc/py/pw_rpc/plugin_pwpb.py \
 	  --out-dir=$(PW_RPC_GEN_PATH)/$(dir $<) --compile-dir=$(dir $<) --language pwpb_rpc \
+	  --no-experimental-editions \
 	  --sources $<
 
 endif # ifneq ($(PW_RPC_SRCS),)
