@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_TRANSACTION_MANAGER_H_
-#define CHRE_UTIL_TRANSACTION_MANAGER_H_
+#ifndef CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_H_
+#define CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_H_
 
 #include <cstdint>
 
@@ -226,6 +226,6 @@ class TransactionManager : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/transaction_manager_impl.h"  // IWYU pragma: export
+#include "chre/util/system/transaction_manager_impl.h"  // IWYU pragma: export
 
-#endif  // CHRE_UTIL_TRANSACTION_MANAGER_H_
+#endif  // CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_H_
