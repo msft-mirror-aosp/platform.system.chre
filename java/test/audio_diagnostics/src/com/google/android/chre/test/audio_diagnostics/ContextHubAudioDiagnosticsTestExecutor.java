@@ -149,8 +149,8 @@ public class ContextHubAudioDiagnosticsTestExecutor extends ContextHubChreApiTes
                                         "audio_dc_offset_test_data.bin", mContext);
 
         Log.i(TAG, "DC Offset: " + runningSampleAvg);
-        Assert.assertTrue("DC offset " + runningSampleAvg + " >= threshold " + DC_OFFSET_LIMIT,
-                runningSampleAvg < DC_OFFSET_LIMIT);
+        Assert.assertTrue("DC offset " + runningSampleAvg + " > threshold " + DC_OFFSET_LIMIT,
+                runningSampleAvg <= DC_OFFSET_LIMIT);
     }
 
     /**

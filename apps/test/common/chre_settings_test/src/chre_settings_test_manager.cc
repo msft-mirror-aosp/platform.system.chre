@@ -56,6 +56,10 @@ uint32_t gAudioDataTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kAudioDataTimerCookie = 0xc001cafe;
 uint32_t gAudioStatusTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kAudioStatusTimerCookie = 0xb01dcafe;
+uint32_t gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+constexpr uint32_t kRangingRequestRetryTimerCookie = 0x600dcafe;
+
+constexpr uint8_t kMaxWifiRequestRetries = 3;
 
 bool getFeature(const chre_settings_test_TestCommand &command,
                 Manager::Feature *feature) {
@@ -285,7 +289,7 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
         break;
 
       case CHRE_EVENT_TIMER:
-        handleTimeout(eventData);
+        handleTimerEvent(eventData);
         break;
 
       case CHRE_EVENT_WIFI_ASYNC_RESULT:
@@ -315,6 +319,12 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
   }
 }
 
+bool Manager::requestRangingForFeatureWifiRtt() {
+  struct chreWifiRangingParams params = {
+      .targetListLen = 1, .targetList = &mCachedRangingTarget.value()};
+  return chreWifiRequestRangingAsync(&params, &kWifiRttCookie);
+}
+
 bool Manager::startTestForFeature(Feature feature) {
   bool success = true;
   switch (feature) {
@@ -326,9 +336,8 @@ bool Manager::startTestForFeature(Feature feature) {
       if (!mCachedRangingTarget.has_value()) {
         LOGE("No cached WiFi RTT ranging target");
       } else {
-        struct chreWifiRangingParams params = {
-            .targetListLen = 1, .targetList = &mCachedRangingTarget.value()};
-        success = chreWifiRequestRangingAsync(&params, &kWifiRttCookie);
+        mWifiRequestRetries = 0;
+        success = requestRangingForFeatureWifiRtt();
       }
       break;
     }
@@ -406,17 +415,46 @@ bool Manager::validateAsyncResult(const chreAsyncResult *result,
 
 void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
   bool success = false;
+  uint8_t feature = static_cast<uint8_t>(mTestSession->feature);
   switch (result->requestType) {
     case CHRE_WIFI_REQUEST_TYPE_REQUEST_SCAN: {
       if (mTestSession->feature == Feature::WIFI_RTT) {
-        // Ignore validating the scan async response since we only care about
-        // the actual scan event to initiate the RTT request. A failure to
-        // receive the scan response should cause a timeout at the host.
-        return;
+        if (result->errorCode == CHRE_ERROR_BUSY) {
+          if (mWifiRequestRetries >= kMaxWifiRequestRetries) {
+            // The request has failed repeatedly and we are no longer retrying
+            // Return success=false to the host rather than timeout.
+            LOGE("Reached max wifi request retries: test feature %" PRIu8
+                 ". Num retries=%" PRIu8,
+                 feature, kMaxWifiRequestRetries);
+            break;
+          }
+
+          // Retry on CHRE_ERROR_BUSY after a short delay
+          mWifiRequestRetries++;
+          uint64_t delay = kOneSecondInNanoseconds;
+          gRangingRequestRetryTimerHandle = chreTimerSet(
+              delay, &kRangingRequestRetryTimerCookie, /*oneShot=*/true);
+          LOGW(
+              "Request failed due to CHRE_ERROR_BUSY. Retrying after "
+              "delay=%" PRIu64 "ns, num_retries=%" PRIu8 "/%" PRIu8,
+              delay, mWifiRequestRetries, kMaxWifiRequestRetries);
+          return;
+        }
+
+        if (result->errorCode == CHRE_ERROR_NONE) {
+          // Ignore validating the scan async response since we only care about
+          // the actual scan event to initiate the RTT request.
+          return;
+        } else {
+          LOGE("Unexpected error in async result: test feature: %" PRIu8
+               " error: %" PRIu8,
+               feature, static_cast<uint8_t>(result->errorCode));
+          break;
+        }
       }
       if (mTestSession->feature != Feature::WIFI_SCANNING) {
         LOGE("Unexpected WiFi scan async result: test feature %" PRIu8,
-             static_cast<uint8_t>(mTestSession->feature));
+             feature);
       } else {
         success = validateAsyncResult(
             result, static_cast<const void *>(&kWifiScanningCookie));
@@ -426,7 +464,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
     case CHRE_WIFI_REQUEST_TYPE_RANGING: {
       if (mTestSession->feature != Feature::WIFI_RTT) {
         LOGE("Unexpected WiFi ranging async result: test feature %" PRIu8,
-             static_cast<uint8_t>(mTestSession->feature));
+             feature);
       } else {
         success = validateAsyncResult(
             result, static_cast<const void *>(&kWifiRttCookie));
@@ -627,9 +665,16 @@ void Manager::handleAudioDataEvent(const struct chreAudioDataEvent *event) {
   }
 }
 
-void Manager::handleTimeout(const void *eventData) {
+void Manager::handleTimerEvent(const void *eventData) {
   bool testSuccess = false;
   auto *cookie = static_cast<const uint32_t *>(eventData);
+
+  if (*cookie == kRangingRequestRetryTimerCookie) {
+    gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+    requestRangingForFeatureWifiRtt();
+    return;
+  }
+
   // Ignore the audio status timer if the suspended status was received.
   if (*cookie == kAudioStatusTimerCookie && !mAudioSamplingEnabled) {
     gAudioStatusTimerHandle = CHRE_TIMER_INVALID;

@@ -2,10 +2,34 @@
 # Util Makefile
 #
 
+# Location of various Pigweed modules  #########################################
+
+PIGWEED_DIR = $(ANDROID_BUILD_TOP)/external/pigweed
+PIGWEED_CHRE_DIR = $(ANDROID_BUILD_TOP)/system/chre/external/pigweed
+
 # Common Compiler Flags ########################################################
 
 # Include paths.
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
+
+# Pigweed ######################################################################
+
+COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_log_nanoapp/public_overrides
+COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_assert_nanoapp/public_overrides
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_allocator/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_assert/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_containers/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_function/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_log/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_polyfill/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_preprocessor/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_result/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_span/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_status/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/fit/include
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/include
+
+COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/unique_ptr.cc
 
 # Common Source Files ##########################################################
 
@@ -23,6 +47,7 @@ COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/wifi.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/ble_util.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/event_callbacks.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/debug_dump.cc
+COMMON_SRCS += $(CHRE_PREFIX)/util/system/message_router.cc
 
 # GoogleTest Source Files ######################################################
 

@@ -17,10 +17,6 @@
 #ifndef CHRE_UTIL_THROTTLE_H_
 #define CHRE_UTIL_THROTTLE_H_
 
-#include "chre/util/optional.h"
-
-using ::chre::Optional;
-
 /**
  * Throttles an action to a given interval and maximum number of times.
  * The action will be called at most maxCount in every interval.
@@ -30,20 +26,21 @@ using ::chre::Optional;
  * @param maxCount The maximum number of times to call the action
  * @param getTime A function to get the current time
  */
-#define CHRE_THROTTLE(action, interval, maxCount, getTime) \
-  do {                                                     \
-    static uint32_t _count = 0;                            \
-    static Optional<Nanoseconds> _lastCallTime;            \
-    Nanoseconds _now = getTime;                            \
-    if (!_lastCallTime.has_value() ||                      \
-        _now - _lastCallTime.value() >= interval) {        \
-      _count = 0;                                          \
-      _lastCallTime = _now;                                \
-    }                                                      \
-    if (++_count > maxCount) {                             \
-      break;                                               \
-    }                                                      \
-    action;                                                \
+#define CHRE_THROTTLE(action, interval, maxCount, getTime)       \
+  do {                                                           \
+    static uint32_t _count = 0;                                  \
+    static bool _hasLastCallTime = false;                        \
+    static Nanoseconds _lastCallTime;                            \
+    Nanoseconds _now = getTime;                                  \
+    if (!_hasLastCallTime || _now - _lastCallTime >= interval) { \
+      _hasLastCallTime = true;                                   \
+      _count = 0;                                                \
+      _lastCallTime = _now;                                      \
+    }                                                            \
+    if (++_count > maxCount) {                                   \
+      break;                                                     \
+    }                                                            \
+    action;                                                      \
   } while (0)
 
 #endif  // CHRE_UTIL_THROTTLE_H_

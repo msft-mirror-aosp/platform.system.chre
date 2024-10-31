@@ -197,21 +197,35 @@ bool PreloadedNanoappLoader::waitAndVerifyFuture(
   return success;
 }
 
-bool PreloadedNanoappLoader::verifyFragmentLoadResponse(
+PreloadedNanoappLoader::ResponseVerificationResult
+PreloadedNanoappLoader::verifyFragmentLoadResponse(
     const ::chre::fbs::LoadNanoappResponseT &response) const {
-  if (!response.success) {
-    LOGE("Loading nanoapp binary fragment %d of transaction %u failed.",
-         response.fragment_id, response.transaction_id);
-    return false;
+  // Allow seen fragment ids to be ignored to tolerate duplicated responses.
+  if (response.fragment_id >= 0 &&
+      response.fragment_id < mPendingTransaction.fragmentId) {
+    LOGW(
+        "Fragmented load response has a fragment id %u while %zu is expected. "
+        "Ignored",
+        response.fragment_id, mPendingTransaction.fragmentId);
+    return ResponseVerificationResult::IGNORED;
   }
-  if (mPreloadedNanoappPendingTransaction.fragmentId != response.fragment_id) {
+
+  // Future or negative fragment ids are not acceptable.
+  if (response.fragment_id != mPendingTransaction.fragmentId) {
     LOGE(
         "Fragmented load response with unexpected fragment id %u while "
         "%zu is expected",
-        response.fragment_id, mPreloadedNanoappPendingTransaction.fragmentId);
-    return false;
+        response.fragment_id, mPendingTransaction.fragmentId);
+    return ResponseVerificationResult::FAILURE;
   }
-  return true;
+
+  // Once fragment id is matched the result is taken.
+  if (!response.success) {
+    LOGE("Loading nanoapp binary fragment %d of transaction %u failed.",
+         response.fragment_id, response.transaction_id);
+    return ResponseVerificationResult::FAILURE;
+  }
+  return ResponseVerificationResult::SUCCESS;
 }
 
 bool PreloadedNanoappLoader::onLoadNanoappResponse(
@@ -225,19 +239,23 @@ bool PreloadedNanoappLoader::onLoadNanoappResponse(
         response.transaction_id, response.fragment_id);
     return false;
   }
-  if (mPreloadedNanoappPendingTransaction.transactionId !=
-      response.transaction_id) {
+  if (mPendingTransaction.transactionId != response.transaction_id) {
     LOGE(
         "Fragmented load response with transactionId %u but transactionId "
         "%u is expected. Ignored.",
-        response.transaction_id,
-        mPreloadedNanoappPendingTransaction.transactionId);
+        response.transaction_id, mPendingTransaction.transactionId);
     return false;
   }
+
   // set value for the future instance.
-  mFragmentedLoadPromise->set_value(verifyFragmentLoadResponse(response));
-  // reset the promise as the value can only be retrieved once from it.
-  mFragmentedLoadPromise = std::nullopt;
+  ResponseVerificationResult result = verifyFragmentLoadResponse(response);
+  if (result != ResponseVerificationResult::IGNORED) {
+    mFragmentedLoadPromise->set_value(result ==
+                                      ResponseVerificationResult::SUCCESS);
+    // reset the promise as the value can only be retrieved once from it.
+    mFragmentedLoadPromise = std::nullopt;
+  }
+
   return true;
 }
 
@@ -257,7 +275,7 @@ std::future<bool> PreloadedNanoappLoader::sendFragmentedLoadRequest(
     // Returns an invalid future to indicate the failure
     return std::future<bool>{};
   }
-  mPreloadedNanoappPendingTransaction = {
+  mPendingTransaction = {
       .transactionId = request.transactionId,
       .fragmentId = request.fragmentId,
   };

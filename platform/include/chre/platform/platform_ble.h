@@ -120,4 +120,9 @@ class PlatformBle : public PlatformBleBase {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_ble_impl.h")
+#include "chre/target_platform/platform_ble_impl.h"
+#endif  // __has_include("chre/target_platform/platform_ble_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_BLE_H_

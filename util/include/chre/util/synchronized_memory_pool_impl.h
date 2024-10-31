@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
 #define CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/lock_guard.h"
 #include "chre/util/synchronized_memory_pool.h"
 

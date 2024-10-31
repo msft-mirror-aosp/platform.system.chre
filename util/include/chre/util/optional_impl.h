@@ -17,6 +17,7 @@
 #ifndef UTIL_CHRE_OPTIONAL_IMPL_H_
 #define UTIL_CHRE_OPTIONAL_IMPL_H_
 
+// IWYU pragma: private
 #include <new>
 #include <utility>
 

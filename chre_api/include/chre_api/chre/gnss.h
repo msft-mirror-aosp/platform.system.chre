@@ -55,21 +55,21 @@ extern "C" {
  */
 
 //! A lack of flags indicates that GNSS is not supported in this CHRE
-#define CHRE_GNSS_CAPABILITIES_NONE          UINT32_C(0)
+#define CHRE_GNSS_CAPABILITIES_NONE          (UINT32_C(0))
 
 //! GNSS position fixes are supported via chreGnssLocationSessionStartAsync()
-#define CHRE_GNSS_CAPABILITIES_LOCATION      UINT32_C(1 << 0)
+#define CHRE_GNSS_CAPABILITIES_LOCATION      (UINT32_C(1) << 0)
 
 //! GNSS raw measurements are supported via
 //! chreGnssMeasurementSessionStartAsync()
-#define CHRE_GNSS_CAPABILITIES_MEASUREMENTS  UINT32_C(1 << 1)
+#define CHRE_GNSS_CAPABILITIES_MEASUREMENTS  (UINT32_C(1) << 1)
 
 //! Location fixes supplied from chreGnssConfigurePassiveLocationListener()
 //! are tapped in at the GNSS engine level, so they include additional fixes
 //! such as those requested by the AP, and not just those requested by other
 //! nanoapps within CHRE (which is the case when this flag is not set)
 #define CHRE_GNSS_CAPABILITIES_GNSS_ENGINE_BASED_PASSIVE_LISTENER \
-                                             UINT32_C(1 << 2)
+                                             (UINT32_C(1) << 2)
 
 /** @} */
 
@@ -120,34 +120,34 @@ extern "C" {
 
 // Flags indicating the Accumulated Delta Range's states
 // (ref: GnssAccumulatedDeltaRangeState)
-#define CHRE_GNSS_ADR_STATE_UNKNOWN     UINT16_C(0)
-#define CHRE_GNSS_ADR_STATE_VALID       UINT16_C(1 << 0)
-#define CHRE_GNSS_ADR_STATE_RESET       UINT16_C(1 << 1)
-#define CHRE_GNSS_ADR_STATE_CYCLE_SLIP  UINT16_C(1 << 2)
+#define CHRE_GNSS_ADR_STATE_UNKNOWN     (UINT16_C(0))
+#define CHRE_GNSS_ADR_STATE_VALID       (UINT16_C(1) << 0)
+#define CHRE_GNSS_ADR_STATE_RESET       (UINT16_C(1) << 1)
+#define CHRE_GNSS_ADR_STATE_CYCLE_SLIP  (UINT16_C(1) << 2)
 
 // Flags to indicate what fields in chreGnssClock are valid (ref: GnssClockFlags)
-#define CHRE_GNSS_CLOCK_HAS_LEAP_SECOND        UINT16_C(1 << 0)
-#define CHRE_GNSS_CLOCK_HAS_TIME_UNCERTAINTY   UINT16_C(1 << 1)
-#define CHRE_GNSS_CLOCK_HAS_FULL_BIAS          UINT16_C(1 << 2)
-#define CHRE_GNSS_CLOCK_HAS_BIAS               UINT16_C(1 << 3)
-#define CHRE_GNSS_CLOCK_HAS_BIAS_UNCERTAINTY   UINT16_C(1 << 4)
-#define CHRE_GNSS_CLOCK_HAS_DRIFT              UINT16_C(1 << 5)
-#define CHRE_GNSS_CLOCK_HAS_DRIFT_UNCERTAINTY  UINT16_C(1 << 6)
+#define CHRE_GNSS_CLOCK_HAS_LEAP_SECOND        (UINT16_C(1) << 0)
+#define CHRE_GNSS_CLOCK_HAS_TIME_UNCERTAINTY   (UINT16_C(1) << 1)
+#define CHRE_GNSS_CLOCK_HAS_FULL_BIAS          (UINT16_C(1) << 2)
+#define CHRE_GNSS_CLOCK_HAS_BIAS               (UINT16_C(1) << 3)
+#define CHRE_GNSS_CLOCK_HAS_BIAS_UNCERTAINTY   (UINT16_C(1) << 4)
+#define CHRE_GNSS_CLOCK_HAS_DRIFT              (UINT16_C(1) << 5)
+#define CHRE_GNSS_CLOCK_HAS_DRIFT_UNCERTAINTY  (UINT16_C(1) << 6)
 
 // Flags to indicate which values are valid in a GpsLocation
 // (ref: GpsLocationFlags)
-#define CHRE_GPS_LOCATION_HAS_LAT_LONG           UINT16_C(1 << 0)
-#define CHRE_GPS_LOCATION_HAS_ALTITUDE           UINT16_C(1 << 1)
-#define CHRE_GPS_LOCATION_HAS_SPEED              UINT16_C(1 << 2)
-#define CHRE_GPS_LOCATION_HAS_BEARING            UINT16_C(1 << 3)
-#define CHRE_GPS_LOCATION_HAS_ACCURACY           UINT16_C(1 << 4)
+#define CHRE_GPS_LOCATION_HAS_LAT_LONG           (UINT16_C(1) << 0)
+#define CHRE_GPS_LOCATION_HAS_ALTITUDE           (UINT16_C(1) << 1)
+#define CHRE_GPS_LOCATION_HAS_SPEED              (UINT16_C(1) << 2)
+#define CHRE_GPS_LOCATION_HAS_BEARING            (UINT16_C(1) << 3)
+#define CHRE_GPS_LOCATION_HAS_ACCURACY           (UINT16_C(1) << 4)
 
 //! @since v1.3
-#define CHRE_GPS_LOCATION_HAS_ALTITUDE_ACCURACY  UINT16_C(1 << 5)
+#define CHRE_GPS_LOCATION_HAS_ALTITUDE_ACCURACY  (UINT16_C(1) << 5)
 //! @since v1.3
-#define CHRE_GPS_LOCATION_HAS_SPEED_ACCURACY     UINT16_C(1 << 6)
+#define CHRE_GPS_LOCATION_HAS_SPEED_ACCURACY     (UINT16_C(1) << 6)
 //! @since v1.3
-#define CHRE_GPS_LOCATION_HAS_BEARING_ACCURACY   UINT16_C(1 << 7)
+#define CHRE_GPS_LOCATION_HAS_BEARING_ACCURACY   (UINT16_C(1) << 7)
 
 /**
  * The maximum number of instances of struct chreGnssMeasurement that may be
@@ -161,21 +161,21 @@ extern "C" {
 #define CHRE_GNSS_MAX_MEASUREMENT_PRE_1_5  UINT8_C(64)
 
 // Flags indicating the GNSS measurement state (ref: GnssMeasurementState)
-#define CHRE_GNSS_MEASUREMENT_STATE_UNKNOWN                UINT16_C(0)
-#define CHRE_GNSS_MEASUREMENT_STATE_CODE_LOCK              UINT16_C(1 << 0)
-#define CHRE_GNSS_MEASUREMENT_STATE_BIT_SYNC               UINT16_C(1 << 1)
-#define CHRE_GNSS_MEASUREMENT_STATE_SUBFRAME_SYNC          UINT16_C(1 << 2)
-#define CHRE_GNSS_MEASUREMENT_STATE_TOW_DECODED            UINT16_C(1 << 3)
-#define CHRE_GNSS_MEASUREMENT_STATE_MSEC_AMBIGUOUS         UINT16_C(1 << 4)
-#define CHRE_GNSS_MEASUREMENT_STATE_SYMBOL_SYNC            UINT16_C(1 << 5)
-#define CHRE_GNSS_MEASUREMENT_STATE_GLO_STRING_SYNC        UINT16_C(1 << 6)
-#define CHRE_GNSS_MEASUREMENT_STATE_GLO_TOD_DECODED        UINT16_C(1 << 7)
-#define CHRE_GNSS_MEASUREMENT_STATE_BDS_D2_BIT_SYNC        UINT16_C(1 << 8)
-#define CHRE_GNSS_MEASUREMENT_STATE_BDS_D2_SUBFRAME_SYNC   UINT16_C(1 << 9)
-#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1BC_CODE_LOCK     UINT16_C(1 << 10)
-#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1C_2ND_CODE_LOCK  UINT16_C(1 << 11)
-#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1B_PAGE_SYNC      UINT16_C(1 << 12)
-#define CHRE_GNSS_MEASUREMENT_STATE_SBAS_SYNC              UINT16_C(1 << 13)
+#define CHRE_GNSS_MEASUREMENT_STATE_UNKNOWN                (UINT16_C(0))
+#define CHRE_GNSS_MEASUREMENT_STATE_CODE_LOCK              (UINT16_C(1) << 0)
+#define CHRE_GNSS_MEASUREMENT_STATE_BIT_SYNC               (UINT16_C(1) << 1)
+#define CHRE_GNSS_MEASUREMENT_STATE_SUBFRAME_SYNC          (UINT16_C(1) << 2)
+#define CHRE_GNSS_MEASUREMENT_STATE_TOW_DECODED            (UINT16_C(1) << 3)
+#define CHRE_GNSS_MEASUREMENT_STATE_MSEC_AMBIGUOUS         (UINT16_C(1) << 4)
+#define CHRE_GNSS_MEASUREMENT_STATE_SYMBOL_SYNC            (UINT16_C(1) << 5)
+#define CHRE_GNSS_MEASUREMENT_STATE_GLO_STRING_SYNC        (UINT16_C(1) << 6)
+#define CHRE_GNSS_MEASUREMENT_STATE_GLO_TOD_DECODED        (UINT16_C(1) << 7)
+#define CHRE_GNSS_MEASUREMENT_STATE_BDS_D2_BIT_SYNC        (UINT16_C(1) << 8)
+#define CHRE_GNSS_MEASUREMENT_STATE_BDS_D2_SUBFRAME_SYNC   (UINT16_C(1) << 9)
+#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1BC_CODE_LOCK     (UINT16_C(1) << 10)
+#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1C_2ND_CODE_LOCK  (UINT16_C(1) << 11)
+#define CHRE_GNSS_MEASUREMENT_STATE_GAL_E1B_PAGE_SYNC      (UINT16_C(1) << 12)
+#define CHRE_GNSS_MEASUREMENT_STATE_SBAS_SYNC              (UINT16_C(1) << 13)
 
 #define CHRE_GNSS_MEASUREMENT_CARRIER_FREQUENCY_UNKNOWN    0.f
 
