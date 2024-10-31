@@ -15,8 +15,12 @@
  */
 
 #include "chre/target_platform/chre_init.h"
+#include "chre/platform/shared/dram_vote_client.h"
 
 BaseType_t chreTinysysInit() {
+  chre::DramVoteClientSingleton::init();
+  chre::freertos::initLogger();
+
   return chre::freertos::init();
 }
 

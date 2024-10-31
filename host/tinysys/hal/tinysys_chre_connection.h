@@ -44,7 +44,7 @@ class TinysysChreConnection : public ChreConnection {
  public:
   TinysysChreConnection(ChreConnectionCallback *callback)
       : mCallback(callback), mLpmaHandler(/* allowed= */ true) {
-    mPayload = std::make_unique<uint8_t[]>(kMaxPayloadBytes);
+    mPayload = std::make_unique<uint8_t[]>(kMaxReceivingPayloadBytes);
   };
 
   ~TinysysChreConnection() override {
@@ -104,11 +104,10 @@ class TinysysChreConnection : public ChreConnection {
   static constexpr char kWakeLock[] = "tinysys_chre_hal_wakelock";
 
   // Max payload size that can be sent to CHRE
-  // TODO(b/277235389): Adjust max payload size (AP -> SCP and SCP -> AP)
-  // as appropriate. This is a temp/quick fix for b/272311907 and b/270758946
-  // setting max payload allowed to CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128 byte
-  // to account for transport overhead.
-  static constexpr uint32_t kMaxPayloadBytes = 4224;  // 4096 + 128
+  static constexpr uint32_t kMaxSendingPayloadBytes = 0x8000;  // 32K
+
+  // Max payload size that can be received from CHRE
+  static constexpr uint32_t kMaxReceivingPayloadBytes = 0x8000;  // 32K
 
   // Max overhead of the nanoapp binary payload caused by the fbs encapsulation
   static constexpr uint32_t kMaxPayloadOverheadBytes = 1024;
@@ -126,10 +125,10 @@ class TinysysChreConnection : public ChreConnection {
     // security check for proper use of the device node.
     uint32_t magic = 0x67728269;
     uint32_t payloadSize = 0;
-    uint8_t payload[kMaxPayloadBytes];
+    uint8_t payload[kMaxSendingPayloadBytes];
 
     ChreConnectionMessage(void *data, size_t length) {
-      assert(length <= kMaxPayloadBytes);
+      assert(length <= kMaxSendingPayloadBytes);
       memcpy(payload, data, length);
       payloadSize = static_cast<uint32_t>(length);
     }

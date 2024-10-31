@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SCOPE_TIMER_IMPL_H_
 #define CHRE_UTIL_SCOPE_TIMER_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/platform/system_time.h"
 
 namespace chre {

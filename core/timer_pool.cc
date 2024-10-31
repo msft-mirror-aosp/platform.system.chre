@@ -20,8 +20,8 @@
 #include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/fatal_error.h"
+#include "chre/platform/log.h"
 #include "chre/platform/system_time.h"
-#include "chre/target_platform/log.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/nested_data_ptr.h"
 
@@ -362,11 +362,9 @@ void TimerPool::handleTimerExpiredCallback(uint16_t /* type */, void *data,
     }
   }
 
-  if (!EventLoopManagerSingleton::get()->getEventLoop()
-        .deliverEventSync(
-            currentTimerRequest.instanceId,
-            CHRE_EVENT_TIMER,
-            const_cast<void*>(currentTimerRequest.cookie))) {
+  if (!EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
+          CHRE_EVENT_TIMER, const_cast<void *>(currentTimerRequest.cookie),
+          currentTimerRequest.instanceId)) {
     LOGW("Failed to deliver timer event");
   }
 }
