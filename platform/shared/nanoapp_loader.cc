@@ -133,7 +133,7 @@ double cosOverride(double rad) {
   return cos(rad);
 }
 
-float sqrtOverride(float val) {
+double sqrtOverride(double val) {
   return sqrt(val);
 }
 

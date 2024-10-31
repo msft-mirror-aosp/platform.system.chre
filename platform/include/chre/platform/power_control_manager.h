@@ -52,4 +52,9 @@ class PowerControlManager : public PowerControlManagerBase, public NonCopyable {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/power_control_manager_impl.h")
+#include "chre/target_platform/power_control_manager_impl.h"
+#endif  // __has_include("chre/target_platform/power_control_manager_impl.h")
+
 #endif  // CHRE_PLATFORM_POWER_CONTROL_MANAGER_H
