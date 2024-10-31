@@ -191,6 +191,6 @@ class MemoryPool : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/memory_pool_impl.h"
+#include "chre/util/memory_pool_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_MEMORY_POOL_H_

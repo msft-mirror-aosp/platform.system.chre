@@ -369,6 +369,6 @@ class DynamicVector : private DynamicVectorBase {
 
 }  // namespace chre
 
-#include "chre/util/dynamic_vector_impl.h"
+#include "chre/util/dynamic_vector_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_DYNAMIC_VECTOR_H_
