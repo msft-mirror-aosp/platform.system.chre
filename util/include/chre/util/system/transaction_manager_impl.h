@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
-#define CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
+#ifndef CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_IMPL_H_
+#define CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_IMPL_H_
 
 // IWYU pragma: private
-#include "chre/util/transaction_manager.h"
+#include "chre/util/system/transaction_manager.h"
 
 #include "chre/core/event_loop_common.h"
 #include "chre/platform/system_time.h"
@@ -230,4 +230,4 @@ void TransactionManager<kMaxTransactions, TimerPoolType>::
 
 }  // namespace chre
 
-#endif  // CHRE_UTIL_TRANSACTION_MANAGER_IMPL_H_
+#endif  // CHRE_UTIL_SYSTEM_TRANSACTION_MANAGER_IMPL_H_
