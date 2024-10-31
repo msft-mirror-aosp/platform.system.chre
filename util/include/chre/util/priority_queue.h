@@ -181,6 +181,6 @@ class PriorityQueue : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/priority_queue_impl.h"
+#include "chre/util/priority_queue_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_PRIORITY_QUEUE_H_

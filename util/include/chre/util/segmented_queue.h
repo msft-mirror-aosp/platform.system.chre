@@ -423,6 +423,6 @@ class SegmentedQueue : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/segmented_queue_impl.h"
+#include "chre/util/segmented_queue_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_SEGMENTED_QUEUE_H_

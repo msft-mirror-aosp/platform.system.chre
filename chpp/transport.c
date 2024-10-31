@@ -1688,11 +1688,13 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
   const uint64_t currentTimeNs = chppGetCurrentTimeNs();
   const bool isTxTimeout = currentTimeNs - context->txStatus.lastTxTimeNs >=
                            CHPP_TRANSPORT_TX_TIMEOUT_NS;
+  const bool isResetting = context->resetState == CHPP_RESET_STATE_RESETTING;
 
   // Call chppTransportDoWork for both TX and request timeouts.
   if (isTxTimeout) {
-    CHPP_LOGE("ACK timeout. Tx t=%" PRIu64,
-              context->txStatus.lastTxTimeNs / CHPP_NSEC_PER_MSEC);
+    CHPP_LOGE("ACK timeout. Tx t=%" PRIu64 ", attempt %zu, isResetting=%d",
+              context->txStatus.lastTxTimeNs / CHPP_NSEC_PER_MSEC,
+              context->txStatus.txAttempts, isResetting);
     chppTransportDoWork(context);
   } else {
     const uint64_t requestTimeoutNs =
@@ -1704,9 +1706,8 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
     }
   }
 
-  if ((context->resetState == CHPP_RESET_STATE_RESETTING) &&
-      (currentTimeNs - context->resetTimeNs >=
-       CHPP_TRANSPORT_RESET_TIMEOUT_NS)) {
+  if (isResetting && (currentTimeNs - context->resetTimeNs >=
+                      CHPP_TRANSPORT_RESET_TIMEOUT_NS)) {
     if (context->resetCount + 1 < CHPP_TRANSPORT_MAX_RESET) {
       CHPP_LOGE("RESET-ACK timeout; retrying");
       context->resetCount++;
@@ -1714,6 +1715,7 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
                 CHPP_TRANSPORT_ERROR_TIMEOUT);
     } else {
       CHPP_LOGE("RESET-ACK timeout; giving up");
+      context->txStatus.txAttempts = 0;
       context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
       chppClearTxDatagramQueue(context);
     }
