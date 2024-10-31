@@ -18,7 +18,6 @@
 #define CHRE_PLATFORM_PLATFORM_SENSOR_MANAGER_H_
 
 #include "chre/core/sensor.h"
-#include "chre/pal/sensor.h"
 #include "chre/target_platform/platform_sensor_manager_base.h"
 #include "chre/util/dynamic_vector.h"
 
@@ -154,5 +153,10 @@ class PlatformSensorManager : public PlatformSensorManagerBase {
 };
 
 }  // namespace chre
+
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_sensor_manager_impl.h")
+#include "chre/target_platform/platform_sensor_manager_impl.h"
+#endif  // __has_include("chre/target_platform/platform_sensor_manager_impl.h")
 
 #endif  // CHRE_PLATFORM_PLATFORM_SENSOR_MANAGER_H_
