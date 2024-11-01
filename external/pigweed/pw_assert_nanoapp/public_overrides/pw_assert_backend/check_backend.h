@@ -33,6 +33,7 @@
   } while (0)
 
 #if defined(_PW_LOG_REQUIRES_VERBOSITY) && _PW_LOG_REQUIRES_VERBOSITY
+#define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
   do {                                                           \
     PW_LOG(PW_LOG_LEVEL_FATAL,                                   \
            PW_LOG_LEVEL,                                         \
