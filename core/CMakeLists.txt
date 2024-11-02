@@ -62,6 +62,7 @@ pw_add_library(chre.core STATIC
     chre.util
     chre.util.system
     chre.variant.config
+    pw_function
   SOURCES
     audio_request_manager.cc
     ble_request.cc
