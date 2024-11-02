@@ -21,9 +21,9 @@
 #include <cstdint>
 
 #include "chre/core/nanoapp.h"
+#include "chre/platform/heap_block_header.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/debug_dump.h"
-#include "heap_block_header.h"
 
 // This default value can be overridden in the variant-specific makefile.
 #ifndef CHRE_MAX_ALLOCATION_BYTES
@@ -139,5 +139,10 @@ class MemoryManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/memory_manager_impl.h")
+#include "chre/target_platform/memory_manager_impl.h"
+#endif  // __has_include("chre/target_platform/memory_manager_impl.h")
 
 #endif  // CHRE_PLATFORM_MEMORY_MANAGER_H_

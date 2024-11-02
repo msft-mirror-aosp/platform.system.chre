@@ -19,6 +19,7 @@
 
 namespace chre {
 
+using ble_constants::kBroadcasterAddress;
 using ble_constants::kGoogleEddystoneUuid;
 using ble_constants::kGoogleManufactureData;
 using ble_constants::kGoogleManufactureDataLength;
@@ -26,6 +27,7 @@ using ble_constants::kGoogleManufactureDataMask;
 using ble_constants::kGoogleNearbyFastpairUuid;
 using ble_constants::kGoogleUuidDataLength;
 using ble_constants::kGoogleUuidMask;
+using ble_constants::kNumBroadcasterFilters;
 using ble_constants::kNumManufacturerDataFilters;
 using ble_constants::kNumScanFilters;
 using ble_constants::kRssiThreshold;
@@ -105,6 +107,27 @@ bool createBleManufacturerDataFilter(uint8_t numGenericFilters,
 
   filter.broadcasterAddressFilterCount = 0;
   filter.broadcasterAddressFilters = nullptr;
+  return true;
+}
+
+bool createBleScanFilterForAdvertiser(
+    struct chreBleScanFilterV1_9 &filter,
+    chreBleBroadcasterAddressFilter *broadcasterFilters,
+    uint8_t numBroadcasterFilters) {
+  if (numBroadcasterFilters < kNumBroadcasterFilters) {
+    return false;
+  }
+
+  memcpy(&broadcasterFilters[0], kBroadcasterAddress,
+         sizeof(broadcasterFilters[0]));
+
+  memset(&filter, 0, sizeof(filter));
+  filter.rssiThreshold = kRssiThreshold;
+  filter.genericFilterCount = 0;
+  filter.genericFilters = nullptr;
+
+  filter.broadcasterAddressFilterCount = kNumBroadcasterFilters;
+  filter.broadcasterAddressFilters = broadcasterFilters;
   return true;
 }
 
