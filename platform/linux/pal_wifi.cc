@@ -245,6 +245,11 @@ bool chrePalWifiApiOpen(const struct chrePalSystemApi *systemApi,
   return success;
 }
 
+bool chrePalWifiNanGetCapabilities(
+    struct chreWifiNanCapabilities * /* capabilities */) {
+  return false;
+}
+
 }  // anonymous namespace
 
 void chrePalWifiEnableResponse(PalWifiAsyncRequestTypes requestType,
@@ -294,6 +299,7 @@ const struct chrePalWifiApi *chrePalWifiGetApi(uint32_t requestedApiVersion) {
       .nanSubscribeCancel = chrePalWifiApiNanSubscribeCancel,
       .releaseNanDiscoveryEvent = chrePalWifiApiNanReleaseDiscoveryEvent,
       .requestNanRanging = chrePalWifiApiRequestNanRanging,
+      .getNanCapabilities = chrePalWifiNanGetCapabilities,
   };
 
   if (!CHRE_PAL_VERSIONS_ARE_COMPATIBLE(kApi.moduleVersion,

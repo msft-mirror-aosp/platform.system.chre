@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
+
 #include "chre/core/wwan_request_manager.h"
 
 #include "chre/core/event_loop_manager.h"
@@ -127,3 +129,5 @@ void WwanRequestManager::freeCellInfoResultCallback(uint16_t eventType,
 }
 
 }  // namespace chre
+
+#endif  // CHRE_WWAN_SUPPORT_ENABLED
