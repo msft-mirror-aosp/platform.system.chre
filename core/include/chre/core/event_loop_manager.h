@@ -17,13 +17,20 @@
 #ifndef CHRE_CORE_EVENT_LOOP_MANAGER_H_
 #define CHRE_CORE_EVENT_LOOP_MANAGER_H_
 
+#include "chre/core/audio_request_manager.h"
+#include "chre/core/ble_request_manager.h"
 #include "chre/core/debug_dump_manager.h"
 #include "chre/core/event_loop.h"
 #include "chre/core/event_loop_common.h"
+#include "chre/core/gnss_manager.h"
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/host_endpoint_manager.h"
+#include "chre/core/sensor_request_manager.h"
 #include "chre/core/settings.h"
 #include "chre/core/system_health_monitor.h"
+#include "chre/core/telemetry_manager.h"
+#include "chre/core/wifi_request_manager.h"
+#include "chre/core/wwan_request_manager.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/memory_manager.h"
 #include "chre/platform/mutex.h"
@@ -33,34 +40,6 @@
 #include "chre/util/singleton.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre/event.h"
-
-#ifdef CHRE_AUDIO_SUPPORT_ENABLED
-#include "chre/core/audio_request_manager.h"
-#endif  // CHRE_AUDIO_SUPPORT_ENABLED
-
-#ifdef CHRE_BLE_SUPPORT_ENABLED
-#include "chre/core/ble_request_manager.h"
-#endif  // CHRE_BLE_SUPPORT_ENABLED
-
-#ifdef CHRE_GNSS_SUPPORT_ENABLED
-#include "chre/core/gnss_manager.h"
-#endif  // CHRE_GNSS_SUPPORT_ENABLED
-
-#ifdef CHRE_SENSORS_SUPPORT_ENABLED
-#include "chre/core/sensor_request_manager.h"
-#endif  // CHRE_SENSORS_SUPPORT_ENABLED
-
-#ifdef CHRE_WIFI_SUPPORT_ENABLED
-#include "chre/core/wifi_request_manager.h"
-#endif  // CHRE_WIFI_SUPPORT_ENABLED
-
-#ifdef CHRE_WWAN_SUPPORT_ENABLED
-#include "chre/core/wwan_request_manager.h"
-#endif  // CHRE_WWAN_SUPPORT_ENABLED
-
-#ifdef CHRE_TELEMETRY_SUPPORT_ENABLED
-#include "chre/core/telemetry_manager.h"
-#endif  // CHRE_TELEMETRY_SUPPORT_ENABLED
 
 #include <cstddef>
 
