@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_AUDIO_REQUEST_MANAGER_H_
 #define CHRE_CORE_AUDIO_REQUEST_MANAGER_H_
 
+#ifdef CHRE_AUDIO_SUPPORT_ENABLED
+
 #include <cstdint>
 
 #include "chre/core/nanoapp.h"
@@ -382,5 +384,7 @@ class AudioRequestManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_AUDIO_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_AUDIO_REQUEST_MANAGER_H_

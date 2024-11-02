@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_GNSS_MANAGER_H_
 #define CHRE_CORE_GNSS_MANAGER_H_
 
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
+
 #include <cstdint>
 
 #include "chre/core/api_manager_common.h"
@@ -510,5 +512,7 @@ class GnssManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_GNSS_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_GNSS_MANAGER_H_
