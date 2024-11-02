@@ -92,4 +92,9 @@ class PlatformSensor : public PlatformSensorBase, public NonCopyable {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_sensor_impl.h")
+#include "chre/target_platform/platform_sensor_impl.h"
+#endif  // __has_include("chre/target_platform/platform_sensor_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_SENSOR_H_
