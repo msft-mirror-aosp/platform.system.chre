@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_TELEMETRY_SUPPORT_ENABLED
+
 #include "chre/core/telemetry_manager.h"
 
 #include <pb_encode.h>
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/fatal_error.h"
-#include "chre/platform/shared/host_protocol_chre.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
 #include "chre/util/time.h"
@@ -173,3 +174,5 @@ void TelemetryManager::scheduleMetricTimer() {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_TELEMETRY_SUPPORT_ENABLED

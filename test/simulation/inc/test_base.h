@@ -25,6 +25,7 @@
 #include "chre/core/nanoapp.h"
 #include "chre/platform/system_time.h"
 #include "chre/platform/system_timer.h"
+#include "chre/util/system/message_router.h"
 #include "chre/util/time.h"
 #include "test_event_queue.h"
 
@@ -126,6 +127,7 @@ class TestBase : public testing::Test {
   MemberInitLogger mInitLogger;
   std::thread mChreThread;
   SystemTimer mSystemTimer;
+  message::MessageRouter::MessageHub mChreMessageHub;
 };
 
 }  // namespace chre

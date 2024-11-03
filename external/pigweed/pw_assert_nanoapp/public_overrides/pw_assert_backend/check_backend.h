@@ -32,6 +32,19 @@
     chreAbort(UINT32_MAX);            \
   } while (0)
 
+#if defined(_PW_LOG_REQUIRES_VERBOSITY) && _PW_LOG_REQUIRES_VERBOSITY
+#define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
+  do {                                                           \
+    PW_LOG(PW_LOG_LEVEL_FATAL,                                   \
+           PW_LOG_LEVEL,                                         \
+           PW_LOG_MODULE_NAME,                                   \
+           PW_LOG_FLAGS,                                         \
+           "Check failed: " condition_string ". " message,       \
+           ##__VA_ARGS__);                                       \
+    chreAbort(UINT32_MAX);                                       \
+  } while (0)
+// TODO: b/376268934 - Remove once http://pwrev.dev/239035 lands and rolls
+#else
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
   do {                                                           \
     PW_LOG(PW_LOG_LEVEL_FATAL,                                   \
@@ -41,7 +54,32 @@
            ##__VA_ARGS__);                                       \
     chreAbort(UINT32_MAX);                                       \
   } while (0)
+#endif
 
+#if defined(_PW_LOG_REQUIRES_VERBOSITY) && _PW_LOG_REQUIRES_VERBOSITY
+#define PW_HANDLE_ASSERT_BINARY_COMPARE_FAILURE(arg_a_str,                \
+                                                arg_a_val,                \
+                                                comparison_op_str,        \
+                                                arg_b_str,                \
+                                                arg_b_val,                \
+                                                type_fmt,                 \
+                                                message, ...)             \
+  do {                                                                    \
+    PW_LOG(PW_LOG_LEVEL_FATAL,                                            \
+           PW_LOG_LEVEL,                                                  \
+           PW_LOG_MODULE_NAME,                                            \
+           PW_LOG_FLAGS,                                                  \
+           "Check failed: "                                               \
+                 arg_a_str " (=" type_fmt ") "                            \
+                 comparison_op_str " "                                    \
+                 arg_b_str " (=" type_fmt ")"                             \
+                 ". " message,                                            \
+              arg_a_val, arg_b_val, ##__VA_ARGS__);                       \
+    chreAbort(UINT32_MAX);                                                \
+  } while(0)
+
+// TODO: b/376268934 - Remove once http://pwrev.dev/239035 lands and rolls
+#else
 #define PW_HANDLE_ASSERT_BINARY_COMPARE_FAILURE(arg_a_str,                \
                                                 arg_a_val,                \
                                                 comparison_op_str,        \
@@ -61,5 +99,6 @@
               arg_a_val, arg_b_val, ##__VA_ARGS__);                       \
     chreAbort(UINT32_MAX);                                                \
   } while(0)
+#endif
 
 #endif // _PW_ASSERT_NANOAPP_PW_CHECK_BACKEND_H_

@@ -46,7 +46,6 @@ cc_binary {
         "system/chre/util/include/",
     ],
     cflags: [
-        "-DCHRE_HOST_DEFAULT_FRAGMENT_SIZE=2048",
         "-DCHRE_IS_HOST_BUILD",
         "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000",
         "-DCHRE_ST_LPMA_HANDLER_AIDL",

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_BLE_SUPPORT_ENABLED
+
 #include "chre/core/ble_request_manager.h"
 
 #include "chre/core/event_loop_manager.h"
@@ -716,3 +718,5 @@ void BleRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_BLE_SUPPORT_ENABLED
