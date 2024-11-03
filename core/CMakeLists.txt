@@ -35,6 +35,8 @@ pw_add_library(chre.core STATIC
     include/chre/core/event.h
     include/chre/core/ble_request.h
     include/chre/core/host_endpoint_manager.h
+  PUBLIC_INCLUDES
+    include
   PUBLIC_DEPS
     chre.chre_api
     chre.platform.assert

@@ -23,6 +23,7 @@
 
 #define BLE_FILTER_TYPE_SERVICE_DATA 0
 #define BLE_FILTER_TYPE_MANUFACTURER_DATA 1
+#define BLE_FILTER_TYPE_BROADCASTER_ADDRESS 2
 
 /**
  * @file
@@ -42,8 +43,9 @@
  *
  * The BLE scanning test can also be configured by filter type. By default, the
  * test will filter by service data, but it can be modified to filter by
- * manufacturer data by setting the BLE_FILTER_TYPE flag to
- * BLE_FILTER_TYPE_MANUFACTURER_DATA. It is recommended to use an app that can
+ * manufacturer data or broadcaster address by setting the BLE_FILTER_TYPE flag
+ * to either BLE_FILTER_TYPE_MANUFACTURER_DATA or
+ * BLE_FILTER_TYPE_BROADCASTER_ADDRESS. It is recommended to use an app that can
  * create advertisers corresponding to the filters to do the tests.
  */
 
@@ -52,6 +54,7 @@ namespace chre {
 namespace {
 #endif  // CHRE_NANOAPP_INTERNAL
 
+using chre::ble_constants::kNumBroadcasterFilters;
 using chre::ble_constants::kNumManufacturerDataFilters;
 using chre::ble_constants::kNumScanFilters;
 
@@ -96,6 +99,12 @@ bool isScanningSupported(uint32_t capabilities, uint32_t filterCapabilities) {
     LOGE("BLE manufacturer data filters are not supported");
     return false;
   }
+#elif BLE_FILTER_TYPE == BLE_FILTER_TYPE_BROADCASTER_ADDRESS
+  if ((filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_BROADCASTER_ADDRESS) ==
+      0) {
+    LOGE("BLE broadcaster address filters are not supported");
+    return false;
+  }
 #else
   if ((filterCapabilities & CHRE_BLE_FILTER_CAPABILITIES_SERVICE_DATA) == 0) {
     LOGE("BLE service data filters are not supported");
@@ -111,10 +120,18 @@ bool enableBleScans() {
   chreBleGenericFilter genericFilters[kNumManufacturerDataFilters];
   chre::createBleManufacturerDataFilter(kNumManufacturerDataFilters,
                                         genericFilters, filter);
+#elif BLE_FILTER_TYPE == BLE_FILTER_TYPE_BROADCASTER_ADDRESS
+  chreBleBroadcasterAddressFilter broadcasterFilters[kNumBroadcasterFilters];
+  if (!chre::createBleScanFilterForAdvertiser(filter, broadcasterFilters,
+                                              kNumBroadcasterFilters)) {
+    LOGE("Failed to create BLE scan filters for known beacons and advertiser");
+  }
 #else
   chreBleGenericFilter genericFilters[kNumScanFilters];
-  chre::createBleScanFilterForKnownBeaconsV1_9(filter, genericFilters,
-                                               kNumScanFilters);
+  if (!chre::createBleScanFilterForKnownBeaconsV1_9(filter, genericFilters,
+                                                    kNumScanFilters)) {
+    LOGE("Failed to create BLE scan filters for known beacons");
+  }
 #endif
   return chreBleStartScanAsyncV1_9(CHRE_BLE_SCAN_MODE_BACKGROUND,
                                    gBleBatchDurationMs, &filter, &kScanCookie);
@@ -181,26 +198,27 @@ uint16_t getUuidInLittleEndian(const uint8_t data[kUuidLengthInBytes]) {
   return static_cast<uint16_t>(data[0] + (data[1] << 8));
 }
 
-void parseAdData(const uint8_t *data, uint16_t size) {
-  for (uint16_t i = 0; i < size;) {
-    // First byte has the dvertisement data length.
-    uint16_t adDataLength = data[i];
+void parseReport(const chreBleAdvertisingReport *report) {
+  for (uint16_t i = 0; i < report->dataLength;) {
+    // First byte has the advertisement data length.
+    uint16_t adDataLength = report->data[i];
     // Early termination with zero length advertisement.
     if (adDataLength == 0) break;
+
     // Log 2 byte UUIDs for service data or manufacturer data AD types.
     if (adDataLength < kUuidLengthInBytes) {
       i += adDataLength + 1;
       continue;
     }
-    uint8_t adDataType = data[++i];
+    uint8_t adDataType = report->data[++i];
     switch (adDataType) {
       case kDataTypeServiceData:
         LOGD("Service Data UUID: %" PRIx16,
-             getUuidInLittleEndian(&data[i + 1]));
+             getUuidInLittleEndian(&report->data[i + 1]));
         break;
       case kDataTypeManufacturerData:
         LOGD("Manufacturer Data UUID: %" PRIx16,
-             getUuidInLittleEndian(&data[i + 1]));
+             getUuidInLittleEndian(&report->data[i + 1]));
         break;
       default:
         break;
@@ -208,6 +226,14 @@ void parseAdData(const uint8_t *data, uint16_t size) {
     // Moves to next advertisement.
     i += adDataLength;
   }
+  LOGD("application address type 0x%" PRIx8, report->addressType);
+  LOGD("address=%02X:%02X:%02X:%02X:%02X:%02X", report->address[0],
+       report->address[1], report->address[2], report->address[3],
+       report->address[4], report->address[5]);
+  LOGD("direct address=%02X:%02X:%02X:%02X:%02X:%02X", report->directAddress[0],
+       report->directAddress[1], report->directAddress[2],
+       report->directAddress[3], report->directAddress[4],
+       report->directAddress[5]);
 }
 
 void handleAsyncResultEvent(const chreAsyncResult *result) {
@@ -229,7 +255,7 @@ void handleAdvertismentEvent(const chreBleAdvertisementEvent *event) {
          event->reports[i].eventTypeAndDataStatus);
     LOGD("Timestamp: %" PRIu64 " ms",
          event->reports[i].timestamp / chre::kOneMillisecondInNanoseconds);
-    parseAdData(event->reports[i].data, event->reports[i].dataLength);
+    parseReport(&event->reports[i]);
   }
 }
 
