@@ -45,6 +45,7 @@ struct chreSensorInfo gSensors[] = {
         .isOneShot = 0,
         .reportsBiasEvents = 0,
         .supportsPassiveMode = 0,
+        .unusedFlags = 0,
         .minInterval = 0,
         .sensorIndex = CHRE_SENSOR_INDEX_DEFAULT,
     },

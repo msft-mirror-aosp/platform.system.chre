@@ -79,4 +79,9 @@ class PlatformSensorTypeHelpers : public PlatformSensorTypeHelpersBase {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_sensor_type_helpers_impl.h")
+#include "chre/target_platform/platform_sensor_type_helpers_impl.h"
+#endif  // __has_include("chre/target_platform/platform_sensor_type_helpers_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_SENSOR_TYPE_HELPERS_H_
