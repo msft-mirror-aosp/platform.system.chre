@@ -27,7 +27,6 @@
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
 #include "chre/platform/log.h"
-#include "chre/target_platform/log.h"
 #include "chre/util/duplicate_message_detector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"

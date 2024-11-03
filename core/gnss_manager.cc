@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
+
 #include "chre/core/gnss_manager.h"
 
 #include <cstddef>
@@ -768,3 +770,5 @@ void GnssSession::dispatchQueuedStateTransitions() {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_GNSS_SUPPORT_ENABLED
