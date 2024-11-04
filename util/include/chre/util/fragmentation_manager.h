@@ -108,5 +108,6 @@ class FragmentationManager {
 };
 }  // namespace chre
 
-#include "chre/util/fragmentation_manager_impl.h"
+#include "chre/util/fragmentation_manager_impl.h"  // IWYU pragma: export
+
 #endif  // CHRE_UTIL_FRAGMENTATION_MANAGER

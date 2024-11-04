@@ -64,4 +64,9 @@ class PlatformWwan : public PlatformWwanBase {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_wwan_impl.h")
+#include "chre/target_platform/platform_wwan_impl.h"
+#endif  // __has_include("chre/target_platform/platform_wwan_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_WWAN_H_

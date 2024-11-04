@@ -16,20 +16,24 @@
 
 #include "chre/platform/system_timer.h"
 
-#include "chre/platform/log.h"
-#include "chre/util/time.h"
-
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
+
 #include <cinttypes>
 #include <mutex>
+#include <unordered_set>
+
+#include "chre/platform/log.h"
+#include "chre/util/time.h"
 
 namespace chre {
 
 namespace {
 
 constexpr uint64_t kOneSecondInNanoseconds = 1000000000;
+std::unordered_set<SystemTimer *> gActiveTimerInstances;
+std::mutex gGlobalTimerMutex;
 
 void NanosecondsToTimespec(uint64_t ns, struct timespec *ts) {
   ts->tv_sec = ns / kOneSecondInNanoseconds;
@@ -40,16 +44,21 @@ void NanosecondsToTimespec(uint64_t ns, struct timespec *ts) {
 
 void SystemTimerBase::systemTimerNotifyCallback(union sigval cookie) {
   SystemTimer *sysTimer = static_cast<SystemTimer *>(cookie.sival_ptr);
-
-  {
+  std::lock_guard<std::mutex> globalLock(gGlobalTimerMutex);
+  if (gActiveTimerInstances.find(sysTimer) != gActiveTimerInstances.end()) {
     std::lock_guard<std::mutex> lock(sysTimer->mMutex);
     sysTimer->mCallback(sysTimer->mData);
   }
 }
 
-SystemTimer::SystemTimer() {}
+SystemTimer::SystemTimer() {
+  std::lock_guard<std::mutex> globalLock(gGlobalTimerMutex);
+  gActiveTimerInstances.insert(this);
+}
 
 SystemTimer::~SystemTimer() {
+  std::lock_guard<std::mutex> globalLock(gGlobalTimerMutex);
+  gActiveTimerInstances.erase(this);
   if (mInitialized) {
     int ret = timer_delete(mTimerId);
     if (ret != 0) {

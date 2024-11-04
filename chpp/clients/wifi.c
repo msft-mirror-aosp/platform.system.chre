@@ -376,17 +376,12 @@ static void chppWifiClientNotifyReset(void *clientContext) {
                               false /* clearOnly */);
   chppCheckWifiScanEventNotificationReset();
 
-  if (wifiClientContext->client.openState != CHPP_OPEN_STATE_OPENED &&
-      !wifiClientContext->client.pseudoOpen) {
-    CHPP_LOGW("WiFi client reset but wasn't open");
-  } else {
-    CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
-              wifiClientContext->client.openState);
-    chppClientSendOpenRequest(&wifiClientContext->client,
-                              &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
-                              CHPP_WIFI_OPEN,
-                              /*blocking=*/false);
-  }
+  CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
+            wifiClientContext->client.openState);
+  chppClientSendOpenRequest(&wifiClientContext->client,
+                            &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
+                            CHPP_WIFI_OPEN,
+                            /*blocking=*/false);
 }
 
 /**
@@ -643,7 +638,7 @@ static void chppWifiScanEventNotification(
                                         CHPP_WIFI_MAX_TIMESYNC_AGE_NS);
     uint64_t currentTime = chppGetCurrentTimeNs();
     if (correctedTime > currentTime) {
-      CHPP_LOGD("WiFi scan time overcorrected %" PRIu64 " current %" PRIu64,
+      CHPP_LOGW("WiFi scan time overcorrected %" PRIu64 " current %" PRIu64,
                 correctedTime / CHPP_NSEC_PER_MSEC,
                 currentTime / CHPP_NSEC_PER_MSEC);
       correctedTime = currentTime;
@@ -691,6 +686,13 @@ static void chppWifiRangingEventNotification(
         results[i].timestamp -
         (uint64_t)chppTimesyncGetOffset(gWifiClientContext.client.appContext,
                                         CHPP_WIFI_MAX_TIMESYNC_AGE_NS);
+    uint64_t currentTime = chppGetCurrentTimeNs();
+    if (correctedTime > currentTime) {
+      CHPP_LOGW("WiFi ranging time overcorrected %" PRIu64 " current %" PRIu64,
+                correctedTime / CHPP_NSEC_PER_MSEC,
+                currentTime / CHPP_NSEC_PER_MSEC);
+      correctedTime = currentTime;
+    }
     CHPP_LOGD("WiFi ranging result time corrected from %" PRIu64 "to %" PRIu64,
               results[i].timestamp / CHPP_NSEC_PER_MSEC,
               correctedTime / CHPP_NSEC_PER_MSEC);

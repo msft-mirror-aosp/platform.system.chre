@@ -45,6 +45,6 @@ class ConditionalLockGuard : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/conditional_lock_guard_impl.h"
+#include "chre/util/conditional_lock_guard_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_CONDITIONAL_LOCK_GUARD_H_

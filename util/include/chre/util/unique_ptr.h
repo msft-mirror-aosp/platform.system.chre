@@ -231,6 +231,6 @@ UniquePtr<ObjectType> MakeUniqueZeroFill();
 
 }  // namespace chre
 
-#include "chre/util/unique_ptr_impl.h"
+#include "chre/util/unique_ptr_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_UNIQUE_PTR_H_

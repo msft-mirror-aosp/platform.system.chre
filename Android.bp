@@ -729,6 +729,8 @@ cc_test_host {
     static_libs: [
         "chre_linux",
         "libgmock",
+        "pw_allocator",
+        "pw_containers",
     ],
     sanitize: {
         address: true,
@@ -749,26 +751,54 @@ cc_defaults {
 // Lib dependencies for apps and libs using PW_RPC with nanopb.
 cc_defaults {
     name: "pw_rpc_nanopb_lib_dependencies",
-    defaults: [
-        "pw_android_common_backends",
-    ],
     static_libs: [
+        "pw_assert_log",
+        "pw_chrono_stl",
         "pw_containers",
+        "pw_log_android",
         "pw_protobuf",
         "pw_rpc_chre",
         "pw_rpc_nanopb_chre",
         "pw_status",
         "pw_stream",
+        "pw_sync_stl",
+        "pw_thread_stl",
         "pw_varint",
+    ],
+    export_static_lib_headers: [
+        "pw_assert_log",
+        "pw_chrono_stl",
+        "pw_log_android",
+        "pw_sync_stl",
+        "pw_thread_stl",
+    ],
+    shared_libs: [
+        "liblog",
     ],
 }
 
 cc_library_static {
     name: "pw_rpc_chre",
     defaults: [
-        "pw_android_common_backends",
         "pw_rpc_cflags_chre",
         "pw_rpc_defaults",
+    ],
+    static_libs: [
+        "pw_assert_log",
+        "pw_chrono_stl",
+        "pw_log_android",
+        "pw_sync_stl",
+        "pw_thread_stl",
+    ],
+    export_static_lib_headers: [
+        "pw_assert_log",
+        "pw_chrono_stl",
+        "pw_log_android",
+        "pw_sync_stl",
+        "pw_thread_stl",
+    ],
+    shared_libs: [
+        "liblog",
     ],
     host_supported: true,
     vendor_available: true,
@@ -863,6 +893,8 @@ cc_test_host {
         "chre_linux",
         "chre_pal_linux",
         "libprotobuf-c-nano",
+        "pw_allocator",
+        "pw_containers",
     ],
     defaults: [
         "chre_linux_cflags",
@@ -974,6 +1006,7 @@ cc_library_static {
     static_libs: [
         "libgmock",
         "libgtest",
+        "pw_allocator",
         "pw_rpc_chre",
     ],
     host_supported: true,
