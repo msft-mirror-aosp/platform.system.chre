@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "chre_api/chre/event.h"
+
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -24,7 +26,6 @@
 #include "chre/platform/log.h"
 #include "chre/util/macros.h"
 #include "chre/util/system/napp_permissions.h"
-#include "chre_api/chre/event.h"
 
 using chre::EventLoop;
 using chre::EventLoopManager;
@@ -167,12 +168,12 @@ DLL_EXPORT bool chreGetNanoappInfoByInstanceId(uint32_t instanceId,
 }
 
 DLL_EXPORT void chreConfigureNanoappInfoEvents(bool enable) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   nanoapp->configureNanoappInfoEvents(enable);
 }
 
 DLL_EXPORT void chreConfigureHostSleepStateEvents(bool enable) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   nanoapp->configureHostSleepEvents(enable);
 }
 
@@ -184,19 +185,19 @@ DLL_EXPORT bool chreIsHostAwake() {
 }
 
 DLL_EXPORT void chreConfigureDebugDumpEvent(bool enable) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   nanoapp->configureDebugDumpEvent(enable);
 }
 
 DLL_EXPORT bool chreConfigureHostEndpointNotifications(uint16_t hostEndpointId,
                                                        bool enable) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->configureHostEndpointNotifications(hostEndpointId, enable);
 }
 
 DLL_EXPORT bool chrePublishRpcServices(struct chreNanoappRpcService *services,
                                        size_t numServices) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->publishRpcServices(services, numServices);
 }
 

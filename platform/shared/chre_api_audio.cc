@@ -20,10 +20,6 @@
 #include "chre/util/macros.h"
 #include "chre/util/system/napp_permissions.h"
 
-#ifdef CHRE_AUDIO_SUPPORT_ENABLED
-#include "chre/platform/platform_audio.h"
-#endif  // CHRE_AUDIO_SUPPORT_ENABLED
-
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
 using chre::Nanoapp;
