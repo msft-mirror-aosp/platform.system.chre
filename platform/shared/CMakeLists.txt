@@ -46,9 +46,6 @@ pw_add_library(chre.platform.shared.chre_api_ble STATIC
     chre.util.system
 )
 
-# Implements chre_api/chre/re.h's:
-# - void chreAbort(uint32_t abortCode)
-#
 # Implements chre_api/chre/event.h's:
 # - bool chreSendEvent(uint16_t eventType, void *eventData,
 #                      chreEventCompleteFunction *freeCallback,
@@ -123,6 +120,7 @@ pw_add_library(chre.platform.shared.chre_api_gnss STATIC
 # - int64_t chreGetEstimatedHostTimeOffset()
 # - uint32_t chreTimerSet(uint64_t duration, const void *cookie, bool oneShot)
 # - bool chreTimerCancel(uint32_t timerId)
+# - void chreAbort(uint32_t abortCode)
 # - void* chreHeapAlloc(uint32_t bytes)
 # - void chreHeapFree(void *ptr)
 # - chreDebugDumpLog(const char *formatStr, ...)
@@ -131,7 +129,6 @@ pw_add_library(chre.platform.shared.chre_api_gnss STATIC
 # - void platform_chreDebugDumpVaLog(const char *formatStr, va_list args)
 #
 # Does not provide:
-# - void chreAbort(uint32_t abortCode)
 # - void chreLog(enum chreLogLevel level, const char *formatStr, ...)
 pw_add_library(chre.platform.shared.chre_api_re STATIC
   HEADERS

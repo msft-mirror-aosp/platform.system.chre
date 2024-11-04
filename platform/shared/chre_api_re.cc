@@ -16,8 +16,7 @@
 
 #include "chre/core/event_loop.h"
 #include "chre/core/event_loop_manager.h"
-#include "chre/platform/assert.h"
-#include "chre/platform/memory.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/shared/debug_dump.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/macros.h"
@@ -25,6 +24,8 @@
 
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
+using chre::handleNanoappAbort;
+using chre::Nanoapp;
 
 DLL_EXPORT uint32_t chreGetCapabilities() {
   uint32_t capabilities = CHRE_CAPABILITIES_NONE;
@@ -92,6 +93,15 @@ DLL_EXPORT bool chreTimerCancel(uint32_t timerId) {
       ->getEventLoop()
       .getTimerPool()
       .cancelNanoappTimer(nanoapp, timerId);
+}
+
+DLL_EXPORT void chreAbort(uint32_t /* abortCode */) {
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  if (nanoapp == nullptr) {
+    FATAL_ERROR("chreAbort called in unknown context");
+  } else {
+    handleNanoappAbort(*nanoapp);
+  }
 }
 
 DLL_EXPORT void *chreHeapAlloc(uint32_t bytes) {
