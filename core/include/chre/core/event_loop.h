@@ -47,7 +47,7 @@
 #endif
 #else
 #include "chre/util/blocking_segmented_queue.h"
-#include "chre/util/synchronized_expandable_memory_pool.h"
+#include "chre/util/system/synchronized_expandable_memory_pool.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_EVENT_PER_BLOCK
