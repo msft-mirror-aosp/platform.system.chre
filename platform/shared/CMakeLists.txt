@@ -6,10 +6,8 @@ include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
 # - bool chreAudioConfigureSource(uint32_t handle, bool enable,
 #                                 uint64_t bufferDuration,
 #                                 uint64_t deliveryInterval)
-#
-# Does not provide:
-#  - bool chreAudioGetStatus(uint32_t handle,
-#                            struct chreAudioSourceStatus *status)
+# - bool chreAudioGetStatus(uint32_t handle,
+#                           struct chreAudioSourceStatus *status)
 #
 pw_add_library(chre.platform.shared.chre_api_audio STATIC
   SOURCES

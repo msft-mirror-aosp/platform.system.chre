@@ -65,3 +65,11 @@ DLL_EXPORT bool chreAudioConfigureSource(uint32_t handle, bool enable,
   return false;
 #endif  // CHRE_AUDIO_SUPPORT_ENABLED
 }
+
+DLL_EXPORT bool chreAudioGetStatus(uint32_t handle,
+                                   struct chreAudioSourceStatus *status) {
+  // TODO(b/174590023): either implement or deprecate this API
+  UNUSED_VAR(handle);
+  UNUSED_VAR(status);
+  return false;
+}
