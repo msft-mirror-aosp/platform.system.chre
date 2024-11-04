@@ -4,6 +4,8 @@ pw_add_module_config(chre_variant_CONFIG)
 pw_add_library(chre.variant.config INTERFACE
   HEADERS
     include/chre/variant/config.h
+  PUBLIC_INCLUDES
+    include
   PUBLIC_DEPS
     "${chre_variant_CONFIG}"
   PUBLIC_COMPILE_OPTIONS

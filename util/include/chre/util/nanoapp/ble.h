@@ -48,6 +48,17 @@ constexpr uint8_t kGoogleNearbyFastpairUuid[kGoogleUuidDataLength] = {0x2C,
 /** Length of Google manufacturer data filter. */
 constexpr uint16_t kGoogleManufactureDataLength = 4;
 
+/**
+ * The public address of the known (bonded) BLE advertiser in big endian byte
+ * order. Change this address to the public identity address of the advertiser
+ * in the test.
+ *
+ * Example: To filter on the address (01:02:03:AB:CD:EF), use
+ * {0x01:0x02:0x03:0xAB:0xCD:0xEF}.
+ */
+constexpr uint8_t kBroadcasterAddress[CHRE_BLE_ADDRESS_LEN] = {
+    0x01, 0x02, 0x03, 0xAB, 0xCD, 0xEF};
+
 /** The Google manufacturer ID followed by some data. */
 constexpr uint8_t kGoogleManufactureData[kGoogleManufactureDataLength] = {
     0xE0, 0x00, 0xAA, 0xFE};
@@ -58,10 +69,14 @@ constexpr uint8_t kGoogleManufactureDataMask[kGoogleManufactureDataLength] = {
 
 /** The number of generic filters (equal to the number of known beacons). */
 constexpr uint8_t kNumScanFilters = 2;
-
 /** The number of manufacturer data filters. */
 constexpr uint8_t kNumManufacturerDataFilters = 1;
 
+/**
+ * The number of broadcaster address filters (equal to the number of known
+ * public advertiser addresses).
+ */
+constexpr uint8_t kNumBroadcasterFilters = 1;
 }  // namespace ble_constants
 
 /**
@@ -118,6 +133,24 @@ bool createBleManufacturerDataFilter(uint8_t numGenericFilters,
                                      chreBleGenericFilter *genericFilters,
                                      struct chreBleScanFilterV1_9 &filter);
 
+/**
+ * Creates a chreBleScanFilter that filters for the Google eddystone UUID,
+ * the Google nearby fastpair UUID, public identity address of a bonded device,
+ * and a RSSI threshold of kRssiThreshold.
+ *
+ * @param filter                   (out) the output filter.
+ * @param broadcasterFilters       (out) the output broadcaster address filters
+ * array.
+ * @param numBroadcasterFilters    the size of the broadcaster address filters
+ * array. must be >= kNumBroadcasterFilters.
+ *
+ * @return true                    the operation was successful
+ * @return false                   the operation was not successful
+ */
+bool createBleScanFilterForAdvertiser(
+    struct chreBleScanFilterV1_9 &filter,
+    chreBleBroadcasterAddressFilter *broadcasterFilters,
+    uint8_t numBroadcasterFilters);
 }  // namespace chre
 
 #endif  // CHRE_UTIL_NANOAPP_BLE_H_
