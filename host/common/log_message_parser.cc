@@ -268,7 +268,7 @@ void LogMessageParser::logV2(const uint8_t *logBuffer, size_t logBufferSize,
   size_t bufferIndex = 0;
   const LogMessageV2 *message = nullptr;
   size_t maxLogMessageLen = 0;
-  while (bufferIndex + kLogHeaderSize <= logBufferSize) {
+  while (bufferIndex + kLogHeaderSize < logBufferSize) {
     message = reinterpret_cast<const LogMessageV2 *>(&logBuffer[bufferIndex]);
     maxLogMessageLen = (logBufferSize - bufferIndex) - kLogHeaderSize;
     logMessageSize = std::nullopt;

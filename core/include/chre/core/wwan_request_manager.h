@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_WWAN_REQUEST_MANAGER_H_
 #define CHRE_CORE_WWAN_REQUEST_MANAGER_H_
 
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
+
 #include <cstdint>
 
 #include "chre/core/api_manager_common.h"
@@ -120,5 +122,7 @@ class WwanRequestManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_WWAN_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_WWAN_REQUEST_MANAGER_H_

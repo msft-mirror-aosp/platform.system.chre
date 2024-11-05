@@ -73,11 +73,11 @@ extern "C" {
  */
 
 //! None of the optional capabilities are supported
-#define CHRE_CAPABILITIES_NONE                 UINT32_C(0)
+#define CHRE_CAPABILITIES_NONE                 (UINT32_C(0))
 
 //! Support for reliable messages.
 //! @see chreSendReliableMessageAsync()
-#define CHRE_CAPABILITIES_RELIABLE_MESSAGES    UINT32_C(1 << 0)
+#define CHRE_CAPABILITIES_RELIABLE_MESSAGES    (UINT32_C(1) << 0)
 
 /** @} */
 
@@ -465,7 +465,7 @@ void chreHeapFree(void *ptr);
  * CHRE framework is required to pass this information to the debug method in
  * the Context Hub HAL, where it can be captured in Android bugreports, etc.
  *
- * This function must only be called while handling CHRE_DEBUG_DUMP_EVENT,
+ * This function must only be called while handling CHRE_EVENT_DEBUG_DUMP,
  * otherwise it will have no effect. A nanoapp can call this function multiple
  * times while handling the event. If the resulting formatted string from a
  * single call to this function is longer than CHRE_DEBUG_DUMP_MINIMUM_MAX_SIZE
