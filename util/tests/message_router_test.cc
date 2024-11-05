@@ -34,29 +34,13 @@ constexpr static size_t kMaxMessageHubs = 3;
 constexpr static size_t kMaxSessions = 10;
 constexpr static size_t kNumEndpoints = 3;
 
-constexpr static EndpointInfo kEndpointInfos[kNumEndpoints] = {
-    {
-        .id = 1,
-        .name = "endpoint1",
-        .version = 1,
-        .type = EndpointType::NANOAPP,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_NONE,
-    },
-    {
-        .id = 2,
-        .name = "endpoint2",
-        .version = 10,
-        .type = EndpointType::HOST_ENDPOINT,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_BLE,
-    },
-    {
-        .id = 3,
-        .name = "endpoint3",
-        .version = 100,
-        .type = EndpointType::GENERIC,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_AUDIO,
-    },
-};
+static EndpointInfo kEndpointInfos[kNumEndpoints] = {
+    EndpointInfo(/* id= */ 1, /* name= */ "endpoint1", /* version= */ 1,
+                 EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE),
+    EndpointInfo(/* id= */ 2, /* name= */ "endpoint2", /* version= */ 10,
+                 EndpointType::HOST_ENDPOINT, CHRE_MESSAGE_PERMISSION_BLE),
+    EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
+                 EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 
 class TestAllocator : public pw::Allocator {
  public:
