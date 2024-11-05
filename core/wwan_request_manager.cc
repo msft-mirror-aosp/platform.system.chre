@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
+
 #include "chre/core/wwan_request_manager.h"
 
 #include "chre/core/event_loop_manager.h"
@@ -67,7 +69,12 @@ void WwanRequestManager::handleCellInfoResultSync(
   if (mCellInfoRequestingNanoappInstanceId.has_value()) {
     result->cookie = mCellInfoRequestingNanoappCookie;
 
-    mCellInfoErrorHistogram[result->errorCode]++;
+    uint8_t errorCode = result->errorCode;
+    if (errorCode < CHRE_ERROR_SIZE) {
+      mCellInfoErrorHistogram[errorCode]++;
+    } else {
+      LOGE("Undefined error in cellInfoResult: %" PRIu8, errorCode);
+    }
 
     EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
         CHRE_EVENT_WWAN_CELL_INFO_RESULT, result, freeCellInfoResultCallback,
@@ -122,3 +129,5 @@ void WwanRequestManager::freeCellInfoResultCallback(uint16_t eventType,
 }
 
 }  // namespace chre
+
+#endif  // CHRE_WWAN_SUPPORT_ENABLED

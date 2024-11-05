@@ -17,17 +17,32 @@
 #include "test_base.h"
 
 #include <gtest/gtest.h>
+#include <pw_containers/vector.h>
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/init.h"
 #include "chre/platform/linux/platform_log.h"
 #include "chre/platform/linux/task_util/task_manager.h"
+#include "chre/util/system/message_router.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 #include "inc/test_util.h"
 #include "test_util.h"
 
+using ::chre::message::MessageRouter;
+using ::chre::message::MessageRouterSingleton;
+using ::chre::message::Session;
+
 namespace chre {
+
+namespace {
+
+constexpr size_t kMaxMessageHubs = 2;
+constexpr size_t kMaxSessions = 25;
+pw::Vector<MessageRouter::MessageHubRecord, kMaxMessageHubs> gMessageHubs;
+pw::Vector<Session, kMaxSessions> gSessions;
+
+}  // anonymous namespace
 
 /**
  * This base class initializes and runs the event loop.
@@ -44,14 +59,10 @@ namespace chre {
  * this test.
  */
 void TestBase::SetUp() {
-  // TODO(b/346903946): remove these extra prints once init failure is resolved
-  printf("SetUp(): log\n");
+  MessageRouterSingleton::init(gMessageHubs, gSessions);
   chre::PlatformLogSingleton::init();
-  printf("SetUp(): TaskManager\n");
   TaskManagerSingleton::init();
-  printf("SetUp(): TestEventQueue\n");
   TestEventQueueSingleton::init();
-  printf("SetUp(): CHRE\n");
   chre::init();
   EventLoopManagerSingleton::get()->lateInit();
 
@@ -67,7 +78,6 @@ void TestBase::SetUp() {
   ASSERT_TRUE(mSystemTimer.init());
   ASSERT_TRUE(mSystemTimer.set(callback, nullptr /*data*/,
                                Nanoseconds(getTimeoutNs())));
-  printf("SetUp() complete\n");
 }
 
 void TestBase::TearDown() {
@@ -83,6 +93,7 @@ void TestBase::TearDown() {
   deleteNanoappInfos();
   unregisterAllTestNanoapps();
   chre::PlatformLogSingleton::deinit();
+  MessageRouterSingleton::deinit();
 }
 
 TEST_F(TestBase, CanLoadAndStartSingleNanoapp) {

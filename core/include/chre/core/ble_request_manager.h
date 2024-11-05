@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_BLE_REQUEST_MANAGER_H_
 #define CHRE_CORE_BLE_REQUEST_MANAGER_H_
 
+#ifdef CHRE_BLE_SUPPORT_ENABLED
+
 #include "chre/core/ble_request.h"
 #include "chre/core/ble_request_multiplexer.h"
 #include "chre/core/nanoapp.h"
@@ -581,5 +583,7 @@ class BleRequestManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_BLE_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_BLE_REQUEST_MANAGER_H_

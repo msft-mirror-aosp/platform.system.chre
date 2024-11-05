@@ -95,4 +95,9 @@ class PlatformGnss : public PlatformGnssBase {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_gnss_impl.h")
+#include "chre/target_platform/platform_gnss_impl.h"
+#endif  // __has_include("chre/target_platform/platform_gnss_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_GNSS_H_

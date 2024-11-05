@@ -23,12 +23,6 @@ bool NanoappLoadManager::prepareForLoad(uint16_t hostClientId,
                                         uint32_t appVersion, uint32_t appFlags,
                                         size_t totalBinaryLen,
                                         uint32_t targetApiVersion) {
-  if (hasPendingLoadTransaction()) {
-    LOGW(
-        "Pending load transaction already exists. Overriding previous"
-        " transaction.");
-  }
-
   mCurrentLoadInfo.hostClientId = hostClientId;
   mCurrentLoadInfo.transactionId = transactionId;
   mCurrentLoadInfo.nextFragmentId = 1;

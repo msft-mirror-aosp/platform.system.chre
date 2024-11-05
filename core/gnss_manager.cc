@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
+
 #include "chre/core/gnss_manager.h"
 
 #include <cstddef>
@@ -589,7 +591,11 @@ bool GnssSession::postAsyncResultEvent(uint16_t instanceId, bool success,
       event->reserved = 0;
       event->cookie = cookie;
 
-      mGnssErrorHistogram[errorCode]++;
+      if (errorCode < CHRE_ERROR_SIZE) {
+        mGnssErrorHistogram[errorCode]++;
+      } else {
+        LOGE("Undefined error in gnssAsyncResult: %" PRIu8, errorCode);
+      }
 
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
           CHRE_EVENT_GNSS_ASYNC_RESULT, event, freeEventDataCallback,
@@ -764,3 +770,5 @@ void GnssSession::dispatchQueuedStateTransitions() {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_GNSS_SUPPORT_ENABLED
