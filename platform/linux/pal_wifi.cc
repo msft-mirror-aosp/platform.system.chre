@@ -278,9 +278,10 @@ bool chrePalWifiIsScanMonitoringActive() {
 }
 
 void chrePalWifiDelayResponse(PalWifiAsyncRequestTypes requestType,
-                              std::chrono::seconds seconds) {
+                              std::chrono::milliseconds milliseconds) {
   gAsyncRequestDelayResponseTime[chre::asBaseType(requestType)] =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(seconds);
+      std::chrono::duration_cast<std::chrono::nanoseconds>(milliseconds);
+  ;
 }
 
 const struct chrePalWifiApi *chrePalWifiGetApi(uint32_t requestedApiVersion) {

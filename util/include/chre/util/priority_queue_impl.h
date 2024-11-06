@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_PRIORITY_QUEUE_IMPL_H_
 #define CHRE_UTIL_PRIORITY_QUEUE_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/priority_queue.h"
 
 #include <utility>

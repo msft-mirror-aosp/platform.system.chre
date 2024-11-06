@@ -358,10 +358,6 @@ class EventLoop : public NonCopyable {
     return mEventPoolUsage.getMax();
   }
 
-  inline uint32_t getMeanEventQueueSize() const {
-    return mEventPoolUsage.getMean();
-  }
-
   inline uint32_t getNumEventsDropped() const {
     return mNumDroppedLowPriEvents;
   }
@@ -462,12 +458,12 @@ class EventLoop : public NonCopyable {
                             uint16_t targetInstanceId,
                             uint16_t targetGroupMask);
   /**
-   * Remove some low priority events from back of the queue.
+   * Remove some non nanoapp and low priority events from back of the queue.
    *
    * @param removeNum Number of low priority events to be removed.
    * @return False if cannot remove any low priority event.
    */
-  bool removeLowPriorityEventsFromBack(size_t removeNum);
+  bool removeNonNanoappLowPriorityEventsFromBack(size_t removeNum);
 
   /**
    * Determine if there are space for high priority event.
