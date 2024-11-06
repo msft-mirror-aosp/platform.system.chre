@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
+#include "chre_api/chre/re.h"
+
 #include "chre/core/event_loop.h"
 #include "chre/core/event_loop_manager.h"
-#include "chre/platform/assert.h"
-#include "chre/platform/memory.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/shared/debug_dump.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/macros.h"
-#include "chre_api/chre/re.h"
 
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
+using chre::handleNanoappAbort;
+using chre::Nanoapp;
 
 DLL_EXPORT uint32_t chreGetCapabilities() {
   uint32_t capabilities = CHRE_CAPABILITIES_NONE;
@@ -68,18 +70,18 @@ DLL_EXPORT int64_t chreGetEstimatedHostTimeOffset() {
 }
 
 DLL_EXPORT uint64_t chreGetAppId(void) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->getAppId();
 }
 
 DLL_EXPORT uint32_t chreGetInstanceId(void) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->getInstanceId();
 }
 
 DLL_EXPORT uint32_t chreTimerSet(uint64_t duration, const void *cookie,
                                  bool oneShot) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getEventLoop()
       .getTimerPool()
@@ -87,32 +89,39 @@ DLL_EXPORT uint32_t chreTimerSet(uint64_t duration, const void *cookie,
 }
 
 DLL_EXPORT bool chreTimerCancel(uint32_t timerId) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getEventLoop()
       .getTimerPool()
       .cancelNanoappTimer(nanoapp, timerId);
 }
 
+DLL_EXPORT void chreAbort(uint32_t /* abortCode */) {
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  if (nanoapp == nullptr) {
+    FATAL_ERROR("chreAbort called in unknown context");
+  } else {
+    handleNanoappAbort(*nanoapp);
+  }
+}
+
 DLL_EXPORT void *chreHeapAlloc(uint32_t bytes) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
-  return chre::EventLoopManagerSingleton::get()
-      ->getMemoryManager()
-      .nanoappAlloc(nanoapp, bytes);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  return EventLoopManagerSingleton::get()->getMemoryManager().nanoappAlloc(
+      nanoapp, bytes);
 }
 
 DLL_EXPORT void chreHeapFree(void *ptr) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
-  chre::EventLoopManagerSingleton::get()->getMemoryManager().nanoappFree(
-      nanoapp, ptr);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  EventLoopManagerSingleton::get()->getMemoryManager().nanoappFree(nanoapp,
+                                                                   ptr);
 }
 
 DLL_EXPORT void platform_chreDebugDumpVaLog(const char *formatStr,
                                             va_list args) {
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
-  chre::EventLoopManagerSingleton::get()
-      ->getDebugDumpManager()
-      .appendNanoappLog(*nanoapp, formatStr, args);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  EventLoopManagerSingleton::get()->getDebugDumpManager().appendNanoappLog(
+      *nanoapp, formatStr, args);
 }
 
 DLL_EXPORT void chreDebugDumpLog(const char *formatStr, ...) {

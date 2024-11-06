@@ -1,6 +1,8 @@
 include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
 include(backend.cmake)
 
+add_subdirectory(shared)
+
 pw_add_facade(chre.platform.assert INTERFACE
   BACKEND
     chre.platform.assert_BACKEND
