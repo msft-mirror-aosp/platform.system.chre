@@ -17,7 +17,7 @@
 #include "gtest/gtest.h"
 
 #include "chre/util/blocking_segmented_queue.h"
-#include "chre/util/fixed_size_blocking_queue.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 #include "chre/util/unique_ptr.h"
 
 using chre::BlockingSegmentedQueue;

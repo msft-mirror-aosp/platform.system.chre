@@ -84,7 +84,6 @@ pw_add_library(chre.platform.shared.chre_api_core STATIC
   PRIVATE_DEPS
     chre.chre_api.facade
     chre.core
-    chre.platform.fatal_error
     chre.platform.log
     chre.util
     chre.util.system
@@ -140,8 +139,7 @@ pw_add_library(chre.platform.shared.chre_api_re STATIC
   PRIVATE_DEPS
     chre.chre_api.facade
     chre.core
-    chre.platform.assert
-    chre.platform.memory
+    chre.platform.fatal_error
     chre.util
 )
 
