@@ -51,8 +51,6 @@ pw_add_library(chre.util STATIC
     include/chre/util/segmented_queue_impl.h
     include/chre/util/singleton.h
     include/chre/util/singleton_impl.h
-    include/chre/util/synchronized_expandable_memory_pool.h
-    include/chre/util/synchronized_expandable_memory_pool_impl.h
     include/chre/util/synchronized_memory_pool.h
     include/chre/util/synchronized_memory_pool_impl.h
     include/chre/util/throttle.h
@@ -61,6 +59,8 @@ pw_add_library(chre.util STATIC
     include/chre/util/toolchain.h
     include/chre/util/unique_ptr.h
     include/chre/util/unique_ptr_impl.h
+    include/chre/util/system/synchronized_expandable_memory_pool.h
+    include/chre/util/system/synchronized_expandable_memory_pool_impl.h
   PUBLIC_INCLUDES
     include
   PUBLIC_DEPS
