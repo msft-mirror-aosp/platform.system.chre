@@ -34,8 +34,8 @@
 #include "chre_api/chre/event.h"
 
 #ifdef CHRE_STATIC_EVENT_LOOP
-#include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/synchronized_memory_pool.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_MAX_EVENT_COUNT
