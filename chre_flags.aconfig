@@ -127,3 +127,13 @@ flag {
   description: "Flag guarding the use of the new EFW transport for ContextHub <-> CHRE comms"
   bug: "369883034"
 }
+
+flag {
+  name: "bug_fix_hal_init_thread"
+  namespace: "context_hub"
+  description: "Flag enabling multiclient HAL to start anyway if connection to CHRE can't be established"
+  bug: "374773993"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
