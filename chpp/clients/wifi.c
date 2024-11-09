@@ -948,10 +948,7 @@ static bool chppWifiClientConfigureScanMonitor(bool enable) {
     CHPP_LOG_OOM();
   } else {
     request->header.command = CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC;
-    request->params.enable = enable;
-    request->params.cookie =
-        &gWifiClientContext
-             .outReqStates[CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC];
+    request->enable = enable;
 
     result = chppClientSendTimestampedRequestOrFail(
         &gWifiClientContext.client,
