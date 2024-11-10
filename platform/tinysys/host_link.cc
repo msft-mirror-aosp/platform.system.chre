@@ -478,15 +478,21 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionRecvAddr));
 
 #ifdef SCP_CHRE_USE_DMA
-  // Using SCP DMA HW to copy the data from share memory to SCP side, ex:
-  // gChreRecvBuffer gChreRecvBuffer could be a global variables or a SCP heap
-  // memory at SRAM/DRAM
-  scp_dma_transaction_dram(reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]),
-                           srcAddr, msg.size, DMA_MEM_ID, NO_RESERVED);
+  auto dstAddr = reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]);
 
-  // Invalid cache to update the newest data before using
-  mrv_dcache_invalid_multi_addr(reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]),
-                                align(msg.size, CACHE_LINE_SIZE));
+  // destination address for receiving data is in a cacheable memory, it should
+  // be invalidated/flushed before transferring from share buffer to SCP
+  mrv_dcache_flush_multi_addr(dstAddr, align(msg.size, CACHE_LINE_SIZE));
+
+  // Using SCP DMA HW to copy the data from share memory to SCP side.
+  // The dstAddr could be a global variables or a SCP heap memory at SRAM/DRAM
+  DMA_RESULT result = scp_dma_transaction_dram(dstAddr, srcAddr, msg.size,
+                                               DMA_MEM_ID, NO_RESERVED);
+
+  if (result != DMA_RESULT_DONE) {
+    LOGE("Failed to send a message using DMA");
+  }
+
 #else
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(static_cast<void *>(gChreRecvBuffer),
@@ -574,16 +580,9 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
   // Mapping the physical address of share memory for SCP
   void *dstAddr = reinterpret_cast<void *>(
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr)));
-
-#ifdef SCP_CHRE_USE_DMA
-  // TODO(b/288415339): use DMA for larger payload
-  // No need cache operation, because src_dst handled by SCP CPU and dstAddr is
-  // non-cacheable
-#else
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(dstAddr, data, dataLen);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
-#endif
 
   // NB: len param for ipi_send is in number of 32-bit words
   int ret = ipi_send_compl(

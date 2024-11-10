@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
-#define CHRE_UTIL_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
+#ifndef CHRE_UTIL_SYSTEM_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
+#define CHRE_UTIL_SYSTEM_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
 
 // IWYU pragma: private
 #include <algorithm>
 
 #include "chre/util/lock_guard.h"
 #include "chre/util/memory_pool.h"
-#include "chre/util/synchronized_expandable_memory_pool.h"
+#include "chre/util/system/synchronized_expandable_memory_pool.h"
 
 namespace chre {
 
@@ -147,4 +147,4 @@ bool SynchronizedExpandableMemoryPool<
 }
 }  // namespace chre
 
-#endif  // CHRE_UTIL_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_
+#endif  // CHRE_UTIL_SYSTEM_SYNCHRONIZED_EXPANDABLE_MEMORY_POOL_IMPL_H_

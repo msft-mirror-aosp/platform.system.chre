@@ -15,8 +15,6 @@
 
 #include "chre_cross_validator_wifi_manager.h"
 
-#include <stdio.h>
-#include <algorithm>
 #include <cinttypes>
 #include <cstring>
 
@@ -62,31 +60,31 @@ void Manager::handleMessageFromHost(uint32_t senderInstanceId,
                                     const chreMessageFromHostData *hostData) {
   if (senderInstanceId != CHRE_INSTANCE_ID) {
     LOGE("Incorrect sender instance id: %" PRIu32, senderInstanceId);
-  } else {
-    mCrossValidatorState.hostEndpoint = hostData->hostEndpoint;
-    switch (hostData->messageType) {
-      case chre_cross_validation_wifi_MessageType_STEP_START: {
-        pb_istream_t stream = pb_istream_from_buffer(
-            static_cast<const pb_byte_t *>(
-                const_cast<const void *>(hostData->message)),
-            hostData->messageSize);
-        chre_cross_validation_wifi_StepStartCommand stepStartCommand;
-        if (!pb_decode(&stream,
-                       chre_cross_validation_wifi_StepStartCommand_fields,
-                       &stepStartCommand)) {
-          LOGE("Error decoding StepStartCommand");
-        } else {
-          handleStepStartMessage(stepStartCommand);
-        }
+    return;
+  }
+  mCrossValidatorState.hostEndpoint = hostData->hostEndpoint;
+  switch (hostData->messageType) {
+    case chre_cross_validation_wifi_MessageType_STEP_START: {
+      pb_istream_t stream = pb_istream_from_buffer(
+          static_cast<const pb_byte_t *>(
+              const_cast<const void *>(hostData->message)),
+          hostData->messageSize);
+      chre_cross_validation_wifi_StepStartCommand stepStartCommand;
+      if (!pb_decode(&stream,
+                     chre_cross_validation_wifi_StepStartCommand_fields,
+                     &stepStartCommand)) {
+        LOGE("Error decoding StepStartCommand");
         break;
       }
-      case chre_cross_validation_wifi_MessageType_SCAN_RESULT:
-        handleDataMessage(hostData);
-        break;
-      default:
-        LOGE("Unknown message type %" PRIu32 " for host message",
-             hostData->messageType);
+      handleStepStartMessage(stepStartCommand);
+      break;
     }
+    case chre_cross_validation_wifi_MessageType_SCAN_RESULT:
+      handleDataMessage(hostData);
+      break;
+    default:
+      LOGE("Unknown message type %" PRIu32 " for host message",
+           hostData->messageType);
   }
 }
 
@@ -97,6 +95,7 @@ void Manager::handleStepStartMessage(
       LOGE("Received StepStartCommand for INIT step");
       break;
     case chre_cross_validation_wifi_Step_CAPABILITIES: {
+      LOGD("%s: Received Step_CAPABILITIES", __func__);
       chre_cross_validation_wifi_WifiCapabilities wifiCapabilities =
           makeWifiCapabilitiesMessage(chreWifiGetCapabilities());
       test_shared::sendMessageToHost(
@@ -106,24 +105,28 @@ void Manager::handleStepStartMessage(
       break;
     }
     case chre_cross_validation_wifi_Step_SETUP: {
-      if (!chreWifiConfigureScanMonitorAsync(true /* enable */,
+      if (!chreWifiConfigureScanMonitorAsync(/* enable= */ true,
                                              &kScanMonitoringCookie)) {
         LOGE("chreWifiConfigureScanMonitorAsync() failed");
         test_shared::sendTestResultWithMsgToHost(
             mCrossValidatorState.hostEndpoint,
             chre_cross_validation_wifi_MessageType_STEP_RESULT,
-            false /*success*/, "setupWifiScanMonitoring failed",
-            false /*abortOnFailure*/);
-      } else {
-        LOGD("chreWifiConfigureScanMonitorAsync() succeeded");
-        if (stepStartCommand.has_chreScanCapacity) {
-          mExpectedMaxChreResultCanHandle = stepStartCommand.chreScanCapacity;
-        }
+            /*success=*/false,
+            /* errMessage= */ "setupWifiScanMonitoring failed",
+            /*abortOnFailure=*/false);
+        break;
+      }
+      LOGD("chreWifiConfigureScanMonitorAsync() succeeded");
+      if (stepStartCommand.has_chreScanCapacity) {
+        mExpectedMaxChreResultCanHandle = stepStartCommand.chreScanCapacity;
       }
       break;
     }
     case chre_cross_validation_wifi_Step_VALIDATE:
       break;
+    default:
+      LOGE("Unexpected start step: %" PRIu8,
+           static_cast<uint8_t>(stepStartCommand.step));
   }
   mStep = stepStartCommand.step;
 }
@@ -137,33 +140,40 @@ void Manager::handleDataMessage(const chreMessageFromHostData *hostData) {
   uint8_t scanResultIndex = scanResult.getResultIndex();
   if (scanResultIndex > scanResult.getTotalNumResults()) {
     LOGE("AP scan result index is greater than scan results size");
-  } else {
-    if (!mApScanResults.push_back(scanResult)) {
-      LOG_OOM();
-    }
-    if (scanResult.isLastMessage()) {
-      mApDataCollectionDone = true;
-      if (mChreDataCollectionDone) {
-        compareAndSendResultToHost();
-      }
-    }
+    return;
+  }
+  if (!mApScanResults.push_back(scanResult)) {
+    LOG_OOM();
+  }
+  LOGD("%s: AP wifi result %" PRIu8 "/%" PRIu8 " is received", __func__,
+       static_cast<uint8_t>(scanResultIndex + 1),
+       scanResult.getTotalNumResults());
+  if (!scanResult.isLastMessage()) {
+    return;
+  }
+  mApDataCollectionDone = true;
+  if (mChreDataCollectionDone) {
+    compareAndSendResultToHost();
   }
 }
 
 void Manager::handleWifiScanResult(const chreWifiScanEvent *event) {
   if (!mScanStartSeen && event->eventIndex != 0) {
-    LOGD("Dropping chreWifiScanEvent because we haven't seen eventIndex=0");
+    LOGW("Dropping chreWifiScanEvent because we haven't seen eventIndex=0");
     return;
   }
   mScanStartSeen = true;
   for (uint8_t i = 0; i < event->resultCount; i++) {
     mChreScanResults.push_back(event->results[i]);
   }
-  if (mChreScanResults.size() >= event->resultTotal) {
-    mChreDataCollectionDone = true;
-    if (mApDataCollectionDone) {
-      compareAndSendResultToHost();
-    }
+  LOGD("%s: CHRE wifi result %zu/%" PRIu8 " is received", __func__,
+       mChreScanResults.size(), event->resultTotal);
+  if (mChreScanResults.size() < event->resultTotal) {
+    return;
+  }
+  mChreDataCollectionDone = true;
+  if (mApDataCollectionDone) {
+    compareAndSendResultToHost();
   }
 }
 
@@ -190,10 +200,10 @@ void Manager::compareAndSendResultToHost() {
         mExpectedMaxChreResultCanHandle);
     test_shared::sendTestResultWithMsgToHost(
         mCrossValidatorState.hostEndpoint,
-        chre_cross_validation_wifi_MessageType_STEP_RESULT, false /*success*/,
+        chre_cross_validation_wifi_MessageType_STEP_RESULT, /*success=*/false,
+        /* errMessage= */
         "There is a different number of AP and CHRE scan results.",
-        false /*abortOnFailure*/);
-
+        /*abortOnFailure=*/false);
     return;
   }
 
@@ -252,6 +262,7 @@ void Manager::verifyScanResults(chre_test_common_TestResult *testResultOut) {
           "with same Bssid",
           bssidStr);
     }
+
     if (!isValidResult) {
       LOGE("False CHRE Scan Result with the following info:");
       logChreWifiResult(mChreScanResults[i]);
@@ -280,6 +291,7 @@ void Manager::verifyScanResults(chre_test_common_TestResult *testResultOut) {
       }
     }
   }
+
   if (allResultsValid) {
     *testResultOut = makeTestResultProtoMessage(true);
   }
@@ -342,7 +354,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
       sendMessage = true;
     } else {
       if (result->success) {
-        LOGD("Wifi scan monitoring setup successfully");
+        LOGI("Wifi scan monitoring setup successfully");
         testResult = makeTestResultProtoMessage(true);
         sendMessage = true;
       } else {

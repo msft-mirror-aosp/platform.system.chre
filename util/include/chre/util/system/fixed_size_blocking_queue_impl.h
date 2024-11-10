@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
-#define CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
+#ifndef CHRE_UTIL_SYSTEM_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
+#define CHRE_UTIL_SYSTEM_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
 
 // IWYU pragma: private
-#include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 
 namespace chre {
 

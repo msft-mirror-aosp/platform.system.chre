@@ -36,10 +36,10 @@
 #include "chre/platform/slpi/power_control_util.h"
 #include "chre/platform/system_time.h"
 #include "chre/platform/system_timer.h"
-#include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/flatbuffers/helpers.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre/version.h"
 
