@@ -20,10 +20,6 @@
 #include "chre/util/macros.h"
 #include "chre/util/system/napp_permissions.h"
 
-#ifdef CHRE_AUDIO_SUPPORT_ENABLED
-#include "chre/platform/platform_audio.h"
-#endif  // CHRE_AUDIO_SUPPORT_ENABLED
-
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
 using chre::Nanoapp;
@@ -64,4 +60,12 @@ DLL_EXPORT bool chreAudioConfigureSource(uint32_t handle, bool enable,
   UNUSED_VAR(deliveryInterval);
   return false;
 #endif  // CHRE_AUDIO_SUPPORT_ENABLED
+}
+
+DLL_EXPORT bool chreAudioGetStatus(uint32_t handle,
+                                   struct chreAudioSourceStatus *status) {
+  // TODO(b/174590023): either implement or deprecate this API
+  UNUSED_VAR(handle);
+  UNUSED_VAR(status);
+  return false;
 }

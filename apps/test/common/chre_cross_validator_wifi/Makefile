@@ -44,7 +44,7 @@ COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/wifi.cc
 # Compiler Flags ###############################################################
 
 # Defines
-COMMON_CFLAGS += -DNANOAPP_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_INFO
+COMMON_CFLAGS += -DNANOAPP_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG
 COMMON_CFLAGS += -DLOG_TAG=\"[ChreCrossValidatorWifi]\"
 COMMON_CFLAGS += -DCHRE_ASSERTIONS_ENABLED
 

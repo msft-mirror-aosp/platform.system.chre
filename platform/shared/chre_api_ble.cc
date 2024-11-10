@@ -22,6 +22,7 @@
 
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
+using chre::Nanoapp;
 using chre::NanoappPermissions;
 
 DLL_EXPORT uint32_t chreBleGetCapabilities() {
@@ -46,7 +47,7 @@ DLL_EXPORT uint32_t chreBleGetFilterCapabilities() {
 
 DLL_EXPORT bool chreBleFlushAsync(const void *cookie) {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()->getBleRequestManager().flushAsync(
              nanoapp, cookie);
@@ -60,7 +61,7 @@ DLL_EXPORT bool chreBleStartScanAsyncV1_9(
     chreBleScanMode mode, uint32_t reportDelayMs,
     const struct chreBleScanFilterV1_9 *filter, const void *cookie) {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()
              ->getBleRequestManager()
@@ -91,7 +92,7 @@ DLL_EXPORT bool chreBleStartScanAsync(chreBleScanMode mode,
 
 DLL_EXPORT bool chreBleStopScanAsyncV1_9(const void *cookie) {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()->getBleRequestManager().stopScanAsync(
              nanoapp, cookie);
@@ -108,7 +109,7 @@ DLL_EXPORT bool chreBleStopScanAsync() {
 DLL_EXPORT bool chreBleReadRssiAsync(uint16_t connectionHandle,
                                      const void *cookie) {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()->getBleRequestManager().readRssiAsync(
              nanoapp, connectionHandle, cookie);
@@ -121,7 +122,7 @@ DLL_EXPORT bool chreBleReadRssiAsync(uint16_t connectionHandle,
 
 DLL_EXPORT bool chreBleGetScanStatus(struct chreBleScanStatus *status) {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
          EventLoopManagerSingleton::get()->getBleRequestManager().getScanStatus(
              status);
