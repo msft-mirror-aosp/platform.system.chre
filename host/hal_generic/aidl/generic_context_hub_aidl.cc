@@ -107,7 +107,7 @@ ScopedAStatus toServiceSpecificError(bool success) {
 ScopedAStatus ContextHub::getContextHubs(
     std::vector<ContextHubInfo> *out_contextHubInfos) {
   ::chre::fbs::HubInfoResponseT response;
-  bool success = mConnection.getContextHubs(&response);
+  bool success = mConnection->getContextHubs(&response);
   if (success) {
     ContextHubInfo hub;
     hub.name = getStringFromByteVector(response.name);
@@ -181,8 +181,8 @@ ScopedAStatus ContextHub::onSettingChanged(Setting setting, bool enabled) {
        setting == Setting::BT_MAIN || setting == Setting::BT_SCANNING);
 
   if (!isWifiOrBtSetting && getFbsSetting(setting, &fbsSetting)) {
-    mConnection.sendSettingChangedNotification(fbsSetting,
-                                               toFbsSettingState(enabled));
+    mConnection->sendSettingChangedNotification(fbsSetting,
+                                                toFbsSettingState(enabled));
   }
 
   bool isWifiMainEnabled = isSettingEnabled(Setting::WIFI_MAIN);
@@ -197,7 +197,7 @@ ScopedAStatus ContextHub::onSettingChanged(Setting setting, bool enabled) {
                              ? (isWifiMainEnabled)
                              : (isWifiMainEnabled || isWifiScanEnabled);
   if (!mIsWifiAvailable.has_value() || (isWifiAvailable != mIsWifiAvailable)) {
-    mConnection.sendSettingChangedNotification(
+    mConnection->sendSettingChangedNotification(
         fbs::Setting::WIFI_AVAILABLE, toFbsSettingState(isWifiAvailable));
     mIsWifiAvailable = isWifiAvailable;
   }
@@ -208,7 +208,7 @@ ScopedAStatus ContextHub::onSettingChanged(Setting setting, bool enabled) {
   bool isBtScanEnabled = isSettingEnabled(Setting::BT_SCANNING);
   bool isBleAvailable = isBtMainEnabled || isBtScanEnabled;
   if (!mIsBleAvailable.has_value() || (isBleAvailable != mIsBleAvailable)) {
-    mConnection.sendSettingChangedNotification(
+    mConnection->sendSettingChangedNotification(
         fbs::Setting::BLE_AVAILABLE, toFbsSettingState(isBleAvailable));
     mIsBleAvailable = isBleAvailable;
   }
@@ -221,7 +221,7 @@ ScopedAStatus ContextHub::queryNanoapps(int32_t contextHubId) {
     LOGE("Invalid ID %" PRId32, contextHubId);
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
-  return toServiceSpecificError(mConnection.queryNanoapps());
+  return toServiceSpecificError(mConnection->queryNanoapps());
 }
 
 ::ndk::ScopedAStatus ContextHub::getPreloadedNanoappIds(
@@ -287,7 +287,7 @@ ScopedAStatus ContextHub::sendMessageToHub(int32_t contextHubId,
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
 
-  bool success = mConnection.sendMessageToHub(
+  bool success = mConnection->sendMessageToHub(
       message.nanoappId, message.messageType, message.hostEndPoint,
       message.messageBody.data(), message.messageBody.size());
   mEventLogger.logMessageToNanoapp(message, success);
@@ -324,7 +324,7 @@ ScopedAStatus ContextHub::onHostEndpointConnected(
       return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
   mConnectedHostEndpoints.insert(in_info.hostEndpointId);
-  mConnection.onHostEndpointConnected(
+  mConnection->onHostEndpointConnected(
       in_info.hostEndpointId, type, in_info.packageName.value_or(std::string()),
       in_info.attributionTag.value_or(std::string()));
   return ndk::ScopedAStatus::ok();
@@ -336,7 +336,7 @@ ScopedAStatus ContextHub::onHostEndpointDisconnected(
   if (mConnectedHostEndpoints.count(in_hostEndpointId) > 0) {
     mConnectedHostEndpoints.erase(in_hostEndpointId);
 
-    mConnection.onHostEndpointDisconnected(in_hostEndpointId);
+    mConnection->onHostEndpointDisconnected(in_hostEndpointId);
   } else {
     LOGE("Unknown host endpoint disconnected (ID: %" PRIu16 ")",
          in_hostEndpointId);
@@ -582,7 +582,7 @@ ScopedAStatus ContextHub::enableTestMode() {
   std::vector<int64_t> nanoappIdsToUnload;
   if (mIsTestModeEnabled) {
     success = true;
-  } else if (mConnection.isLoadTransactionPending()) {
+  } else if (mConnection->isLoadTransactionPending()) {
     /**
      * There is already a pending load transaction. We cannot change the test
      * mode state if there is a pending load transaction. We do not consider
@@ -639,7 +639,7 @@ ScopedAStatus ContextHub::disableTestMode() {
   std::string preloadedNanoappDirectory;
   if (!mIsTestModeEnabled) {
     success = true;
-  } else if (mConnection.isLoadTransactionPending()) {
+  } else if (mConnection->isLoadTransactionPending()) {
     /**
      * There is already a pending load transaction. We cannot change the test
      * mode state if there is a pending load transaction. We do not consider
@@ -702,7 +702,7 @@ bool ContextHub::loadNanoappInternal(const NanoappBinary &appBinary,
   FragmentedLoadTransaction transaction(
       transactionId, appBinary.nanoappId, appBinary.nanoappVersion,
       appBinary.flags, targetApiVersion, appBinary.customBinary);
-  bool success = mConnection.loadNanoapp(transaction);
+  bool success = mConnection->loadNanoapp(transaction);
   mEventLogger.logNanoappLoad(appBinary.nanoappId,
                               appBinary.customBinary.size(),
                               appBinary.nanoappVersion, success);
@@ -751,7 +751,7 @@ bool ContextHub::loadNanoappsInternal(
 }
 
 bool ContextHub::unloadNanoappInternal(int64_t appId, int32_t transactionId) {
-  bool success = mConnection.unloadNanoapp(appId, transactionId);
+  bool success = mConnection->unloadNanoapp(appId, transactionId);
   mEventLogger.logNanoappUnload(appId, success);
   return success;
 }

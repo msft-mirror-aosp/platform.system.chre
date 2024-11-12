@@ -17,9 +17,11 @@
 #ifndef ANDROID_HARDWARE_CONTEXTHUB_COMMON_CHRE_SOCKET_H
 #define ANDROID_HARDWARE_CONTEXTHUB_COMMON_CHRE_SOCKET_H
 
+#include <flatbuffers/flatbuffers.h>
 #include <condition_variable>
 #include <mutex>
 
+#include "bluetooth_socket_connection_callback.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
 #include "chre_host/socket_client.h"
@@ -143,6 +145,10 @@ class HalChreSocketConnection {
    */
   bool isLoadTransactionPending();
 
+  void setBtSocketCallback(
+      ::android::hardware::bluetooth::socket::common::implementation::
+          BluetoothSocketConnectionCallback *btSocketCallback);
+
  private:
   class SocketCallbacks : public ::android::chre::SocketClient::ICallbacks,
                           public ::android::chre::IChreMessageHandlers {
@@ -168,10 +174,19 @@ class HalChreSocketConnection {
         const ::chre::fbs::DebugDumpResponseT &response) override;
     bool handleContextHubV4Message(
         const ::chre::fbs::ChreMessageUnion &message) override;
+    void handleBtSocketOpenResponse(
+        const ::chre::fbs::BtSocketOpenResponseT &response) override;
+    void handleBtSocketClose(
+        const ::chre::fbs::BtSocketCloseT &message) override;
+    void setBtSocketCallback(
+        ::android::hardware::bluetooth::socket::common::implementation::
+            BluetoothSocketConnectionCallback *btSocketCallback);
 
    private:
     HalChreSocketConnection &mParent;
     IChreSocketCallback *mCallback = nullptr;
+    ::android::hardware::bluetooth::socket::common::implementation::
+        BluetoothSocketConnectionCallback *mBtSocketCallback = nullptr;
     bool mHaveConnected = false;
   };
 

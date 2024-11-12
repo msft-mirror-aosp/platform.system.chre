@@ -52,33 +52,39 @@ class IChreMessageHandlers {
   virtual ~IChreMessageHandlers() = default;
 
   virtual void handleNanoappMessage(
-      const ::chre::fbs::NanoappMessageT & /*message*/){};
+      const ::chre::fbs::NanoappMessageT & /*message*/) {}
 
   virtual void handleHubInfoResponse(
-      const ::chre::fbs::HubInfoResponseT & /*response*/){};
+      const ::chre::fbs::HubInfoResponseT & /*response*/) {}
 
   virtual void handleNanoappListResponse(
-      const ::chre::fbs::NanoappListResponseT & /*response*/){};
+      const ::chre::fbs::NanoappListResponseT & /*response*/) {}
 
   virtual void handleLoadNanoappResponse(
-      const ::chre::fbs::LoadNanoappResponseT & /*response*/){};
+      const ::chre::fbs::LoadNanoappResponseT & /*response*/) {}
 
   virtual void handleUnloadNanoappResponse(
-      const ::chre::fbs::UnloadNanoappResponseT & /*response*/){};
+      const ::chre::fbs::UnloadNanoappResponseT & /*response*/) {}
 
   virtual void handleDebugDumpData(
-      const ::chre::fbs::DebugDumpDataT & /*data*/){};
+      const ::chre::fbs::DebugDumpDataT & /*data*/) {}
 
   virtual void handleDebugDumpResponse(
-      const ::chre::fbs::DebugDumpResponseT & /*response*/){};
+      const ::chre::fbs::DebugDumpResponseT & /*response*/) {}
 
   virtual void handleSelfTestResponse(
-      const ::chre::fbs::SelfTestResponseT & /*response*/){};
+      const ::chre::fbs::SelfTestResponseT & /*response*/) {}
 
   virtual bool handleContextHubV4Message(
       const ::chre::fbs::ChreMessageUnion & /*msg*/) {
     return false;
-  };
+  }
+
+  virtual void handleBtSocketOpenResponse(
+      const ::chre::fbs::BtSocketOpenResponseT & /*response*/) {}
+
+  virtual void handleBtSocketClose(
+      const ::chre::fbs::BtSocketCloseT & /*message*/) {}
 };
 
 /**
@@ -98,7 +104,8 @@ class HostProtocolHost : public ::chre::HostProtocolCommon {
    *        function returns success, then exactly one of these functions was
    *        called.
    *
-   * @return true if the message was parsed successfully and passed to a handler
+   * @return true if the message was parsed successfully and passed to a
+   *         handler
    */
   static bool decodeMessageFromChre(const void *message, size_t messageLen,
                                     IChreMessageHandlers &handlers);
@@ -159,9 +166,9 @@ class HostProtocolHost : public ::chre::HostProtocolCommon {
    *        response to this request
    * @param appId Identifier for the app to unload
    * @param allowSystemNanoappUnload Whether this request should be allowed to
-   *        result in unloading a system nanoapp (e.g. requests from the context
-   *        hub HAL should have set this to false, as system nanoapps are not
-   *        expected to be managed through that HAL)
+   *        result in unloading a system nanoapp (e.g. requests from the
+   *        context hub HAL should have set this to false, as system nanoapps
+   *        are not expected to be managed through that HAL)
    */
   static void encodeUnloadNanoappRequest(
       flatbuffers::FlatBufferBuilder &builder, uint32_t transactionId,
@@ -190,8 +197,8 @@ class HostProtocolHost : public ::chre::HostProtocolCommon {
    *
    * @param message Buffer containing a complete FlatBuffers CHRE message
    * @param messageLen Size of the message, in bytes
-   * @param hostClientId Output parameter that will be populated with the client
-   *        ID included in the message on success
+   * @param hostClientId Output parameter that will be populated with the
+   *        client ID included in the message on success
    *
    * @return true if the host client ID was successfully decoded from the
    *         message
@@ -207,8 +214,8 @@ class HostProtocolHost : public ::chre::HostProtocolCommon {
    * @param messageLen Size of the message, in bytes
    * @param hostClientId The value to set the host client ID to
    *
-   * @return true if the message was verified successfully, and we were able to
-   *         modify the host client ID field
+   * @return true if the message was verified successfully, and we were able
+   *         to modify the host client ID field
    */
   static bool mutateHostClientId(void *message, size_t messageLen,
                                  uint16_t hostClientId);
