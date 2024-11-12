@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_H_
-#define CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_H_
+#ifndef CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_H_
+#define CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_H_
 
 #include "chre/platform/mutex.h"
 #include "chre/util/memory_pool.h"
@@ -94,6 +94,6 @@ class SynchronizedMemoryPool : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/synchronized_memory_pool_impl.h"  // IWYU pragma: export
+#include "chre/util/system/synchronized_memory_pool_impl.h"  // IWYU pragma: export
 
-#endif  // CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_H_
+#endif  // CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_H_
