@@ -1,4 +1,5 @@
 include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
+include(backend.cmake)
 
 # Implements chre_api/chre/audio.h's:
 # - bool chreAudioGetSource(uint32_t handle,
@@ -17,6 +18,15 @@ pw_add_library(chre.platform.shared.chre_api_audio STATIC
     chre.platform.platform_audio
     chre.util
     chre.util.system
+)
+
+pw_add_facade(chre.platform.shared.bt_snoop_log INTERFACE
+  BACKEND
+    chre.platform.shared.bt_snoop_log_BACKEND
+  HEADERS
+    include/chre/platform/shared/bt_snoop_log.h
+  PUBLIC_INCLUDES
+    include
 )
 
 # Implements chre_api/chre/ble.h's:
@@ -231,4 +241,228 @@ pw_add_library(chre.platform.shared.chre_api_wwan STATIC
     chre.core
     chre.util
     chre.util.system
+)
+
+pw_add_library(chre.platform.shared.generated.host_messages_generated INTERFACE
+  HEADERS
+    include/chre/platform/shared/generated/host_messages_generated.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre_third_party.flatbuffers
+)
+
+pw_add_library(chre.platform.shared.log_buffer STATIC
+  HEADERS
+    include/chre/platform/shared/log_buffer.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.core
+    chre.platform.mutex
+    chre.platform.shared.bt_snoop_log
+    chre.platform.shared.generated.host_messages_generated
+  SOURCES
+    log_buffer.cc
+  PRIVATE_DEPS
+    chre.platform.assert
+    chre.util
+)
+
+pw_add_library(chre.platform.shared.log_buffer_manager STATIC
+  HEADERS
+    include/chre/platform/shared/log_buffer_manager.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.chre_api
+    chre.platform.assert
+    chre.platform.condition_variable
+    chre.platform.mutex
+    chre.platform.shared.bt_snoop_log.facade
+    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.log_buffer
+    chre.util
+  SOURCES
+    log_buffer_manager.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.util
+    pw_log_tokenized.config
+    pw_tokenizer
+)
+
+# Note that this does NOT actually implement, which are only required for
+# nanoapp builds:
+# - const struct chreNslNanoappInfo *getChreNslDsoNanoappInfo()
+# - bool chreNslDsoGetApi(uint32_t apiId, void **apiHandle)
+pw_add_library(chre.platform.shared.nanoapp_support_lib_dso INTERFACE
+  HEADERS
+    include/chre/platform/shared/nanoapp_support_lib_dso.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.chre_api
+)
+
+pw_add_library(chre.platform.shared.pal_audio_stub STATIC
+  SOURCES
+    pal_audio_stub.cc
+  PRIVATE_DEPS
+    chre.pal.audio.facade
+)
+
+pw_add_library(chre.platform.shared.pal_ble_stub STATIC
+  SOURCES
+    pal_ble_stub.cc
+  PRIVATE_DEPS
+    chre.pal.ble.facade
+)
+
+pw_add_library(chre.platform.shared.pal_gnss_stub STATIC
+  SOURCES
+    pal_gnss_stub.cc
+  PRIVATE_DEPS
+    chre.pal.gnss.facade
+)
+
+pw_add_library(chre.platform.shared.pal_sensor_stub STATIC
+  SOURCES
+    pal_sensor_stub.cc
+  PRIVATE_DEPS
+    chre.pal.sensor.facade
+)
+
+pw_add_facade(chre.platform.shared.pal_system_api STATIC
+  BACKEND
+    chre.platform.shared.pal_system_api_BACKEND
+  HEADERS
+    include/chre/platform/shared/pal_system_api.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.pal.system
+  SOURCES
+    pal_system_api.cc
+  PRIVATE_DEPS
+   chre.platform.log
+   chre.platform.memory
+   chre.platform.system_time
+)
+
+pw_add_library(chre.platform.shared.pal_wifi_stub STATIC
+  SOURCES
+    pal_wifi_stub.cc
+  PRIVATE_DEPS
+    chre.pal.wifi.facade
+)
+
+pw_add_library(chre.platform.shared.pal_wwan_stub STATIC
+  SOURCES
+    pal_wwan_stub.cc
+  PRIVATE_DEPS
+    chre.pal.wwan.facade
+)
+
+pw_add_library(chre.platform.shared.platform_ble_pal STATIC
+  HEADERS
+    public_platform_ble_pal/chre/target_platform/platform_ble_base.h
+  PUBLIC_INCLUDES
+    public_platform_ble_pal
+  PUBLIC_DEPS
+    chre.pal.ble
+    chre.platform.shared.platform_pal
+  SOURCES
+    platform_ble.cc
+  PRIVATE_DEPS
+    chre.chre_api
+    chre.core
+    chre.platform.log
+    chre.platform.platform_ble.facade
+    chre.platform.shared.bt_snoop_log
+    chre.platform.shared.pal_system_api
+    chre.variant.config
+)
+
+# The optional CHPP and ASH integration is not supported.
+pw_add_library(chre.platform.shared.platform_debug_dump_manager STATIC
+  HEADERS
+    public_platform_debug_dump_manager/chre/target_platform/platform_debug_dump_manager_base.h
+  PUBLIC_INCLUDES
+    public_platform_debug_dump_manager
+  PUBLIC_DEPS
+    chre.variant.config
+  SOURCES
+    platform_debug_dump_manager.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.host_link
+    chre.platform.log
+    chre.platform.platform_debug_dump_manager.facade
+    chre.util
+)
+
+pw_add_library(chre.platform.shared.platform_gnss_pal STATIC
+  HEADERS
+    public_platform_gnss_pal/chre/target_platform/platform_gnss_base.h
+  PUBLIC_INCLUDES
+    public_platform_gnss_pal
+  PUBLIC_DEPS
+    chre.pal.gnss
+    chre.platform.shared.platform_pal
+  SOURCES
+    platform_gnss.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.platform.platform_gnss.facade
+    chre.platform.shared.pal_system_api
+    chre.variant.config
+)
+
+pw_add_facade(chre.platform.shared.platform_pal INTERFACE
+  BACKEND
+    chre.platform.shared.platform_pal_BACKEND
+  HEADERS
+    include/chre/platform/shared/platform_pal.h
+  PUBLIC_INCLUDES
+    include
+)
+
+pw_add_library(chre.platform.shared.platform_wifi_pal STATIC
+  HEADERS
+    public_platform_wifi_pal/chre/target_platform/platform_wifi_base.h
+  PUBLIC_INCLUDES
+    public_platform_wifi_pal
+  PUBLIC_DEPS
+    chre.pal.wifi
+    chre.platform.shared.platform_pal
+  SOURCES
+    platform_wifi.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.platform.platform_wifi.facade
+    chre.platform.shared.pal_system_api
+    chre.util.system
+    chre.variant.config
+)
+
+pw_add_library(chre.platform.shared.platform_wwan_pal STATIC
+  HEADERS
+    public_platform_wwan_pal/chre/target_platform/platform_wwan_base.h
+  PUBLIC_INCLUDES
+    public_platform_wwan_pal
+  PUBLIC_DEPS
+    chre.pal.wwan
+    chre.platform.shared.platform_pal
+  SOURCES
+    platform_wwan.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.platform.platform_wwan.facade
+    chre.platform.shared.pal_system_api
+    chre.variant.config
 )
