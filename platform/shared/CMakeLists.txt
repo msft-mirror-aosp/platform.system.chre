@@ -1,6 +1,24 @@
 include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
 include(backend.cmake)
 
+pw_add_facade(chre.platform.shared.authentication INTERFACE
+  BACKEND
+    chre.platform.shared.authentication_BACKEND
+  HEADERS
+    include/chre/platform/shared/authentication.h
+  PUBLIC_INCLUDES
+    include
+)
+
+pw_add_facade(chre.platform.shared.bt_snoop_log INTERFACE
+  BACKEND
+    chre.platform.shared.bt_snoop_log_BACKEND
+  HEADERS
+    include/chre/platform/shared/bt_snoop_log.h
+  PUBLIC_INCLUDES
+    include
+)
+
 # Implements chre_api/chre/audio.h's:
 # - bool chreAudioGetSource(uint32_t handle,
 #                           struct chreAudioSource *audioSource)
@@ -19,16 +37,6 @@ pw_add_library(chre.platform.shared.chre_api_audio STATIC
     chre.util
     chre.util.system
 )
-
-pw_add_facade(chre.platform.shared.bt_snoop_log INTERFACE
-  BACKEND
-    chre.platform.shared.bt_snoop_log_BACKEND
-  HEADERS
-    include/chre/platform/shared/bt_snoop_log.h
-  PUBLIC_INCLUDES
-    include
-)
-
 # Implements chre_api/chre/ble.h's:
 # - uint32_t chreBleGetCapabilities()
 # - uint32_t chreBleGetFilterCapabilities()
@@ -243,6 +251,20 @@ pw_add_library(chre.platform.shared.chre_api_wwan STATIC
     chre.util.system
 )
 
+pw_add_library(chre.platform.shared.dlfcn STATIC
+  HEADERS
+    include/chre/platform/shared/libc/dlfcn.h
+  PUBLIC_INCLUDES
+    include/chre/platform/shared/libc
+  SOURCES
+    dlfcn.cc
+  PRIVATE_DEPS
+    chre.platform.assert
+    chre.platform.log
+    chre.platform.shared.nanoapp_loader
+    chre.util
+)
+
 pw_add_library(chre.platform.shared.generated.host_messages_generated INTERFACE
   HEADERS
     include/chre/platform/shared/generated/host_messages_generated.h
@@ -250,6 +272,15 @@ pw_add_library(chre.platform.shared.generated.host_messages_generated INTERFACE
     include
   PUBLIC_DEPS
     chre_third_party.flatbuffers
+)
+
+pw_add_library(chre.platform.shared.loader_util INTERFACE
+  HEADERS
+    include/chre/platform/shared/loader_util.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.variant.config
 )
 
 pw_add_library(chre.platform.shared.log_buffer STATIC
@@ -293,6 +324,16 @@ pw_add_library(chre.platform.shared.log_buffer_manager STATIC
     pw_tokenizer
 )
 
+pw_add_facade(chre.platform.shared.memory INTERFACE
+  BACKEND
+    chre.platform.shared.memory_BACKEND
+  HEADERS
+    include/chre/platform/shared/memory.h
+  PUBLIC_INCLUDES
+    include
+)
+
+
 # Note that this does NOT actually implement, which are only required for
 # nanoapp builds:
 # - const struct chreNslNanoappInfo *getChreNslDsoNanoappInfo()
@@ -304,6 +345,65 @@ pw_add_library(chre.platform.shared.nanoapp_support_lib_dso INTERFACE
     include
   PUBLIC_DEPS
     chre.chre_api
+)
+
+pw_add_library(chre.platform.shared.nanoapp_dso_util STATIC
+  HEADERS
+    include/chre/platform/shared/nanoapp_dso_util.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.platform.shared.nanoapp_support_lib_dso
+  SOURCES
+    nanoapp/nanoapp_dso_util.cc
+  PRIVATE_DEPS
+    chre.platform.log
+)
+
+# This is itself a facade for:
+# 1) bool NanoappLoader::relocateTable(DynamicHeader *dyn, int tag)
+# 2) bool NanoappLoader::resolveGot()
+# 3) if CHREX_SYMBOL_EXTENSIONS is set, providing
+#    `const ExportedData chre::kVendorExportedData[]` via
+#    `chre/extensions/platform/symbol_list.h`.
+pw_add_facade(chre.platform.shared.nanoapp_loader STATIC
+  BACKEND
+    chre.platform.shared.nanoapp_loader_BACKEND
+  HEADERS
+    include/chre/platform/shared/nanoapp_loader.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.util
+    chre.platform.shared.loader_util
+  SOURCES
+    nanoapp_loader.cc
+  PRIVATE_DEPS
+    chre.chre_api
+    chre.platform.assert
+    chre.platform.fatal_error
+    chre.platform.shared.chre_api_re
+    chre.platform.shared.memory
+    chre.platform.shared.nanoapp_tokenized_log
+    chre.platform.shared.platform_cache_management
+    chre.variant.config
+)
+
+pw_add_library(chre.platform.shared.nanoapp_tokenized_log STATIC
+  HEADERS
+    nanoapp/include/chre/platform/shared/nanoapp/tokenized_log.h
+  PUBLIC_INCLUDES
+    nanoapp/include
+  PUBLIC_DEPS
+    chre.chre_api
+  SOURCES
+    tokenized_log.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.platform.shared.log_buffer_manager
+    pw_log_tokenized.config
+    pw_tokenizer
 )
 
 pw_add_library(chre.platform.shared.pal_audio_stub STATIC
@@ -383,6 +483,15 @@ pw_add_library(chre.platform.shared.platform_ble_pal STATIC
     chre.platform.shared.bt_snoop_log
     chre.platform.shared.pal_system_api
     chre.variant.config
+)
+
+pw_add_facade(chre.platform.shared.platform_cache_management INTERFACE
+  BACKEND
+    chre.platform.shared.platform_cache_management_BACKEND
+  HEADERS
+    include/chre/platform/shared/platform_cache_management.h
+  PUBLIC_INCLUDES
+    include
 )
 
 # The optional CHPP and ASH integration is not supported.
