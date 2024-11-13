@@ -82,12 +82,12 @@ ChppResetPacket generateResetAckPacket(uint8_t ackSeq, uint8_t seq) {
   return pkt;
 }
 
-ChppEmptyPacket generateAck(std::vector<uint8_t> &pkt) {
+ChppEmptyPacket generateAck(const std::vector<uint8_t> &pkt) {
   // An ACK consists of an empty packet with the ackSeq set to the received
   // packet's seq + 1 (since ackSeq indicates the next seq value we expect), and
   // seq set to the received packet's ackSeq - 1 (since we don't increment seq
   // on empty packets and ackSeq indicates the next expected seq)
-  ChppTransportHeader &hdr = getHeader(pkt);
+  const ChppTransportHeader &hdr = getHeader(pkt);
   return generateEmptyPacket(/*acqSeq=*/hdr.seq + 1, /*seq=*/hdr.ackSeq - 1);
 }
 
