@@ -604,8 +604,18 @@ static void chppProcessRxPacket(struct ChppTransportState *context) {
     // There are packets to send out (could be new or retx)
     // Note: For a future ACK window > 1, makes more sense to cap the NACKs
     // to one instead of flooding with out of order NACK errors.
-    chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
-                                     CHPP_TRANSPORT_ATTR_NONE, errorCode));
+
+    // If the sender is retrying a packet we've already received successfully,
+    // send an ACK so it will continue normally
+    enum ChppTransportErrorCode errorCodeToSend = errorCode;
+    if (context->rxHeader.length > 0 &&
+        context->rxHeader.seq == context->rxStatus.expectedSeq - 1) {
+      errorCodeToSend = CHPP_TRANSPORT_ERROR_NONE;
+    }
+
+    chppEnqueueTxPacket(
+        context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(CHPP_TRANSPORT_ATTR_NONE,
+                                                    errorCodeToSend));
   }
 
   if (errorCode == CHPP_TRANSPORT_ERROR_ORDER) {
