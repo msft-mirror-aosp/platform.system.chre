@@ -16,6 +16,8 @@
 
 #include "packet_util.h"
 
+#include "chpp/app.h"
+
 #include <cstring>
 
 namespace chpp::test {
@@ -93,8 +95,123 @@ ChppEmptyPacket generateAck(const std::vector<uint8_t> &pkt) {
 
 // Utilities for debugging -----------------------------------------------------
 
+const char *appErrorCodeToStr(uint8_t error) {
+  switch (error) {
+    case CHPP_APP_ERROR_NONE:
+      return "NONE";
+    case CHPP_APP_ERROR_INVALID_COMMAND:
+      return "INVALID_COMMAND";
+    case CHPP_APP_ERROR_INVALID_ARG:
+      return "INVALID_ARG";
+    case CHPP_APP_ERROR_BUSY:
+      return "BUSY";
+    case CHPP_APP_ERROR_OOM:
+      return "OOM";
+    case CHPP_APP_ERROR_UNSUPPORTED:
+      return "UNSUPPORTED";
+    case CHPP_APP_ERROR_TIMEOUT:
+      return "TIMEOUT";
+    case CHPP_APP_ERROR_DISABLED:
+      return "DISABLED";
+    case CHPP_APP_ERROR_RATELIMITED:
+      return "RATELIMITED";
+    case CHPP_APP_ERROR_BLOCKED:
+      return "BLOCKED";
+    case CHPP_APP_ERROR_INVALID_LENGTH:
+      return "INVALID_LENGTH";
+    case CHPP_APP_ERROR_NOT_READY:
+      return "NOT_READY";
+    case CHPP_APP_ERROR_BEYOND_CHPP:
+      return "BEYOND_CHPP";
+    case CHPP_APP_ERROR_UNEXPECTED_RESPONSE:
+      return "UNEXPECTED_RESPONSE";
+    case CHPP_APP_ERROR_CONVERSION_FAILED:
+      return "CONVERSION_FAILED";
+    case CHPP_APP_ERROR_UNSPECIFIED:
+      return "UNSPECIFIED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+const char *appMessageTypeToStr(uint8_t type) {
+  switch (type) {
+    case CHPP_MESSAGE_TYPE_CLIENT_REQUEST:
+      return "CLIENT_REQ";
+    case CHPP_MESSAGE_TYPE_SERVICE_RESPONSE:
+      return "SERVICE_RESP";
+    case CHPP_MESSAGE_TYPE_CLIENT_NOTIFICATION:
+      return "CLIENT_NOTIF";
+    case CHPP_MESSAGE_TYPE_SERVICE_NOTIFICATION:
+      return "SERVICE_NOTIF";
+    case CHPP_MESSAGE_TYPE_SERVICE_REQUEST:
+      return "SERVICE_REQ";
+    case CHPP_MESSAGE_TYPE_CLIENT_RESPONSE:
+      return "CLIENT_RESP";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+const char *handleToStr(uint8_t handle) {
+  switch (handle) {
+    case CHPP_HANDLE_NONE:
+      return "(NONE)";
+    case CHPP_HANDLE_LOOPBACK:
+      return "(LOOPBACK)";
+    case CHPP_HANDLE_TIMESYNC:
+      return "(TIMESYNC)";
+    case CHPP_HANDLE_DISCOVERY:
+      return "(DISCOVERY)";
+    default:
+      return "";
+  }
+}
+
+const char *packetAttrToStr(uint8_t attr) {
+  switch (attr) {
+    case CHPP_TRANSPORT_ATTR_NONE:
+      return "none";
+    case CHPP_TRANSPORT_ATTR_RESET:
+      return "reset";
+    case CHPP_TRANSPORT_ATTR_RESET_ACK:
+      return "reset-ack";
+    case CHPP_TRANSPORT_ATTR_LOOPBACK_REQUEST:
+      return "loopback-req";
+    case CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE:
+      return "loopback-rsp";
+    default:
+      return "invalid";
+  }
+}
+
+const char *transportErrorToStr(uint8_t error) {
+  switch (error) {
+    case CHPP_TRANSPORT_ERROR_NONE:
+      return "none";
+    case CHPP_TRANSPORT_ERROR_CHECKSUM:
+      return "checksum";
+    case CHPP_TRANSPORT_ERROR_OOM:
+      return "oom";
+    case CHPP_TRANSPORT_ERROR_BUSY:
+      return "busy";
+    case CHPP_TRANSPORT_ERROR_HEADER:
+      return "header";
+    case CHPP_TRANSPORT_ERROR_ORDER:
+      return "order";
+    case CHPP_TRANSPORT_ERROR_TIMEOUT:
+      return "timeout";
+    case CHPP_TRANSPORT_ERROR_MAX_RETRIES:
+      return "max-retries";
+    case CHPP_TRANSPORT_ERROR_APPLAYER:
+      return "app-layer";
+    default:
+      return "invalid";
+  }
+}
+
 void dumpRaw(std::ostream &os, const void *ptr, size_t len) {
-  const char *buffer = static_cast<const char *>(ptr);
+  const uint8_t *buffer = static_cast<const uint8_t *>(ptr);
   char line[32];
   char lineChars[32];
   size_t offset = 0;
@@ -150,64 +267,14 @@ void dumpHeader(std::ostream &os, const ChppTransportHeader &hdr) {
   } else {
     os << " (finished)";
   }
+  uint8_t attr = CHPP_TRANSPORT_GET_ATTR(hdr.packetCode);
+  uint8_t error = CHPP_TRANSPORT_GET_ERROR(hdr.packetCode);
   os << std::endl
      << "  packetCode: 0x" << std::hex << (unsigned)hdr.packetCode
-     << " (attr: ";
-  uint8_t attr = CHPP_TRANSPORT_GET_ATTR(hdr.packetCode);
-  switch (attr) {
-    case CHPP_TRANSPORT_ATTR_NONE:
-      os << "none";
-      break;
-    case CHPP_TRANSPORT_ATTR_RESET:
-      os << "reset";
-      break;
-    case CHPP_TRANSPORT_ATTR_RESET_ACK:
-      os << "reset-ack";
-      break;
-    case CHPP_TRANSPORT_ATTR_LOOPBACK_REQUEST:
-      os << "loopback-req";
-      break;
-    case CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE:
-      os << "loopback-rsp";
-      break;
-    default:
-      os << "invalid";
-  }
-  os << " | error: ";
-  uint8_t error = CHPP_TRANSPORT_GET_ERROR(hdr.packetCode);
-  switch (error) {
-    case CHPP_TRANSPORT_ERROR_NONE:
-      os << "none";
-      break;
-    case CHPP_TRANSPORT_ERROR_CHECKSUM:
-      os << "checksum";
-      break;
-    case CHPP_TRANSPORT_ERROR_OOM:
-      os << "oom";
-      break;
-    case CHPP_TRANSPORT_ERROR_BUSY:
-      os << "busy";
-      break;
-    case CHPP_TRANSPORT_ERROR_HEADER:
-      os << "header";
-      break;
-    case CHPP_TRANSPORT_ERROR_ORDER:
-      os << "order";
-      break;
-    case CHPP_TRANSPORT_ERROR_TIMEOUT:
-      os << "timeout";
-      break;
-    case CHPP_TRANSPORT_ERROR_MAX_RETRIES:
-      os << "max-retries";
-      break;
-    case CHPP_TRANSPORT_ERROR_APPLAYER:
-      os << "app-layer";
-      break;
-    default:
-      os << "invalid";
-  }
-  os << ")" << std::endl
-     << "  ackSeq: " << std::dec << (unsigned)hdr.ackSeq << std::endl
+     << " (attr: " << packetAttrToStr(attr)
+     << " | error: " << transportErrorToStr(error) << ")" << std::endl;
+
+  os << "  ackSeq: " << std::dec << (unsigned)hdr.ackSeq << std::endl
      << "  seq: " << std::dec << (unsigned)hdr.seq << std::endl
      << "  length: " << std::dec << hdr.length << std::endl
      << "  reserved: " << std::dec << hdr.reserved << std::endl
@@ -238,9 +305,30 @@ void dumpResetPacket(std::ostream &os, const ChppResetPacket &pkt) {
 void dumpPacket(std::ostream &os, const ChppPacketPrefix &pkt) {
   dumpPreamble(os, pkt.preamble);
   dumpHeader(os, pkt.header);
-  os << "Payload {" << std::endl;
-  dumpRaw(os, pkt.payload, pkt.header.length);
-  os << "}" << std::endl;
+  size_t payloadOffset = 0;
+  if (CHPP_TRANSPORT_GET_ATTR(pkt.header.packetCode) ==
+          CHPP_TRANSPORT_ATTR_NONE &&
+      pkt.header.length >= sizeof(ChppAppHeader)) {
+    auto &appHdr = reinterpret_cast<const ChppAppHeader &>(*pkt.payload);
+    os << "AppHeader {" << std::endl;
+    os << " handle: 0x" << std::hex << (unsigned)appHdr.handle << " "
+       << handleToStr(appHdr.handle) << std::endl;
+    os << " type: " << std::dec << (unsigned)appHdr.type << " ("
+       << appMessageTypeToStr(appHdr.type) << ")" << std::endl;
+    os << " transaction: " << std::dec << (unsigned)appHdr.transaction
+       << std::endl;
+    os << " error: " << std::dec << (unsigned)appHdr.error << " ("
+       << appErrorCodeToStr(appHdr.error) << ")" << std::endl;
+    os << " command: " << std::dec << (unsigned)appHdr.command << std::endl;
+    os << "}" << std::endl;
+    payloadOffset = sizeof(ChppAppHeader);
+  }
+  size_t payloadSize = pkt.header.length - payloadOffset;
+  if (payloadSize > 0) {
+    os << "Payload (size " << payloadSize << ") {" << std::endl;
+    dumpRaw(os, &pkt.payload[payloadOffset], pkt.header.length - payloadOffset);
+    os << "}" << std::endl;
+  }
 
   const auto &footer = *reinterpret_cast<const ChppTransportFooter *>(
       &pkt.payload[pkt.header.length]);
