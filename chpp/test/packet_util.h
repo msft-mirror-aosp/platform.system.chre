@@ -25,6 +25,7 @@
 
 #include <gtest/gtest.h>
 
+#include "chpp/app.h"
 #include "chpp/crc.h"
 #include "chpp/transport.h"
 
@@ -62,6 +63,13 @@ struct ChppPacketWithPayload {
   ChppTransportFooter footer;
 } CHPP_PACKED_ATTR;
 
+struct ChppPacketWithAppHeader {
+  uint16_t preamble;
+  ChppTransportHeader transportHeader;
+  ChppAppHeader appHeader;
+  uint8_t payload[];
+};
+
 // Utilities for packet creation -----------------------------------------------
 
 //! Computes the CRC of one of the complete packet types defined above
@@ -84,7 +92,7 @@ ChppEmptyPacket generateAck(const std::vector<uint8_t> &pkt);
 template <size_t kPayloadSize>
 ChppPacketWithPayload<kPayloadSize> generatePacketWithPayload(
     uint8_t ackSeq = 0, uint8_t seq = 0,
-    const std::array<uint8_t, kPayloadSize> *payload = nullptr) {
+    const std::span<uint8_t, kPayloadSize> *payload = nullptr) {
   // clang-format off
   ChppPacketWithPayload<kPayloadSize> pkt = {
     .preamble = kPreamble,
@@ -129,7 +137,19 @@ inline const ChppTransportHeader &getHeader(const std::vector<uint8_t> &pkt) {
   return *reinterpret_cast<const ChppTransportHeader *>(&pkt[sizeof(uint16_t)]);
 }
 
+inline const ChppPacketWithAppHeader &asApp(const std::vector<uint8_t> &pkt) {
+  EXPECT_GE(pkt.size(),
+            sizeof(ChppPacketWithAppHeader) + sizeof(ChppTransportFooter));
+  return *reinterpret_cast<const ChppPacketWithAppHeader *>(pkt.data());
+}
+
 // Utilities for debugging -----------------------------------------------------
+
+const char *appErrorCodeToStr(uint8_t error);
+const char *appMessageTypeToStr(uint8_t type);
+const char *handleToStr(uint8_t handle);
+const char *packetAttrToStr(uint8_t attr);
+const char *transportErrorToStr(uint8_t error);
 
 //! Tuned for outputting a raw binary buffer (e.g. payload or full packet)
 void dumpRaw(std::ostream &os, const void *ptr, size_t len);
