@@ -514,11 +514,15 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
 }
 
 DRAM_REGION_FUNCTION void HostLinkBase::initializeIpi(void) {
-  LOGV("%s", __func__);
   bool success = false;
   int ret;
   constexpr size_t kBackgroundTaskStackSize = 1024;
+
+#ifdef PRI_CHRE_BACKGROUND
+  constexpr UBaseType_t kBackgroundTaskPriority = PRI_CHRE_BACKGROUND;
+#else
   constexpr UBaseType_t kBackgroundTaskPriority = 2;
+#endif
 
   // prepared share memory information and register the callback functions
   if (!(ret = scp_get_reserve_mem_by_id(SCP_CHRE_FROM_MEM_ID,
