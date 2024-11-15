@@ -15,13 +15,14 @@
  */
 
 #include <general_test/basic_ble_test.h>
-
 #include <shared/send_message.h>
 
 #include "chre/util/nanoapp/ble.h"
+#include "chre/util/nanoapp/log.h"
 #include "chre/util/time.h"
 #include "chre_api/chre.h"
 
+#define LOG_TAG "[GeneralTest][Ble]"
 /*
  * Test to check expected functionality of the CHRE BLE APIs.
  */
@@ -83,8 +84,15 @@ void BasicBleTest::setUp(uint32_t messageSize, const void * /* message */) {
 }
 
 void BasicBleTest::handleBleAsyncResult(const chreAsyncResult *result) {
-  if (result == nullptr || !result->success) {
+  if (result == nullptr) {
+    sendFatalFailureToHost("Received null BLE async result");
+    return;
+  }
+  if (!result->success) {
+    LOGE("Received unsuccessful BLE async result, error code %" PRIu8,
+         result->errorCode);
     sendFatalFailureToHost("Received unsuccessful BLE async result");
+    return;
   }
 
   switch (result->requestType) {
