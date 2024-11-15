@@ -1,1 +1,0 @@
-../../../public_platform_gnss_pal/chre/target_platform/platform_gnss_base.h
