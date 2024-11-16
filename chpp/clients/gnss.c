@@ -192,7 +192,8 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
     switch (rxHeader->command) {
       case CHPP_GNSS_OPEN: {
         chppClientProcessOpenResponse(&gnssClientContext->client, buf, len);
-        if (gnssClientContext->requestStateResyncPending) {
+        if (rxHeader->error == CHPP_APP_ERROR_NONE &&
+            gnssClientContext->requestStateResyncPending) {
           gCallbacks->requestStateResync();
           gnssClientContext->requestStateResyncPending = false;
         }

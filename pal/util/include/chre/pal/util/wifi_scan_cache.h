@@ -97,9 +97,9 @@ void chreWifiScanCacheDeinit(void);
  * This function must not be invoked while a scan caching is currently taking
  * place (i.e. until chreWifiScanCacheScanEventEnd() is invoked).
  *
- * @param activeScanResult true if this WiFi scan was a result of an active WiFi
- * scan from CHRE (i.e. not a result of passive scan monitoring only). If true,
- * a scanResponseCallback will be invoked in chreWifiScanCacheScanEventEnd().
+ * @param scanRequestedByChre true if this WiFi scan was requested by CHRE (i.e.
+ * not a result of passive scan monitoring only). If true, a
+ * scanResponseCallback will be invoked in chreWifiScanCacheScanEventEnd().
  *
  * @return true if the scan cache was successfully started.
  *
@@ -110,7 +110,7 @@ bool chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
                                      const uint32_t *scannedFreqList,
                                      uint16_t scannedFreqListLength,
                                      uint8_t radioChainPref,
-                                     bool activeScanResult);
+                                     bool scanRequestedByChre);
 
 /**
  * Adds a WiFi scan result to the current WiFi scan event cache.

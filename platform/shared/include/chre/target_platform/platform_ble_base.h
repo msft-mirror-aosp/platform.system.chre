@@ -1,1 +1,0 @@
-../../../public_platform_ble_pal/chre/target_platform/platform_ble_base.h
