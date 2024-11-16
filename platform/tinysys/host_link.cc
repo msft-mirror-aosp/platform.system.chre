@@ -92,6 +92,8 @@ size_t gChreSubregionSendSize;
 // TODO(b/277235389): move it to HostLinkBase, and revisit buffer size
 // payload buffers
 #define CHRE_IPI_RECV_BUFFER_SIZE (CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128)
+
+// The buffer used to receive messages from AP
 DRAM_REGION_VARIABLE uint32_t
     gChreRecvBuffer[CHRE_IPI_RECV_BUFFER_SIZE / sizeof(uint32_t)]
     __attribute__((aligned(CACHE_LINE_SIZE)));
@@ -162,7 +164,7 @@ struct PendingMessage {
 };
 
 constexpr size_t kOutboundQueueSize = 100;
-DRAM_REGION_VARIABLE FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize>
+SRAM_REGION_VARIABLE FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize>
     gOutboundQueue;
 
 typedef void(MessageBuilderFunction)(ChreFlatBufferBuilder &builder,
@@ -465,9 +467,9 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
   struct ScpChreIpiMsg msg = *(struct ScpChreIpiMsg *)data;
 
   // check the magic number and payload size need to be copy(if need) */
-  LOGV("%s: msg.magic=0x%x, msg.size=%u", __func__, msg.magic, msg.size);
+  LOGD("%s: Received a message from AP. Size=%u", __func__, msg.size);
   if (msg.magic != SCP_CHRE_MAGIC) {
-    LOGE("Invalid magic number, skip message");
+    LOGE("Invalid magic number: 0x%x, skip message", msg.magic);
     gChreIpiAckToHost[0] = IPI_NO_MEMORY;
     gChreIpiAckToHost[1] = 0;
     return;
@@ -478,11 +480,12 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionRecvAddr));
 
 #ifdef SCP_CHRE_USE_DMA
-  auto dstAddr = reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]);
+
+  auto dstAddr = reinterpret_cast<uint32_t>(gChreRecvBuffer);
 
   // destination address for receiving data is in a cacheable memory, it should
   // be invalidated/flushed before transferring from share buffer to SCP
-  mrv_dcache_flush_multi_addr(dstAddr, align(msg.size, CACHE_LINE_SIZE));
+  scp_dcache_flush(dstAddr, align(msg.size, CACHE_LINE_SIZE));
 
   // Using SCP DMA HW to copy the data from share memory to SCP side.
   // The dstAddr could be a global variables or a SCP heap memory at SRAM/DRAM
@@ -490,19 +493,19 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
                                                DMA_MEM_ID, NO_RESERVED);
 
   if (result != DMA_RESULT_DONE) {
-    LOGE("Failed to send a message using DMA");
+    LOGE("Failed to receive a message from AP using DMA");
   }
 
-#else
+#else  // SCP_CHRE_USE_DMA
+
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(static_cast<void *>(gChreRecvBuffer),
          reinterpret_cast<void *>(srcAddr), msg.size);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
-#endif
+
+#endif  // SCP_CHRE_USE_DMA
 
   // process the message
-  LOGV("chre_rcvbuf: 0x%x 0x%x 0x%x 0x%x", gChreRecvBuffer[0],
-       gChreRecvBuffer[1], gChreRecvBuffer[2], gChreRecvBuffer[3]);
   receive(static_cast<HostLinkBase *>(prdata), gChreRecvBuffer, msg.size);
 
   // After finishing the job, akc the message to host
@@ -511,11 +514,15 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
 }
 
 DRAM_REGION_FUNCTION void HostLinkBase::initializeIpi(void) {
-  LOGV("%s", __func__);
   bool success = false;
   int ret;
   constexpr size_t kBackgroundTaskStackSize = 1024;
+
+#ifdef PRI_CHRE_BACKGROUND
+  constexpr UBaseType_t kBackgroundTaskPriority = PRI_CHRE_BACKGROUND;
+#else
   constexpr UBaseType_t kBackgroundTaskPriority = 2;
+#endif
 
   // prepared share memory information and register the callback functions
   if (!(ret = scp_get_reserve_mem_by_id(SCP_CHRE_FROM_MEM_ID,
@@ -577,9 +584,9 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
   msg.magic = SCP_CHRE_MAGIC;
   msg.size = dataLen;
 
-  // Mapping the physical address of share memory for SCP
   void *dstAddr = reinterpret_cast<void *>(
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr)));
+
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(dstAddr, data, dataLen);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
