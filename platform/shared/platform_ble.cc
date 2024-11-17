@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_BLE_SUPPORT_ENABLED
+
 #include "chre/platform/platform_ble.h"
 
 #include <cinttypes>
@@ -166,3 +168,5 @@ void PlatformBleBase::handleBtSnoopLog(bool isTxToBtController,
 }
 
 }  // namespace chre
+
+#endif  // CHRE_BLE_SUPPORT_ENABLED
