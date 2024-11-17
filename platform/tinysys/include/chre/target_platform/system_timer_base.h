@@ -25,6 +25,7 @@
 extern "C" {
 #endif
 
+#include "FreeRTOS.h"
 #include "sensorhub/rt_timer.h"
 #include "task.h"
 
@@ -40,7 +41,11 @@ class SystemTimerBase {
   static constexpr uint32_t kStackDepthWords = 0x200;  // 2K stack size
 
   /** Priority of the callback runner task */
+#ifdef PRI_CHRE_SYS_TIMER
+  static constexpr UBaseType_t kTaskPriority = PRI_CHRE_SYS_TIMER;
+#else
   static constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY + 4;
+#endif
 
   /** Name of the callback runner task */
   static constexpr char kTaskName[] = "ChreTimerCbRunner";
