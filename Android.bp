@@ -887,6 +887,11 @@ cc_test_host {
     ],
     local_include_dirs: [
         "platform/shared",
+        "platform/shared/public_platform_ble_pal",
+        "platform/shared/public_platform_debug_dump_manager",
+        "platform/shared/public_platform_gnss_pal",
+        "platform/shared/public_platform_wifi_pal",
+        "platform/shared/public_platform_wwan_pal",
         "test/simulation/inc",
     ],
     static_libs: [
@@ -992,6 +997,11 @@ cc_library_static {
         "platform/linux/include",
         "platform/shared/audio_pal/include",
         "platform/shared/include",
+        "platform/shared/public_platform_ble_pal",
+        "platform/shared/public_platform_debug_dump_manager",
+        "platform/shared/public_platform_gnss_pal",
+        "platform/shared/public_platform_wifi_pal",
+        "platform/shared/public_platform_wwan_pal",
         "platform/shared/sensor_pal/include",
         "util/include",
     ],

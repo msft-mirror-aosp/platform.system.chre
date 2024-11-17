@@ -18,12 +18,14 @@
  * @file Utilities for working with raw CHPP packets in a test setting
  */
 
+#include <array>
 #include <cinttypes>
 #include <iostream>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "chpp/app.h"
 #include "chpp/crc.h"
 #include "chpp/transport.h"
 
@@ -53,6 +55,21 @@ struct ChppPacketPrefix {
   uint8_t payload[1];  // Variable size per header.length
 } CHPP_PACKED_ATTR;
 
+template <size_t kPayloadSize>
+struct ChppPacketWithPayload {
+  uint16_t preamble;
+  ChppTransportHeader header;
+  uint8_t payload[kPayloadSize];
+  ChppTransportFooter footer;
+} CHPP_PACKED_ATTR;
+
+struct ChppPacketWithAppHeader {
+  uint16_t preamble;
+  ChppTransportHeader transportHeader;
+  ChppAppHeader appHeader;
+  uint8_t payload[];
+};
+
 // Utilities for packet creation -----------------------------------------------
 
 //! Computes the CRC of one of the complete packet types defined above
@@ -68,32 +85,71 @@ ChppEmptyPacket generateEmptyPacket(uint8_t ackSeq = 1, uint8_t seq = 0,
                                     uint8_t error = CHPP_TRANSPORT_ERROR_NONE);
 
 //! Create an empty ACK packet for the given packet
-ChppEmptyPacket generateAck(std::vector<uint8_t> &pkt);
+ChppEmptyPacket generateAck(const std::vector<uint8_t> &pkt);
+
+//! Create a packet with payload of the given size. If a payload array is not
+//! provided, it is set to all-zeros.
+template <size_t kPayloadSize>
+ChppPacketWithPayload<kPayloadSize> generatePacketWithPayload(
+    uint8_t ackSeq = 0, uint8_t seq = 0,
+    const std::span<uint8_t, kPayloadSize> *payload = nullptr) {
+  // clang-format off
+  ChppPacketWithPayload<kPayloadSize> pkt = {
+    .preamble = kPreamble,
+    .header = {
+      .flags = CHPP_TRANSPORT_FLAG_FINISHED_DATAGRAM,
+      .packetCode = static_cast<uint8_t>(CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
+          CHPP_TRANSPORT_ATTR_NONE, CHPP_TRANSPORT_ERROR_NONE)),
+      .ackSeq = ackSeq,
+      .seq = seq,
+      .length = kPayloadSize,
+      .reserved = 0,
+    },
+  };
+  // clang-format on
+  if (payload != nullptr) {
+    std::memcpy(pkt.payload, payload->data(), sizeof(pkt.payload));
+  }
+  pkt.footer.checksum = computeCrc(pkt);
+  return pkt;
+}
 
 // Utilities for packet parsing ------------------------------------------------
 
-inline ChppEmptyPacket &asEmptyPacket(std::vector<uint8_t> &pkt) {
+inline const ChppEmptyPacket &asEmptyPacket(const std::vector<uint8_t> &pkt) {
   EXPECT_EQ(pkt.size(), sizeof(ChppEmptyPacket));
-  return *reinterpret_cast<ChppEmptyPacket *>(pkt.data());
+  return *reinterpret_cast<const ChppEmptyPacket *>(pkt.data());
 }
 
-inline ChppResetPacket &asResetPacket(std::vector<uint8_t> &pkt) {
+inline const ChppResetPacket &asResetPacket(const std::vector<uint8_t> &pkt) {
   EXPECT_EQ(pkt.size(), sizeof(ChppResetPacket));
-  return *reinterpret_cast<ChppResetPacket *>(pkt.data());
+  return *reinterpret_cast<const ChppResetPacket *>(pkt.data());
 }
 
-inline ChppPacketPrefix &asChpp(std::vector<uint8_t> &pkt) {
+inline const ChppPacketPrefix &asChpp(const std::vector<uint8_t> &pkt) {
   EXPECT_GE(pkt.size(), sizeof(ChppEmptyPacket));
-  return *reinterpret_cast<ChppPacketPrefix *>(pkt.data());
+  return *reinterpret_cast<const ChppPacketPrefix *>(pkt.data());
 }
 
-inline ChppTransportHeader &getHeader(std::vector<uint8_t> &pkt) {
+inline const ChppTransportHeader &getHeader(const std::vector<uint8_t> &pkt) {
   static_assert(CHPP_PREAMBLE_LEN_BYTES == sizeof(uint16_t));
   EXPECT_GE(pkt.size(), sizeof(uint16_t) + sizeof(ChppTransportHeader));
-  return *reinterpret_cast<ChppTransportHeader *>(&pkt[sizeof(uint16_t)]);
+  return *reinterpret_cast<const ChppTransportHeader *>(&pkt[sizeof(uint16_t)]);
+}
+
+inline const ChppPacketWithAppHeader &asApp(const std::vector<uint8_t> &pkt) {
+  EXPECT_GE(pkt.size(),
+            sizeof(ChppPacketWithAppHeader) + sizeof(ChppTransportFooter));
+  return *reinterpret_cast<const ChppPacketWithAppHeader *>(pkt.data());
 }
 
 // Utilities for debugging -----------------------------------------------------
+
+const char *appErrorCodeToStr(uint8_t error);
+const char *appMessageTypeToStr(uint8_t type);
+const char *handleToStr(uint8_t handle);
+const char *packetAttrToStr(uint8_t attr);
+const char *transportErrorToStr(uint8_t error);
 
 //! Tuned for outputting a raw binary buffer (e.g. payload or full packet)
 void dumpRaw(std::ostream &os, const void *ptr, size_t len);

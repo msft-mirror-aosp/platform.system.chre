@@ -213,7 +213,9 @@ static enum ChppAppErrorCode chppDispatchWifiResponse(void *clientContext,
     switch (rxHeader->command) {
       case CHPP_WIFI_OPEN: {
         chppClientProcessOpenResponse(&wifiClientContext->client, buf, len);
-        chppWiFiRecoverScanMonitor(wifiClientContext);
+        if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+          chppWiFiRecoverScanMonitor(wifiClientContext);
+        }
         break;
       }
 
@@ -486,9 +488,10 @@ static void chppWifiConfigureScanMonitorResult(
 
   if (len < sizeof(struct ChppWifiConfigureScanMonitorAsyncResponse)) {
     // Short response length indicates an error
-    gCallbacks->scanMonitorStatusChangeCallback(
-        false, chppAppShortResponseErrorHandler(buf, len, "ScanMonitor"));
-
+    uint8_t error = chppAppShortResponseErrorHandler(buf, len, "ScanMonitor");
+    if (!gWifiClientContext.scanMonitorSilenceCallback) {
+      gCallbacks->scanMonitorStatusChangeCallback(false, error);
+    }
   } else {
     struct ChppWifiConfigureScanMonitorAsyncResponseParameters *result =
         &((struct ChppWifiConfigureScanMonitorAsyncResponse *)buf)->params;
@@ -948,10 +951,7 @@ static bool chppWifiClientConfigureScanMonitor(bool enable) {
     CHPP_LOG_OOM();
   } else {
     request->header.command = CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC;
-    request->params.enable = enable;
-    request->params.cookie =
-        &gWifiClientContext
-             .outReqStates[CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC];
+    request->enable = enable;
 
     result = chppClientSendTimestampedRequestOrFail(
         &gWifiClientContext.client,
