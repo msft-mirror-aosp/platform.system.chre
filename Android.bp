@@ -56,6 +56,70 @@ filegroup {
     ],
 }
 
+filegroup {
+    name: "contexthub_hal_common_srcs",
+    srcs: [
+        "host/common/file_stream.cc",
+        "host/common/fragmented_load_transaction.cc",
+        "host/common/host_protocol_host.cc",
+        "host/common/log.cc",
+        "platform/shared/host_protocol_common.cc",
+    ],
+}
+
+filegroup {
+    name: "contexthub_hal_client_srcs",
+    srcs: [
+        "host/common/hal_client.cc",
+        "host/common/pigweed/hal_channel_output.cc",
+        "host/common/pigweed/hal_rpc_client.cc",
+        "host/common/socket_client.cc",
+    ],
+}
+
+cc_defaults {
+    name: "contexthub_hal_defaults",
+    vendor: true,
+    srcs: [":contexthub_hal_common_srcs"],
+    include_dirs: [
+        "system/chre/host/common/include/",
+        "system/chre/host/hal_generic/aidl/",
+        "system/chre/host/hal_generic/common/",
+        "system/chre/platform/shared/include/",
+        "system/chre/util/include/",
+    ],
+    header_libs: [
+        "chre_api",
+        "chre_flatbuffers",
+    ],
+    shared_libs: [
+        "android.frameworks.stats-V2-ndk",
+        "android.hardware.contexthub-V4-ndk",
+        "chre_atoms_log",
+        "chremetrics-cpp",
+        "libaconfig_storage_read_api_cc",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libjsoncpp",
+        "liblog",
+        "libprotobuf-cpp-lite",
+        "libutils",
+        "server_configurable_flags",
+    ],
+    static_libs: [
+        "chre_flags_c_lib",
+        "chre_metrics_reporter",
+        "event_logger",
+    ],
+    cflags: [
+        "-DCHRE_IS_HOST_BUILD",
+        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000", // Needed to import CHRE APIs
+        "-Wall",
+        "-Werror",
+    ],
+}
+
 cc_library_static {
     name: "chre_client",
     vendor_available: true,
@@ -469,7 +533,7 @@ cc_library_static {
         "util/include",
     ],
     shared_libs: [
-        "android.hardware.contexthub-V3-ndk",
+        "android.hardware.contexthub-V4-ndk",
         "libcutils",
         "libutils",
     ],
@@ -528,7 +592,7 @@ cc_test_host {
         "util/include/",
     ],
     static_libs: [
-        "android.hardware.contexthub-V3-ndk",
+        "android.hardware.contexthub-V4-ndk",
         "chre_flags_c_lib",
         "chre_host_common",
         "event_logger",
@@ -537,7 +601,7 @@ cc_test_host {
     ],
     shared_libs: [
         "android.frameworks.stats-V2-ndk",
-        "android.hardware.contexthub-V3-ndk",
+        "android.hardware.contexthub-V4-ndk",
         "chre_atoms_log",
         "libaconfig_storage_read_api_cc",
         "libbase",
