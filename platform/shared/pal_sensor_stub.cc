@@ -16,11 +16,8 @@
 
 #include "chre/pal/sensor.h"
 
-#include "chre/util/macros.h"
-
 const struct chrePalSensorApi *chrePalSensorGetApi(
-    uint32_t requestedApiVersion) {
-  UNUSED_VAR(requestedApiVersion);
+    uint32_t /*requestedApiVersion*/) {
 
   // This stub implementation of the CHRE PAL returns nullptr to indicate that
   // it is not supplied by this platform.
