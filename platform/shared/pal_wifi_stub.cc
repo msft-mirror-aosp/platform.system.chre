@@ -16,7 +16,7 @@
 
 #include "chre/pal/wifi.h"
 
-const struct chrePalWifiApi *chrePalWifiGetApi(uint32_t requestedApiVersion) {
+const struct chrePalWifiApi *chrePalWifiGetApi(uint32_t /*requestedApiVersion*/) {
   // This stub implementation of the CHRE PAL returns nullptr to indicate that
   // it is not supplied by this platform.
   return nullptr;
