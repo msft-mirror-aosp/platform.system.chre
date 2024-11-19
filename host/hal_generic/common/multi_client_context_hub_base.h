@@ -33,9 +33,11 @@
 
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 namespace android::hardware::contexthub::common::implementation {
 
@@ -89,6 +91,24 @@ class MultiClientContextHubBase
   ScopedAStatus sendMessageDeliveryStatusToHub(
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
+  ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
+  ScopedAStatus getEndpoints(std::vector<EndpointInfo> *endpoints) override;
+  ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus registerEndpointCallback(
+      const std::shared_ptr<IEndpointCallback> &callback) override;
+  ScopedAStatus requestSessionIdRange(int32_t size,
+                                      std::vector<int32_t> *ids) override;
+  ScopedAStatus openEndpointSession(
+      int32_t sessionId, const EndpointId &destination,
+      const EndpointId &initiator,
+      const std::optional<std::string> &serviceDescriptor) override;
+  ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
+                                      const Message &msg) override;
+  ScopedAStatus sendMessageDeliveryStatusToEndpoint(
+      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
+  ScopedAStatus closeEndpointSession(int32_t sessionId, Reason reason) override;
+  ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
 
   // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,

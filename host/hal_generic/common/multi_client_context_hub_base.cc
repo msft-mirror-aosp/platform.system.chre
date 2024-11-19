@@ -532,6 +532,63 @@ ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
   return fromResult(success);
 }
 
+ScopedAStatus MultiClientContextHubBase::getHubs(
+    std::vector<HubInfo> * /*hubs*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::getEndpoints(
+    std::vector<EndpointInfo> * /*endpoints*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::registerEndpoint(
+    const EndpointInfo & /*endpoint*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::unregisterEndpoint(
+    const EndpointInfo & /*endpoint*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::registerEndpointCallback(
+    const std::shared_ptr<IEndpointCallback> & /*callback*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::requestSessionIdRange(
+    int32_t /*size*/, std::vector<int32_t> * /*ids*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::openEndpointSession(
+    int32_t /*sessionId*/, const EndpointId & /*destination*/,
+    const EndpointId & /*initiator*/,
+    const std::optional<std::string> & /*serviceDescriptor*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::sendMessageToEndpoint(
+    int32_t /*sessionId*/, const Message & /*msg*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToEndpoint(
+    int32_t /*sessionId*/, const MessageDeliveryStatus & /*msgStatus*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::closeEndpointSession(
+    int32_t /*sessionId*/, Reason /*reason*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::endpointSessionOpenComplete(
+    int32_t /*sessionId*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
 bool MultiClientContextHubBase::enableTestMode() {
   std::unique_lock<std::mutex> lock(mTestModeMutex);
   if (mIsTestModeEnabled) {
