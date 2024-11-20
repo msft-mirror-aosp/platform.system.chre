@@ -779,14 +779,6 @@ cc_test_host {
         "platform/shared/pw_trace/include",
         "util/include",
     ],
-    cflags: [
-        "-DCHRE_ASSERTIONS_ENABLED=true",
-        "-DCHRE_BLE_SUPPORT_ENABLED=true",
-        "-DCHRE_FILENAME=__FILE__",
-        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
-        "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
-        "-DGTEST",
-    ],
     header_libs: [
         "chre_flatbuffers",
     ],
@@ -795,6 +787,9 @@ cc_test_host {
         "libgmock",
         "pw_allocator",
         "pw_containers",
+    ],
+    defaults: [
+        "chre_linux_cflags",
     ],
     sanitize: {
         address: true,

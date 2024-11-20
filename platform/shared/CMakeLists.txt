@@ -337,7 +337,11 @@ pw_add_library(chre.platform.shared.log_buffer STATIC
     chre.util
 )
 
-pw_add_library(chre.platform.shared.log_buffer_manager STATIC
+# This requires the backend to provide an implementation for:
+# - void LogBufferManager::preSecondaryBufferUse() const
+pw_add_facade(chre.platform.shared.log_buffer_manager STATIC
+  BACKEND
+    chre.platform.shared.log_buffer_manager_BACKEND
   HEADERS
     include/chre/platform/shared/log_buffer_manager.h
   PUBLIC_INCLUDES
