@@ -116,7 +116,7 @@ class MessageRouter {
     bool closeSession(SessionId sessionId);
 
     //! Returns a session if it exists
-    //!@return The session or std::nullopt if the session was not found
+    //! @return The session or std::nullopt if the session was not found
     std::optional<Session> getSessionWithId(SessionId sessionId);
 
     //! Sends a message to the session specified by sessionId.
