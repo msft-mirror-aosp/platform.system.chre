@@ -38,7 +38,8 @@ class DestructorCounter {
     if (mValue >= 0) {
       gDestructorCount[mValue]++;
     }
-  };
+  }
+
   void setValue(int value) {
     mValue = value;
   }
