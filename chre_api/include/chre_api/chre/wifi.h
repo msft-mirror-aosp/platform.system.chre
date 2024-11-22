@@ -1282,6 +1282,8 @@ bool chreWifiNanSubscribeCancel(uint32_t subscriptionID);
  * @param cookie An opaque value that will be included in the chreAsyncResult
  *        sent in relation to this request.
  * @return true if the request was accepted for processing, false otherwise.
+ * @since v1.6
+ * @note Requires WiFi permission
  */
 bool chreWifiNanRequestRangingAsync(const struct chreWifiNanRangingParams *params,
                                     const void *cookie);
