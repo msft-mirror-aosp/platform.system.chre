@@ -568,13 +568,12 @@ void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   debugDump.print("\nSensors:\n");
   for (uint8_t i = 0; i < mSensors.size(); i++) {
     for (const auto &request : mSensors[i].getRequests()) {
-      // TODO: Rearrange these prints to be similar to sensor request logs
-      // below
       debugDump.print(
-          " %s: mode=%d int=%" PRIu64 " lat=%" PRIu64 " nappId=%" PRIu16 "\n",
-          mSensors[i].getSensorTypeName(), static_cast<int>(request.getMode()),
+          " %s: nappId=%" PRIu16 " mode=%s int=%" PRIu64 " lat=%" PRIu64 "\n",
+          mSensors[i].getSensorTypeName(), request.getInstanceId(),
+          getSensorModeName(request.getMode()),
           request.getInterval().toRawNanoseconds(),
-          request.getLatency().toRawNanoseconds(), request.getInstanceId());
+          request.getLatency().toRawNanoseconds());
     }
   }
   debugDump.print("\n Last %zu Sensor Requests:\n", mSensorRequestLogs.size());
