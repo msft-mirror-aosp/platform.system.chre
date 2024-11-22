@@ -135,7 +135,7 @@ struct Message {
 //! Represents information about an endpoint
 //! Service information is stored in ServiceManager
 struct EndpointInfo {
-  static constexpr size_t kMaxNameLength = 20;
+  static constexpr size_t kMaxNameLength = 50;
 
   EndpointInfo(EndpointId id, const char *name, uint32_t version,
                EndpointType type, uint32_t requiredPermissions)
