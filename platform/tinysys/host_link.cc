@@ -89,9 +89,13 @@ size_t gChreSubregionRecvSize;
 void *gChreSubregionSendAddr;
 size_t gChreSubregionSendSize;
 
-// TODO(b/277235389): move it to HostLinkBase, and revisit buffer size
-// payload buffers
-#define CHRE_IPI_RECV_BUFFER_SIZE (CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128)
+#ifdef CHRE_LARGE_PAYLOAD_MAX_SIZE
+#define CHRE_IPI_RECV_BUFFER_SIZE \
+  (CHRE_LARGE_PAYLOAD_MAX_SIZE + CACHE_LINE_SIZE)
+#else
+#define CHRE_IPI_RECV_BUFFER_SIZE \
+  (CHRE_MESSAGE_TO_HOST_MAX_SIZE + CACHE_LINE_SIZE)
+#endif
 
 // The buffer used to receive messages from AP
 DRAM_REGION_VARIABLE uint32_t
@@ -584,13 +588,49 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
   msg.magic = SCP_CHRE_MAGIC;
   msg.size = dataLen;
 
-  void *dstAddr = reinterpret_cast<void *>(
-      ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr)));
+  uint32_t dstAddr =
+      ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr));
 
+#ifdef SCP_CHRE_USE_DMA
+  if (dataLen < CACHE_LINE_SIZE + 4000) {
+    dvfs_enable_DRAM_resource(CHRE_MEM_ID);
+    memcpy(reinterpret_cast<void *>(dstAddr), data, dataLen);
+    dvfs_disable_DRAM_resource(CHRE_MEM_ID);
+  } else {
+    auto srcAddr = reinterpret_cast<uint32_t>(data);
+    auto msgSize = reinterpret_cast<uint32_t>(msg.size);
+
+    // Separate the message into 2 parts, copySize and dmaSize, and use memcpy
+    // and dma to transfer them respectively. This is needed due to the
+    // alignment requirement of the dma transfer.
+    uint32_t dmaStartSrcAddr = align(srcAddr, CACHE_LINE_SIZE);
+    uint32_t copySize = dmaStartSrcAddr - srcAddr;
+    uint32_t dmaSize = msgSize - copySize;
+
+    if (copySize > 0) {
+      dvfs_enable_DRAM_resource(CHRE_MEM_ID);
+      memcpy(reinterpret_cast<void *>(dstAddr), data, copySize);
+      dvfs_disable_DRAM_resource(CHRE_MEM_ID);
+    }
+
+    // source address for sending data is in a cacheable memory, it should
+    // be invalidated/flushed before transferring from SCP to shared buffer
+    scp_dcache_flush(dmaStartSrcAddr, align(dmaSize, CACHE_LINE_SIZE));
+
+    // Using SCP DMA HW to copy the data from SCP to shared memory.
+    // The dstAddr could be a global variables or a SCP heap memory at SRAM/DRAM
+    DMA_RESULT result = scp_dma_transaction_dram(
+        dstAddr + copySize, dmaStartSrcAddr, dmaSize, DMA_MEM_ID, NO_RESERVED);
+
+    if (result != DMA_RESULT_DONE) {
+      LOGE("Failed to receive a message from AP using DMA");
+    }
+  }
+#else
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
-  memcpy(dstAddr, data, dataLen);
+  memcpy(reinterpret_cast<void *>(dstAddr), data, dataLen);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
-
+#endif
   // NB: len param for ipi_send is in number of 32-bit words
   int ret = ipi_send_compl(
       IPI_OUT_C_SCP_HOST_CHRE, &msg, sizeof(msg) / sizeof(uint32_t),
