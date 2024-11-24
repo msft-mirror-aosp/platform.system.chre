@@ -50,9 +50,12 @@ const chrePalWifiCallbacks gChreWifiPalCallbacks = {
     .scanEventCallback = chreWifiScanEventCallback,
 };
 
+using InputVec = std::vector<chreWifiScanResult>;
+using ResultVec = chre::FixedSizeVector<chreWifiScanResult,
+                                        CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY>;
+
 chre::Optional<WifiScanResponse> gWifiScanResponse;
-chre::FixedSizeVector<chreWifiScanResult, CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY>
-    gWifiScanResultList;
+ResultVec gWifiScanResultList;
 chre::Optional<chreWifiScanEvent> gExpectedWifiScanEvent;
 bool gWifiScanEventCompleted;
 
@@ -124,7 +127,7 @@ void chreWifiScanEventCallback(struct chreWifiScanEvent *event) {
 
 void beginDefaultWifiCache(const uint32_t *scannedFreqList,
                            uint16_t scannedFreqListLen,
-                           bool activeScanResult = true) {
+                           bool scanRequestedByChre = true) {
   chreWifiScanEvent event;
   memset(&event, 0, sizeof(chreWifiScanEvent));
   event.version = CHRE_WIFI_SCAN_EVENT_VERSION;
@@ -139,27 +142,26 @@ void beginDefaultWifiCache(const uint32_t *scannedFreqList,
       gExpectedWifiScanEvent->ssidSetSize,
       gExpectedWifiScanEvent->scannedFreqList,
       gExpectedWifiScanEvent->scannedFreqListLen,
-      gExpectedWifiScanEvent->radioChainPref, activeScanResult);
+      gExpectedWifiScanEvent->radioChainPref, scanRequestedByChre);
 }
 
-void cacheDefaultWifiCacheTest(size_t numEvents,
-                               const uint32_t *scannedFreqList,
-                               uint16_t scannedFreqListLen,
-                               bool activeScanResult = true,
-                               bool scanMonitoringEnabled = false) {
+void resultSpecifiedWifiCacheTest(size_t numEvents, InputVec &inputResults,
+                                  ResultVec &expectedResults,
+                                  const uint32_t *scannedFreqList,
+                                  uint16_t scannedFreqListLen,
+                                  bool scanRequestedByChre = true,
+                                  bool scanMonitoringEnabled = false) {
   gWifiScanEventCompleted = false;
-  beginDefaultWifiCache(scannedFreqList, scannedFreqListLen, activeScanResult);
+  beginDefaultWifiCache(scannedFreqList, scannedFreqListLen,
+                        scanRequestedByChre);
 
-  chreWifiScanResult result = {};
   for (size_t i = 0; i < numEvents; i++) {
-    result.rssi = static_cast<int8_t>(i);
-    memcpy(result.bssid, &i, sizeof(i));
-    chreWifiScanCacheScanEventAdd(&result);
+    chreWifiScanCacheScanEventAdd(&inputResults[i]);
   }
 
   chreWifiScanCacheScanEventEnd(CHRE_ERROR_NONE);
 
-  if (activeScanResult) {
+  if (scanRequestedByChre) {
     EXPECT_TRUE(gWifiScanResponse.has_value());
     EXPECT_EQ(gWifiScanResponse->pending, true);
     ASSERT_EQ(gWifiScanResponse->errorCode, CHRE_ERROR_NONE);
@@ -168,7 +170,7 @@ void cacheDefaultWifiCacheTest(size_t numEvents,
   }
 
   size_t numEventsExpected = 0;
-  if (activeScanResult || scanMonitoringEnabled) {
+  if (scanRequestedByChre || scanMonitoringEnabled) {
     numEventsExpected = std::min(
         numEvents, static_cast<size_t>(CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY));
     ASSERT_TRUE(gWifiScanEventCompleted);
@@ -177,13 +179,48 @@ void cacheDefaultWifiCacheTest(size_t numEvents,
   ASSERT_EQ(gWifiScanResultList.size(), numEventsExpected);
   for (size_t i = 0; i < gWifiScanResultList.size(); i++) {
     // ageMs is not known apriori
-    result.ageMs = gWifiScanResultList[i].ageMs;
-    result.rssi = static_cast<int8_t>(i);
-    memcpy(result.bssid, &i, sizeof(i));
-    EXPECT_EQ(
-        memcmp(&gWifiScanResultList[i], &result, sizeof(chreWifiScanResult)),
-        0);
+    expectedResults[i].ageMs = gWifiScanResultList[i].ageMs;
+    EXPECT_EQ(memcmp(&gWifiScanResultList[i], &expectedResults[i],
+                     sizeof(chreWifiScanResult)),
+              0);
   }
+}
+
+void cacheDefaultWifiCacheTest(size_t numEvents,
+                               const uint32_t *scannedFreqList,
+                               uint16_t scannedFreqListLen,
+                               bool scanRequestedByChre = true,
+                               bool scanMonitoringEnabled = false) {
+  InputVec inputResults;
+  ResultVec expectedResults;
+
+  // Generate a default set of input and expected results if not specified
+  chreWifiScanResult result = {};
+  for (uint64_t i = 0; i < numEvents; i++) {
+    result.rssi = static_cast<int8_t>(i);
+    memcpy(result.bssid, &i, sizeof(result.bssid));
+    inputResults.push_back(result);
+
+    if (!expectedResults.full()) {
+      expectedResults.push_back(result);
+    } else {
+      int8_t minRssi = result.rssi;
+      int minIdx = -1;
+      for (uint64_t idx = 0; idx < expectedResults.size(); idx++) {
+        if (expectedResults[idx].rssi < minRssi) {
+          minRssi = expectedResults[idx].rssi;
+          minIdx = idx;
+        }
+      }
+      if (minIdx != -1) {
+        expectedResults[minIdx] = result;
+      }
+    }
+  }
+
+  resultSpecifiedWifiCacheTest(numEvents, inputResults, expectedResults,
+                               scannedFreqList, scannedFreqListLen,
+                               scanRequestedByChre, scanMonitoringEnabled);
 }
 
 void testCacheDispatch(size_t numEvents, uint32_t maxScanAgeMs,
@@ -236,8 +273,61 @@ TEST_F(WifiScanCacheTests, MultiWifiResultTest) {
 
 TEST_F(WifiScanCacheTests, WifiResultOverflowTest) {
   cacheDefaultWifiCacheTest(
-      CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY + 1 /* numEvents */,
+      CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY + 42 /* numEvents */,
       nullptr /* scannedFreqList */, 0 /* scannedFreqListLen */);
+}
+
+TEST_F(WifiScanCacheTests, WeakestRssiNotAddedToFullCacheTest) {
+  size_t numEvents = CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY + 1;
+  InputVec inputResults;
+  ResultVec expectedResults;
+
+  chreWifiScanResult result = {};
+  result.rssi = -20;
+  uint64_t i;
+  for (i = 0; i < CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY; i++) {
+    memcpy(result.bssid, &i, sizeof(result.bssid));
+    inputResults.push_back(result);
+    expectedResults.push_back(result);
+  }
+
+  result.rssi = -21;
+  memcpy(result.bssid, &i, sizeof(result.bssid));
+  inputResults.push_back(result);
+
+  resultSpecifiedWifiCacheTest(numEvents, inputResults, expectedResults,
+                               nullptr /* scannedFreqList */,
+                               0 /* scannedFreqListLen */);
+}
+
+TEST_F(WifiScanCacheTests, WeakestRssiReplacedAtEndOfFullCacheTest) {
+  size_t numEvents = CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY + 1;
+  InputVec inputResults;
+  ResultVec expectedResults;
+
+  chreWifiScanResult result = {};
+  result.rssi = -20;
+  uint64_t i;
+  for (i = 0; i < CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY - 1; i++) {
+    memcpy(result.bssid, &i, sizeof(result.bssid));
+    inputResults.push_back(result);
+    expectedResults.push_back(result);
+  }
+
+  result.rssi = -21;
+  memcpy(result.bssid, &i, sizeof(result.bssid));
+  i++;
+  inputResults.push_back(result);
+
+  result.rssi = -19;
+  memcpy(result.bssid, &i, sizeof(result.bssid));
+  i++;
+  inputResults.push_back(result);
+  expectedResults.push_back(result);
+
+  resultSpecifiedWifiCacheTest(numEvents, inputResults, expectedResults,
+                               nullptr /* scannedFreqList */,
+                               0 /* scannedFreqListLen */);
 }
 
 TEST_F(WifiScanCacheTests, EmptyWifiResultTest) {
@@ -286,7 +376,7 @@ TEST_F(WifiScanCacheTests, SequentialWifiResultTest) {
 TEST_F(WifiScanCacheTests, ScanMonitorDisabledTest) {
   cacheDefaultWifiCacheTest(1 /* numEvents */, nullptr /* scannedFreqList */,
                             0 /* scannedFreqListLen */,
-                            false /* activeScanResult */,
+                            false /* scanRequestedByChre */,
                             false /* scanMonitoringEnabled */);
 }
 
@@ -294,7 +384,7 @@ TEST_F(WifiScanCacheTests, ScanMonitorEnabledTest) {
   chreWifiScanCacheConfigureScanMonitor(true /* enable */);
   cacheDefaultWifiCacheTest(1 /* numEvents */, nullptr /* scannedFreqList */,
                             0 /* scannedFreqListLen */,
-                            false /* activeScanResult */,
+                            false /* scanRequestedByChre */,
                             true /* scanMonitoringEnabled */);
 }
 
@@ -302,14 +392,14 @@ TEST_F(WifiScanCacheTests, ScanMonitorEnableDisableTest) {
   chreWifiScanCacheConfigureScanMonitor(true /* enable */);
   cacheDefaultWifiCacheTest(1 /* numEvents */, nullptr /* scannedFreqList */,
                             0 /* scannedFreqListLen */,
-                            false /* activeScanResult */,
+                            false /* scanRequestedByChre */,
                             true /* scanMonitoringEnabled */);
 
   clearTestState();
   chreWifiScanCacheConfigureScanMonitor(false /* enable */);
   cacheDefaultWifiCacheTest(1 /* numEvents */, nullptr /* scannedFreqList */,
                             0 /* scannedFreqListLen */,
-                            false /* activeScanResult */,
+                            false /* scanRequestedByChre */,
                             false /* scanMonitoringEnabled */);
 }
 
@@ -326,7 +416,7 @@ TEST_F(WifiScanCacheTests, ZeroMaxScanAgeCacheDispatchTest) {
 TEST_F(WifiScanCacheTests, DuplicateScanResultTest) {
   beginDefaultWifiCache(nullptr /* scannedFreqList */,
                         0 /* scannedFreqListLen */,
-                        true /* activeScanResult */);
+                        true /* scanRequestedByChre */);
 
   chreWifiScanResult result = {};
   result.rssi = -98;
@@ -362,4 +452,40 @@ TEST_F(WifiScanCacheTests, DuplicateScanResultTest) {
   result2.ageMs = gWifiScanResultList[1].ageMs;
   EXPECT_EQ(
       memcmp(&gWifiScanResultList[1], &result2, sizeof(chreWifiScanResult)), 0);
+}
+
+TEST_F(WifiScanCacheTests, IncomingRequestDuringCachePopulationTest) {
+  beginDefaultWifiCache(nullptr /* scannedFreqList */,
+                        0 /* scannedFreqListLen */,
+                        false /* scanRequestedByChre */);
+
+  chreWifiScanResult result = {};
+  chreWifiScanCacheScanEventAdd(&result);
+
+  // An incoming request should upgrade the cache to a CHRE requested scan
+  // event.
+  chreWifiScanParams params = {
+      .scanType = CHRE_WIFI_SCAN_TYPE_ACTIVE,
+      .maxScanAgeMs = 5000,
+      .frequencyListLen = 0,
+      .frequencyList = nullptr,
+      .ssidListLen = 0,
+      .ssidList = nullptr,
+      .radioChainPref = CHRE_WIFI_RADIO_CHAIN_PREF_DEFAULT,
+      .channelSet = CHRE_WIFI_CHANNEL_SET_NON_DFS,
+  };
+  EXPECT_TRUE(chreWifiScanCacheDispatchFromCache(&params));
+
+  // We shouldn't get the scan response until cache population is complete.
+  EXPECT_FALSE(gWifiScanResponse.has_value());
+
+  result.bssid[0] = 1;
+  chreWifiScanCacheScanEventAdd(&result);
+  chreWifiScanCacheScanEventEnd(CHRE_ERROR_NONE);
+
+  // CHRE should get the full cache result.
+  EXPECT_TRUE(gWifiScanResponse.has_value());
+  EXPECT_EQ(gWifiScanResponse->pending, true);
+  EXPECT_EQ(gWifiScanResponse->errorCode, CHRE_ERROR_NONE);
+  EXPECT_EQ(gWifiScanResultList.size(), 2);
 }
