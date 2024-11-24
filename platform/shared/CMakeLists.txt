@@ -274,6 +274,43 @@ pw_add_library(chre.platform.shared.generated.host_messages_generated INTERFACE
     chre_third_party.flatbuffers
 )
 
+pw_add_library(chre.platform.shared.host_protocol_chre STATIC
+  HEADERS
+    include/chre/platform/shared/host_protocol_chre.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.core
+    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.host_protocol_common
+    chre.util
+    chre.util.flatbuffers
+    chre.chre_api
+    chre_third_party.flatbuffers
+  SOURCES
+    host_protocol_chre.cc
+    host_link.cc
+  PRIVATE_DEPS
+    chre.core
+    chre.platform.log
+    chre.platform.shared.host_protocol_chre
+    chre.platform.shared.nanoapp_load_manager
+)
+
+pw_add_library(chre.platform.shared.host_protocol_common STATIC
+  HEADERS
+    include/chre/platform/shared/host_protocol_common.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.util.system
+    chre_third_party.flatbuffers
+  SOURCES
+    host_protocol_common.cc
+  PRIVATE_DEPS
+    chre.platform.shared.generated.host_messages_generated
+)
+
 pw_add_library(chre.platform.shared.loader_util INTERFACE
   HEADERS
     include/chre/platform/shared/loader_util.h
@@ -300,7 +337,11 @@ pw_add_library(chre.platform.shared.log_buffer STATIC
     chre.util
 )
 
-pw_add_library(chre.platform.shared.log_buffer_manager STATIC
+# This requires the backend to provide an implementation for:
+# - void LogBufferManager::preSecondaryBufferUse() const
+pw_add_facade(chre.platform.shared.log_buffer_manager STATIC
+  BACKEND
+    chre.platform.shared.log_buffer_manager_BACKEND
   HEADERS
     include/chre/platform/shared/log_buffer_manager.h
   PUBLIC_INCLUDES
@@ -333,18 +374,18 @@ pw_add_facade(chre.platform.shared.memory INTERFACE
     include
 )
 
-
-# Note that this does NOT actually implement, which are only required for
-# nanoapp builds:
-# - const struct chreNslNanoappInfo *getChreNslDsoNanoappInfo()
-# - bool chreNslDsoGetApi(uint32_t apiId, void **apiHandle)
-pw_add_library(chre.platform.shared.nanoapp_support_lib_dso INTERFACE
-  HEADERS
-    include/chre/platform/shared/nanoapp_support_lib_dso.h
-  PUBLIC_INCLUDES
-    include
-  PUBLIC_DEPS
-    chre.chre_api
+# Partial backend for chre.platform.memory_manger which implements:
+# 1) void *MemoryManager::nanoappAlloc(Nanoapp *app, uint32_t bytes)
+# 2) void MemoryManager::nanoappFree(Nanoapp *app, void *ptr)
+# 3) uint32_t MemoryManager::nanoappFreeAll(Nanoapp *app)
+# 4) void MemoryManager::logStateToBuffer(DebugDumpWrapper &debugDump) const
+pw_add_library(chre.platform.shared.memory_manager STATIC
+  SOURCES
+    memory_manager.cc
+  PRIVATE_DEPS
+    chre.platform.assert
+    chre.platform.memory_manager.facade
+    chre.util.system
 )
 
 pw_add_library(chre.platform.shared.nanoapp_dso_util STATIC
@@ -387,6 +428,31 @@ pw_add_facade(chre.platform.shared.nanoapp_loader STATIC
     chre.platform.shared.nanoapp_tokenized_log
     chre.platform.shared.platform_cache_management
     chre.variant.config
+)
+
+pw_add_library(chre.platform.shared.nanoapp_load_manager STATIC
+  HEADERS
+    include/chre/platform/shared/nanoapp_load_manager.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.core
+    chre.util
+  SOURCES
+    nanoapp_load_manager.cc
+)
+
+# Note that this does NOT actually implement, which are only required for
+# nanoapp builds:
+# - const struct chreNslNanoappInfo *getChreNslDsoNanoappInfo()
+# - bool chreNslDsoGetApi(uint32_t apiId, void **apiHandle)
+pw_add_library(chre.platform.shared.nanoapp_support_lib_dso INTERFACE
+  HEADERS
+    include/chre/platform/shared/nanoapp_support_lib_dso.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.chre_api
 )
 
 pw_add_library(chre.platform.shared.nanoapp_tokenized_log STATIC
