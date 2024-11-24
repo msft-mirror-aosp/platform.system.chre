@@ -55,12 +55,6 @@ pw_add_library(chre.util STATIC
     include/chre/util/toolchain.h
     include/chre/util/unique_ptr.h
     include/chre/util/unique_ptr_impl.h
-    include/chre/util/system/fixed_size_blocking_queue.h
-    include/chre/util/system/fixed_size_blocking_queue_impl.h
-    include/chre/util/system/synchronized_expandable_memory_pool.h
-    include/chre/util/system/synchronized_expandable_memory_pool_impl.h
-    include/chre/util/system/synchronized_memory_pool.h
-    include/chre/util/system/synchronized_memory_pool_impl.h
   PUBLIC_INCLUDES
     include
   PUBLIC_DEPS
@@ -167,6 +161,8 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/ble_util.h
     include/chre/util/system/debug_dump.h
     include/chre/util/system/event_callbacks.h
+    include/chre/util/system/fixed_size_blocking_queue.h
+    include/chre/util/system/fixed_size_blocking_queue_impl.h
     include/chre/util/system/message_common.h
     include/chre/util/system/message_router.h
     include/chre/util/system/napp_header_utils.h
@@ -174,6 +170,10 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/ref_base.h
     include/chre/util/system/shared_ptr.h
     include/chre/util/system/shared_ptr_impl.h
+    include/chre/util/system/synchronized_expandable_memory_pool.h
+    include/chre/util/system/synchronized_expandable_memory_pool_impl.h
+    include/chre/util/system/synchronized_memory_pool.h
+    include/chre/util/system/synchronized_memory_pool_impl.h
     include/chre/util/system/stats_container.h
     include/chre/util/system/transaction_manager.h
     include/chre/util/system/transaction_manager_impl.h

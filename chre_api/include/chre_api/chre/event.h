@@ -500,16 +500,16 @@ struct chreMessageFromEndpointData {
  * Data provided with CHRE_EVENT_ENDPOINT_SESSION_CLOSED.
  */
 struct chreEndpointSessionClosedData {
-  /**
-   * The message hub ID and endpoint ID of the other party in the session.
-   */
-  uint64_t hubId;
-  uint64_t endpointId;
+    /**
+     * The message hub ID and endpoint ID of the other party in the session.
+     */
+    uint64_t hubId;
+    uint64_t endpointId;
 
-  /**
-   * The ID of the session that was closed.
-   */
-  uint16_t sessionId;
+    /**
+     * The ID of the session that was closed.
+     */
+    uint16_t sessionId;
 };
 
 /**
@@ -559,7 +559,7 @@ struct chreNanoappInfo {
      */
     uint8_t rpcServiceCount;
 
-    /*
+    /**
      * Array of RPC services published by this nanoapp.
      * Services are published via chrePublishRpcServices.
      * The array contains rpcServiceCount entries.

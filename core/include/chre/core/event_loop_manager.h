@@ -19,6 +19,7 @@
 
 #include "chre/core/audio_request_manager.h"
 #include "chre/core/ble_request_manager.h"
+#include "chre/core/chre_message_hub_manager.h"
 #include "chre/core/debug_dump_manager.h"
 #include "chre/core/event_loop.h"
 #include "chre/core/event_loop_common.h"
@@ -321,6 +322,12 @@ class EventLoopManager : public NonCopyable {
     return mSystemHealthMonitor;
   }
 
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  ChreMessageHubManager &getChreMessageHubManager() {
+    return mChreMessageHubManager;
+  }
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+
   /**
    * Performs second-stage initialization of things that are not necessarily
    * required at construction time but need to be completed prior to executing
@@ -392,6 +399,11 @@ class EventLoopManager : public NonCopyable {
 
   //! The SettingManager that manages setting states.
   SettingManager mSettingManager;
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  //! The ChreMessageHubManager that manages the CHRE Message Hub.
+  ChreMessageHubManager mChreMessageHubManager;
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 };
 
 //! Provide an alias to the EventLoopManager singleton.
