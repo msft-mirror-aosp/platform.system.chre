@@ -37,17 +37,20 @@ class FakeElement {
  public:
   FakeElement() {
     constructor_count++;
-  };
+  }
+
   FakeElement(int i) {
     val_ = i;
     constructor_count++;
-  };
+  }
+
   ~FakeElement() {
     total_destructor_count++;
     if (val_ >= 0 && val_ < kMaxTestCapacity) {
       destructor_count[val_]++;
     }
-  };
+  }
+
   void setValue(int i) {
     val_ = i;
   }

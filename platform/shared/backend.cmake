@@ -8,6 +8,9 @@ pw_add_backend_variable(chre.platform.shared.authentication_BACKEND)
 # Backend for chre.platform.shared.bt_snoop_log.
 pw_add_backend_variable(chre.platform.shared.bt_snoop_log_BACKEND)
 
+# Backend for chre.platform.shared.log_buffer_manager.
+pw_add_backend_variable(chre.platform.shared.log_buffer_manager_BACKEND)
+
 # Backend for chre.platform.shared.memory.
 pw_add_backend_variable(chre.platform.shared.memory_BACKEND)
 
