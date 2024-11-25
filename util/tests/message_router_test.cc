@@ -19,11 +19,14 @@
 #include <pw_allocator/unique_ptr.h>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 
 #include "chre/util/dynamic_vector.h"
+#include "chre/util/lock_guard.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
+#include "chre/util/system/message_router_callback_allocator.h"
 #include "chre_api/chre.h"
 #include "gtest/gtest.h"
 
@@ -32,31 +35,16 @@ namespace {
 
 constexpr static size_t kMaxMessageHubs = 3;
 constexpr static size_t kMaxSessions = 10;
+constexpr static size_t kMaxFreeCallbackRecords = kMaxSessions * 2;
 constexpr static size_t kNumEndpoints = 3;
 
-constexpr static EndpointInfo kEndpointInfos[kNumEndpoints] = {
-    {
-        .id = 1,
-        .name = "endpoint1",
-        .version = 1,
-        .type = EndpointType::NANOAPP,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_NONE,
-    },
-    {
-        .id = 2,
-        .name = "endpoint2",
-        .version = 10,
-        .type = EndpointType::HOST_ENDPOINT,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_BLE,
-    },
-    {
-        .id = 3,
-        .name = "endpoint3",
-        .version = 100,
-        .type = EndpointType::GENERIC,
-        .requiredPermissions = CHRE_MESSAGE_PERMISSION_AUDIO,
-    },
-};
+static EndpointInfo kEndpointInfos[kNumEndpoints] = {
+    EndpointInfo(/* id= */ 1, /* name= */ "endpoint1", /* version= */ 1,
+                 EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE),
+    EndpointInfo(/* id= */ 2, /* name= */ "endpoint2", /* version= */ 10,
+                 EndpointType::HOST_ENDPOINT, CHRE_MESSAGE_PERMISSION_BLE),
+    EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
+                 EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 
 class TestAllocator : public pw::Allocator {
  public:
@@ -720,6 +708,135 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
   for (size_t i = 0; i < kMessageSize; ++i) {
     EXPECT_EQ(messageFromCallback1.data[i], static_cast<std::byte>(i + 1));
   }
+}
+
+TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
+  struct FreeCallbackContext {
+    bool *freeCallbackCalled;
+    std::byte *message;
+    size_t length;
+  };
+
+  pw::Vector<
+      MessageRouterCallbackAllocator<FreeCallbackContext>::FreeCallbackRecord,
+      10>
+      freeCallbackRecords;
+  MessageRouterCallbackAllocator<FreeCallbackContext> allocator(
+      [](std::byte *message, size_t length,
+         const FreeCallbackContext &context) {
+        *context.freeCallbackCalled =
+            message == context.message && length == context.length;
+      },
+      freeCallbackRecords);
+
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  constexpr size_t kMessageSize = 5;
+  std::byte messageData[kMessageSize];
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  Message messageFromCallback1;
+  Message messageFromCallback2;
+  Message messageFromCallback3;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  Session sessionFromCallback3;
+  MessageHubCallbackStoreData callback(&messageFromCallback1,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(&messageFromCallback2,
+                                        &sessionFromCallback2);
+  MessageHubCallbackStoreData callback3(&messageFromCallback3,
+                                        &sessionFromCallback3);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub3 =
+      router.registerMessageHub("hub3", /* id= */ 3, callback3);
+  EXPECT_TRUE(messageHub3.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Open session from messageHub2:2 to messageHub3:3
+  SessionId sessionId2 = messageHub2->openSession(
+      kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Open session from messageHub3:3 to messageHub1:1
+  SessionId sessionId3 = messageHub3->openSession(
+      kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Send message from messageHub:1 to messageHub2:2
+  bool freeCallbackCalled = false;
+  FreeCallbackContext freeCallbackContext = {
+      .freeCallbackCalled = &freeCallbackCalled,
+      .message = messageData,
+      .length = kMessageSize,
+  };
+  pw::UniquePtr<std::byte[]> data = allocator.MakeUniqueArrayWithCallback(
+      messageData, kMessageSize, std::move(freeCallbackContext));
+  ASSERT_NE(data.get(), nullptr);
+
+  ASSERT_TRUE(messageHub->sendMessage(std::move(data), kMessageSize,
+                                      /* messageType= */ 1,
+                                      /* messagePermissions= */ 0, sessionId));
+  EXPECT_EQ(messageFromCallback2.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback2.sender.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback2.sender.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback2.recipient.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback2.recipient.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback2.messageType, 1);
+  EXPECT_EQ(messageFromCallback2.messagePermissions, 0);
+  EXPECT_EQ(messageFromCallback2.length, kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
+  }
+
+  // Check if free callback was called
+  EXPECT_FALSE(freeCallbackCalled);
+  EXPECT_EQ(messageFromCallback2.data.get(), messageData);
+  messageFromCallback2.data.Reset();
+  EXPECT_TRUE(freeCallbackCalled);
+
+  // Send message from messageHub2:2 to messageHub:1
+  freeCallbackCalled = false;
+  FreeCallbackContext freeCallbackContext2 = {
+      .freeCallbackCalled = &freeCallbackCalled,
+      .message = messageData,
+      .length = kMessageSize,
+  };
+  data = allocator.MakeUniqueArrayWithCallback(messageData, kMessageSize,
+                                               std::move(freeCallbackContext2));
+  ASSERT_NE(data.get(), nullptr);
+
+  ASSERT_TRUE(messageHub2->sendMessage(std::move(data), kMessageSize,
+                                       /* messageType= */ 2,
+                                       /* messagePermissions= */ 3, sessionId));
+  EXPECT_EQ(messageFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback1.sender.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback1.sender.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback1.recipient.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback1.recipient.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback1.messageType, 2);
+  EXPECT_EQ(messageFromCallback1.messagePermissions, 3);
+  EXPECT_EQ(messageFromCallback1.length, kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback1.data[i], static_cast<std::byte>(i + 1));
+  }
+
+  // Check if free callback was called
+  EXPECT_FALSE(freeCallbackCalled);
+  EXPECT_EQ(messageFromCallback1.data.get(), messageData);
+  messageFromCallback1.data.Reset();
+  EXPECT_TRUE(freeCallbackCalled);
 }
 
 TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {

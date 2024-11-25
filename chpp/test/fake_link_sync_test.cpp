@@ -191,4 +191,79 @@ TEST_F(FakeLinkSyncTests, MultipleNotifications) {
   EXPECT_FALSE(mFakeLink->waitForTxPacket());
 }
 
+// This test is essentially CheckRetryOnTimeout but with a twist: we send a
+// packet, then don't send an ACK in the expected time so it gets retried, then
+// after the retry, we send two equivalent ACKs back-to-back
+TEST_F(FakeLinkSyncTests, DelayedThenDupeAck) {
+  // Post the TX packet
+  txPacket();
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
+  (void)mFakeLink->popTxPacket();  // discard the first packet
+
+  // Second wait should yield timeout + retry
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
+
+  // Now deliver duplicate ACKs
+  ChppEmptyPacket ack = generateAck(mFakeLink->popTxPacket());
+  chppRxDataCb(&mTransportContext, reinterpret_cast<uint8_t *>(&ack),
+               sizeof(ack));
+  chppRxDataCb(&mTransportContext, reinterpret_cast<uint8_t *>(&ack),
+               sizeof(ack));
+
+  // We shouldn't get another packet (e.g. NAK)
+  EXPECT_FALSE(mFakeLink->waitForTxPacket())
+      << "Got unexpected packet: " << asChpp(mFakeLink->popTxPacket());
+
+  // The next outbound packet should carry the next sequence number
+  txPacket();
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  EXPECT_EQ(asChpp(mFakeLink->popTxPacket()).header.seq, ack.header.ackSeq);
+}
+
+// This tests the opposite side of DelayedThenDuplicateAck: confirms that if we
+// receive a packet, then send an ACK, then we receive a duplicate, we send the
+// ACK again
+TEST_F(FakeLinkSyncTests, ResendAckOnDupe) {
+  // Note that seq and ackSeq should both be 1, since RESET/RESET_ACK will use 0
+  constexpr uint8_t kSeq = 1;
+  constexpr uint8_t kAckSeq = 1;
+  auto rxPkt = generatePacketWithPayload<1>(kAckSeq, kSeq);
+  EXPECT_TRUE(chppRxDataCb(&mTransportContext,
+                           reinterpret_cast<const uint8_t *>(&rxPkt),
+                           sizeof(rxPkt)));
+
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
+  std::vector<uint8_t> pkt = mFakeLink->popTxPacket();
+  // We should get an ACK in response
+  EXPECT_TRUE(comparePacket(pkt, generateEmptyPacket(kSeq + 1)))
+      << "Expected first ACK for seq 1 but got: " << asEmptyPacket(pkt);
+
+  // Pretend that we lost that ACK, so resend the same packet
+  EXPECT_TRUE(chppRxDataCb(&mTransportContext,
+                           reinterpret_cast<const uint8_t *>(&rxPkt),
+                           sizeof(rxPkt)));
+
+  // We should get another ACK that matches the first
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
+  pkt = mFakeLink->popTxPacket();
+  EXPECT_TRUE(comparePacket(pkt, generateEmptyPacket(kSeq + 1)))
+      << "Expected second ACK for seq 1 but got: " << asEmptyPacket(pkt);
+
+  // Sending another packet should succeed
+  auto secondRxPkt = generatePacketWithPayload<2>(kAckSeq, kSeq + 1);
+  EXPECT_TRUE(chppRxDataCb(&mTransportContext,
+                           reinterpret_cast<const uint8_t *>(&secondRxPkt),
+                           sizeof(secondRxPkt)));
+
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
+  pkt = mFakeLink->popTxPacket();
+  EXPECT_TRUE(comparePacket(pkt, generateEmptyPacket(kSeq + 2)))
+      << "Expected ACK for seq 2 but got: " << asEmptyPacket(pkt);
+}
+
 }  // namespace chpp::test

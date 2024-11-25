@@ -16,8 +16,8 @@
 
 #include "FreeRTOS.h"
 
-#include "chre/target_platform/platform_cache_management.h"
 #include "chre/platform/shared/nanoapp_loader.h"
+#include "chre/platform/shared/platform_cache_management.h"
 
 #include "dma_api.h"
 

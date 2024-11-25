@@ -193,6 +193,11 @@ endif
 # Simulator-specific Compiler Flags ############################################
 
 SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_ble_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_debug_dump_manager
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_gnss_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wifi_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wwan_pal
 SIM_CFLAGS += -Iplatform/linux/sim/include
 
 # Simulator-specific Source Files ##############################################
@@ -342,6 +347,11 @@ GOOGLETEST_CFLAGS += $(FLATBUFFERS_CFLAGS)
 # The order here is important so that the googletest target prefers shared,
 # linux and then SLPI.
 GOOGLETEST_CFLAGS += -Iplatform/shared/include
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_ble_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_debug_dump_manager
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_gnss_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_wifi_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_wwan_pal
 GOOGLETEST_CFLAGS += -Iplatform/linux/include
 GOOGLETEST_CFLAGS += -Iplatform/slpi/include
 GOOGLETEST_CFLAGS += -Iplatform/shared/pw_trace/include
@@ -523,6 +533,11 @@ TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_ble_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_debug_dump_manager
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_gnss_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wifi_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wwan_pal
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
 
