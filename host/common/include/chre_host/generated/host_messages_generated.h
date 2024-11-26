@@ -145,6 +145,26 @@ struct PulseResponse;
 struct PulseResponseBuilder;
 struct PulseResponseT;
 
+struct LeCocChannelInfo;
+struct LeCocChannelInfoBuilder;
+struct LeCocChannelInfoT;
+
+struct BtSocketOpen;
+struct BtSocketOpenBuilder;
+struct BtSocketOpenT;
+
+struct BtSocketOpenResponse;
+struct BtSocketOpenResponseBuilder;
+struct BtSocketOpenResponseT;
+
+struct BtSocketClose;
+struct BtSocketCloseBuilder;
+struct BtSocketCloseT;
+
+struct BtSocketCloseResponse;
+struct BtSocketCloseResponseBuilder;
+struct BtSocketCloseResponseT;
+
 struct HostAddress;
 
 struct MessageContainer;
@@ -327,6 +347,119 @@ inline const char *EnumNameBtSnoopDirection(BtSnoopDirection e) {
   return EnumNamesBtSnoopDirection()[index];
 }
 
+enum class ChannelInfo : uint8_t {
+  NONE = 0,
+  LeCocChannelInfo = 1,
+  MIN = NONE,
+  MAX = LeCocChannelInfo
+};
+
+inline const ChannelInfo (&EnumValuesChannelInfo())[2] {
+  static const ChannelInfo values[] = {
+    ChannelInfo::NONE,
+    ChannelInfo::LeCocChannelInfo
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesChannelInfo() {
+  static const char * const names[3] = {
+    "NONE",
+    "LeCocChannelInfo",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameChannelInfo(ChannelInfo e) {
+  if (flatbuffers::IsOutRange(e, ChannelInfo::NONE, ChannelInfo::LeCocChannelInfo)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesChannelInfo()[index];
+}
+
+template<typename T> struct ChannelInfoTraits {
+  static const ChannelInfo enum_value = ChannelInfo::NONE;
+};
+
+template<> struct ChannelInfoTraits<chre::fbs::LeCocChannelInfo> {
+  static const ChannelInfo enum_value = ChannelInfo::LeCocChannelInfo;
+};
+
+struct ChannelInfoUnion {
+  ChannelInfo type;
+  void *value;
+
+  ChannelInfoUnion() : type(ChannelInfo::NONE), value(nullptr) {}
+  ChannelInfoUnion(ChannelInfoUnion&& u) FLATBUFFERS_NOEXCEPT :
+    type(ChannelInfo::NONE), value(nullptr)
+    { std::swap(type, u.type); std::swap(value, u.value); }
+  ChannelInfoUnion(const ChannelInfoUnion &);
+  ChannelInfoUnion &operator=(const ChannelInfoUnion &u)
+    { ChannelInfoUnion t(u); std::swap(type, t.type); std::swap(value, t.value); return *this; }
+  ChannelInfoUnion &operator=(ChannelInfoUnion &&u) FLATBUFFERS_NOEXCEPT
+    { std::swap(type, u.type); std::swap(value, u.value); return *this; }
+  ~ChannelInfoUnion() { Reset(); }
+
+  void Reset();
+
+#ifndef FLATBUFFERS_CPP98_STL
+  template <typename T>
+  void Set(T&& val) {
+    using RT = typename std::remove_reference<T>::type;
+    Reset();
+    type = ChannelInfoTraits<typename RT::TableType>::enum_value;
+    if (type != ChannelInfo::NONE) {
+      value = new RT(std::forward<T>(val));
+    }
+  }
+#endif  // FLATBUFFERS_CPP98_STL
+
+  static void *UnPack(const void *obj, ChannelInfo type, const flatbuffers::resolver_function_t *resolver);
+  flatbuffers::Offset<void> Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher = nullptr) const;
+
+  chre::fbs::LeCocChannelInfoT *AsLeCocChannelInfo() {
+    return type == ChannelInfo::LeCocChannelInfo ?
+      reinterpret_cast<chre::fbs::LeCocChannelInfoT *>(value) : nullptr;
+  }
+  const chre::fbs::LeCocChannelInfoT *AsLeCocChannelInfo() const {
+    return type == ChannelInfo::LeCocChannelInfo ?
+      reinterpret_cast<const chre::fbs::LeCocChannelInfoT *>(value) : nullptr;
+  }
+};
+
+bool VerifyChannelInfo(flatbuffers::Verifier &verifier, const void *obj, ChannelInfo type);
+bool VerifyChannelInfoVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types);
+
+enum class BtSocketOpenStatus : int8_t {
+  SUCCESS = 0,
+  FAILURE = 1,
+  MIN = SUCCESS,
+  MAX = FAILURE
+};
+
+inline const BtSocketOpenStatus (&EnumValuesBtSocketOpenStatus())[2] {
+  static const BtSocketOpenStatus values[] = {
+    BtSocketOpenStatus::SUCCESS,
+    BtSocketOpenStatus::FAILURE
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesBtSocketOpenStatus() {
+  static const char * const names[3] = {
+    "SUCCESS",
+    "FAILURE",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameBtSocketOpenStatus(BtSocketOpenStatus e) {
+  if (flatbuffers::IsOutRange(e, BtSocketOpenStatus::SUCCESS, BtSocketOpenStatus::FAILURE)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesBtSocketOpenStatus()[index];
+}
+
 /// A union that joins together all possible messages. Note that in FlatBuffers,
 /// unions have an implicit type
 enum class ChreMessage : uint8_t {
@@ -363,11 +496,15 @@ enum class ChreMessage : uint8_t {
   PulseResponse = 30,
   NanoappTokenDatabaseInfo = 31,
   MessageDeliveryStatus = 32,
+  BtSocketOpen = 33,
+  BtSocketOpenResponse = 34,
+  BtSocketClose = 35,
+  BtSocketCloseResponse = 36,
   MIN = NONE,
-  MAX = MessageDeliveryStatus
+  MAX = BtSocketCloseResponse
 };
 
-inline const ChreMessage (&EnumValuesChreMessage())[33] {
+inline const ChreMessage (&EnumValuesChreMessage())[37] {
   static const ChreMessage values[] = {
     ChreMessage::NONE,
     ChreMessage::NanoappMessage,
@@ -401,13 +538,17 @@ inline const ChreMessage (&EnumValuesChreMessage())[33] {
     ChreMessage::PulseRequest,
     ChreMessage::PulseResponse,
     ChreMessage::NanoappTokenDatabaseInfo,
-    ChreMessage::MessageDeliveryStatus
+    ChreMessage::MessageDeliveryStatus,
+    ChreMessage::BtSocketOpen,
+    ChreMessage::BtSocketOpenResponse,
+    ChreMessage::BtSocketClose,
+    ChreMessage::BtSocketCloseResponse
   };
   return values;
 }
 
 inline const char * const *EnumNamesChreMessage() {
-  static const char * const names[34] = {
+  static const char * const names[38] = {
     "NONE",
     "NanoappMessage",
     "HubInfoRequest",
@@ -441,13 +582,17 @@ inline const char * const *EnumNamesChreMessage() {
     "PulseResponse",
     "NanoappTokenDatabaseInfo",
     "MessageDeliveryStatus",
+    "BtSocketOpen",
+    "BtSocketOpenResponse",
+    "BtSocketClose",
+    "BtSocketCloseResponse",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameChreMessage(ChreMessage e) {
-  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::MessageDeliveryStatus)) return "";
+  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::BtSocketCloseResponse)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesChreMessage()[index];
 }
@@ -582,6 +727,22 @@ template<> struct ChreMessageTraits<chre::fbs::NanoappTokenDatabaseInfo> {
 
 template<> struct ChreMessageTraits<chre::fbs::MessageDeliveryStatus> {
   static const ChreMessage enum_value = ChreMessage::MessageDeliveryStatus;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::BtSocketOpen> {
+  static const ChreMessage enum_value = ChreMessage::BtSocketOpen;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::BtSocketOpenResponse> {
+  static const ChreMessage enum_value = ChreMessage::BtSocketOpenResponse;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::BtSocketClose> {
+  static const ChreMessage enum_value = ChreMessage::BtSocketClose;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::BtSocketCloseResponse> {
+  static const ChreMessage enum_value = ChreMessage::BtSocketCloseResponse;
 };
 
 struct ChreMessageUnion {
@@ -871,6 +1032,38 @@ struct ChreMessageUnion {
   const chre::fbs::MessageDeliveryStatusT *AsMessageDeliveryStatus() const {
     return type == ChreMessage::MessageDeliveryStatus ?
       reinterpret_cast<const chre::fbs::MessageDeliveryStatusT *>(value) : nullptr;
+  }
+  chre::fbs::BtSocketOpenT *AsBtSocketOpen() {
+    return type == ChreMessage::BtSocketOpen ?
+      reinterpret_cast<chre::fbs::BtSocketOpenT *>(value) : nullptr;
+  }
+  const chre::fbs::BtSocketOpenT *AsBtSocketOpen() const {
+    return type == ChreMessage::BtSocketOpen ?
+      reinterpret_cast<const chre::fbs::BtSocketOpenT *>(value) : nullptr;
+  }
+  chre::fbs::BtSocketOpenResponseT *AsBtSocketOpenResponse() {
+    return type == ChreMessage::BtSocketOpenResponse ?
+      reinterpret_cast<chre::fbs::BtSocketOpenResponseT *>(value) : nullptr;
+  }
+  const chre::fbs::BtSocketOpenResponseT *AsBtSocketOpenResponse() const {
+    return type == ChreMessage::BtSocketOpenResponse ?
+      reinterpret_cast<const chre::fbs::BtSocketOpenResponseT *>(value) : nullptr;
+  }
+  chre::fbs::BtSocketCloseT *AsBtSocketClose() {
+    return type == ChreMessage::BtSocketClose ?
+      reinterpret_cast<chre::fbs::BtSocketCloseT *>(value) : nullptr;
+  }
+  const chre::fbs::BtSocketCloseT *AsBtSocketClose() const {
+    return type == ChreMessage::BtSocketClose ?
+      reinterpret_cast<const chre::fbs::BtSocketCloseT *>(value) : nullptr;
+  }
+  chre::fbs::BtSocketCloseResponseT *AsBtSocketCloseResponse() {
+    return type == ChreMessage::BtSocketCloseResponse ?
+      reinterpret_cast<chre::fbs::BtSocketCloseResponseT *>(value) : nullptr;
+  }
+  const chre::fbs::BtSocketCloseResponseT *AsBtSocketCloseResponse() const {
+    return type == ChreMessage::BtSocketCloseResponse ?
+      reinterpret_cast<const chre::fbs::BtSocketCloseResponseT *>(value) : nullptr;
   }
 };
 
@@ -3888,6 +4081,604 @@ inline flatbuffers::Offset<PulseResponse> CreatePulseResponse(
 
 flatbuffers::Offset<PulseResponse> CreatePulseResponse(flatbuffers::FlatBufferBuilder &_fbb, const PulseResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct LeCocChannelInfoT : public flatbuffers::NativeTable {
+  typedef LeCocChannelInfo TableType;
+  int32_t localCid;
+  int32_t remoteCid;
+  int32_t psm;
+  int32_t localMtu;
+  int32_t remoteMtu;
+  int32_t localMps;
+  int32_t remoteMps;
+  int32_t initialRxCredits;
+  int32_t initialTxCredits;
+  LeCocChannelInfoT()
+      : localCid(0),
+        remoteCid(0),
+        psm(0),
+        localMtu(0),
+        remoteMtu(0),
+        localMps(0),
+        remoteMps(0),
+        initialRxCredits(0),
+        initialTxCredits(0) {
+  }
+};
+
+struct LeCocChannelInfo FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef LeCocChannelInfoT NativeTableType;
+  typedef LeCocChannelInfoBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_LOCALCID = 4,
+    VT_REMOTECID = 6,
+    VT_PSM = 8,
+    VT_LOCALMTU = 10,
+    VT_REMOTEMTU = 12,
+    VT_LOCALMPS = 14,
+    VT_REMOTEMPS = 16,
+    VT_INITIALRXCREDITS = 18,
+    VT_INITIALTXCREDITS = 20
+  };
+  int32_t localCid() const {
+    return GetField<int32_t>(VT_LOCALCID, 0);
+  }
+  bool mutate_localCid(int32_t _localCid) {
+    return SetField<int32_t>(VT_LOCALCID, _localCid, 0);
+  }
+  int32_t remoteCid() const {
+    return GetField<int32_t>(VT_REMOTECID, 0);
+  }
+  bool mutate_remoteCid(int32_t _remoteCid) {
+    return SetField<int32_t>(VT_REMOTECID, _remoteCid, 0);
+  }
+  int32_t psm() const {
+    return GetField<int32_t>(VT_PSM, 0);
+  }
+  bool mutate_psm(int32_t _psm) {
+    return SetField<int32_t>(VT_PSM, _psm, 0);
+  }
+  int32_t localMtu() const {
+    return GetField<int32_t>(VT_LOCALMTU, 0);
+  }
+  bool mutate_localMtu(int32_t _localMtu) {
+    return SetField<int32_t>(VT_LOCALMTU, _localMtu, 0);
+  }
+  int32_t remoteMtu() const {
+    return GetField<int32_t>(VT_REMOTEMTU, 0);
+  }
+  bool mutate_remoteMtu(int32_t _remoteMtu) {
+    return SetField<int32_t>(VT_REMOTEMTU, _remoteMtu, 0);
+  }
+  int32_t localMps() const {
+    return GetField<int32_t>(VT_LOCALMPS, 0);
+  }
+  bool mutate_localMps(int32_t _localMps) {
+    return SetField<int32_t>(VT_LOCALMPS, _localMps, 0);
+  }
+  int32_t remoteMps() const {
+    return GetField<int32_t>(VT_REMOTEMPS, 0);
+  }
+  bool mutate_remoteMps(int32_t _remoteMps) {
+    return SetField<int32_t>(VT_REMOTEMPS, _remoteMps, 0);
+  }
+  int32_t initialRxCredits() const {
+    return GetField<int32_t>(VT_INITIALRXCREDITS, 0);
+  }
+  bool mutate_initialRxCredits(int32_t _initialRxCredits) {
+    return SetField<int32_t>(VT_INITIALRXCREDITS, _initialRxCredits, 0);
+  }
+  int32_t initialTxCredits() const {
+    return GetField<int32_t>(VT_INITIALTXCREDITS, 0);
+  }
+  bool mutate_initialTxCredits(int32_t _initialTxCredits) {
+    return SetField<int32_t>(VT_INITIALTXCREDITS, _initialTxCredits, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int32_t>(verifier, VT_LOCALCID) &&
+           VerifyField<int32_t>(verifier, VT_REMOTECID) &&
+           VerifyField<int32_t>(verifier, VT_PSM) &&
+           VerifyField<int32_t>(verifier, VT_LOCALMTU) &&
+           VerifyField<int32_t>(verifier, VT_REMOTEMTU) &&
+           VerifyField<int32_t>(verifier, VT_LOCALMPS) &&
+           VerifyField<int32_t>(verifier, VT_REMOTEMPS) &&
+           VerifyField<int32_t>(verifier, VT_INITIALRXCREDITS) &&
+           VerifyField<int32_t>(verifier, VT_INITIALTXCREDITS) &&
+           verifier.EndTable();
+  }
+  LeCocChannelInfoT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(LeCocChannelInfoT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<LeCocChannelInfo> Pack(flatbuffers::FlatBufferBuilder &_fbb, const LeCocChannelInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct LeCocChannelInfoBuilder {
+  typedef LeCocChannelInfo Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_localCid(int32_t localCid) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_LOCALCID, localCid, 0);
+  }
+  void add_remoteCid(int32_t remoteCid) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_REMOTECID, remoteCid, 0);
+  }
+  void add_psm(int32_t psm) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_PSM, psm, 0);
+  }
+  void add_localMtu(int32_t localMtu) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_LOCALMTU, localMtu, 0);
+  }
+  void add_remoteMtu(int32_t remoteMtu) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_REMOTEMTU, remoteMtu, 0);
+  }
+  void add_localMps(int32_t localMps) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_LOCALMPS, localMps, 0);
+  }
+  void add_remoteMps(int32_t remoteMps) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_REMOTEMPS, remoteMps, 0);
+  }
+  void add_initialRxCredits(int32_t initialRxCredits) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_INITIALRXCREDITS, initialRxCredits, 0);
+  }
+  void add_initialTxCredits(int32_t initialTxCredits) {
+    fbb_.AddElement<int32_t>(LeCocChannelInfo::VT_INITIALTXCREDITS, initialTxCredits, 0);
+  }
+  explicit LeCocChannelInfoBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  LeCocChannelInfoBuilder &operator=(const LeCocChannelInfoBuilder &);
+  flatbuffers::Offset<LeCocChannelInfo> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<LeCocChannelInfo>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<LeCocChannelInfo> CreateLeCocChannelInfo(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int32_t localCid = 0,
+    int32_t remoteCid = 0,
+    int32_t psm = 0,
+    int32_t localMtu = 0,
+    int32_t remoteMtu = 0,
+    int32_t localMps = 0,
+    int32_t remoteMps = 0,
+    int32_t initialRxCredits = 0,
+    int32_t initialTxCredits = 0) {
+  LeCocChannelInfoBuilder builder_(_fbb);
+  builder_.add_initialTxCredits(initialTxCredits);
+  builder_.add_initialRxCredits(initialRxCredits);
+  builder_.add_remoteMps(remoteMps);
+  builder_.add_localMps(localMps);
+  builder_.add_remoteMtu(remoteMtu);
+  builder_.add_localMtu(localMtu);
+  builder_.add_psm(psm);
+  builder_.add_remoteCid(remoteCid);
+  builder_.add_localCid(localCid);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<LeCocChannelInfo> CreateLeCocChannelInfo(flatbuffers::FlatBufferBuilder &_fbb, const LeCocChannelInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct BtSocketOpenT : public flatbuffers::NativeTable {
+  typedef BtSocketOpen TableType;
+  int64_t socketId;
+  std::vector<int8_t> name;
+  int32_t aclConnectionHandle;
+  chre::fbs::ChannelInfoUnion channelInfo;
+  int64_t hubId;
+  int64_t endpointId;
+  BtSocketOpenT()
+      : socketId(0),
+        aclConnectionHandle(0),
+        hubId(0),
+        endpointId(0) {
+  }
+};
+
+struct BtSocketOpen FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef BtSocketOpenT NativeTableType;
+  typedef BtSocketOpenBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SOCKETID = 4,
+    VT_NAME = 6,
+    VT_ACLCONNECTIONHANDLE = 8,
+    VT_CHANNELINFO_TYPE = 10,
+    VT_CHANNELINFO = 12,
+    VT_HUBID = 14,
+    VT_ENDPOINTID = 16
+  };
+  int64_t socketId() const {
+    return GetField<int64_t>(VT_SOCKETID, 0);
+  }
+  bool mutate_socketId(int64_t _socketId) {
+    return SetField<int64_t>(VT_SOCKETID, _socketId, 0);
+  }
+  const flatbuffers::Vector<int8_t> *name() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  flatbuffers::Vector<int8_t> *mutable_name() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  int32_t aclConnectionHandle() const {
+    return GetField<int32_t>(VT_ACLCONNECTIONHANDLE, 0);
+  }
+  bool mutate_aclConnectionHandle(int32_t _aclConnectionHandle) {
+    return SetField<int32_t>(VT_ACLCONNECTIONHANDLE, _aclConnectionHandle, 0);
+  }
+  chre::fbs::ChannelInfo channelInfo_type() const {
+    return static_cast<chre::fbs::ChannelInfo>(GetField<uint8_t>(VT_CHANNELINFO_TYPE, 0));
+  }
+  const void *channelInfo() const {
+    return GetPointer<const void *>(VT_CHANNELINFO);
+  }
+  template<typename T> const T *channelInfo_as() const;
+  const chre::fbs::LeCocChannelInfo *channelInfo_as_LeCocChannelInfo() const {
+    return channelInfo_type() == chre::fbs::ChannelInfo::LeCocChannelInfo ? static_cast<const chre::fbs::LeCocChannelInfo *>(channelInfo()) : nullptr;
+  }
+  void *mutable_channelInfo() {
+    return GetPointer<void *>(VT_CHANNELINFO);
+  }
+  int64_t hubId() const {
+    return GetField<int64_t>(VT_HUBID, 0);
+  }
+  bool mutate_hubId(int64_t _hubId) {
+    return SetField<int64_t>(VT_HUBID, _hubId, 0);
+  }
+  int64_t endpointId() const {
+    return GetField<int64_t>(VT_ENDPOINTID, 0);
+  }
+  bool mutate_endpointId(int64_t _endpointId) {
+    return SetField<int64_t>(VT_ENDPOINTID, _endpointId, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_SOCKETID) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyVector(name()) &&
+           VerifyField<int32_t>(verifier, VT_ACLCONNECTIONHANDLE) &&
+           VerifyField<uint8_t>(verifier, VT_CHANNELINFO_TYPE) &&
+           VerifyOffset(verifier, VT_CHANNELINFO) &&
+           VerifyChannelInfo(verifier, channelInfo(), channelInfo_type()) &&
+           VerifyField<int64_t>(verifier, VT_HUBID) &&
+           VerifyField<int64_t>(verifier, VT_ENDPOINTID) &&
+           verifier.EndTable();
+  }
+  BtSocketOpenT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(BtSocketOpenT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<BtSocketOpen> Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+template<> inline const chre::fbs::LeCocChannelInfo *BtSocketOpen::channelInfo_as<chre::fbs::LeCocChannelInfo>() const {
+  return channelInfo_as_LeCocChannelInfo();
+}
+
+struct BtSocketOpenBuilder {
+  typedef BtSocketOpen Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_socketId(int64_t socketId) {
+    fbb_.AddElement<int64_t>(BtSocketOpen::VT_SOCKETID, socketId, 0);
+  }
+  void add_name(flatbuffers::Offset<flatbuffers::Vector<int8_t>> name) {
+    fbb_.AddOffset(BtSocketOpen::VT_NAME, name);
+  }
+  void add_aclConnectionHandle(int32_t aclConnectionHandle) {
+    fbb_.AddElement<int32_t>(BtSocketOpen::VT_ACLCONNECTIONHANDLE, aclConnectionHandle, 0);
+  }
+  void add_channelInfo_type(chre::fbs::ChannelInfo channelInfo_type) {
+    fbb_.AddElement<uint8_t>(BtSocketOpen::VT_CHANNELINFO_TYPE, static_cast<uint8_t>(channelInfo_type), 0);
+  }
+  void add_channelInfo(flatbuffers::Offset<void> channelInfo) {
+    fbb_.AddOffset(BtSocketOpen::VT_CHANNELINFO, channelInfo);
+  }
+  void add_hubId(int64_t hubId) {
+    fbb_.AddElement<int64_t>(BtSocketOpen::VT_HUBID, hubId, 0);
+  }
+  void add_endpointId(int64_t endpointId) {
+    fbb_.AddElement<int64_t>(BtSocketOpen::VT_ENDPOINTID, endpointId, 0);
+  }
+  explicit BtSocketOpenBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  BtSocketOpenBuilder &operator=(const BtSocketOpenBuilder &);
+  flatbuffers::Offset<BtSocketOpen> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<BtSocketOpen>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<BtSocketOpen> CreateBtSocketOpen(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> name = 0,
+    int32_t aclConnectionHandle = 0,
+    chre::fbs::ChannelInfo channelInfo_type = chre::fbs::ChannelInfo::NONE,
+    flatbuffers::Offset<void> channelInfo = 0,
+    int64_t hubId = 0,
+    int64_t endpointId = 0) {
+  BtSocketOpenBuilder builder_(_fbb);
+  builder_.add_endpointId(endpointId);
+  builder_.add_hubId(hubId);
+  builder_.add_socketId(socketId);
+  builder_.add_channelInfo(channelInfo);
+  builder_.add_aclConnectionHandle(aclConnectionHandle);
+  builder_.add_name(name);
+  builder_.add_channelInfo_type(channelInfo_type);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<BtSocketOpen> CreateBtSocketOpenDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    const std::vector<int8_t> *name = nullptr,
+    int32_t aclConnectionHandle = 0,
+    chre::fbs::ChannelInfo channelInfo_type = chre::fbs::ChannelInfo::NONE,
+    flatbuffers::Offset<void> channelInfo = 0,
+    int64_t hubId = 0,
+    int64_t endpointId = 0) {
+  auto name__ = name ? _fbb.CreateVector<int8_t>(*name) : 0;
+  return chre::fbs::CreateBtSocketOpen(
+      _fbb,
+      socketId,
+      name__,
+      aclConnectionHandle,
+      channelInfo_type,
+      channelInfo,
+      hubId,
+      endpointId);
+}
+
+flatbuffers::Offset<BtSocketOpen> CreateBtSocketOpen(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct BtSocketOpenResponseT : public flatbuffers::NativeTable {
+  typedef BtSocketOpenResponse TableType;
+  int64_t socketId;
+  chre::fbs::BtSocketOpenStatus status;
+  std::vector<int8_t> reason;
+  BtSocketOpenResponseT()
+      : socketId(0),
+        status(chre::fbs::BtSocketOpenStatus::SUCCESS) {
+  }
+};
+
+struct BtSocketOpenResponse FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef BtSocketOpenResponseT NativeTableType;
+  typedef BtSocketOpenResponseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SOCKETID = 4,
+    VT_STATUS = 6,
+    VT_REASON = 8
+  };
+  int64_t socketId() const {
+    return GetField<int64_t>(VT_SOCKETID, 0);
+  }
+  bool mutate_socketId(int64_t _socketId) {
+    return SetField<int64_t>(VT_SOCKETID, _socketId, 0);
+  }
+  chre::fbs::BtSocketOpenStatus status() const {
+    return static_cast<chre::fbs::BtSocketOpenStatus>(GetField<int8_t>(VT_STATUS, 0));
+  }
+  bool mutate_status(chre::fbs::BtSocketOpenStatus _status) {
+    return SetField<int8_t>(VT_STATUS, static_cast<int8_t>(_status), 0);
+  }
+  const flatbuffers::Vector<int8_t> *reason() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_REASON);
+  }
+  flatbuffers::Vector<int8_t> *mutable_reason() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_REASON);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_SOCKETID) &&
+           VerifyField<int8_t>(verifier, VT_STATUS) &&
+           VerifyOffset(verifier, VT_REASON) &&
+           verifier.VerifyVector(reason()) &&
+           verifier.EndTable();
+  }
+  BtSocketOpenResponseT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(BtSocketOpenResponseT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<BtSocketOpenResponse> Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct BtSocketOpenResponseBuilder {
+  typedef BtSocketOpenResponse Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_socketId(int64_t socketId) {
+    fbb_.AddElement<int64_t>(BtSocketOpenResponse::VT_SOCKETID, socketId, 0);
+  }
+  void add_status(chre::fbs::BtSocketOpenStatus status) {
+    fbb_.AddElement<int8_t>(BtSocketOpenResponse::VT_STATUS, static_cast<int8_t>(status), 0);
+  }
+  void add_reason(flatbuffers::Offset<flatbuffers::Vector<int8_t>> reason) {
+    fbb_.AddOffset(BtSocketOpenResponse::VT_REASON, reason);
+  }
+  explicit BtSocketOpenResponseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  BtSocketOpenResponseBuilder &operator=(const BtSocketOpenResponseBuilder &);
+  flatbuffers::Offset<BtSocketOpenResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<BtSocketOpenResponse>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<BtSocketOpenResponse> CreateBtSocketOpenResponse(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    chre::fbs::BtSocketOpenStatus status = chre::fbs::BtSocketOpenStatus::SUCCESS,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> reason = 0) {
+  BtSocketOpenResponseBuilder builder_(_fbb);
+  builder_.add_socketId(socketId);
+  builder_.add_reason(reason);
+  builder_.add_status(status);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<BtSocketOpenResponse> CreateBtSocketOpenResponseDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    chre::fbs::BtSocketOpenStatus status = chre::fbs::BtSocketOpenStatus::SUCCESS,
+    const std::vector<int8_t> *reason = nullptr) {
+  auto reason__ = reason ? _fbb.CreateVector<int8_t>(*reason) : 0;
+  return chre::fbs::CreateBtSocketOpenResponse(
+      _fbb,
+      socketId,
+      status,
+      reason__);
+}
+
+flatbuffers::Offset<BtSocketOpenResponse> CreateBtSocketOpenResponse(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct BtSocketCloseT : public flatbuffers::NativeTable {
+  typedef BtSocketClose TableType;
+  int64_t socketId;
+  std::vector<int8_t> reason;
+  BtSocketCloseT()
+      : socketId(0) {
+  }
+};
+
+struct BtSocketClose FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef BtSocketCloseT NativeTableType;
+  typedef BtSocketCloseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SOCKETID = 4,
+    VT_REASON = 6
+  };
+  int64_t socketId() const {
+    return GetField<int64_t>(VT_SOCKETID, 0);
+  }
+  bool mutate_socketId(int64_t _socketId) {
+    return SetField<int64_t>(VT_SOCKETID, _socketId, 0);
+  }
+  const flatbuffers::Vector<int8_t> *reason() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_REASON);
+  }
+  flatbuffers::Vector<int8_t> *mutable_reason() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_REASON);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_SOCKETID) &&
+           VerifyOffset(verifier, VT_REASON) &&
+           verifier.VerifyVector(reason()) &&
+           verifier.EndTable();
+  }
+  BtSocketCloseT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(BtSocketCloseT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<BtSocketClose> Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct BtSocketCloseBuilder {
+  typedef BtSocketClose Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_socketId(int64_t socketId) {
+    fbb_.AddElement<int64_t>(BtSocketClose::VT_SOCKETID, socketId, 0);
+  }
+  void add_reason(flatbuffers::Offset<flatbuffers::Vector<int8_t>> reason) {
+    fbb_.AddOffset(BtSocketClose::VT_REASON, reason);
+  }
+  explicit BtSocketCloseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  BtSocketCloseBuilder &operator=(const BtSocketCloseBuilder &);
+  flatbuffers::Offset<BtSocketClose> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<BtSocketClose>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<BtSocketClose> CreateBtSocketClose(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> reason = 0) {
+  BtSocketCloseBuilder builder_(_fbb);
+  builder_.add_socketId(socketId);
+  builder_.add_reason(reason);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<BtSocketClose> CreateBtSocketCloseDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0,
+    const std::vector<int8_t> *reason = nullptr) {
+  auto reason__ = reason ? _fbb.CreateVector<int8_t>(*reason) : 0;
+  return chre::fbs::CreateBtSocketClose(
+      _fbb,
+      socketId,
+      reason__);
+}
+
+flatbuffers::Offset<BtSocketClose> CreateBtSocketClose(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct BtSocketCloseResponseT : public flatbuffers::NativeTable {
+  typedef BtSocketCloseResponse TableType;
+  int64_t socketId;
+  BtSocketCloseResponseT()
+      : socketId(0) {
+  }
+};
+
+struct BtSocketCloseResponse FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef BtSocketCloseResponseT NativeTableType;
+  typedef BtSocketCloseResponseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SOCKETID = 4
+  };
+  int64_t socketId() const {
+    return GetField<int64_t>(VT_SOCKETID, 0);
+  }
+  bool mutate_socketId(int64_t _socketId) {
+    return SetField<int64_t>(VT_SOCKETID, _socketId, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_SOCKETID) &&
+           verifier.EndTable();
+  }
+  BtSocketCloseResponseT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(BtSocketCloseResponseT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<BtSocketCloseResponse> Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct BtSocketCloseResponseBuilder {
+  typedef BtSocketCloseResponse Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_socketId(int64_t socketId) {
+    fbb_.AddElement<int64_t>(BtSocketCloseResponse::VT_SOCKETID, socketId, 0);
+  }
+  explicit BtSocketCloseResponseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  BtSocketCloseResponseBuilder &operator=(const BtSocketCloseResponseBuilder &);
+  flatbuffers::Offset<BtSocketCloseResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<BtSocketCloseResponse>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t socketId = 0) {
+  BtSocketCloseResponseBuilder builder_(_fbb);
+  builder_.add_socketId(socketId);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct MessageContainerT : public flatbuffers::NativeTable {
   typedef MessageContainer TableType;
   chre::fbs::ChreMessageUnion message;
@@ -4009,6 +4800,18 @@ struct MessageContainer FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   const chre::fbs::MessageDeliveryStatus *message_as_MessageDeliveryStatus() const {
     return message_type() == chre::fbs::ChreMessage::MessageDeliveryStatus ? static_cast<const chre::fbs::MessageDeliveryStatus *>(message()) : nullptr;
+  }
+  const chre::fbs::BtSocketOpen *message_as_BtSocketOpen() const {
+    return message_type() == chre::fbs::ChreMessage::BtSocketOpen ? static_cast<const chre::fbs::BtSocketOpen *>(message()) : nullptr;
+  }
+  const chre::fbs::BtSocketOpenResponse *message_as_BtSocketOpenResponse() const {
+    return message_type() == chre::fbs::ChreMessage::BtSocketOpenResponse ? static_cast<const chre::fbs::BtSocketOpenResponse *>(message()) : nullptr;
+  }
+  const chre::fbs::BtSocketClose *message_as_BtSocketClose() const {
+    return message_type() == chre::fbs::ChreMessage::BtSocketClose ? static_cast<const chre::fbs::BtSocketClose *>(message()) : nullptr;
+  }
+  const chre::fbs::BtSocketCloseResponse *message_as_BtSocketCloseResponse() const {
+    return message_type() == chre::fbs::ChreMessage::BtSocketCloseResponse ? static_cast<const chre::fbs::BtSocketCloseResponse *>(message()) : nullptr;
   }
   void *mutable_message() {
     return GetPointer<void *>(VT_MESSAGE);
@@ -4164,6 +4967,22 @@ template<> inline const chre::fbs::NanoappTokenDatabaseInfo *MessageContainer::m
 
 template<> inline const chre::fbs::MessageDeliveryStatus *MessageContainer::message_as<chre::fbs::MessageDeliveryStatus>() const {
   return message_as_MessageDeliveryStatus();
+}
+
+template<> inline const chre::fbs::BtSocketOpen *MessageContainer::message_as<chre::fbs::BtSocketOpen>() const {
+  return message_as_BtSocketOpen();
+}
+
+template<> inline const chre::fbs::BtSocketOpenResponse *MessageContainer::message_as<chre::fbs::BtSocketOpenResponse>() const {
+  return message_as_BtSocketOpenResponse();
+}
+
+template<> inline const chre::fbs::BtSocketClose *MessageContainer::message_as<chre::fbs::BtSocketClose>() const {
+  return message_as_BtSocketClose();
+}
+
+template<> inline const chre::fbs::BtSocketCloseResponse *MessageContainer::message_as<chre::fbs::BtSocketCloseResponse>() const {
+  return message_as_BtSocketCloseResponse();
 }
 
 struct MessageContainerBuilder {
@@ -5217,6 +6036,187 @@ inline flatbuffers::Offset<PulseResponse> CreatePulseResponse(flatbuffers::FlatB
       _fbb);
 }
 
+inline LeCocChannelInfoT *LeCocChannelInfo::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::LeCocChannelInfoT> _o = std::unique_ptr<chre::fbs::LeCocChannelInfoT>(new LeCocChannelInfoT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void LeCocChannelInfo::UnPackTo(LeCocChannelInfoT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = localCid(); _o->localCid = _e; }
+  { auto _e = remoteCid(); _o->remoteCid = _e; }
+  { auto _e = psm(); _o->psm = _e; }
+  { auto _e = localMtu(); _o->localMtu = _e; }
+  { auto _e = remoteMtu(); _o->remoteMtu = _e; }
+  { auto _e = localMps(); _o->localMps = _e; }
+  { auto _e = remoteMps(); _o->remoteMps = _e; }
+  { auto _e = initialRxCredits(); _o->initialRxCredits = _e; }
+  { auto _e = initialTxCredits(); _o->initialTxCredits = _e; }
+}
+
+inline flatbuffers::Offset<LeCocChannelInfo> LeCocChannelInfo::Pack(flatbuffers::FlatBufferBuilder &_fbb, const LeCocChannelInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateLeCocChannelInfo(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<LeCocChannelInfo> CreateLeCocChannelInfo(flatbuffers::FlatBufferBuilder &_fbb, const LeCocChannelInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const LeCocChannelInfoT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _localCid = _o->localCid;
+  auto _remoteCid = _o->remoteCid;
+  auto _psm = _o->psm;
+  auto _localMtu = _o->localMtu;
+  auto _remoteMtu = _o->remoteMtu;
+  auto _localMps = _o->localMps;
+  auto _remoteMps = _o->remoteMps;
+  auto _initialRxCredits = _o->initialRxCredits;
+  auto _initialTxCredits = _o->initialTxCredits;
+  return chre::fbs::CreateLeCocChannelInfo(
+      _fbb,
+      _localCid,
+      _remoteCid,
+      _psm,
+      _localMtu,
+      _remoteMtu,
+      _localMps,
+      _remoteMps,
+      _initialRxCredits,
+      _initialTxCredits);
+}
+
+inline BtSocketOpenT *BtSocketOpen::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::BtSocketOpenT> _o = std::unique_ptr<chre::fbs::BtSocketOpenT>(new BtSocketOpenT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void BtSocketOpen::UnPackTo(BtSocketOpenT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = socketId(); _o->socketId = _e; }
+  { auto _e = name(); if (_e) { _o->name.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->name[_i] = _e->Get(_i); } } }
+  { auto _e = aclConnectionHandle(); _o->aclConnectionHandle = _e; }
+  { auto _e = channelInfo_type(); _o->channelInfo.type = _e; }
+  { auto _e = channelInfo(); if (_e) _o->channelInfo.value = chre::fbs::ChannelInfoUnion::UnPack(_e, channelInfo_type(), _resolver); }
+  { auto _e = hubId(); _o->hubId = _e; }
+  { auto _e = endpointId(); _o->endpointId = _e; }
+}
+
+inline flatbuffers::Offset<BtSocketOpen> BtSocketOpen::Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateBtSocketOpen(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<BtSocketOpen> CreateBtSocketOpen(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const BtSocketOpenT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _socketId = _o->socketId;
+  auto _name = _o->name.size() ? _fbb.CreateVector(_o->name) : 0;
+  auto _aclConnectionHandle = _o->aclConnectionHandle;
+  auto _channelInfo_type = _o->channelInfo.type;
+  auto _channelInfo = _o->channelInfo.Pack(_fbb);
+  auto _hubId = _o->hubId;
+  auto _endpointId = _o->endpointId;
+  return chre::fbs::CreateBtSocketOpen(
+      _fbb,
+      _socketId,
+      _name,
+      _aclConnectionHandle,
+      _channelInfo_type,
+      _channelInfo,
+      _hubId,
+      _endpointId);
+}
+
+inline BtSocketOpenResponseT *BtSocketOpenResponse::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::BtSocketOpenResponseT> _o = std::unique_ptr<chre::fbs::BtSocketOpenResponseT>(new BtSocketOpenResponseT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void BtSocketOpenResponse::UnPackTo(BtSocketOpenResponseT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = socketId(); _o->socketId = _e; }
+  { auto _e = status(); _o->status = _e; }
+  { auto _e = reason(); if (_e) { _o->reason.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->reason[_i] = _e->Get(_i); } } }
+}
+
+inline flatbuffers::Offset<BtSocketOpenResponse> BtSocketOpenResponse::Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateBtSocketOpenResponse(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<BtSocketOpenResponse> CreateBtSocketOpenResponse(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketOpenResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const BtSocketOpenResponseT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _socketId = _o->socketId;
+  auto _status = _o->status;
+  auto _reason = _o->reason.size() ? _fbb.CreateVector(_o->reason) : 0;
+  return chre::fbs::CreateBtSocketOpenResponse(
+      _fbb,
+      _socketId,
+      _status,
+      _reason);
+}
+
+inline BtSocketCloseT *BtSocketClose::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::BtSocketCloseT> _o = std::unique_ptr<chre::fbs::BtSocketCloseT>(new BtSocketCloseT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void BtSocketClose::UnPackTo(BtSocketCloseT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = socketId(); _o->socketId = _e; }
+  { auto _e = reason(); if (_e) { _o->reason.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->reason[_i] = _e->Get(_i); } } }
+}
+
+inline flatbuffers::Offset<BtSocketClose> BtSocketClose::Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateBtSocketClose(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<BtSocketClose> CreateBtSocketClose(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const BtSocketCloseT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _socketId = _o->socketId;
+  auto _reason = _o->reason.size() ? _fbb.CreateVector(_o->reason) : 0;
+  return chre::fbs::CreateBtSocketClose(
+      _fbb,
+      _socketId,
+      _reason);
+}
+
+inline BtSocketCloseResponseT *BtSocketCloseResponse::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::BtSocketCloseResponseT> _o = std::unique_ptr<chre::fbs::BtSocketCloseResponseT>(new BtSocketCloseResponseT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void BtSocketCloseResponse::UnPackTo(BtSocketCloseResponseT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = socketId(); _o->socketId = _e; }
+}
+
+inline flatbuffers::Offset<BtSocketCloseResponse> BtSocketCloseResponse::Pack(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateBtSocketCloseResponse(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const BtSocketCloseResponseT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _socketId = _o->socketId;
+  return chre::fbs::CreateBtSocketCloseResponse(
+      _fbb,
+      _socketId);
+}
+
 inline MessageContainerT *MessageContainer::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
   std::unique_ptr<chre::fbs::MessageContainerT> _o = std::unique_ptr<chre::fbs::MessageContainerT>(new MessageContainerT());
   UnPackTo(_o.get(), _resolver);
@@ -5247,6 +6247,75 @@ inline flatbuffers::Offset<MessageContainer> CreateMessageContainer(flatbuffers:
       _message_type,
       _message,
       _host_addr);
+}
+
+inline bool VerifyChannelInfo(flatbuffers::Verifier &verifier, const void *obj, ChannelInfo type) {
+  switch (type) {
+    case ChannelInfo::NONE: {
+      return true;
+    }
+    case ChannelInfo::LeCocChannelInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::LeCocChannelInfo *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    default: return true;
+  }
+}
+
+inline bool VerifyChannelInfoVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types) {
+  if (!values || !types) return !values && !types;
+  if (values->size() != types->size()) return false;
+  for (flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+    if (!VerifyChannelInfo(
+        verifier,  values->Get(i), types->GetEnum<ChannelInfo>(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline void *ChannelInfoUnion::UnPack(const void *obj, ChannelInfo type, const flatbuffers::resolver_function_t *resolver) {
+  switch (type) {
+    case ChannelInfo::LeCocChannelInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::LeCocChannelInfo *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    default: return nullptr;
+  }
+}
+
+inline flatbuffers::Offset<void> ChannelInfoUnion::Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher) const {
+  switch (type) {
+    case ChannelInfo::LeCocChannelInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::LeCocChannelInfoT *>(value);
+      return CreateLeCocChannelInfo(_fbb, ptr, _rehasher).Union();
+    }
+    default: return 0;
+  }
+}
+
+inline ChannelInfoUnion::ChannelInfoUnion(const ChannelInfoUnion &u) : type(u.type), value(nullptr) {
+  switch (type) {
+    case ChannelInfo::LeCocChannelInfo: {
+      value = new chre::fbs::LeCocChannelInfoT(*reinterpret_cast<chre::fbs::LeCocChannelInfoT *>(u.value));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+inline void ChannelInfoUnion::Reset() {
+  switch (type) {
+    case ChannelInfo::LeCocChannelInfo: {
+      auto ptr = reinterpret_cast<chre::fbs::LeCocChannelInfoT *>(value);
+      delete ptr;
+      break;
+    }
+    default: break;
+  }
+  value = nullptr;
+  type = ChannelInfo::NONE;
 }
 
 inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, ChreMessage type) {
@@ -5380,6 +6449,22 @@ inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, 
     }
     case ChreMessage::MessageDeliveryStatus: {
       auto ptr = reinterpret_cast<const chre::fbs::MessageDeliveryStatus *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::BtSocketOpen: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpen *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::BtSocketOpenResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpenResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::BtSocketClose: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketClose *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::BtSocketCloseResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;
@@ -5528,6 +6613,22 @@ inline void *ChreMessageUnion::UnPack(const void *obj, ChreMessage type, const f
       auto ptr = reinterpret_cast<const chre::fbs::MessageDeliveryStatus *>(obj);
       return ptr->UnPack(resolver);
     }
+    case ChreMessage::BtSocketOpen: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpen *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::BtSocketOpenResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpenResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::BtSocketClose: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketClose *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::BtSocketCloseResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
     default: return nullptr;
   }
 }
@@ -5662,6 +6763,22 @@ inline flatbuffers::Offset<void> ChreMessageUnion::Pack(flatbuffers::FlatBufferB
       auto ptr = reinterpret_cast<const chre::fbs::MessageDeliveryStatusT *>(value);
       return CreateMessageDeliveryStatus(_fbb, ptr, _rehasher).Union();
     }
+    case ChreMessage::BtSocketOpen: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpenT *>(value);
+      return CreateBtSocketOpen(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::BtSocketOpenResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketOpenResponseT *>(value);
+      return CreateBtSocketOpenResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::BtSocketClose: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseT *>(value);
+      return CreateBtSocketClose(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::BtSocketCloseResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponseT *>(value);
+      return CreateBtSocketCloseResponse(_fbb, ptr, _rehasher).Union();
+    }
     default: return 0;
   }
 }
@@ -5794,6 +6911,22 @@ inline ChreMessageUnion::ChreMessageUnion(const ChreMessageUnion &u) : type(u.ty
     }
     case ChreMessage::MessageDeliveryStatus: {
       value = new chre::fbs::MessageDeliveryStatusT(*reinterpret_cast<chre::fbs::MessageDeliveryStatusT *>(u.value));
+      break;
+    }
+    case ChreMessage::BtSocketOpen: {
+      value = new chre::fbs::BtSocketOpenT(*reinterpret_cast<chre::fbs::BtSocketOpenT *>(u.value));
+      break;
+    }
+    case ChreMessage::BtSocketOpenResponse: {
+      value = new chre::fbs::BtSocketOpenResponseT(*reinterpret_cast<chre::fbs::BtSocketOpenResponseT *>(u.value));
+      break;
+    }
+    case ChreMessage::BtSocketClose: {
+      value = new chre::fbs::BtSocketCloseT(*reinterpret_cast<chre::fbs::BtSocketCloseT *>(u.value));
+      break;
+    }
+    case ChreMessage::BtSocketCloseResponse: {
+      value = new chre::fbs::BtSocketCloseResponseT(*reinterpret_cast<chre::fbs::BtSocketCloseResponseT *>(u.value));
       break;
     }
     default:
@@ -5960,6 +7093,26 @@ inline void ChreMessageUnion::Reset() {
     }
     case ChreMessage::MessageDeliveryStatus: {
       auto ptr = reinterpret_cast<chre::fbs::MessageDeliveryStatusT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::BtSocketOpen: {
+      auto ptr = reinterpret_cast<chre::fbs::BtSocketOpenT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::BtSocketOpenResponse: {
+      auto ptr = reinterpret_cast<chre::fbs::BtSocketOpenResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::BtSocketClose: {
+      auto ptr = reinterpret_cast<chre::fbs::BtSocketCloseT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::BtSocketCloseResponse: {
+      auto ptr = reinterpret_cast<chre::fbs::BtSocketCloseResponseT *>(value);
       delete ptr;
       break;
     }
