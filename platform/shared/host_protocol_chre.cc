@@ -18,6 +18,7 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <cstdint>
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/host_endpoint_manager.h"
@@ -200,13 +201,53 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         break;
       }
 
+      case fbs::ChreMessage::BtSocketOpen: {
+        const auto *btSocketOpen =
+            static_cast<const fbs::BtSocketOpen *>(container->message());
+        if (btSocketOpen->channelInfo_type() !=
+            fbs::ChannelInfo::LeCocChannelInfo) {
+          LOGW("Unexpected BT Socket Open Channel Info Type %" PRIu8,
+               static_cast<uint8_t>(btSocketOpen->channelInfo_type()));
+        } else {
+          const auto *leCocChannelInfo =
+              static_cast<const fbs::LeCocChannelInfo *>(
+                  btSocketOpen->channelInfo());
+          const char *name = getStringFromByteVector(btSocketOpen->name());
+          HostMessageHandlers::handleBtSocketOpen(
+              hostClientId, static_cast<uint64_t>(btSocketOpen->socketId()),
+              name, static_cast<uint64_t>(btSocketOpen->endpointId()),
+              static_cast<uint64_t>(btSocketOpen->hubId()),
+              static_cast<uint32_t>(btSocketOpen->aclConnectionHandle()),
+              static_cast<uint32_t>(leCocChannelInfo->localCid()),
+              static_cast<uint32_t>(leCocChannelInfo->remoteCid()),
+              static_cast<uint32_t>(leCocChannelInfo->psm()),
+              static_cast<uint32_t>(leCocChannelInfo->localMtu()),
+              static_cast<uint32_t>(leCocChannelInfo->remoteMtu()),
+              static_cast<uint32_t>(leCocChannelInfo->localMps()),
+              static_cast<uint32_t>(leCocChannelInfo->remoteMps()),
+              static_cast<uint32_t>(leCocChannelInfo->initialRxCredits()),
+              static_cast<uint32_t>(leCocChannelInfo->initialTxCredits()));
+          success = true;
+        }
+        break;
+      }
+
+      case fbs::ChreMessage::BtSocketCloseResponse: {
+        const auto *btSocketCloseResponse =
+            static_cast<const fbs::BtSocketCloseResponse *>(
+                container->message());
+        LOGD("Received BT Socket close response for socketId=%" PRIu64,
+             btSocketCloseResponse->socketId());
+        success = true;
+        break;
+      }
+
       default:
         LOGW("Got invalid/unexpected message type %" PRIu8,
              static_cast<uint8_t>(container->message_type()));
         success = false;
     }
   }
-
   return success;
 }
 
@@ -381,6 +422,29 @@ void HostProtocolChre::encodeNanConfigurationRequest(
     ChreFlatBufferBuilder &builder, bool enable) {
   auto request = fbs::CreateNanConfigurationRequest(builder, enable);
   finalize(builder, fbs::ChreMessage::NanConfigurationRequest, request.Union());
+}
+
+void HostProtocolChre::encodeBtSocketOpenResponse(
+    ChreFlatBufferBuilder &builder, uint16_t hostClientId, uint64_t socketId,
+    bool success, const char *reason) {
+  auto reasonOffset = addStringAsByteVector(builder, reason);
+  auto socketOpenResponse = fbs::CreateBtSocketOpenResponse(
+      builder, socketId,
+      success ? fbs::BtSocketOpenStatus::SUCCESS
+              : fbs::BtSocketOpenStatus::FAILURE,
+      reasonOffset);
+  finalize(builder, fbs::ChreMessage::BtSocketOpenResponse,
+           socketOpenResponse.Union(), hostClientId);
+}
+
+void HostProtocolChre::encodeBtSocketClose(ChreFlatBufferBuilder &builder,
+                                           uint16_t hostClientId,
+                                           uint64_t socketId,
+                                           const char *reason) {
+  auto reasonOffset = addStringAsByteVector(builder, reason);
+  auto socketClose = fbs::CreateBtSocketClose(builder, socketId, reasonOffset);
+  finalize(builder, fbs::ChreMessage::BtSocketClose, socketClose.Union(),
+           hostClientId);
 }
 
 bool HostProtocolChre::getSettingFromFbs(fbs::Setting setting,
