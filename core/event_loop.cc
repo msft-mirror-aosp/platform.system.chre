@@ -35,6 +35,9 @@
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 
+using ::chre::message::EndpointInfo;
+using ::chre::message::EndpointType;
+
 namespace chre {
 
 // Out of line declaration required for nonintegral static types
@@ -458,15 +461,23 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   }
 }
 
-void EventLoop::findFirstMatchingNanoapp(
-    const pw::Function<bool(const Nanoapp &)> &function) {
+void EventLoop::onMatchingNanoappEndpoint(
+    const pw::Function<bool(const EndpointInfo &)> &function) {
   ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
 
   for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if (function(*app.get())) {
+    if (function(getEndpointInfoFromNanoappLocked(*app.get()))) {
       break;
     }
   }
+}
+
+std::optional<EndpointInfo> EventLoop::getEndpointInfo(uint64_t appId) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+  Nanoapp *app = lookupAppByAppId(appId);
+  return app == nullptr
+             ? std::nullopt
+             : std::make_optional(getEndpointInfoFromNanoappLocked(*app));
 }
 
 bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
@@ -699,6 +710,16 @@ void EventLoop::logDanglingResources(const char *name, uint32_t count) {
     LOGE("App 0x%016" PRIx64 " had %" PRIu32 " remaining %s at unload",
          mCurrentApp->getAppId(), count, name);
   }
+}
+
+EndpointInfo EventLoop::getEndpointInfoFromNanoappLocked(
+    const Nanoapp &nanoapp) {
+  return EndpointInfo(
+      /* id= */ nanoapp.getAppId(),
+      /* name= */ nanoapp.getAppName(),
+      /* version= */ nanoapp.getAppVersion(),
+      /* type= */ EndpointType::NANOAPP,
+      /* requiredPermissions= */ nanoapp.getAppPermissions());
 }
 
 }  // namespace chre

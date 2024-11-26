@@ -31,10 +31,7 @@ cc_binary {
     defaults: ["chre_aidl_hal_generic_defaults"],
     vendor: true,
     relative_install_path: "hw",
-    srcs: [
-        ":hal_aidl_generic_srcs",
-        "aidl/service.cc",
-    ],
+    srcs: ["aidl/service.cc"],
     init_rc: ["aidl/android.hardware.contexthub-service.generic.rc"],
     vintf_fragments: ["aidl/android.hardware.contexthub-service.generic.xml"],
     visibility: ["//visibility:public"],
@@ -51,42 +48,22 @@ filegroup {
 
 cc_defaults {
     name: "chre_aidl_hal_generic_defaults",
+    defaults: [
+        "//system/chre:contexthub_hal_defaults",
+        "//system/chre:pw_rpc_cflags_chre",
+        "//system/chre:pw_rpc_nanopb_lib_dependencies",
+    ],
     vendor: true,
-    include_dirs: [
-        "system/chre/host/hal_generic/common/",
-        "system/chre/util/include",
+    srcs: [
+        "//system/chre/host/hal_generic:hal_aidl_generic_srcs",
+        "//system/chre:contexthub_hal_client_srcs",
     ],
     cflags: [
         "-DCHRE_HAL_SOCKET_METRICS_ENABLED",
-        "-DCHRE_IS_HOST_BUILD",
-        "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000", // Needed to import CHRE APIs.
-        "-Wall",
-        "-Werror",
-    ],
-    header_libs: [
-        "chre_api",
-    ],
-    shared_libs: [
-        "android.frameworks.stats-V2-ndk",
-        "android.hardware.contexthub-V3-ndk",
-        "chre_atoms_log",
-        "chremetrics-cpp",
-        "libbase",
-        "libbinder_ndk",
-        "libcutils",
-        "libjsoncpp",
-        "liblog",
-        "libprotobuf-cpp-lite",
-        "libutils",
-        "server_configurable_flags",
-        "libaconfig_storage_read_api_cc",
+        "-Wthread-safety", // Need to be explicitly set
     ],
     static_libs: [
-        "chre_client",
         "chre_config_util",
-        "chre_flags_c_lib",
-        "chre_metrics_reporter",
-        "event_logger",
     ],
 }
 

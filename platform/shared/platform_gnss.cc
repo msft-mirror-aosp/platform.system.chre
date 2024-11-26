@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
+
 #include "chre/platform/platform_gnss.h"
 
 #include <cinttypes>
@@ -158,3 +160,5 @@ void PlatformGnssBase::measurementEventCallback(
 }
 
 }  // namespace chre
+
+#endif  // CHRE_GNSS_SUPPORT_ENABLED

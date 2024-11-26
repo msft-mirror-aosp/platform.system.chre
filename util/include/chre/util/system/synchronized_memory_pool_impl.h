@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
-#define CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
+#ifndef CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
+#define CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
 
 // IWYU pragma: private
 #include "chre/util/lock_guard.h"
-#include "chre/util/synchronized_memory_pool.h"
+#include "chre/util/system/synchronized_memory_pool.h"
 
 namespace chre {
 
@@ -53,4 +53,4 @@ size_t SynchronizedMemoryPool<ElementType, kSize>::getFreeBlockCount() {
 
 }  // namespace chre
 
-#endif  // CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
+#endif  // CHRE_UTIL_SYSTEM_SYNCHRONIZED_MEMORY_POOL_IMPL_H_

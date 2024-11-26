@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
+
 #include "chre/platform/platform_wifi.h"
 
 #include <cinttypes>
@@ -257,3 +259,5 @@ void PlatformWifiBase::nanServiceSubscriptionCanceledCallback(
 }
 
 }  // namespace chre
+
+#endif   // CHRE_WIFI_SUPPORT_ENABLED
