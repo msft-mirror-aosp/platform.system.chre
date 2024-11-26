@@ -182,6 +182,13 @@ class HalClientManager {
   std::shared_ptr<IContextHubCallback> getCallback(HalClientId clientId);
 
   /**
+   * Gets all the callbacks and postpone any API calls to the caller.
+   *
+   * @return all the non-null callback pointers
+   */
+  std::vector<std::shared_ptr<IContextHubCallback>> getCallbacks();
+
+  /**
    * Registers a IContextHubCallback function mapped to the current client's
    * client id. @p deathRecipient and @p deathRecipientCookie are used to unlink
    * the previous registered callback for the same client, if any.
