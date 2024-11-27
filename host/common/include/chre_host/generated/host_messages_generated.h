@@ -165,6 +165,70 @@ struct BtSocketCloseResponse;
 struct BtSocketCloseResponseBuilder;
 struct BtSocketCloseResponseT;
 
+struct VendorHubInfo;
+struct VendorHubInfoBuilder;
+struct VendorHubInfoT;
+
+struct MessageHub;
+struct MessageHubBuilder;
+struct MessageHubT;
+
+struct RegisterMessageHub;
+struct RegisterMessageHubBuilder;
+struct RegisterMessageHubT;
+
+struct UnregisterMessageHub;
+struct UnregisterMessageHubBuilder;
+struct UnregisterMessageHubT;
+
+struct EndpointId;
+struct EndpointIdBuilder;
+struct EndpointIdT;
+
+struct Service;
+struct ServiceBuilder;
+struct ServiceT;
+
+struct EndpointInfo;
+struct EndpointInfoBuilder;
+struct EndpointInfoT;
+
+struct RegisterEndpoint;
+struct RegisterEndpointBuilder;
+struct RegisterEndpointT;
+
+struct UnregisterEndpoint;
+struct UnregisterEndpointBuilder;
+struct UnregisterEndpointT;
+
+struct GetMessageHubsAndEndpointsRequest;
+struct GetMessageHubsAndEndpointsRequestBuilder;
+struct GetMessageHubsAndEndpointsRequestT;
+
+struct GetMessageHubsAndEndpointsResponse;
+struct GetMessageHubsAndEndpointsResponseBuilder;
+struct GetMessageHubsAndEndpointsResponseT;
+
+struct OpenEndpointSessionRequest;
+struct OpenEndpointSessionRequestBuilder;
+struct OpenEndpointSessionRequestT;
+
+struct OnEndpointSessionOpened;
+struct OnEndpointSessionOpenedBuilder;
+struct OnEndpointSessionOpenedT;
+
+struct OnEndpointSessionClosed;
+struct OnEndpointSessionClosedBuilder;
+struct OnEndpointSessionClosedT;
+
+struct EndpointSessionMessage;
+struct EndpointSessionMessageBuilder;
+struct EndpointSessionMessageT;
+
+struct EndpointSessionMessageDeliveryStatus;
+struct EndpointSessionMessageDeliveryStatusBuilder;
+struct EndpointSessionMessageDeliveryStatusT;
+
 struct HostAddress;
 
 struct MessageContainer;
@@ -460,6 +524,249 @@ inline const char *EnumNameBtSocketOpenStatus(BtSocketOpenStatus e) {
   return EnumNamesBtSocketOpenStatus()[index];
 }
 
+enum class MessageHubDetails : uint8_t {
+  NONE = 0,
+  HubInfoResponse = 1,
+  VendorHubInfo = 2,
+  MIN = NONE,
+  MAX = VendorHubInfo
+};
+
+inline const MessageHubDetails (&EnumValuesMessageHubDetails())[3] {
+  static const MessageHubDetails values[] = {
+    MessageHubDetails::NONE,
+    MessageHubDetails::HubInfoResponse,
+    MessageHubDetails::VendorHubInfo
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesMessageHubDetails() {
+  static const char * const names[4] = {
+    "NONE",
+    "HubInfoResponse",
+    "VendorHubInfo",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameMessageHubDetails(MessageHubDetails e) {
+  if (flatbuffers::IsOutRange(e, MessageHubDetails::NONE, MessageHubDetails::VendorHubInfo)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesMessageHubDetails()[index];
+}
+
+template<typename T> struct MessageHubDetailsTraits {
+  static const MessageHubDetails enum_value = MessageHubDetails::NONE;
+};
+
+template<> struct MessageHubDetailsTraits<chre::fbs::HubInfoResponse> {
+  static const MessageHubDetails enum_value = MessageHubDetails::HubInfoResponse;
+};
+
+template<> struct MessageHubDetailsTraits<chre::fbs::VendorHubInfo> {
+  static const MessageHubDetails enum_value = MessageHubDetails::VendorHubInfo;
+};
+
+struct MessageHubDetailsUnion {
+  MessageHubDetails type;
+  void *value;
+
+  MessageHubDetailsUnion() : type(MessageHubDetails::NONE), value(nullptr) {}
+  MessageHubDetailsUnion(MessageHubDetailsUnion&& u) FLATBUFFERS_NOEXCEPT :
+    type(MessageHubDetails::NONE), value(nullptr)
+    { std::swap(type, u.type); std::swap(value, u.value); }
+  MessageHubDetailsUnion(const MessageHubDetailsUnion &);
+  MessageHubDetailsUnion &operator=(const MessageHubDetailsUnion &u)
+    { MessageHubDetailsUnion t(u); std::swap(type, t.type); std::swap(value, t.value); return *this; }
+  MessageHubDetailsUnion &operator=(MessageHubDetailsUnion &&u) FLATBUFFERS_NOEXCEPT
+    { std::swap(type, u.type); std::swap(value, u.value); return *this; }
+  ~MessageHubDetailsUnion() { Reset(); }
+
+  void Reset();
+
+#ifndef FLATBUFFERS_CPP98_STL
+  template <typename T>
+  void Set(T&& val) {
+    using RT = typename std::remove_reference<T>::type;
+    Reset();
+    type = MessageHubDetailsTraits<typename RT::TableType>::enum_value;
+    if (type != MessageHubDetails::NONE) {
+      value = new RT(std::forward<T>(val));
+    }
+  }
+#endif  // FLATBUFFERS_CPP98_STL
+
+  static void *UnPack(const void *obj, MessageHubDetails type, const flatbuffers::resolver_function_t *resolver);
+  flatbuffers::Offset<void> Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher = nullptr) const;
+
+  chre::fbs::HubInfoResponseT *AsHubInfoResponse() {
+    return type == MessageHubDetails::HubInfoResponse ?
+      reinterpret_cast<chre::fbs::HubInfoResponseT *>(value) : nullptr;
+  }
+  const chre::fbs::HubInfoResponseT *AsHubInfoResponse() const {
+    return type == MessageHubDetails::HubInfoResponse ?
+      reinterpret_cast<const chre::fbs::HubInfoResponseT *>(value) : nullptr;
+  }
+  chre::fbs::VendorHubInfoT *AsVendorHubInfo() {
+    return type == MessageHubDetails::VendorHubInfo ?
+      reinterpret_cast<chre::fbs::VendorHubInfoT *>(value) : nullptr;
+  }
+  const chre::fbs::VendorHubInfoT *AsVendorHubInfo() const {
+    return type == MessageHubDetails::VendorHubInfo ?
+      reinterpret_cast<const chre::fbs::VendorHubInfoT *>(value) : nullptr;
+  }
+};
+
+bool VerifyMessageHubDetails(flatbuffers::Verifier &verifier, const void *obj, MessageHubDetails type);
+bool VerifyMessageHubDetailsVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types);
+
+/// An enum describing the type of an endpoint.
+enum class EndpointType : uint8_t {
+  INVALID = 0,
+  /// The endpoint is part of the Android Framework
+  FRAMEWORK = 1,
+  /// The endpoint is an Android app
+  APP = 2,
+  /// The endpoint is a native Android program
+  NATIVE = 3,
+  /// The endpoint is a nanoapp
+  NANOAPP = 4,
+  /// A generic, non-nanoapp endpoint
+  GENERIC = 5,
+  MIN = INVALID,
+  MAX = GENERIC
+};
+
+inline const EndpointType (&EnumValuesEndpointType())[6] {
+  static const EndpointType values[] = {
+    EndpointType::INVALID,
+    EndpointType::FRAMEWORK,
+    EndpointType::APP,
+    EndpointType::NATIVE,
+    EndpointType::NANOAPP,
+    EndpointType::GENERIC
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesEndpointType() {
+  static const char * const names[7] = {
+    "INVALID",
+    "FRAMEWORK",
+    "APP",
+    "NATIVE",
+    "NANOAPP",
+    "GENERIC",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameEndpointType(EndpointType e) {
+  if (flatbuffers::IsOutRange(e, EndpointType::INVALID, EndpointType::GENERIC)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesEndpointType()[index];
+}
+
+enum class RpcFormat : uint8_t {
+  /// Fully custom format
+  CUSTOM = 0,
+  /// Stable AIDL defined interface using Binder marshalling
+  AIDL = 1,
+  /// Pigweed RPC defined interface using Protobuf marshalling
+  PW_RPC = 2,
+  MIN = CUSTOM,
+  MAX = PW_RPC
+};
+
+inline const RpcFormat (&EnumValuesRpcFormat())[3] {
+  static const RpcFormat values[] = {
+    RpcFormat::CUSTOM,
+    RpcFormat::AIDL,
+    RpcFormat::PW_RPC
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesRpcFormat() {
+  static const char * const names[4] = {
+    "CUSTOM",
+    "AIDL",
+    "PW_RPC",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameRpcFormat(RpcFormat e) {
+  if (flatbuffers::IsOutRange(e, RpcFormat::CUSTOM, RpcFormat::PW_RPC)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesRpcFormat()[index];
+}
+
+/// "Reason"s for stopping an endpoint or session over an endpoint.
+enum class Reason : uint8_t {
+  /// Unspecified reason.
+  UNSPECIFIED = 0,
+  /// Out of memory. There's not enough memory to perform this operation.
+  OUT_OF_MEMORY = 1,
+  /// Timeout. This operation timed out.
+  TIMEOUT = 2,
+  /// Endpoint rejected this openEndpointSession request.
+  OPEN_ENDPOINT_SESSION_REQUEST_REJECTED = 3,
+  /// Endpoint requested closeEndpointSession.
+  CLOSE_ENDPOINT_SESSION_REQUESTED = 4,
+  /// Invalid endpoint.
+  ENDPOINT_INVALID = 5,
+  /// Endpoint is now stopped.
+  ENDPOINT_GONE = 6,
+  /// Endpoint crashed.
+  ENDPOINT_CRASHED = 7,
+  /// Hub was reset or is resetting.
+  HUB_RESET = 8,
+  MIN = UNSPECIFIED,
+  MAX = HUB_RESET
+};
+
+inline const Reason (&EnumValuesReason())[9] {
+  static const Reason values[] = {
+    Reason::UNSPECIFIED,
+    Reason::OUT_OF_MEMORY,
+    Reason::TIMEOUT,
+    Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED,
+    Reason::CLOSE_ENDPOINT_SESSION_REQUESTED,
+    Reason::ENDPOINT_INVALID,
+    Reason::ENDPOINT_GONE,
+    Reason::ENDPOINT_CRASHED,
+    Reason::HUB_RESET
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesReason() {
+  static const char * const names[10] = {
+    "UNSPECIFIED",
+    "OUT_OF_MEMORY",
+    "TIMEOUT",
+    "OPEN_ENDPOINT_SESSION_REQUEST_REJECTED",
+    "CLOSE_ENDPOINT_SESSION_REQUESTED",
+    "ENDPOINT_INVALID",
+    "ENDPOINT_GONE",
+    "ENDPOINT_CRASHED",
+    "HUB_RESET",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameReason(Reason e) {
+  if (flatbuffers::IsOutRange(e, Reason::UNSPECIFIED, Reason::HUB_RESET)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesReason()[index];
+}
+
 /// A union that joins together all possible messages. Note that in FlatBuffers,
 /// unions have an implicit type
 enum class ChreMessage : uint8_t {
@@ -500,11 +807,22 @@ enum class ChreMessage : uint8_t {
   BtSocketOpenResponse = 34,
   BtSocketClose = 35,
   BtSocketCloseResponse = 36,
+  GetMessageHubsAndEndpointsRequest = 37,
+  GetMessageHubsAndEndpointsResponse = 38,
+  RegisterMessageHub = 39,
+  UnregisterMessageHub = 40,
+  RegisterEndpoint = 41,
+  UnregisterEndpoint = 42,
+  OpenEndpointSessionRequest = 43,
+  OnEndpointSessionOpened = 44,
+  OnEndpointSessionClosed = 45,
+  EndpointSessionMessage = 46,
+  EndpointSessionMessageDeliveryStatus = 47,
   MIN = NONE,
-  MAX = BtSocketCloseResponse
+  MAX = EndpointSessionMessageDeliveryStatus
 };
 
-inline const ChreMessage (&EnumValuesChreMessage())[37] {
+inline const ChreMessage (&EnumValuesChreMessage())[48] {
   static const ChreMessage values[] = {
     ChreMessage::NONE,
     ChreMessage::NanoappMessage,
@@ -542,13 +860,24 @@ inline const ChreMessage (&EnumValuesChreMessage())[37] {
     ChreMessage::BtSocketOpen,
     ChreMessage::BtSocketOpenResponse,
     ChreMessage::BtSocketClose,
-    ChreMessage::BtSocketCloseResponse
+    ChreMessage::BtSocketCloseResponse,
+    ChreMessage::GetMessageHubsAndEndpointsRequest,
+    ChreMessage::GetMessageHubsAndEndpointsResponse,
+    ChreMessage::RegisterMessageHub,
+    ChreMessage::UnregisterMessageHub,
+    ChreMessage::RegisterEndpoint,
+    ChreMessage::UnregisterEndpoint,
+    ChreMessage::OpenEndpointSessionRequest,
+    ChreMessage::OnEndpointSessionOpened,
+    ChreMessage::OnEndpointSessionClosed,
+    ChreMessage::EndpointSessionMessage,
+    ChreMessage::EndpointSessionMessageDeliveryStatus
   };
   return values;
 }
 
 inline const char * const *EnumNamesChreMessage() {
-  static const char * const names[38] = {
+  static const char * const names[49] = {
     "NONE",
     "NanoappMessage",
     "HubInfoRequest",
@@ -586,13 +915,24 @@ inline const char * const *EnumNamesChreMessage() {
     "BtSocketOpenResponse",
     "BtSocketClose",
     "BtSocketCloseResponse",
+    "GetMessageHubsAndEndpointsRequest",
+    "GetMessageHubsAndEndpointsResponse",
+    "RegisterMessageHub",
+    "UnregisterMessageHub",
+    "RegisterEndpoint",
+    "UnregisterEndpoint",
+    "OpenEndpointSessionRequest",
+    "OnEndpointSessionOpened",
+    "OnEndpointSessionClosed",
+    "EndpointSessionMessage",
+    "EndpointSessionMessageDeliveryStatus",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameChreMessage(ChreMessage e) {
-  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::BtSocketCloseResponse)) return "";
+  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::EndpointSessionMessageDeliveryStatus)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesChreMessage()[index];
 }
@@ -743,6 +1083,50 @@ template<> struct ChreMessageTraits<chre::fbs::BtSocketClose> {
 
 template<> struct ChreMessageTraits<chre::fbs::BtSocketCloseResponse> {
   static const ChreMessage enum_value = ChreMessage::BtSocketCloseResponse;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::GetMessageHubsAndEndpointsRequest> {
+  static const ChreMessage enum_value = ChreMessage::GetMessageHubsAndEndpointsRequest;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::GetMessageHubsAndEndpointsResponse> {
+  static const ChreMessage enum_value = ChreMessage::GetMessageHubsAndEndpointsResponse;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::RegisterMessageHub> {
+  static const ChreMessage enum_value = ChreMessage::RegisterMessageHub;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::UnregisterMessageHub> {
+  static const ChreMessage enum_value = ChreMessage::UnregisterMessageHub;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::RegisterEndpoint> {
+  static const ChreMessage enum_value = ChreMessage::RegisterEndpoint;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::UnregisterEndpoint> {
+  static const ChreMessage enum_value = ChreMessage::UnregisterEndpoint;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::OpenEndpointSessionRequest> {
+  static const ChreMessage enum_value = ChreMessage::OpenEndpointSessionRequest;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::OnEndpointSessionOpened> {
+  static const ChreMessage enum_value = ChreMessage::OnEndpointSessionOpened;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::OnEndpointSessionClosed> {
+  static const ChreMessage enum_value = ChreMessage::OnEndpointSessionClosed;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::EndpointSessionMessage> {
+  static const ChreMessage enum_value = ChreMessage::EndpointSessionMessage;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::EndpointSessionMessageDeliveryStatus> {
+  static const ChreMessage enum_value = ChreMessage::EndpointSessionMessageDeliveryStatus;
 };
 
 struct ChreMessageUnion {
@@ -1064,6 +1448,94 @@ struct ChreMessageUnion {
   const chre::fbs::BtSocketCloseResponseT *AsBtSocketCloseResponse() const {
     return type == ChreMessage::BtSocketCloseResponse ?
       reinterpret_cast<const chre::fbs::BtSocketCloseResponseT *>(value) : nullptr;
+  }
+  chre::fbs::GetMessageHubsAndEndpointsRequestT *AsGetMessageHubsAndEndpointsRequest() {
+    return type == ChreMessage::GetMessageHubsAndEndpointsRequest ?
+      reinterpret_cast<chre::fbs::GetMessageHubsAndEndpointsRequestT *>(value) : nullptr;
+  }
+  const chre::fbs::GetMessageHubsAndEndpointsRequestT *AsGetMessageHubsAndEndpointsRequest() const {
+    return type == ChreMessage::GetMessageHubsAndEndpointsRequest ?
+      reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsRequestT *>(value) : nullptr;
+  }
+  chre::fbs::GetMessageHubsAndEndpointsResponseT *AsGetMessageHubsAndEndpointsResponse() {
+    return type == ChreMessage::GetMessageHubsAndEndpointsResponse ?
+      reinterpret_cast<chre::fbs::GetMessageHubsAndEndpointsResponseT *>(value) : nullptr;
+  }
+  const chre::fbs::GetMessageHubsAndEndpointsResponseT *AsGetMessageHubsAndEndpointsResponse() const {
+    return type == ChreMessage::GetMessageHubsAndEndpointsResponse ?
+      reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsResponseT *>(value) : nullptr;
+  }
+  chre::fbs::RegisterMessageHubT *AsRegisterMessageHub() {
+    return type == ChreMessage::RegisterMessageHub ?
+      reinterpret_cast<chre::fbs::RegisterMessageHubT *>(value) : nullptr;
+  }
+  const chre::fbs::RegisterMessageHubT *AsRegisterMessageHub() const {
+    return type == ChreMessage::RegisterMessageHub ?
+      reinterpret_cast<const chre::fbs::RegisterMessageHubT *>(value) : nullptr;
+  }
+  chre::fbs::UnregisterMessageHubT *AsUnregisterMessageHub() {
+    return type == ChreMessage::UnregisterMessageHub ?
+      reinterpret_cast<chre::fbs::UnregisterMessageHubT *>(value) : nullptr;
+  }
+  const chre::fbs::UnregisterMessageHubT *AsUnregisterMessageHub() const {
+    return type == ChreMessage::UnregisterMessageHub ?
+      reinterpret_cast<const chre::fbs::UnregisterMessageHubT *>(value) : nullptr;
+  }
+  chre::fbs::RegisterEndpointT *AsRegisterEndpoint() {
+    return type == ChreMessage::RegisterEndpoint ?
+      reinterpret_cast<chre::fbs::RegisterEndpointT *>(value) : nullptr;
+  }
+  const chre::fbs::RegisterEndpointT *AsRegisterEndpoint() const {
+    return type == ChreMessage::RegisterEndpoint ?
+      reinterpret_cast<const chre::fbs::RegisterEndpointT *>(value) : nullptr;
+  }
+  chre::fbs::UnregisterEndpointT *AsUnregisterEndpoint() {
+    return type == ChreMessage::UnregisterEndpoint ?
+      reinterpret_cast<chre::fbs::UnregisterEndpointT *>(value) : nullptr;
+  }
+  const chre::fbs::UnregisterEndpointT *AsUnregisterEndpoint() const {
+    return type == ChreMessage::UnregisterEndpoint ?
+      reinterpret_cast<const chre::fbs::UnregisterEndpointT *>(value) : nullptr;
+  }
+  chre::fbs::OpenEndpointSessionRequestT *AsOpenEndpointSessionRequest() {
+    return type == ChreMessage::OpenEndpointSessionRequest ?
+      reinterpret_cast<chre::fbs::OpenEndpointSessionRequestT *>(value) : nullptr;
+  }
+  const chre::fbs::OpenEndpointSessionRequestT *AsOpenEndpointSessionRequest() const {
+    return type == ChreMessage::OpenEndpointSessionRequest ?
+      reinterpret_cast<const chre::fbs::OpenEndpointSessionRequestT *>(value) : nullptr;
+  }
+  chre::fbs::OnEndpointSessionOpenedT *AsOnEndpointSessionOpened() {
+    return type == ChreMessage::OnEndpointSessionOpened ?
+      reinterpret_cast<chre::fbs::OnEndpointSessionOpenedT *>(value) : nullptr;
+  }
+  const chre::fbs::OnEndpointSessionOpenedT *AsOnEndpointSessionOpened() const {
+    return type == ChreMessage::OnEndpointSessionOpened ?
+      reinterpret_cast<const chre::fbs::OnEndpointSessionOpenedT *>(value) : nullptr;
+  }
+  chre::fbs::OnEndpointSessionClosedT *AsOnEndpointSessionClosed() {
+    return type == ChreMessage::OnEndpointSessionClosed ?
+      reinterpret_cast<chre::fbs::OnEndpointSessionClosedT *>(value) : nullptr;
+  }
+  const chre::fbs::OnEndpointSessionClosedT *AsOnEndpointSessionClosed() const {
+    return type == ChreMessage::OnEndpointSessionClosed ?
+      reinterpret_cast<const chre::fbs::OnEndpointSessionClosedT *>(value) : nullptr;
+  }
+  chre::fbs::EndpointSessionMessageT *AsEndpointSessionMessage() {
+    return type == ChreMessage::EndpointSessionMessage ?
+      reinterpret_cast<chre::fbs::EndpointSessionMessageT *>(value) : nullptr;
+  }
+  const chre::fbs::EndpointSessionMessageT *AsEndpointSessionMessage() const {
+    return type == ChreMessage::EndpointSessionMessage ?
+      reinterpret_cast<const chre::fbs::EndpointSessionMessageT *>(value) : nullptr;
+  }
+  chre::fbs::EndpointSessionMessageDeliveryStatusT *AsEndpointSessionMessageDeliveryStatus() {
+    return type == ChreMessage::EndpointSessionMessageDeliveryStatus ?
+      reinterpret_cast<chre::fbs::EndpointSessionMessageDeliveryStatusT *>(value) : nullptr;
+  }
+  const chre::fbs::EndpointSessionMessageDeliveryStatusT *AsEndpointSessionMessageDeliveryStatus() const {
+    return type == ChreMessage::EndpointSessionMessageDeliveryStatus ?
+      reinterpret_cast<const chre::fbs::EndpointSessionMessageDeliveryStatusT *>(value) : nullptr;
   }
 };
 
@@ -4679,6 +5151,1429 @@ inline flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(
 
 flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(flatbuffers::FlatBufferBuilder &_fbb, const BtSocketCloseResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct VendorHubInfoT : public flatbuffers::NativeTable {
+  typedef VendorHubInfo TableType;
+  std::vector<int8_t> name;
+  uint32_t version;
+  std::vector<uint8_t> extended_info;
+  VendorHubInfoT()
+      : version(0) {
+  }
+};
+
+struct VendorHubInfo FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef VendorHubInfoT NativeTableType;
+  typedef VendorHubInfoBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_NAME = 4,
+    VT_VERSION = 6,
+    VT_EXTENDED_INFO = 8
+  };
+  /// The name of the hub. Nominally a UTF-8 string, but note that we're not
+  /// using the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  const flatbuffers::Vector<int8_t> *name() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  flatbuffers::Vector<int8_t> *mutable_name() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  /// Hub version
+  uint32_t version() const {
+    return GetField<uint32_t>(VT_VERSION, 0);
+  }
+  bool mutate_version(uint32_t _version) {
+    return SetField<uint32_t>(VT_VERSION, _version, 0);
+  }
+  /// Additional vendor-defined data
+  const flatbuffers::Vector<uint8_t> *extended_info() const {
+    return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_EXTENDED_INFO);
+  }
+  flatbuffers::Vector<uint8_t> *mutable_extended_info() {
+    return GetPointer<flatbuffers::Vector<uint8_t> *>(VT_EXTENDED_INFO);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyVector(name()) &&
+           VerifyField<uint32_t>(verifier, VT_VERSION) &&
+           VerifyOffset(verifier, VT_EXTENDED_INFO) &&
+           verifier.VerifyVector(extended_info()) &&
+           verifier.EndTable();
+  }
+  VendorHubInfoT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(VendorHubInfoT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<VendorHubInfo> Pack(flatbuffers::FlatBufferBuilder &_fbb, const VendorHubInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct VendorHubInfoBuilder {
+  typedef VendorHubInfo Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_name(flatbuffers::Offset<flatbuffers::Vector<int8_t>> name) {
+    fbb_.AddOffset(VendorHubInfo::VT_NAME, name);
+  }
+  void add_version(uint32_t version) {
+    fbb_.AddElement<uint32_t>(VendorHubInfo::VT_VERSION, version, 0);
+  }
+  void add_extended_info(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> extended_info) {
+    fbb_.AddOffset(VendorHubInfo::VT_EXTENDED_INFO, extended_info);
+  }
+  explicit VendorHubInfoBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  VendorHubInfoBuilder &operator=(const VendorHubInfoBuilder &);
+  flatbuffers::Offset<VendorHubInfo> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<VendorHubInfo>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<VendorHubInfo> CreateVendorHubInfo(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> name = 0,
+    uint32_t version = 0,
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> extended_info = 0) {
+  VendorHubInfoBuilder builder_(_fbb);
+  builder_.add_extended_info(extended_info);
+  builder_.add_version(version);
+  builder_.add_name(name);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<VendorHubInfo> CreateVendorHubInfoDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<int8_t> *name = nullptr,
+    uint32_t version = 0,
+    const std::vector<uint8_t> *extended_info = nullptr) {
+  auto name__ = name ? _fbb.CreateVector<int8_t>(*name) : 0;
+  auto extended_info__ = extended_info ? _fbb.CreateVector<uint8_t>(*extended_info) : 0;
+  return chre::fbs::CreateVendorHubInfo(
+      _fbb,
+      name__,
+      version,
+      extended_info__);
+}
+
+flatbuffers::Offset<VendorHubInfo> CreateVendorHubInfo(flatbuffers::FlatBufferBuilder &_fbb, const VendorHubInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct MessageHubT : public flatbuffers::NativeTable {
+  typedef MessageHub TableType;
+  int64_t id;
+  chre::fbs::MessageHubDetailsUnion details;
+  MessageHubT()
+      : id(0) {
+  }
+};
+
+struct MessageHub FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef MessageHubT NativeTableType;
+  typedef MessageHubBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_DETAILS_TYPE = 6,
+    VT_DETAILS = 8
+  };
+  /// The hub id. -1 is reserved and 0 is invalid. 0x416e64726f696400 represents
+  /// the ContextHub service.
+  int64_t id() const {
+    return GetField<int64_t>(VT_ID, 0);
+  }
+  bool mutate_id(int64_t _id) {
+    return SetField<int64_t>(VT_ID, _id, 0);
+  }
+  chre::fbs::MessageHubDetails details_type() const {
+    return static_cast<chre::fbs::MessageHubDetails>(GetField<uint8_t>(VT_DETAILS_TYPE, 0));
+  }
+  /// Details of the message hub.
+  const void *details() const {
+    return GetPointer<const void *>(VT_DETAILS);
+  }
+  template<typename T> const T *details_as() const;
+  const chre::fbs::HubInfoResponse *details_as_HubInfoResponse() const {
+    return details_type() == chre::fbs::MessageHubDetails::HubInfoResponse ? static_cast<const chre::fbs::HubInfoResponse *>(details()) : nullptr;
+  }
+  const chre::fbs::VendorHubInfo *details_as_VendorHubInfo() const {
+    return details_type() == chre::fbs::MessageHubDetails::VendorHubInfo ? static_cast<const chre::fbs::VendorHubInfo *>(details()) : nullptr;
+  }
+  void *mutable_details() {
+    return GetPointer<void *>(VT_DETAILS);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_ID) &&
+           VerifyField<uint8_t>(verifier, VT_DETAILS_TYPE) &&
+           VerifyOffset(verifier, VT_DETAILS) &&
+           VerifyMessageHubDetails(verifier, details(), details_type()) &&
+           verifier.EndTable();
+  }
+  MessageHubT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(MessageHubT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<MessageHub> Pack(flatbuffers::FlatBufferBuilder &_fbb, const MessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+template<> inline const chre::fbs::HubInfoResponse *MessageHub::details_as<chre::fbs::HubInfoResponse>() const {
+  return details_as_HubInfoResponse();
+}
+
+template<> inline const chre::fbs::VendorHubInfo *MessageHub::details_as<chre::fbs::VendorHubInfo>() const {
+  return details_as_VendorHubInfo();
+}
+
+struct MessageHubBuilder {
+  typedef MessageHub Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(int64_t id) {
+    fbb_.AddElement<int64_t>(MessageHub::VT_ID, id, 0);
+  }
+  void add_details_type(chre::fbs::MessageHubDetails details_type) {
+    fbb_.AddElement<uint8_t>(MessageHub::VT_DETAILS_TYPE, static_cast<uint8_t>(details_type), 0);
+  }
+  void add_details(flatbuffers::Offset<void> details) {
+    fbb_.AddOffset(MessageHub::VT_DETAILS, details);
+  }
+  explicit MessageHubBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  MessageHubBuilder &operator=(const MessageHubBuilder &);
+  flatbuffers::Offset<MessageHub> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<MessageHub>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<MessageHub> CreateMessageHub(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t id = 0,
+    chre::fbs::MessageHubDetails details_type = chre::fbs::MessageHubDetails::NONE,
+    flatbuffers::Offset<void> details = 0) {
+  MessageHubBuilder builder_(_fbb);
+  builder_.add_id(id);
+  builder_.add_details(details);
+  builder_.add_details_type(details_type);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<MessageHub> CreateMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const MessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct RegisterMessageHubT : public flatbuffers::NativeTable {
+  typedef RegisterMessageHub TableType;
+  std::unique_ptr<chre::fbs::MessageHubT> hub;
+  RegisterMessageHubT() {
+  }
+};
+
+struct RegisterMessageHub FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef RegisterMessageHubT NativeTableType;
+  typedef RegisterMessageHubBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_HUB = 4
+  };
+  const chre::fbs::MessageHub *hub() const {
+    return GetPointer<const chre::fbs::MessageHub *>(VT_HUB);
+  }
+  chre::fbs::MessageHub *mutable_hub() {
+    return GetPointer<chre::fbs::MessageHub *>(VT_HUB);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_HUB) &&
+           verifier.VerifyTable(hub()) &&
+           verifier.EndTable();
+  }
+  RegisterMessageHubT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(RegisterMessageHubT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<RegisterMessageHub> Pack(flatbuffers::FlatBufferBuilder &_fbb, const RegisterMessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct RegisterMessageHubBuilder {
+  typedef RegisterMessageHub Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_hub(flatbuffers::Offset<chre::fbs::MessageHub> hub) {
+    fbb_.AddOffset(RegisterMessageHub::VT_HUB, hub);
+  }
+  explicit RegisterMessageHubBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  RegisterMessageHubBuilder &operator=(const RegisterMessageHubBuilder &);
+  flatbuffers::Offset<RegisterMessageHub> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<RegisterMessageHub>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<RegisterMessageHub> CreateRegisterMessageHub(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::MessageHub> hub = 0) {
+  RegisterMessageHubBuilder builder_(_fbb);
+  builder_.add_hub(hub);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<RegisterMessageHub> CreateRegisterMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const RegisterMessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct UnregisterMessageHubT : public flatbuffers::NativeTable {
+  typedef UnregisterMessageHub TableType;
+  int64_t id;
+  UnregisterMessageHubT()
+      : id(0) {
+  }
+};
+
+struct UnregisterMessageHub FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef UnregisterMessageHubT NativeTableType;
+  typedef UnregisterMessageHubBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4
+  };
+  int64_t id() const {
+    return GetField<int64_t>(VT_ID, 0);
+  }
+  bool mutate_id(int64_t _id) {
+    return SetField<int64_t>(VT_ID, _id, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_ID) &&
+           verifier.EndTable();
+  }
+  UnregisterMessageHubT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UnregisterMessageHubT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<UnregisterMessageHub> Pack(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterMessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct UnregisterMessageHubBuilder {
+  typedef UnregisterMessageHub Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(int64_t id) {
+    fbb_.AddElement<int64_t>(UnregisterMessageHub::VT_ID, id, 0);
+  }
+  explicit UnregisterMessageHubBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  UnregisterMessageHubBuilder &operator=(const UnregisterMessageHubBuilder &);
+  flatbuffers::Offset<UnregisterMessageHub> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<UnregisterMessageHub>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<UnregisterMessageHub> CreateUnregisterMessageHub(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t id = 0) {
+  UnregisterMessageHubBuilder builder_(_fbb);
+  builder_.add_id(id);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<UnregisterMessageHub> CreateUnregisterMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterMessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct EndpointIdT : public flatbuffers::NativeTable {
+  typedef EndpointId TableType;
+  int64_t hubId;
+  int64_t id;
+  EndpointIdT()
+      : hubId(0),
+        id(0) {
+  }
+};
+
+struct EndpointId FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointIdT NativeTableType;
+  typedef EndpointIdBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_HUBID = 4,
+    VT_ID = 6
+  };
+  /// Id of the hub hosting the endpoint
+  int64_t hubId() const {
+    return GetField<int64_t>(VT_HUBID, 0);
+  }
+  bool mutate_hubId(int64_t _hubId) {
+    return SetField<int64_t>(VT_HUBID, _hubId, 0);
+  }
+  /// The id of the endpoint scoped to the hub
+  int64_t id() const {
+    return GetField<int64_t>(VT_ID, 0);
+  }
+  bool mutate_id(int64_t _id) {
+    return SetField<int64_t>(VT_ID, _id, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_HUBID) &&
+           VerifyField<int64_t>(verifier, VT_ID) &&
+           verifier.EndTable();
+  }
+  EndpointIdT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EndpointIdT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<EndpointId> Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointIdT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct EndpointIdBuilder {
+  typedef EndpointId Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_hubId(int64_t hubId) {
+    fbb_.AddElement<int64_t>(EndpointId::VT_HUBID, hubId, 0);
+  }
+  void add_id(int64_t id) {
+    fbb_.AddElement<int64_t>(EndpointId::VT_ID, id, 0);
+  }
+  explicit EndpointIdBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  EndpointIdBuilder &operator=(const EndpointIdBuilder &);
+  flatbuffers::Offset<EndpointId> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<EndpointId>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<EndpointId> CreateEndpointId(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t hubId = 0,
+    int64_t id = 0) {
+  EndpointIdBuilder builder_(_fbb);
+  builder_.add_id(id);
+  builder_.add_hubId(hubId);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<EndpointId> CreateEndpointId(flatbuffers::FlatBufferBuilder &_fbb, const EndpointIdT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct ServiceT : public flatbuffers::NativeTable {
+  typedef Service TableType;
+  chre::fbs::RpcFormat format;
+  std::vector<int8_t> descriptor;
+  uint32_t major_version;
+  uint32_t minor_version;
+  ServiceT()
+      : format(chre::fbs::RpcFormat::CUSTOM),
+        major_version(0),
+        minor_version(0) {
+  }
+};
+
+struct Service FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef ServiceT NativeTableType;
+  typedef ServiceBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_FORMAT = 4,
+    VT_DESCRIPTOR = 6,
+    VT_MAJOR_VERSION = 8,
+    VT_MINOR_VERSION = 10
+  };
+  chre::fbs::RpcFormat format() const {
+    return static_cast<chre::fbs::RpcFormat>(GetField<uint8_t>(VT_FORMAT, 0));
+  }
+  bool mutate_format(chre::fbs::RpcFormat _format) {
+    return SetField<uint8_t>(VT_FORMAT, static_cast<uint8_t>(_format), 0);
+  }
+  /// Service descriptor. Nominally a UTF-8 string, but note that we're not
+  /// using the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  const flatbuffers::Vector<int8_t> *descriptor() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_DESCRIPTOR);
+  }
+  flatbuffers::Vector<int8_t> *mutable_descriptor() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_DESCRIPTOR);
+  }
+  /// Breaking changes should bump the major version.
+  uint32_t major_version() const {
+    return GetField<uint32_t>(VT_MAJOR_VERSION, 0);
+  }
+  bool mutate_major_version(uint32_t _major_version) {
+    return SetField<uint32_t>(VT_MAJOR_VERSION, _major_version, 0);
+  }
+  /// Monotonically increasing minor version.
+  uint32_t minor_version() const {
+    return GetField<uint32_t>(VT_MINOR_VERSION, 0);
+  }
+  bool mutate_minor_version(uint32_t _minor_version) {
+    return SetField<uint32_t>(VT_MINOR_VERSION, _minor_version, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_FORMAT) &&
+           VerifyOffset(verifier, VT_DESCRIPTOR) &&
+           verifier.VerifyVector(descriptor()) &&
+           VerifyField<uint32_t>(verifier, VT_MAJOR_VERSION) &&
+           VerifyField<uint32_t>(verifier, VT_MINOR_VERSION) &&
+           verifier.EndTable();
+  }
+  ServiceT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(ServiceT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<Service> Pack(flatbuffers::FlatBufferBuilder &_fbb, const ServiceT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct ServiceBuilder {
+  typedef Service Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_format(chre::fbs::RpcFormat format) {
+    fbb_.AddElement<uint8_t>(Service::VT_FORMAT, static_cast<uint8_t>(format), 0);
+  }
+  void add_descriptor(flatbuffers::Offset<flatbuffers::Vector<int8_t>> descriptor) {
+    fbb_.AddOffset(Service::VT_DESCRIPTOR, descriptor);
+  }
+  void add_major_version(uint32_t major_version) {
+    fbb_.AddElement<uint32_t>(Service::VT_MAJOR_VERSION, major_version, 0);
+  }
+  void add_minor_version(uint32_t minor_version) {
+    fbb_.AddElement<uint32_t>(Service::VT_MINOR_VERSION, minor_version, 0);
+  }
+  explicit ServiceBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ServiceBuilder &operator=(const ServiceBuilder &);
+  flatbuffers::Offset<Service> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<Service>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<Service> CreateService(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    chre::fbs::RpcFormat format = chre::fbs::RpcFormat::CUSTOM,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> descriptor = 0,
+    uint32_t major_version = 0,
+    uint32_t minor_version = 0) {
+  ServiceBuilder builder_(_fbb);
+  builder_.add_minor_version(minor_version);
+  builder_.add_major_version(major_version);
+  builder_.add_descriptor(descriptor);
+  builder_.add_format(format);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<Service> CreateServiceDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    chre::fbs::RpcFormat format = chre::fbs::RpcFormat::CUSTOM,
+    const std::vector<int8_t> *descriptor = nullptr,
+    uint32_t major_version = 0,
+    uint32_t minor_version = 0) {
+  auto descriptor__ = descriptor ? _fbb.CreateVector<int8_t>(*descriptor) : 0;
+  return chre::fbs::CreateService(
+      _fbb,
+      format,
+      descriptor__,
+      major_version,
+      minor_version);
+}
+
+flatbuffers::Offset<Service> CreateService(flatbuffers::FlatBufferBuilder &_fbb, const ServiceT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct EndpointInfoT : public flatbuffers::NativeTable {
+  typedef EndpointInfo TableType;
+  std::unique_ptr<chre::fbs::EndpointIdT> id;
+  chre::fbs::EndpointType type;
+  std::vector<int8_t> name;
+  uint32_t version;
+  uint32_t required_permissions;
+  std::vector<std::unique_ptr<chre::fbs::ServiceT>> services;
+  EndpointInfoT()
+      : type(chre::fbs::EndpointType::INVALID),
+        version(0),
+        required_permissions(0) {
+  }
+};
+
+struct EndpointInfo FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointInfoT NativeTableType;
+  typedef EndpointInfoBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_TYPE = 6,
+    VT_NAME = 8,
+    VT_VERSION = 10,
+    VT_REQUIRED_PERMISSIONS = 12,
+    VT_SERVICES = 14
+  };
+  const chre::fbs::EndpointId *id() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_ID);
+  }
+  chre::fbs::EndpointId *mutable_id() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_ID);
+  }
+  chre::fbs::EndpointType type() const {
+    return static_cast<chre::fbs::EndpointType>(GetField<uint8_t>(VT_TYPE, 0));
+  }
+  bool mutate_type(chre::fbs::EndpointType _type) {
+    return SetField<uint8_t>(VT_TYPE, static_cast<uint8_t>(_type), 0);
+  }
+  /// Endpoing name. Nominally a UTF-8 string, but note that we're not using
+  /// the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  const flatbuffers::Vector<int8_t> *name() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  flatbuffers::Vector<int8_t> *mutable_name() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_NAME);
+  }
+  uint32_t version() const {
+    return GetField<uint32_t>(VT_VERSION, 0);
+  }
+  bool mutate_version(uint32_t _version) {
+    return SetField<uint32_t>(VT_VERSION, _version, 0);
+  }
+  /// Values from CHRE_MESSAGE_PERMISSION_*
+  uint32_t required_permissions() const {
+    return GetField<uint32_t>(VT_REQUIRED_PERMISSIONS, 0);
+  }
+  bool mutate_required_permissions(uint32_t _required_permissions) {
+    return SetField<uint32_t>(VT_REQUIRED_PERMISSIONS, _required_permissions, 0);
+  }
+  const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>> *services() const {
+    return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>> *>(VT_SERVICES);
+  }
+  flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>> *mutable_services() {
+    return GetPointer<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>> *>(VT_SERVICES);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ID) &&
+           verifier.VerifyTable(id()) &&
+           VerifyField<uint8_t>(verifier, VT_TYPE) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyVector(name()) &&
+           VerifyField<uint32_t>(verifier, VT_VERSION) &&
+           VerifyField<uint32_t>(verifier, VT_REQUIRED_PERMISSIONS) &&
+           VerifyOffset(verifier, VT_SERVICES) &&
+           verifier.VerifyVector(services()) &&
+           verifier.VerifyVectorOfTables(services()) &&
+           verifier.EndTable();
+  }
+  EndpointInfoT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EndpointInfoT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<EndpointInfo> Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct EndpointInfoBuilder {
+  typedef EndpointInfo Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(flatbuffers::Offset<chre::fbs::EndpointId> id) {
+    fbb_.AddOffset(EndpointInfo::VT_ID, id);
+  }
+  void add_type(chre::fbs::EndpointType type) {
+    fbb_.AddElement<uint8_t>(EndpointInfo::VT_TYPE, static_cast<uint8_t>(type), 0);
+  }
+  void add_name(flatbuffers::Offset<flatbuffers::Vector<int8_t>> name) {
+    fbb_.AddOffset(EndpointInfo::VT_NAME, name);
+  }
+  void add_version(uint32_t version) {
+    fbb_.AddElement<uint32_t>(EndpointInfo::VT_VERSION, version, 0);
+  }
+  void add_required_permissions(uint32_t required_permissions) {
+    fbb_.AddElement<uint32_t>(EndpointInfo::VT_REQUIRED_PERMISSIONS, required_permissions, 0);
+  }
+  void add_services(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>>> services) {
+    fbb_.AddOffset(EndpointInfo::VT_SERVICES, services);
+  }
+  explicit EndpointInfoBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  EndpointInfoBuilder &operator=(const EndpointInfoBuilder &);
+  flatbuffers::Offset<EndpointInfo> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<EndpointInfo>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<EndpointInfo> CreateEndpointInfo(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointId> id = 0,
+    chre::fbs::EndpointType type = chre::fbs::EndpointType::INVALID,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> name = 0,
+    uint32_t version = 0,
+    uint32_t required_permissions = 0,
+    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::Service>>> services = 0) {
+  EndpointInfoBuilder builder_(_fbb);
+  builder_.add_services(services);
+  builder_.add_required_permissions(required_permissions);
+  builder_.add_version(version);
+  builder_.add_name(name);
+  builder_.add_id(id);
+  builder_.add_type(type);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<EndpointInfo> CreateEndpointInfoDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointId> id = 0,
+    chre::fbs::EndpointType type = chre::fbs::EndpointType::INVALID,
+    const std::vector<int8_t> *name = nullptr,
+    uint32_t version = 0,
+    uint32_t required_permissions = 0,
+    const std::vector<flatbuffers::Offset<chre::fbs::Service>> *services = nullptr) {
+  auto name__ = name ? _fbb.CreateVector<int8_t>(*name) : 0;
+  auto services__ = services ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::Service>>(*services) : 0;
+  return chre::fbs::CreateEndpointInfo(
+      _fbb,
+      id,
+      type,
+      name__,
+      version,
+      required_permissions,
+      services__);
+}
+
+flatbuffers::Offset<EndpointInfo> CreateEndpointInfo(flatbuffers::FlatBufferBuilder &_fbb, const EndpointInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct RegisterEndpointT : public flatbuffers::NativeTable {
+  typedef RegisterEndpoint TableType;
+  std::unique_ptr<chre::fbs::EndpointInfoT> endpoint;
+  RegisterEndpointT() {
+  }
+};
+
+struct RegisterEndpoint FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef RegisterEndpointT NativeTableType;
+  typedef RegisterEndpointBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT = 4
+  };
+  const chre::fbs::EndpointInfo *endpoint() const {
+    return GetPointer<const chre::fbs::EndpointInfo *>(VT_ENDPOINT);
+  }
+  chre::fbs::EndpointInfo *mutable_endpoint() {
+    return GetPointer<chre::fbs::EndpointInfo *>(VT_ENDPOINT);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT) &&
+           verifier.VerifyTable(endpoint()) &&
+           verifier.EndTable();
+  }
+  RegisterEndpointT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(RegisterEndpointT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<RegisterEndpoint> Pack(flatbuffers::FlatBufferBuilder &_fbb, const RegisterEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct RegisterEndpointBuilder {
+  typedef RegisterEndpoint Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_endpoint(flatbuffers::Offset<chre::fbs::EndpointInfo> endpoint) {
+    fbb_.AddOffset(RegisterEndpoint::VT_ENDPOINT, endpoint);
+  }
+  explicit RegisterEndpointBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  RegisterEndpointBuilder &operator=(const RegisterEndpointBuilder &);
+  flatbuffers::Offset<RegisterEndpoint> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<RegisterEndpoint>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointInfo> endpoint = 0) {
+  RegisterEndpointBuilder builder_(_fbb);
+  builder_.add_endpoint(endpoint);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const RegisterEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct UnregisterEndpointT : public flatbuffers::NativeTable {
+  typedef UnregisterEndpoint TableType;
+  std::unique_ptr<chre::fbs::EndpointIdT> endpoint;
+  UnregisterEndpointT() {
+  }
+};
+
+struct UnregisterEndpoint FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef UnregisterEndpointT NativeTableType;
+  typedef UnregisterEndpointBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT = 4
+  };
+  const chre::fbs::EndpointId *endpoint() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  chre::fbs::EndpointId *mutable_endpoint() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT) &&
+           verifier.VerifyTable(endpoint()) &&
+           verifier.EndTable();
+  }
+  UnregisterEndpointT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UnregisterEndpointT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<UnregisterEndpoint> Pack(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct UnregisterEndpointBuilder {
+  typedef UnregisterEndpoint Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_endpoint(flatbuffers::Offset<chre::fbs::EndpointId> endpoint) {
+    fbb_.AddOffset(UnregisterEndpoint::VT_ENDPOINT, endpoint);
+  }
+  explicit UnregisterEndpointBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  UnregisterEndpointBuilder &operator=(const UnregisterEndpointBuilder &);
+  flatbuffers::Offset<UnregisterEndpoint> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<UnregisterEndpoint>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<UnregisterEndpoint> CreateUnregisterEndpoint(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointId> endpoint = 0) {
+  UnregisterEndpointBuilder builder_(_fbb);
+  builder_.add_endpoint(endpoint);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<UnregisterEndpoint> CreateUnregisterEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GetMessageHubsAndEndpointsRequestT : public flatbuffers::NativeTable {
+  typedef GetMessageHubsAndEndpointsRequest TableType;
+  GetMessageHubsAndEndpointsRequestT() {
+  }
+};
+
+/// HAL->CHRE, indicates the HAL is coming up
+struct GetMessageHubsAndEndpointsRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef GetMessageHubsAndEndpointsRequestT NativeTableType;
+  typedef GetMessageHubsAndEndpointsRequestBuilder Builder;
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+  GetMessageHubsAndEndpointsRequestT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GetMessageHubsAndEndpointsRequestT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> Pack(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsRequestT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct GetMessageHubsAndEndpointsRequestBuilder {
+  typedef GetMessageHubsAndEndpointsRequest Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  explicit GetMessageHubsAndEndpointsRequestBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  GetMessageHubsAndEndpointsRequestBuilder &operator=(const GetMessageHubsAndEndpointsRequestBuilder &);
+  flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<GetMessageHubsAndEndpointsRequest>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> CreateGetMessageHubsAndEndpointsRequest(
+    flatbuffers::FlatBufferBuilder &_fbb) {
+  GetMessageHubsAndEndpointsRequestBuilder builder_(_fbb);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> CreateGetMessageHubsAndEndpointsRequest(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsRequestT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GetMessageHubsAndEndpointsResponseT : public flatbuffers::NativeTable {
+  typedef GetMessageHubsAndEndpointsResponse TableType;
+  std::vector<std::unique_ptr<chre::fbs::MessageHubT>> hubs;
+  std::vector<std::unique_ptr<chre::fbs::EndpointInfoT>> endpoints;
+  GetMessageHubsAndEndpointsResponseT() {
+  }
+};
+
+struct GetMessageHubsAndEndpointsResponse FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef GetMessageHubsAndEndpointsResponseT NativeTableType;
+  typedef GetMessageHubsAndEndpointsResponseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_HUBS = 4,
+    VT_ENDPOINTS = 6
+  };
+  const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>> *hubs() const {
+    return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>> *>(VT_HUBS);
+  }
+  flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>> *mutable_hubs() {
+    return GetPointer<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>> *>(VT_HUBS);
+  }
+  const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>> *endpoints() const {
+    return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>> *>(VT_ENDPOINTS);
+  }
+  flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>> *mutable_endpoints() {
+    return GetPointer<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>> *>(VT_ENDPOINTS);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_HUBS) &&
+           verifier.VerifyVector(hubs()) &&
+           verifier.VerifyVectorOfTables(hubs()) &&
+           VerifyOffset(verifier, VT_ENDPOINTS) &&
+           verifier.VerifyVector(endpoints()) &&
+           verifier.VerifyVectorOfTables(endpoints()) &&
+           verifier.EndTable();
+  }
+  GetMessageHubsAndEndpointsResponseT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GetMessageHubsAndEndpointsResponseT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> Pack(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct GetMessageHubsAndEndpointsResponseBuilder {
+  typedef GetMessageHubsAndEndpointsResponse Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_hubs(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>>> hubs) {
+    fbb_.AddOffset(GetMessageHubsAndEndpointsResponse::VT_HUBS, hubs);
+  }
+  void add_endpoints(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>>> endpoints) {
+    fbb_.AddOffset(GetMessageHubsAndEndpointsResponse::VT_ENDPOINTS, endpoints);
+  }
+  explicit GetMessageHubsAndEndpointsResponseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  GetMessageHubsAndEndpointsResponseBuilder &operator=(const GetMessageHubsAndEndpointsResponseBuilder &);
+  flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<GetMessageHubsAndEndpointsResponse>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> CreateGetMessageHubsAndEndpointsResponse(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::MessageHub>>> hubs = 0,
+    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<chre::fbs::EndpointInfo>>> endpoints = 0) {
+  GetMessageHubsAndEndpointsResponseBuilder builder_(_fbb);
+  builder_.add_endpoints(endpoints);
+  builder_.add_hubs(hubs);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> CreateGetMessageHubsAndEndpointsResponseDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<flatbuffers::Offset<chre::fbs::MessageHub>> *hubs = nullptr,
+    const std::vector<flatbuffers::Offset<chre::fbs::EndpointInfo>> *endpoints = nullptr) {
+  auto hubs__ = hubs ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::MessageHub>>(*hubs) : 0;
+  auto endpoints__ = endpoints ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::EndpointInfo>>(*endpoints) : 0;
+  return chre::fbs::CreateGetMessageHubsAndEndpointsResponse(
+      _fbb,
+      hubs__,
+      endpoints__);
+}
+
+flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> CreateGetMessageHubsAndEndpointsResponse(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct OpenEndpointSessionRequestT : public flatbuffers::NativeTable {
+  typedef OpenEndpointSessionRequest TableType;
+  uint16_t id;
+  std::unique_ptr<chre::fbs::EndpointIdT> fromEndpoint;
+  std::unique_ptr<chre::fbs::EndpointIdT> toEndpoint;
+  std::vector<int8_t> serviceDescriptor;
+  OpenEndpointSessionRequestT()
+      : id(0) {
+  }
+};
+
+struct OpenEndpointSessionRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef OpenEndpointSessionRequestT NativeTableType;
+  typedef OpenEndpointSessionRequestBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_FROMENDPOINT = 6,
+    VT_TOENDPOINT = 8,
+    VT_SERVICEDESCRIPTOR = 10
+  };
+  uint16_t id() const {
+    return GetField<uint16_t>(VT_ID, 0);
+  }
+  bool mutate_id(uint16_t _id) {
+    return SetField<uint16_t>(VT_ID, _id, 0);
+  }
+  const chre::fbs::EndpointId *fromEndpoint() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_FROMENDPOINT);
+  }
+  chre::fbs::EndpointId *mutable_fromEndpoint() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_FROMENDPOINT);
+  }
+  const chre::fbs::EndpointId *toEndpoint() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_TOENDPOINT);
+  }
+  chre::fbs::EndpointId *mutable_toEndpoint() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_TOENDPOINT);
+  }
+  /// If present, describes the service definition used over the session
+  const flatbuffers::Vector<int8_t> *serviceDescriptor() const {
+    return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_SERVICEDESCRIPTOR);
+  }
+  flatbuffers::Vector<int8_t> *mutable_serviceDescriptor() {
+    return GetPointer<flatbuffers::Vector<int8_t> *>(VT_SERVICEDESCRIPTOR);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_ID) &&
+           VerifyOffset(verifier, VT_FROMENDPOINT) &&
+           verifier.VerifyTable(fromEndpoint()) &&
+           VerifyOffset(verifier, VT_TOENDPOINT) &&
+           verifier.VerifyTable(toEndpoint()) &&
+           VerifyOffset(verifier, VT_SERVICEDESCRIPTOR) &&
+           verifier.VerifyVector(serviceDescriptor()) &&
+           verifier.EndTable();
+  }
+  OpenEndpointSessionRequestT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(OpenEndpointSessionRequestT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<OpenEndpointSessionRequest> Pack(flatbuffers::FlatBufferBuilder &_fbb, const OpenEndpointSessionRequestT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct OpenEndpointSessionRequestBuilder {
+  typedef OpenEndpointSessionRequest Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(uint16_t id) {
+    fbb_.AddElement<uint16_t>(OpenEndpointSessionRequest::VT_ID, id, 0);
+  }
+  void add_fromEndpoint(flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint) {
+    fbb_.AddOffset(OpenEndpointSessionRequest::VT_FROMENDPOINT, fromEndpoint);
+  }
+  void add_toEndpoint(flatbuffers::Offset<chre::fbs::EndpointId> toEndpoint) {
+    fbb_.AddOffset(OpenEndpointSessionRequest::VT_TOENDPOINT, toEndpoint);
+  }
+  void add_serviceDescriptor(flatbuffers::Offset<flatbuffers::Vector<int8_t>> serviceDescriptor) {
+    fbb_.AddOffset(OpenEndpointSessionRequest::VT_SERVICEDESCRIPTOR, serviceDescriptor);
+  }
+  explicit OpenEndpointSessionRequestBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  OpenEndpointSessionRequestBuilder &operator=(const OpenEndpointSessionRequestBuilder &);
+  flatbuffers::Offset<OpenEndpointSessionRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<OpenEndpointSessionRequest>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequest(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t id = 0,
+    flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint = 0,
+    flatbuffers::Offset<chre::fbs::EndpointId> toEndpoint = 0,
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> serviceDescriptor = 0) {
+  OpenEndpointSessionRequestBuilder builder_(_fbb);
+  builder_.add_serviceDescriptor(serviceDescriptor);
+  builder_.add_toEndpoint(toEndpoint);
+  builder_.add_fromEndpoint(fromEndpoint);
+  builder_.add_id(id);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequestDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t id = 0,
+    flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint = 0,
+    flatbuffers::Offset<chre::fbs::EndpointId> toEndpoint = 0,
+    const std::vector<int8_t> *serviceDescriptor = nullptr) {
+  auto serviceDescriptor__ = serviceDescriptor ? _fbb.CreateVector<int8_t>(*serviceDescriptor) : 0;
+  return chre::fbs::CreateOpenEndpointSessionRequest(
+      _fbb,
+      id,
+      fromEndpoint,
+      toEndpoint,
+      serviceDescriptor__);
+}
+
+flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequest(flatbuffers::FlatBufferBuilder &_fbb, const OpenEndpointSessionRequestT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct OnEndpointSessionOpenedT : public flatbuffers::NativeTable {
+  typedef OnEndpointSessionOpened TableType;
+  uint16_t id;
+  OnEndpointSessionOpenedT()
+      : id(0) {
+  }
+};
+
+struct OnEndpointSessionOpened FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef OnEndpointSessionOpenedT NativeTableType;
+  typedef OnEndpointSessionOpenedBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4
+  };
+  uint16_t id() const {
+    return GetField<uint16_t>(VT_ID, 0);
+  }
+  bool mutate_id(uint16_t _id) {
+    return SetField<uint16_t>(VT_ID, _id, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_ID) &&
+           verifier.EndTable();
+  }
+  OnEndpointSessionOpenedT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(OnEndpointSessionOpenedT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<OnEndpointSessionOpened> Pack(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionOpenedT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct OnEndpointSessionOpenedBuilder {
+  typedef OnEndpointSessionOpened Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(uint16_t id) {
+    fbb_.AddElement<uint16_t>(OnEndpointSessionOpened::VT_ID, id, 0);
+  }
+  explicit OnEndpointSessionOpenedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  OnEndpointSessionOpenedBuilder &operator=(const OnEndpointSessionOpenedBuilder &);
+  flatbuffers::Offset<OnEndpointSessionOpened> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<OnEndpointSessionOpened>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<OnEndpointSessionOpened> CreateOnEndpointSessionOpened(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t id = 0) {
+  OnEndpointSessionOpenedBuilder builder_(_fbb);
+  builder_.add_id(id);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<OnEndpointSessionOpened> CreateOnEndpointSessionOpened(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionOpenedT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct OnEndpointSessionClosedT : public flatbuffers::NativeTable {
+  typedef OnEndpointSessionClosed TableType;
+  uint16_t id;
+  chre::fbs::Reason reason;
+  OnEndpointSessionClosedT()
+      : id(0),
+        reason(chre::fbs::Reason::UNSPECIFIED) {
+  }
+};
+
+struct OnEndpointSessionClosed FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef OnEndpointSessionClosedT NativeTableType;
+  typedef OnEndpointSessionClosedBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_REASON = 6
+  };
+  uint16_t id() const {
+    return GetField<uint16_t>(VT_ID, 0);
+  }
+  bool mutate_id(uint16_t _id) {
+    return SetField<uint16_t>(VT_ID, _id, 0);
+  }
+  chre::fbs::Reason reason() const {
+    return static_cast<chre::fbs::Reason>(GetField<uint8_t>(VT_REASON, 0));
+  }
+  bool mutate_reason(chre::fbs::Reason _reason) {
+    return SetField<uint8_t>(VT_REASON, static_cast<uint8_t>(_reason), 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_ID) &&
+           VerifyField<uint8_t>(verifier, VT_REASON) &&
+           verifier.EndTable();
+  }
+  OnEndpointSessionClosedT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(OnEndpointSessionClosedT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<OnEndpointSessionClosed> Pack(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionClosedT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct OnEndpointSessionClosedBuilder {
+  typedef OnEndpointSessionClosed Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(uint16_t id) {
+    fbb_.AddElement<uint16_t>(OnEndpointSessionClosed::VT_ID, id, 0);
+  }
+  void add_reason(chre::fbs::Reason reason) {
+    fbb_.AddElement<uint8_t>(OnEndpointSessionClosed::VT_REASON, static_cast<uint8_t>(reason), 0);
+  }
+  explicit OnEndpointSessionClosedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  OnEndpointSessionClosedBuilder &operator=(const OnEndpointSessionClosedBuilder &);
+  flatbuffers::Offset<OnEndpointSessionClosed> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<OnEndpointSessionClosed>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<OnEndpointSessionClosed> CreateOnEndpointSessionClosed(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t id = 0,
+    chre::fbs::Reason reason = chre::fbs::Reason::UNSPECIFIED) {
+  OnEndpointSessionClosedBuilder builder_(_fbb);
+  builder_.add_id(id);
+  builder_.add_reason(reason);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<OnEndpointSessionClosed> CreateOnEndpointSessionClosed(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionClosedT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct EndpointSessionMessageT : public flatbuffers::NativeTable {
+  typedef EndpointSessionMessage TableType;
+  uint16_t session_id;
+  uint32_t type;
+  uint32_t permissions;
+  std::vector<uint8_t> data;
+  uint32_t flags;
+  uint32_t sequence_number;
+  EndpointSessionMessageT()
+      : session_id(0),
+        type(0),
+        permissions(0),
+        flags(0),
+        sequence_number(0) {
+  }
+};
+
+struct EndpointSessionMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointSessionMessageT NativeTableType;
+  typedef EndpointSessionMessageBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SESSION_ID = 4,
+    VT_TYPE = 6,
+    VT_PERMISSIONS = 8,
+    VT_DATA = 10,
+    VT_FLAGS = 12,
+    VT_SEQUENCE_NUMBER = 14
+  };
+  /// Id of session this message is being sent within
+  uint16_t session_id() const {
+    return GetField<uint16_t>(VT_SESSION_ID, 0);
+  }
+  bool mutate_session_id(uint16_t _session_id) {
+    return SetField<uint16_t>(VT_SESSION_ID, _session_id, 0);
+  }
+  /// Type of the message, specific to the Session protocol
+  uint32_t type() const {
+    return GetField<uint32_t>(VT_TYPE, 0);
+  }
+  bool mutate_type(uint32_t _type) {
+    return SetField<uint32_t>(VT_TYPE, _type, 0);
+  }
+  /// Values from CHRE_MESSAGE_PERMISSION_*. Permissions required to read the
+  /// message.
+  uint32_t permissions() const {
+    return GetField<uint32_t>(VT_PERMISSIONS, 0);
+  }
+  bool mutate_permissions(uint32_t _permissions) {
+    return SetField<uint32_t>(VT_PERMISSIONS, _permissions, 0);
+  }
+  const flatbuffers::Vector<uint8_t> *data() const {
+    return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_DATA);
+  }
+  flatbuffers::Vector<uint8_t> *mutable_data() {
+    return GetPointer<flatbuffers::Vector<uint8_t> *>(VT_DATA);
+  }
+  /// Bitmask of additional flags applied to the message:
+  /// - 0x1: Message delivery status required within 1s
+  uint32_t flags() const {
+    return GetField<uint32_t>(VT_FLAGS, 0);
+  }
+  bool mutate_flags(uint32_t _flags) {
+    return SetField<uint32_t>(VT_FLAGS, _flags, 0);
+  }
+  uint32_t sequence_number() const {
+    return GetField<uint32_t>(VT_SEQUENCE_NUMBER, 0);
+  }
+  bool mutate_sequence_number(uint32_t _sequence_number) {
+    return SetField<uint32_t>(VT_SEQUENCE_NUMBER, _sequence_number, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
+           VerifyField<uint32_t>(verifier, VT_TYPE) &&
+           VerifyField<uint32_t>(verifier, VT_PERMISSIONS) &&
+           VerifyOffset(verifier, VT_DATA) &&
+           verifier.VerifyVector(data()) &&
+           VerifyField<uint32_t>(verifier, VT_FLAGS) &&
+           VerifyField<uint32_t>(verifier, VT_SEQUENCE_NUMBER) &&
+           verifier.EndTable();
+  }
+  EndpointSessionMessageT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EndpointSessionMessageT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<EndpointSessionMessage> Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct EndpointSessionMessageBuilder {
+  typedef EndpointSessionMessage Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_session_id(uint16_t session_id) {
+    fbb_.AddElement<uint16_t>(EndpointSessionMessage::VT_SESSION_ID, session_id, 0);
+  }
+  void add_type(uint32_t type) {
+    fbb_.AddElement<uint32_t>(EndpointSessionMessage::VT_TYPE, type, 0);
+  }
+  void add_permissions(uint32_t permissions) {
+    fbb_.AddElement<uint32_t>(EndpointSessionMessage::VT_PERMISSIONS, permissions, 0);
+  }
+  void add_data(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> data) {
+    fbb_.AddOffset(EndpointSessionMessage::VT_DATA, data);
+  }
+  void add_flags(uint32_t flags) {
+    fbb_.AddElement<uint32_t>(EndpointSessionMessage::VT_FLAGS, flags, 0);
+  }
+  void add_sequence_number(uint32_t sequence_number) {
+    fbb_.AddElement<uint32_t>(EndpointSessionMessage::VT_SEQUENCE_NUMBER, sequence_number, 0);
+  }
+  explicit EndpointSessionMessageBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  EndpointSessionMessageBuilder &operator=(const EndpointSessionMessageBuilder &);
+  flatbuffers::Offset<EndpointSessionMessage> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<EndpointSessionMessage>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t session_id = 0,
+    uint32_t type = 0,
+    uint32_t permissions = 0,
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> data = 0,
+    uint32_t flags = 0,
+    uint32_t sequence_number = 0) {
+  EndpointSessionMessageBuilder builder_(_fbb);
+  builder_.add_sequence_number(sequence_number);
+  builder_.add_flags(flags);
+  builder_.add_data(data);
+  builder_.add_permissions(permissions);
+  builder_.add_type(type);
+  builder_.add_session_id(session_id);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessageDirect(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t session_id = 0,
+    uint32_t type = 0,
+    uint32_t permissions = 0,
+    const std::vector<uint8_t> *data = nullptr,
+    uint32_t flags = 0,
+    uint32_t sequence_number = 0) {
+  auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
+  return chre::fbs::CreateEndpointSessionMessage(
+      _fbb,
+      session_id,
+      type,
+      permissions,
+      data__,
+      flags,
+      sequence_number);
+}
+
+flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct EndpointSessionMessageDeliveryStatusT : public flatbuffers::NativeTable {
+  typedef EndpointSessionMessageDeliveryStatus TableType;
+  uint16_t session_id;
+  std::unique_ptr<chre::fbs::MessageDeliveryStatusT> status;
+  EndpointSessionMessageDeliveryStatusT()
+      : session_id(0) {
+  }
+};
+
+struct EndpointSessionMessageDeliveryStatus FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointSessionMessageDeliveryStatusT NativeTableType;
+  typedef EndpointSessionMessageDeliveryStatusBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SESSION_ID = 4,
+    VT_STATUS = 6
+  };
+  /// Id of session the message was sent within
+  uint16_t session_id() const {
+    return GetField<uint16_t>(VT_SESSION_ID, 0);
+  }
+  bool mutate_session_id(uint16_t _session_id) {
+    return SetField<uint16_t>(VT_SESSION_ID, _session_id, 0);
+  }
+  const chre::fbs::MessageDeliveryStatus *status() const {
+    return GetPointer<const chre::fbs::MessageDeliveryStatus *>(VT_STATUS);
+  }
+  chre::fbs::MessageDeliveryStatus *mutable_status() {
+    return GetPointer<chre::fbs::MessageDeliveryStatus *>(VT_STATUS);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
+           VerifyOffset(verifier, VT_STATUS) &&
+           verifier.VerifyTable(status()) &&
+           verifier.EndTable();
+  }
+  EndpointSessionMessageDeliveryStatusT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EndpointSessionMessageDeliveryStatusT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageDeliveryStatusT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct EndpointSessionMessageDeliveryStatusBuilder {
+  typedef EndpointSessionMessageDeliveryStatus Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_session_id(uint16_t session_id) {
+    fbb_.AddElement<uint16_t>(EndpointSessionMessageDeliveryStatus::VT_SESSION_ID, session_id, 0);
+  }
+  void add_status(flatbuffers::Offset<chre::fbs::MessageDeliveryStatus> status) {
+    fbb_.AddOffset(EndpointSessionMessageDeliveryStatus::VT_STATUS, status);
+  }
+  explicit EndpointSessionMessageDeliveryStatusBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  EndpointSessionMessageDeliveryStatusBuilder &operator=(const EndpointSessionMessageDeliveryStatusBuilder &);
+  flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<EndpointSessionMessageDeliveryStatus>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> CreateEndpointSessionMessageDeliveryStatus(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t session_id = 0,
+    flatbuffers::Offset<chre::fbs::MessageDeliveryStatus> status = 0) {
+  EndpointSessionMessageDeliveryStatusBuilder builder_(_fbb);
+  builder_.add_status(status);
+  builder_.add_session_id(session_id);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> CreateEndpointSessionMessageDeliveryStatus(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageDeliveryStatusT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct MessageContainerT : public flatbuffers::NativeTable {
   typedef MessageContainer TableType;
   chre::fbs::ChreMessageUnion message;
@@ -4812,6 +6707,39 @@ struct MessageContainer FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   const chre::fbs::BtSocketCloseResponse *message_as_BtSocketCloseResponse() const {
     return message_type() == chre::fbs::ChreMessage::BtSocketCloseResponse ? static_cast<const chre::fbs::BtSocketCloseResponse *>(message()) : nullptr;
+  }
+  const chre::fbs::GetMessageHubsAndEndpointsRequest *message_as_GetMessageHubsAndEndpointsRequest() const {
+    return message_type() == chre::fbs::ChreMessage::GetMessageHubsAndEndpointsRequest ? static_cast<const chre::fbs::GetMessageHubsAndEndpointsRequest *>(message()) : nullptr;
+  }
+  const chre::fbs::GetMessageHubsAndEndpointsResponse *message_as_GetMessageHubsAndEndpointsResponse() const {
+    return message_type() == chre::fbs::ChreMessage::GetMessageHubsAndEndpointsResponse ? static_cast<const chre::fbs::GetMessageHubsAndEndpointsResponse *>(message()) : nullptr;
+  }
+  const chre::fbs::RegisterMessageHub *message_as_RegisterMessageHub() const {
+    return message_type() == chre::fbs::ChreMessage::RegisterMessageHub ? static_cast<const chre::fbs::RegisterMessageHub *>(message()) : nullptr;
+  }
+  const chre::fbs::UnregisterMessageHub *message_as_UnregisterMessageHub() const {
+    return message_type() == chre::fbs::ChreMessage::UnregisterMessageHub ? static_cast<const chre::fbs::UnregisterMessageHub *>(message()) : nullptr;
+  }
+  const chre::fbs::RegisterEndpoint *message_as_RegisterEndpoint() const {
+    return message_type() == chre::fbs::ChreMessage::RegisterEndpoint ? static_cast<const chre::fbs::RegisterEndpoint *>(message()) : nullptr;
+  }
+  const chre::fbs::UnregisterEndpoint *message_as_UnregisterEndpoint() const {
+    return message_type() == chre::fbs::ChreMessage::UnregisterEndpoint ? static_cast<const chre::fbs::UnregisterEndpoint *>(message()) : nullptr;
+  }
+  const chre::fbs::OpenEndpointSessionRequest *message_as_OpenEndpointSessionRequest() const {
+    return message_type() == chre::fbs::ChreMessage::OpenEndpointSessionRequest ? static_cast<const chre::fbs::OpenEndpointSessionRequest *>(message()) : nullptr;
+  }
+  const chre::fbs::OnEndpointSessionOpened *message_as_OnEndpointSessionOpened() const {
+    return message_type() == chre::fbs::ChreMessage::OnEndpointSessionOpened ? static_cast<const chre::fbs::OnEndpointSessionOpened *>(message()) : nullptr;
+  }
+  const chre::fbs::OnEndpointSessionClosed *message_as_OnEndpointSessionClosed() const {
+    return message_type() == chre::fbs::ChreMessage::OnEndpointSessionClosed ? static_cast<const chre::fbs::OnEndpointSessionClosed *>(message()) : nullptr;
+  }
+  const chre::fbs::EndpointSessionMessage *message_as_EndpointSessionMessage() const {
+    return message_type() == chre::fbs::ChreMessage::EndpointSessionMessage ? static_cast<const chre::fbs::EndpointSessionMessage *>(message()) : nullptr;
+  }
+  const chre::fbs::EndpointSessionMessageDeliveryStatus *message_as_EndpointSessionMessageDeliveryStatus() const {
+    return message_type() == chre::fbs::ChreMessage::EndpointSessionMessageDeliveryStatus ? static_cast<const chre::fbs::EndpointSessionMessageDeliveryStatus *>(message()) : nullptr;
   }
   void *mutable_message() {
     return GetPointer<void *>(VT_MESSAGE);
@@ -4983,6 +6911,50 @@ template<> inline const chre::fbs::BtSocketClose *MessageContainer::message_as<c
 
 template<> inline const chre::fbs::BtSocketCloseResponse *MessageContainer::message_as<chre::fbs::BtSocketCloseResponse>() const {
   return message_as_BtSocketCloseResponse();
+}
+
+template<> inline const chre::fbs::GetMessageHubsAndEndpointsRequest *MessageContainer::message_as<chre::fbs::GetMessageHubsAndEndpointsRequest>() const {
+  return message_as_GetMessageHubsAndEndpointsRequest();
+}
+
+template<> inline const chre::fbs::GetMessageHubsAndEndpointsResponse *MessageContainer::message_as<chre::fbs::GetMessageHubsAndEndpointsResponse>() const {
+  return message_as_GetMessageHubsAndEndpointsResponse();
+}
+
+template<> inline const chre::fbs::RegisterMessageHub *MessageContainer::message_as<chre::fbs::RegisterMessageHub>() const {
+  return message_as_RegisterMessageHub();
+}
+
+template<> inline const chre::fbs::UnregisterMessageHub *MessageContainer::message_as<chre::fbs::UnregisterMessageHub>() const {
+  return message_as_UnregisterMessageHub();
+}
+
+template<> inline const chre::fbs::RegisterEndpoint *MessageContainer::message_as<chre::fbs::RegisterEndpoint>() const {
+  return message_as_RegisterEndpoint();
+}
+
+template<> inline const chre::fbs::UnregisterEndpoint *MessageContainer::message_as<chre::fbs::UnregisterEndpoint>() const {
+  return message_as_UnregisterEndpoint();
+}
+
+template<> inline const chre::fbs::OpenEndpointSessionRequest *MessageContainer::message_as<chre::fbs::OpenEndpointSessionRequest>() const {
+  return message_as_OpenEndpointSessionRequest();
+}
+
+template<> inline const chre::fbs::OnEndpointSessionOpened *MessageContainer::message_as<chre::fbs::OnEndpointSessionOpened>() const {
+  return message_as_OnEndpointSessionOpened();
+}
+
+template<> inline const chre::fbs::OnEndpointSessionClosed *MessageContainer::message_as<chre::fbs::OnEndpointSessionClosed>() const {
+  return message_as_OnEndpointSessionClosed();
+}
+
+template<> inline const chre::fbs::EndpointSessionMessage *MessageContainer::message_as<chre::fbs::EndpointSessionMessage>() const {
+  return message_as_EndpointSessionMessage();
+}
+
+template<> inline const chre::fbs::EndpointSessionMessageDeliveryStatus *MessageContainer::message_as<chre::fbs::EndpointSessionMessageDeliveryStatus>() const {
+  return message_as_EndpointSessionMessageDeliveryStatus();
 }
 
 struct MessageContainerBuilder {
@@ -6217,6 +8189,491 @@ inline flatbuffers::Offset<BtSocketCloseResponse> CreateBtSocketCloseResponse(fl
       _socketId);
 }
 
+inline VendorHubInfoT *VendorHubInfo::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::VendorHubInfoT> _o = std::unique_ptr<chre::fbs::VendorHubInfoT>(new VendorHubInfoT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void VendorHubInfo::UnPackTo(VendorHubInfoT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = name(); if (_e) { _o->name.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->name[_i] = _e->Get(_i); } } }
+  { auto _e = version(); _o->version = _e; }
+  { auto _e = extended_info(); if (_e) { _o->extended_info.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->extended_info[_i] = _e->Get(_i); } } }
+}
+
+inline flatbuffers::Offset<VendorHubInfo> VendorHubInfo::Pack(flatbuffers::FlatBufferBuilder &_fbb, const VendorHubInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateVendorHubInfo(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<VendorHubInfo> CreateVendorHubInfo(flatbuffers::FlatBufferBuilder &_fbb, const VendorHubInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const VendorHubInfoT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _name = _o->name.size() ? _fbb.CreateVector(_o->name) : 0;
+  auto _version = _o->version;
+  auto _extended_info = _o->extended_info.size() ? _fbb.CreateVector(_o->extended_info) : 0;
+  return chre::fbs::CreateVendorHubInfo(
+      _fbb,
+      _name,
+      _version,
+      _extended_info);
+}
+
+inline MessageHubT *MessageHub::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::MessageHubT> _o = std::unique_ptr<chre::fbs::MessageHubT>(new MessageHubT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void MessageHub::UnPackTo(MessageHubT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); _o->id = _e; }
+  { auto _e = details_type(); _o->details.type = _e; }
+  { auto _e = details(); if (_e) _o->details.value = chre::fbs::MessageHubDetailsUnion::UnPack(_e, details_type(), _resolver); }
+}
+
+inline flatbuffers::Offset<MessageHub> MessageHub::Pack(flatbuffers::FlatBufferBuilder &_fbb, const MessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateMessageHub(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<MessageHub> CreateMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const MessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const MessageHubT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id;
+  auto _details_type = _o->details.type;
+  auto _details = _o->details.Pack(_fbb);
+  return chre::fbs::CreateMessageHub(
+      _fbb,
+      _id,
+      _details_type,
+      _details);
+}
+
+inline RegisterMessageHubT *RegisterMessageHub::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::RegisterMessageHubT> _o = std::unique_ptr<chre::fbs::RegisterMessageHubT>(new RegisterMessageHubT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void RegisterMessageHub::UnPackTo(RegisterMessageHubT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = hub(); if (_e) _o->hub = std::unique_ptr<chre::fbs::MessageHubT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<RegisterMessageHub> RegisterMessageHub::Pack(flatbuffers::FlatBufferBuilder &_fbb, const RegisterMessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateRegisterMessageHub(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<RegisterMessageHub> CreateRegisterMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const RegisterMessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const RegisterMessageHubT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _hub = _o->hub ? CreateMessageHub(_fbb, _o->hub.get(), _rehasher) : 0;
+  return chre::fbs::CreateRegisterMessageHub(
+      _fbb,
+      _hub);
+}
+
+inline UnregisterMessageHubT *UnregisterMessageHub::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::UnregisterMessageHubT> _o = std::unique_ptr<chre::fbs::UnregisterMessageHubT>(new UnregisterMessageHubT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void UnregisterMessageHub::UnPackTo(UnregisterMessageHubT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); _o->id = _e; }
+}
+
+inline flatbuffers::Offset<UnregisterMessageHub> UnregisterMessageHub::Pack(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterMessageHubT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUnregisterMessageHub(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<UnregisterMessageHub> CreateUnregisterMessageHub(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterMessageHubT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const UnregisterMessageHubT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id;
+  return chre::fbs::CreateUnregisterMessageHub(
+      _fbb,
+      _id);
+}
+
+inline EndpointIdT *EndpointId::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::EndpointIdT> _o = std::unique_ptr<chre::fbs::EndpointIdT>(new EndpointIdT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void EndpointId::UnPackTo(EndpointIdT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = hubId(); _o->hubId = _e; }
+  { auto _e = id(); _o->id = _e; }
+}
+
+inline flatbuffers::Offset<EndpointId> EndpointId::Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointIdT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateEndpointId(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<EndpointId> CreateEndpointId(flatbuffers::FlatBufferBuilder &_fbb, const EndpointIdT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const EndpointIdT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _hubId = _o->hubId;
+  auto _id = _o->id;
+  return chre::fbs::CreateEndpointId(
+      _fbb,
+      _hubId,
+      _id);
+}
+
+inline ServiceT *Service::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::ServiceT> _o = std::unique_ptr<chre::fbs::ServiceT>(new ServiceT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void Service::UnPackTo(ServiceT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = format(); _o->format = _e; }
+  { auto _e = descriptor(); if (_e) { _o->descriptor.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->descriptor[_i] = _e->Get(_i); } } }
+  { auto _e = major_version(); _o->major_version = _e; }
+  { auto _e = minor_version(); _o->minor_version = _e; }
+}
+
+inline flatbuffers::Offset<Service> Service::Pack(flatbuffers::FlatBufferBuilder &_fbb, const ServiceT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateService(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<Service> CreateService(flatbuffers::FlatBufferBuilder &_fbb, const ServiceT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const ServiceT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _format = _o->format;
+  auto _descriptor = _o->descriptor.size() ? _fbb.CreateVector(_o->descriptor) : 0;
+  auto _major_version = _o->major_version;
+  auto _minor_version = _o->minor_version;
+  return chre::fbs::CreateService(
+      _fbb,
+      _format,
+      _descriptor,
+      _major_version,
+      _minor_version);
+}
+
+inline EndpointInfoT *EndpointInfo::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::EndpointInfoT> _o = std::unique_ptr<chre::fbs::EndpointInfoT>(new EndpointInfoT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void EndpointInfo::UnPackTo(EndpointInfoT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); if (_e) _o->id = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+  { auto _e = type(); _o->type = _e; }
+  { auto _e = name(); if (_e) { _o->name.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->name[_i] = _e->Get(_i); } } }
+  { auto _e = version(); _o->version = _e; }
+  { auto _e = required_permissions(); _o->required_permissions = _e; }
+  { auto _e = services(); if (_e) { _o->services.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->services[_i] = std::unique_ptr<chre::fbs::ServiceT>(_e->Get(_i)->UnPack(_resolver)); } } }
+}
+
+inline flatbuffers::Offset<EndpointInfo> EndpointInfo::Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointInfoT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateEndpointInfo(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<EndpointInfo> CreateEndpointInfo(flatbuffers::FlatBufferBuilder &_fbb, const EndpointInfoT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const EndpointInfoT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id ? CreateEndpointId(_fbb, _o->id.get(), _rehasher) : 0;
+  auto _type = _o->type;
+  auto _name = _o->name.size() ? _fbb.CreateVector(_o->name) : 0;
+  auto _version = _o->version;
+  auto _required_permissions = _o->required_permissions;
+  auto _services = _o->services.size() ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::Service>> (_o->services.size(), [](size_t i, _VectorArgs *__va) { return CreateService(*__va->__fbb, __va->__o->services[i].get(), __va->__rehasher); }, &_va ) : 0;
+  return chre::fbs::CreateEndpointInfo(
+      _fbb,
+      _id,
+      _type,
+      _name,
+      _version,
+      _required_permissions,
+      _services);
+}
+
+inline RegisterEndpointT *RegisterEndpoint::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::RegisterEndpointT> _o = std::unique_ptr<chre::fbs::RegisterEndpointT>(new RegisterEndpointT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void RegisterEndpoint::UnPackTo(RegisterEndpointT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint(); if (_e) _o->endpoint = std::unique_ptr<chre::fbs::EndpointInfoT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<RegisterEndpoint> RegisterEndpoint::Pack(flatbuffers::FlatBufferBuilder &_fbb, const RegisterEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateRegisterEndpoint(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const RegisterEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const RegisterEndpointT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint = _o->endpoint ? CreateEndpointInfo(_fbb, _o->endpoint.get(), _rehasher) : 0;
+  return chre::fbs::CreateRegisterEndpoint(
+      _fbb,
+      _endpoint);
+}
+
+inline UnregisterEndpointT *UnregisterEndpoint::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::UnregisterEndpointT> _o = std::unique_ptr<chre::fbs::UnregisterEndpointT>(new UnregisterEndpointT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void UnregisterEndpoint::UnPackTo(UnregisterEndpointT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint(); if (_e) _o->endpoint = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<UnregisterEndpoint> UnregisterEndpoint::Pack(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUnregisterEndpoint(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<UnregisterEndpoint> CreateUnregisterEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const UnregisterEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const UnregisterEndpointT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint = _o->endpoint ? CreateEndpointId(_fbb, _o->endpoint.get(), _rehasher) : 0;
+  return chre::fbs::CreateUnregisterEndpoint(
+      _fbb,
+      _endpoint);
+}
+
+inline GetMessageHubsAndEndpointsRequestT *GetMessageHubsAndEndpointsRequest::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::GetMessageHubsAndEndpointsRequestT> _o = std::unique_ptr<chre::fbs::GetMessageHubsAndEndpointsRequestT>(new GetMessageHubsAndEndpointsRequestT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GetMessageHubsAndEndpointsRequest::UnPackTo(GetMessageHubsAndEndpointsRequestT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+}
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> GetMessageHubsAndEndpointsRequest::Pack(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsRequestT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateGetMessageHubsAndEndpointsRequest(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsRequest> CreateGetMessageHubsAndEndpointsRequest(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsRequestT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const GetMessageHubsAndEndpointsRequestT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  return chre::fbs::CreateGetMessageHubsAndEndpointsRequest(
+      _fbb);
+}
+
+inline GetMessageHubsAndEndpointsResponseT *GetMessageHubsAndEndpointsResponse::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::GetMessageHubsAndEndpointsResponseT> _o = std::unique_ptr<chre::fbs::GetMessageHubsAndEndpointsResponseT>(new GetMessageHubsAndEndpointsResponseT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GetMessageHubsAndEndpointsResponse::UnPackTo(GetMessageHubsAndEndpointsResponseT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = hubs(); if (_e) { _o->hubs.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->hubs[_i] = std::unique_ptr<chre::fbs::MessageHubT>(_e->Get(_i)->UnPack(_resolver)); } } }
+  { auto _e = endpoints(); if (_e) { _o->endpoints.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->endpoints[_i] = std::unique_ptr<chre::fbs::EndpointInfoT>(_e->Get(_i)->UnPack(_resolver)); } } }
+}
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> GetMessageHubsAndEndpointsResponse::Pack(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsResponseT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateGetMessageHubsAndEndpointsResponse(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> CreateGetMessageHubsAndEndpointsResponse(flatbuffers::FlatBufferBuilder &_fbb, const GetMessageHubsAndEndpointsResponseT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const GetMessageHubsAndEndpointsResponseT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _hubs = _o->hubs.size() ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::MessageHub>> (_o->hubs.size(), [](size_t i, _VectorArgs *__va) { return CreateMessageHub(*__va->__fbb, __va->__o->hubs[i].get(), __va->__rehasher); }, &_va ) : 0;
+  auto _endpoints = _o->endpoints.size() ? _fbb.CreateVector<flatbuffers::Offset<chre::fbs::EndpointInfo>> (_o->endpoints.size(), [](size_t i, _VectorArgs *__va) { return CreateEndpointInfo(*__va->__fbb, __va->__o->endpoints[i].get(), __va->__rehasher); }, &_va ) : 0;
+  return chre::fbs::CreateGetMessageHubsAndEndpointsResponse(
+      _fbb,
+      _hubs,
+      _endpoints);
+}
+
+inline OpenEndpointSessionRequestT *OpenEndpointSessionRequest::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::OpenEndpointSessionRequestT> _o = std::unique_ptr<chre::fbs::OpenEndpointSessionRequestT>(new OpenEndpointSessionRequestT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void OpenEndpointSessionRequest::UnPackTo(OpenEndpointSessionRequestT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); _o->id = _e; }
+  { auto _e = fromEndpoint(); if (_e) _o->fromEndpoint = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+  { auto _e = toEndpoint(); if (_e) _o->toEndpoint = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+  { auto _e = serviceDescriptor(); if (_e) { _o->serviceDescriptor.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->serviceDescriptor[_i] = _e->Get(_i); } } }
+}
+
+inline flatbuffers::Offset<OpenEndpointSessionRequest> OpenEndpointSessionRequest::Pack(flatbuffers::FlatBufferBuilder &_fbb, const OpenEndpointSessionRequestT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateOpenEndpointSessionRequest(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequest(flatbuffers::FlatBufferBuilder &_fbb, const OpenEndpointSessionRequestT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const OpenEndpointSessionRequestT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id;
+  auto _fromEndpoint = _o->fromEndpoint ? CreateEndpointId(_fbb, _o->fromEndpoint.get(), _rehasher) : 0;
+  auto _toEndpoint = _o->toEndpoint ? CreateEndpointId(_fbb, _o->toEndpoint.get(), _rehasher) : 0;
+  auto _serviceDescriptor = _o->serviceDescriptor.size() ? _fbb.CreateVector(_o->serviceDescriptor) : 0;
+  return chre::fbs::CreateOpenEndpointSessionRequest(
+      _fbb,
+      _id,
+      _fromEndpoint,
+      _toEndpoint,
+      _serviceDescriptor);
+}
+
+inline OnEndpointSessionOpenedT *OnEndpointSessionOpened::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::OnEndpointSessionOpenedT> _o = std::unique_ptr<chre::fbs::OnEndpointSessionOpenedT>(new OnEndpointSessionOpenedT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void OnEndpointSessionOpened::UnPackTo(OnEndpointSessionOpenedT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); _o->id = _e; }
+}
+
+inline flatbuffers::Offset<OnEndpointSessionOpened> OnEndpointSessionOpened::Pack(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionOpenedT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateOnEndpointSessionOpened(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<OnEndpointSessionOpened> CreateOnEndpointSessionOpened(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionOpenedT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const OnEndpointSessionOpenedT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id;
+  return chre::fbs::CreateOnEndpointSessionOpened(
+      _fbb,
+      _id);
+}
+
+inline OnEndpointSessionClosedT *OnEndpointSessionClosed::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::OnEndpointSessionClosedT> _o = std::unique_ptr<chre::fbs::OnEndpointSessionClosedT>(new OnEndpointSessionClosedT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void OnEndpointSessionClosed::UnPackTo(OnEndpointSessionClosedT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); _o->id = _e; }
+  { auto _e = reason(); _o->reason = _e; }
+}
+
+inline flatbuffers::Offset<OnEndpointSessionClosed> OnEndpointSessionClosed::Pack(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionClosedT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateOnEndpointSessionClosed(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<OnEndpointSessionClosed> CreateOnEndpointSessionClosed(flatbuffers::FlatBufferBuilder &_fbb, const OnEndpointSessionClosedT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const OnEndpointSessionClosedT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id;
+  auto _reason = _o->reason;
+  return chre::fbs::CreateOnEndpointSessionClosed(
+      _fbb,
+      _id,
+      _reason);
+}
+
+inline EndpointSessionMessageT *EndpointSessionMessage::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::EndpointSessionMessageT> _o = std::unique_ptr<chre::fbs::EndpointSessionMessageT>(new EndpointSessionMessageT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void EndpointSessionMessage::UnPackTo(EndpointSessionMessageT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = session_id(); _o->session_id = _e; }
+  { auto _e = type(); _o->type = _e; }
+  { auto _e = permissions(); _o->permissions = _e; }
+  { auto _e = data(); if (_e) { _o->data.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->data[_i] = _e->Get(_i); } } }
+  { auto _e = flags(); _o->flags = _e; }
+  { auto _e = sequence_number(); _o->sequence_number = _e; }
+}
+
+inline flatbuffers::Offset<EndpointSessionMessage> EndpointSessionMessage::Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateEndpointSessionMessage(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const EndpointSessionMessageT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _session_id = _o->session_id;
+  auto _type = _o->type;
+  auto _permissions = _o->permissions;
+  auto _data = _o->data.size() ? _fbb.CreateVector(_o->data) : 0;
+  auto _flags = _o->flags;
+  auto _sequence_number = _o->sequence_number;
+  return chre::fbs::CreateEndpointSessionMessage(
+      _fbb,
+      _session_id,
+      _type,
+      _permissions,
+      _data,
+      _flags,
+      _sequence_number);
+}
+
+inline EndpointSessionMessageDeliveryStatusT *EndpointSessionMessageDeliveryStatus::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::EndpointSessionMessageDeliveryStatusT> _o = std::unique_ptr<chre::fbs::EndpointSessionMessageDeliveryStatusT>(new EndpointSessionMessageDeliveryStatusT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void EndpointSessionMessageDeliveryStatus::UnPackTo(EndpointSessionMessageDeliveryStatusT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = session_id(); _o->session_id = _e; }
+  { auto _e = status(); if (_e) _o->status = std::unique_ptr<chre::fbs::MessageDeliveryStatusT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> EndpointSessionMessageDeliveryStatus::Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageDeliveryStatusT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateEndpointSessionMessageDeliveryStatus(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> CreateEndpointSessionMessageDeliveryStatus(flatbuffers::FlatBufferBuilder &_fbb, const EndpointSessionMessageDeliveryStatusT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const EndpointSessionMessageDeliveryStatusT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _session_id = _o->session_id;
+  auto _status = _o->status ? CreateMessageDeliveryStatus(_fbb, _o->status.get(), _rehasher) : 0;
+  return chre::fbs::CreateEndpointSessionMessageDeliveryStatus(
+      _fbb,
+      _session_id,
+      _status);
+}
+
 inline MessageContainerT *MessageContainer::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
   std::unique_ptr<chre::fbs::MessageContainerT> _o = std::unique_ptr<chre::fbs::MessageContainerT>(new MessageContainerT());
   UnPackTo(_o.get(), _resolver);
@@ -6316,6 +8773,96 @@ inline void ChannelInfoUnion::Reset() {
   }
   value = nullptr;
   type = ChannelInfo::NONE;
+}
+
+inline bool VerifyMessageHubDetails(flatbuffers::Verifier &verifier, const void *obj, MessageHubDetails type) {
+  switch (type) {
+    case MessageHubDetails::NONE: {
+      return true;
+    }
+    case MessageHubDetails::HubInfoResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::HubInfoResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MessageHubDetails::VendorHubInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::VendorHubInfo *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    default: return true;
+  }
+}
+
+inline bool VerifyMessageHubDetailsVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types) {
+  if (!values || !types) return !values && !types;
+  if (values->size() != types->size()) return false;
+  for (flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+    if (!VerifyMessageHubDetails(
+        verifier,  values->Get(i), types->GetEnum<MessageHubDetails>(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline void *MessageHubDetailsUnion::UnPack(const void *obj, MessageHubDetails type, const flatbuffers::resolver_function_t *resolver) {
+  switch (type) {
+    case MessageHubDetails::HubInfoResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::HubInfoResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MessageHubDetails::VendorHubInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::VendorHubInfo *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    default: return nullptr;
+  }
+}
+
+inline flatbuffers::Offset<void> MessageHubDetailsUnion::Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher) const {
+  switch (type) {
+    case MessageHubDetails::HubInfoResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::HubInfoResponseT *>(value);
+      return CreateHubInfoResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MessageHubDetails::VendorHubInfo: {
+      auto ptr = reinterpret_cast<const chre::fbs::VendorHubInfoT *>(value);
+      return CreateVendorHubInfo(_fbb, ptr, _rehasher).Union();
+    }
+    default: return 0;
+  }
+}
+
+inline MessageHubDetailsUnion::MessageHubDetailsUnion(const MessageHubDetailsUnion &u) : type(u.type), value(nullptr) {
+  switch (type) {
+    case MessageHubDetails::HubInfoResponse: {
+      value = new chre::fbs::HubInfoResponseT(*reinterpret_cast<chre::fbs::HubInfoResponseT *>(u.value));
+      break;
+    }
+    case MessageHubDetails::VendorHubInfo: {
+      value = new chre::fbs::VendorHubInfoT(*reinterpret_cast<chre::fbs::VendorHubInfoT *>(u.value));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+inline void MessageHubDetailsUnion::Reset() {
+  switch (type) {
+    case MessageHubDetails::HubInfoResponse: {
+      auto ptr = reinterpret_cast<chre::fbs::HubInfoResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MessageHubDetails::VendorHubInfo: {
+      auto ptr = reinterpret_cast<chre::fbs::VendorHubInfoT *>(value);
+      delete ptr;
+      break;
+    }
+    default: break;
+  }
+  value = nullptr;
+  type = MessageHubDetails::NONE;
 }
 
 inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, ChreMessage type) {
@@ -6465,6 +9012,50 @@ inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, 
     }
     case ChreMessage::BtSocketCloseResponse: {
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::RegisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterMessageHub *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::UnregisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterMessageHub *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::RegisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterEndpoint *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::UnregisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterEndpoint *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::OpenEndpointSessionRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::OpenEndpointSessionRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::OnEndpointSessionOpened: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionOpened *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::OnEndpointSessionClosed: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionClosed *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::EndpointSessionMessage: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessage *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::EndpointSessionMessageDeliveryStatus: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessageDeliveryStatus *>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;
@@ -6629,6 +9220,50 @@ inline void *ChreMessageUnion::UnPack(const void *obj, ChreMessage type, const f
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponse *>(obj);
       return ptr->UnPack(resolver);
     }
+    case ChreMessage::GetMessageHubsAndEndpointsRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::RegisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterMessageHub *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::UnregisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterMessageHub *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::RegisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterEndpoint *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::UnregisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterEndpoint *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::OpenEndpointSessionRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::OpenEndpointSessionRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::OnEndpointSessionOpened: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionOpened *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::OnEndpointSessionClosed: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionClosed *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::EndpointSessionMessage: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessage *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::EndpointSessionMessageDeliveryStatus: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessageDeliveryStatus *>(obj);
+      return ptr->UnPack(resolver);
+    }
     default: return nullptr;
   }
 }
@@ -6779,6 +9414,50 @@ inline flatbuffers::Offset<void> ChreMessageUnion::Pack(flatbuffers::FlatBufferB
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCloseResponseT *>(value);
       return CreateBtSocketCloseResponse(_fbb, ptr, _rehasher).Union();
     }
+    case ChreMessage::GetMessageHubsAndEndpointsRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsRequestT *>(value);
+      return CreateGetMessageHubsAndEndpointsRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsResponse: {
+      auto ptr = reinterpret_cast<const chre::fbs::GetMessageHubsAndEndpointsResponseT *>(value);
+      return CreateGetMessageHubsAndEndpointsResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::RegisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterMessageHubT *>(value);
+      return CreateRegisterMessageHub(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::UnregisterMessageHub: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterMessageHubT *>(value);
+      return CreateUnregisterMessageHub(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::RegisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::RegisterEndpointT *>(value);
+      return CreateRegisterEndpoint(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::UnregisterEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::UnregisterEndpointT *>(value);
+      return CreateUnregisterEndpoint(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::OpenEndpointSessionRequest: {
+      auto ptr = reinterpret_cast<const chre::fbs::OpenEndpointSessionRequestT *>(value);
+      return CreateOpenEndpointSessionRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::OnEndpointSessionOpened: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionOpenedT *>(value);
+      return CreateOnEndpointSessionOpened(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::OnEndpointSessionClosed: {
+      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionClosedT *>(value);
+      return CreateOnEndpointSessionClosed(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::EndpointSessionMessage: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessageT *>(value);
+      return CreateEndpointSessionMessage(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::EndpointSessionMessageDeliveryStatus: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionMessageDeliveryStatusT *>(value);
+      return CreateEndpointSessionMessageDeliveryStatus(_fbb, ptr, _rehasher).Union();
+    }
     default: return 0;
   }
 }
@@ -6927,6 +9606,50 @@ inline ChreMessageUnion::ChreMessageUnion(const ChreMessageUnion &u) : type(u.ty
     }
     case ChreMessage::BtSocketCloseResponse: {
       value = new chre::fbs::BtSocketCloseResponseT(*reinterpret_cast<chre::fbs::BtSocketCloseResponseT *>(u.value));
+      break;
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsRequest: {
+      value = new chre::fbs::GetMessageHubsAndEndpointsRequestT(*reinterpret_cast<chre::fbs::GetMessageHubsAndEndpointsRequestT *>(u.value));
+      break;
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsResponse: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::GetMessageHubsAndEndpointsResponseT not copyable.
+      break;
+    }
+    case ChreMessage::RegisterMessageHub: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::RegisterMessageHubT not copyable.
+      break;
+    }
+    case ChreMessage::UnregisterMessageHub: {
+      value = new chre::fbs::UnregisterMessageHubT(*reinterpret_cast<chre::fbs::UnregisterMessageHubT *>(u.value));
+      break;
+    }
+    case ChreMessage::RegisterEndpoint: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::RegisterEndpointT not copyable.
+      break;
+    }
+    case ChreMessage::UnregisterEndpoint: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::UnregisterEndpointT not copyable.
+      break;
+    }
+    case ChreMessage::OpenEndpointSessionRequest: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::OpenEndpointSessionRequestT not copyable.
+      break;
+    }
+    case ChreMessage::OnEndpointSessionOpened: {
+      value = new chre::fbs::OnEndpointSessionOpenedT(*reinterpret_cast<chre::fbs::OnEndpointSessionOpenedT *>(u.value));
+      break;
+    }
+    case ChreMessage::OnEndpointSessionClosed: {
+      value = new chre::fbs::OnEndpointSessionClosedT(*reinterpret_cast<chre::fbs::OnEndpointSessionClosedT *>(u.value));
+      break;
+    }
+    case ChreMessage::EndpointSessionMessage: {
+      value = new chre::fbs::EndpointSessionMessageT(*reinterpret_cast<chre::fbs::EndpointSessionMessageT *>(u.value));
+      break;
+    }
+    case ChreMessage::EndpointSessionMessageDeliveryStatus: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::EndpointSessionMessageDeliveryStatusT not copyable.
       break;
     }
     default:
@@ -7113,6 +9836,61 @@ inline void ChreMessageUnion::Reset() {
     }
     case ChreMessage::BtSocketCloseResponse: {
       auto ptr = reinterpret_cast<chre::fbs::BtSocketCloseResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsRequest: {
+      auto ptr = reinterpret_cast<chre::fbs::GetMessageHubsAndEndpointsRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::GetMessageHubsAndEndpointsResponse: {
+      auto ptr = reinterpret_cast<chre::fbs::GetMessageHubsAndEndpointsResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::RegisterMessageHub: {
+      auto ptr = reinterpret_cast<chre::fbs::RegisterMessageHubT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::UnregisterMessageHub: {
+      auto ptr = reinterpret_cast<chre::fbs::UnregisterMessageHubT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::RegisterEndpoint: {
+      auto ptr = reinterpret_cast<chre::fbs::RegisterEndpointT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::UnregisterEndpoint: {
+      auto ptr = reinterpret_cast<chre::fbs::UnregisterEndpointT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::OpenEndpointSessionRequest: {
+      auto ptr = reinterpret_cast<chre::fbs::OpenEndpointSessionRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::OnEndpointSessionOpened: {
+      auto ptr = reinterpret_cast<chre::fbs::OnEndpointSessionOpenedT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::OnEndpointSessionClosed: {
+      auto ptr = reinterpret_cast<chre::fbs::OnEndpointSessionClosedT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::EndpointSessionMessage: {
+      auto ptr = reinterpret_cast<chre::fbs::EndpointSessionMessageT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::EndpointSessionMessageDeliveryStatus: {
+      auto ptr = reinterpret_cast<chre::fbs::EndpointSessionMessageDeliveryStatusT *>(value);
       delete ptr;
       break;
     }
