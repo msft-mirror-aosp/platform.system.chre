@@ -102,7 +102,6 @@ flag {
   namespace: "context_hub"
   description: "Enables the generic offload APIs"
   bug: "361573382"
-  is_exported: true
 }
 
 flag {
