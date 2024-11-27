@@ -137,3 +137,13 @@ flag {
     purpose: PURPOSE_BUGFIX
   }
 }
+
+flag {
+  name: "hal_handle_nanoapp_query_test_mode"
+  namespace: "context_hub"
+  description: "Flag guarding the fix for nanoapp query handling when enabling test mode"
+  bug: "379342519"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
