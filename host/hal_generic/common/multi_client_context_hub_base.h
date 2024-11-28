@@ -114,6 +114,9 @@ class MultiClientContextHubBase
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
+  void onChreDisconnected() override {
+    mIsChreReady = false;
+  }
 
   // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -261,6 +264,12 @@ class MultiClientContextHubBase
   // Used to map message sequence number to host endpoint ID
   std::mutex mReliableMessageMutex;
   std::deque<ReliableMessageRecord> mReliableMessageQueue;
+
+  // A thread safe flag indicating if CHRE is ready for operations.
+  // Outside of the constructor, this boolean flag should only be written by
+  // onChreDisconnected and onChreRestarted, the order of which should be
+  // guaranteed by the CHRE's disconnection handler.
+  std::atomic_bool mIsChreReady = true;
 
   // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;
