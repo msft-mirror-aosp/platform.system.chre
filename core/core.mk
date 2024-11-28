@@ -9,6 +9,7 @@ COMMON_CFLAGS += -I$(CHRE_PREFIX)/core/include
 
 # Common Source Files ##########################################################
 
+COMMON_SRCS += $(CHRE_PREFIX)/core/chre_message_hub_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/debug_dump_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/event.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/event_loop.cc
@@ -17,7 +18,6 @@ COMMON_SRCS += $(CHRE_PREFIX)/core/event_ref_queue.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/host_comms_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/host_endpoint_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/init.cc
-COMMON_SRCS += $(CHRE_PREFIX)/core/log.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/nanoapp.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/settings.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/static_nanoapps.cc

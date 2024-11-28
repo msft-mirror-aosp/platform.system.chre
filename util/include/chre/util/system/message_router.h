@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
-#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
+#define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
 
 #include <pw_allocator/unique_ptr.h>
 #include <pw_containers/vector.h>
@@ -36,7 +36,7 @@ namespace chre::message {
 //! register a callback to handle messages sent to its endpoints and other
 //! functions to provide information about the endpoints connected to it.
 //!
-//! The MessageRouter is thread-safe.
+//! MessageRouter is thread-safe.
 //!
 //! Usage:
 //! 1. Create a MessageRouter instance.
@@ -116,7 +116,7 @@ class MessageRouter {
     bool closeSession(SessionId sessionId);
 
     //! Returns a session if it exists
-    //!@return The session or std::nullopt if the session was not found
+    //! @return The session or std::nullopt if the session was not found
     std::optional<Session> getSessionWithId(SessionId sessionId);
 
     //! Sends a message to the session specified by sessionId.
@@ -178,7 +178,7 @@ class MessageRouter {
                                                MessageHubCallback &callback);
 
   //! Executes the function for each endpoint connected to this MessageHub.
-  //! If function return true, the iteration will stop.
+  //! If function returns true, the iteration will stop.
   //! @return true if the MessageHub is found, false otherwise
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
@@ -189,7 +189,7 @@ class MessageRouter {
                                               EndpointId endpointId);
 
   //! Executes the function for each MessageHub connected to the MessageRouter.
-  //! If function return true, the iteration will stop.
+  //! If function returns true, the iteration will stop.
   //! The lock is held when calling the callback.
   void forEachMessageHub(
       const pw::Function<bool(const MessageHubInfo &)> &function);
@@ -283,4 +283,4 @@ class MessageRouterWithStorage : public MessageRouter {
 
 }  // namespace chre::message
 
-#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_BASE_H_
+#endif  // CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_

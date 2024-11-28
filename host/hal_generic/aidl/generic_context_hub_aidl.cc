@@ -351,6 +351,60 @@ ScopedAStatus ContextHub::onNanSessionStateChanged(
   return ndk::ScopedAStatus::ok();
 }
 
+ScopedAStatus ContextHub::getHubs(std::vector<HubInfo> * /*hubs*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::getEndpoints(
+    std::vector<EndpointInfo> * /*endpoints*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::registerEndpoint(const EndpointInfo & /*endpoint*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::unregisterEndpoint(
+    const EndpointInfo & /*endpoint*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::registerEndpointCallback(
+    const std::shared_ptr<IEndpointCallback> & /*callback*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::requestSessionIdRange(
+    int32_t /*size*/, std::vector<int32_t> * /*ids*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::openEndpointSession(
+    int32_t /*sessionId*/, const EndpointId & /*destination*/,
+    const EndpointId & /*initiator*/,
+    const std::optional<std::string> & /*serviceDescriptor*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::sendMessageToEndpoint(int32_t /*sessionId*/,
+                                                const Message & /*msg*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::sendMessageDeliveryStatusToEndpoint(
+    int32_t /*sessionId*/, const MessageDeliveryStatus & /*msgStatus*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::closeEndpointSession(int32_t /*sessionId*/,
+                                               Reason /*reason*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus ContextHub::endpointSessionOpenComplete(int32_t /*sessionId*/) {
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
 void ContextHub::onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) {
   std::lock_guard<std::mutex> lock(mCallbackMutex);
   if (mCallback != nullptr) {

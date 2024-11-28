@@ -40,6 +40,13 @@ constexpr static SessionId SESSION_ID_INVALID = UINT16_MAX;
 //! An invalid MessageHub ID
 constexpr static MessageHubId MESSAGE_HUB_ID_INVALID = UINT64_MAX;
 
+//! Endpoint types
+enum class EndpointType : uint8_t {
+  NANOAPP = 0,
+  GENERIC = 1,
+  HOST_ENDPOINT = 2,
+};
+
 //! Represents a single endpoint connected to a MessageHub
 struct Endpoint {
   MessageHubId messageHubId;
@@ -128,10 +135,26 @@ struct Message {
 //! Represents information about an endpoint
 //! Service information is stored in ServiceManager
 struct EndpointInfo {
+  static constexpr size_t kMaxNameLength = 50;
+
+  EndpointInfo(EndpointId id, const char *name, uint32_t version,
+               EndpointType type, uint32_t requiredPermissions)
+      : id(id),
+        version(version),
+        type(type),
+        requiredPermissions(requiredPermissions) {
+    if (name != nullptr) {
+      std::strncpy(this->name, name, kMaxNameLength);
+    } else {
+      this->name[0] = '\0';
+    }
+    this->name[kMaxNameLength] = '\0';
+  }
+
   EndpointId id;
-  const char *name;
+  char name[kMaxNameLength + 1];
   uint32_t version;
-  uint8_t type;
+  EndpointType type;
   uint32_t requiredPermissions;
 
   bool operator==(const EndpointInfo &other) const {

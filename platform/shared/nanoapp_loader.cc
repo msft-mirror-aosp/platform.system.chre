@@ -27,7 +27,7 @@
 #include "chre/platform/shared/debug_dump.h"
 #include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp/tokenized_log.h"
-#include "chre/target_platform/platform_cache_management.h"
+#include "chre/platform/shared/platform_cache_management.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 
@@ -133,7 +133,7 @@ double cosOverride(double rad) {
   return cos(rad);
 }
 
-float sqrtOverride(float val) {
+double sqrtOverride(double val) {
   return sqrt(val);
 }
 

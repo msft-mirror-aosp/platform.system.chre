@@ -261,10 +261,7 @@ bool isAudioSupported() {
   struct chreAudioSource source;
   constexpr uint32_t kRequiredAudioHandle = 0;
   // If the DUT supports CHRE audio, then audio handle 0 is required to be
-  // valid. There is the risk that the chreAudioGetSource function might
-  // legitimately fail however - we should replace this function when CHRE
-  // audio capabilities in b/185155280 are implemented.
-  // TODO (b/185155280): fix this query
+  // valid.
   return chreAudioGetSource(kRequiredAudioHandle, &source);
 }
 }  // anonymous namespace
