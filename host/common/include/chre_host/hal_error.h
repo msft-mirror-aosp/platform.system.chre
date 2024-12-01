@@ -28,6 +28,7 @@ enum class HalError {
   OPERATION_FAILED = -1,
   INVALID_RESULT = -2,
   INVALID_ARGUMENT = -3,
+  CHRE_NOT_READY = -4,
 
   // Hal client errors
   BINDER_CONNECTION_FAILED = -100,
