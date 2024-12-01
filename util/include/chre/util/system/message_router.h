@@ -178,7 +178,7 @@ class MessageRouter {
                                                MessageHubCallback &callback);
 
   //! Executes the function for each endpoint connected to this MessageHub.
-  //! If function return true, the iteration will stop.
+  //! If function returns true, the iteration will stop.
   //! @return true if the MessageHub is found, false otherwise
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
@@ -189,7 +189,7 @@ class MessageRouter {
                                               EndpointId endpointId);
 
   //! Executes the function for each MessageHub connected to the MessageRouter.
-  //! If function return true, the iteration will stop.
+  //! If function returns true, the iteration will stop.
   //! The lock is held when calling the callback.
   void forEachMessageHub(
       const pw::Function<bool(const MessageHubInfo &)> &function);

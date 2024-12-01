@@ -32,7 +32,10 @@ class ChreConnectionCallback {
 
   /** This method should be called when CHRE is reconnected to HAL and ready to
    * accept new messages. */
-  virtual void onChreRestarted(){};
+  virtual void onChreRestarted() {};
+
+  /** This method should be called when CHRE is disconnected from HAL. */
+  virtual void onChreDisconnected() {};
 };
 }  // namespace android::hardware::contexthub::common::implementation
 #endif  // ANDROID_HARDWARE_CONTEXTHUB_COMMON_CHRE_CONNECTION_CALLBACK_H_
