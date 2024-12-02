@@ -580,60 +580,74 @@ ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
   return fromResult(success);
 }
 
-ScopedAStatus MultiClientContextHubBase::getHubs(
-    std::vector<HubInfo> * /*hubs*/) {
+ScopedAStatus MultiClientContextHubBase::getHubs(std::vector<HubInfo> *hubs) {
+  if (mV4Impl) return mV4Impl->getHubs(hubs);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::getEndpoints(
-    std::vector<EndpointInfo> * /*endpoints*/) {
+    std::vector<EndpointInfo> *endpoints) {
+  if (mV4Impl) return mV4Impl->getEndpoints(endpoints);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::registerEndpoint(
-    const EndpointInfo & /*endpoint*/) {
+    const EndpointInfo &endpoint) {
+  if (mV4Impl) return mV4Impl->registerEndpoint(endpoint);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::unregisterEndpoint(
-    const EndpointInfo & /*endpoint*/) {
+    const EndpointInfo &endpoint) {
+  if (mV4Impl) return mV4Impl->unregisterEndpoint(endpoint);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> & /*callback*/) {
+    const std::shared_ptr<IEndpointCallback> &callback) {
+  if (mV4Impl) return mV4Impl->registerEndpointCallback(callback);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::requestSessionIdRange(
-    int32_t /*size*/, std::vector<int32_t> * /*ids*/) {
+    int32_t size, std::vector<int32_t> *ids) {
+  if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::openEndpointSession(
-    int32_t /*sessionId*/, const EndpointId & /*destination*/,
-    const EndpointId & /*initiator*/,
-    const std::optional<std::string> & /*serviceDescriptor*/) {
+    int32_t sessionId, const EndpointId &destination,
+    const EndpointId &initiator,
+    const std::optional<std::string> &serviceDescriptor) {
+  if (mV4Impl) {
+    return mV4Impl->openEndpointSession(sessionId, destination, initiator,
+                                        serviceDescriptor);
+  }
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::sendMessageToEndpoint(
-    int32_t /*sessionId*/, const Message & /*msg*/) {
+    int32_t sessionId, const Message &msg) {
+  if (mV4Impl) return mV4Impl->sendMessageToEndpoint(sessionId, msg);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToEndpoint(
-    int32_t /*sessionId*/, const MessageDeliveryStatus & /*msgStatus*/) {
+    int32_t sessionId, const MessageDeliveryStatus &msgStatus) {
+  if (mV4Impl)
+    return mV4Impl->sendMessageDeliveryStatusToEndpoint(sessionId, msgStatus);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus MultiClientContextHubBase::closeEndpointSession(
-    int32_t /*sessionId*/, Reason /*reason*/) {
+ScopedAStatus MultiClientContextHubBase::closeEndpointSession(int32_t sessionId,
+                                                              Reason reason) {
+  if (mV4Impl) return mV4Impl->closeEndpointSession(sessionId, reason);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus MultiClientContextHubBase::endpointSessionOpenComplete(
-    int32_t /*sessionId*/) {
+    int32_t sessionId) {
+  if (mV4Impl) return mV4Impl->endpointSessionOpenComplete(sessionId);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
@@ -782,8 +796,12 @@ void MultiClientContextHubBase::handleMessageFromChre(
       break;
     }
     default:
-      LOGW("Got unexpected message type %" PRIu8,
-           static_cast<uint8_t>(message.type));
+      if (mV4Impl) {
+        mV4Impl->handleMessageFromChre(message);
+      } else {
+        LOGW("Got unexpected message type %" PRIu8,
+             static_cast<uint8_t>(message.type));
+      }
   }
 }
 

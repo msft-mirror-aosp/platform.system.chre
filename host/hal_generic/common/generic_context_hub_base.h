@@ -350,6 +350,11 @@ class GenericContextHubBase : public IContexthubT,
     debugDumpComplete();
   }
 
+  bool onContextHubV4Message(
+      const ::chre::fbs::ChreMessageUnion & /* message */) override {
+    return false;
+  }
+
   // Write a string to the debug file.
   void writeToDebugFile(const char *str) override {
     if (checkDebugFd()) {
