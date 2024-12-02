@@ -308,6 +308,18 @@ pw_add_facade(chre.platform.system_timer INTERFACE
     chre.variant.config
 )
 
+pw_add_facade(chre.platform.tagged_log INTERFACE
+  BACKEND
+    chre.platform.tagged_log_BACKEND
+  HEADERS
+    include/chre/platform/tagged_log.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.util
+    chre.variant.config
+)
+
 pw_add_facade(chre.platform.thread_handle INTERFACE
   BACKEND
     chre.platform.thread_handle_BACKEND
