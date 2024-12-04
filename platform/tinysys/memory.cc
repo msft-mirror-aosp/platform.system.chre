@@ -30,7 +30,6 @@ extern "C" {
 #include "encoding.h"
 #include "mt_heap.h"
 #include "resource_req.h"
-#include "sensorhub/heap.h"
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -103,7 +102,7 @@ void memoryFree(void *pointer) {
     vPortDramFree(pointer);
     DramVoteClientSingleton::get()->decrementDramVoteCount();
   } else {
-    heap_free(pointer);
+    vPortFree(pointer);
   }
 }
 }  // namespace chre
