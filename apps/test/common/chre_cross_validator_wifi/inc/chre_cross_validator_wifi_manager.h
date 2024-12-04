@@ -32,9 +32,7 @@
 #include "chre_test_common.nanopb.h"
 #include "wifi_scan_result.h"
 
-namespace chre {
-
-namespace cross_validator_wifi {
+namespace chre::cross_validator_wifi {
 
 /**
  * Class to manage a CHRE cross validator wifi nanoapp.
@@ -94,22 +92,21 @@ class Manager {
       chre_cross_validation_wifi_StepStartCommand stepStartCommand);
 
   /**
+   * Sends the test result to host.
+   *
    * @param success true if the result was success.
    * @param errMessage The error message that should be sent to host with
    * failure.
-   *
-   * @return The TestResult proto message that is encoded with these fields.
    */
-  chre_test_common_TestResult makeTestResultProtoMessage(
-      bool success, const char *errMessage = nullptr);
+  void sendTestResult(bool success, const char *errorMessage = nullptr) const;
 
   /**
    * @param capabilitiesFromChre The number with flags that represent the
    *        different wifi capabilities.
    * @return The wifi capabilities proto message for the host.
    */
-  chre_cross_validation_wifi_WifiCapabilities makeWifiCapabilitiesMessage(
-      uint32_t capabilitiesFromChre);
+  static chre_cross_validation_wifi_WifiCapabilities
+  makeWifiCapabilitiesMessage(uint32_t capabilitiesFromChre);
 
   /**
    * Handle a wifi scan result data message sent from AP.
@@ -148,16 +145,9 @@ class Manager {
    * @return               The index of the matched scan result in the list if
    *                       found, otherwise SIZE_MAX.
    */
-  size_t getMatchingScanResultIndex(
+  static size_t getMatchingScanResultIndex(
       const DynamicVector<WifiScanResult> &results,
       const WifiScanResult &queryResult);
-
-  /**
-   * Setup WiFi scan monitoring from CHRE apis.
-   *
-   * @return true if chreWifiConfigureScanMonitorAsync() returns true
-   */
-  bool setupWifiScanMonitoring();
 
   /**
    * Handle wifi async result event with event data.
@@ -165,26 +155,11 @@ class Manager {
    * @param result The data for the event.
    */
   void handleWifiAsyncResult(const chreAsyncResult *result);
-
-  /**
-   * The function to pass as the encode function pointer for the errorMessage
-   * field of the TestResult message.
-   *
-   * @param stream The stream to write bytes to.
-   * @param field The field that should be encoded. Unused by us.
-   * @param arg The argument that will be set to a pointer to the string to
-   * encode as error message.
-   */
-  static bool encodeErrorMessage(pb_ostream_t *stream,
-                                 const pb_field_t * /*field*/,
-                                 void *const *arg);
 };
 
 // The chre cross validator manager singleton.
 typedef chre::Singleton<Manager> ManagerSingleton;
 
-}  // namespace cross_validator_wifi
-
-}  // namespace chre
+}  // namespace chre::cross_validator_wifi
 
 #endif  // CHRE_CROSS_VALIDATOR_WIFI_MANAGER_H_
