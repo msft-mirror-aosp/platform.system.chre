@@ -540,7 +540,7 @@ static void chppSetResetComplete(struct ChppTransportState *context) {
  */
 static void chppProcessResetAck(struct ChppTransportState *context) {
   if (context->resetState == CHPP_RESET_STATE_NONE) {
-    CHPP_LOGE("Unexpected reset-ack seq=%" PRIu8 " code=0x%" PRIx8,
+    CHPP_LOGW("Unexpected reset-ack seq=%" PRIu8 " code=0x%" PRIx8,
               context->rxHeader.seq, context->rxHeader.packetCode);
     // In a reset race condition with both endpoints sending resets and
     // reset-acks, the sent resets and reset-acks will both have a sequence
@@ -604,8 +604,18 @@ static void chppProcessRxPacket(struct ChppTransportState *context) {
     // There are packets to send out (could be new or retx)
     // Note: For a future ACK window > 1, makes more sense to cap the NACKs
     // to one instead of flooding with out of order NACK errors.
-    chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
-                                     CHPP_TRANSPORT_ATTR_NONE, errorCode));
+
+    // If the sender is retrying a packet we've already received successfully,
+    // send an ACK so it will continue normally
+    enum ChppTransportErrorCode errorCodeToSend = errorCode;
+    if (context->rxHeader.length > 0 &&
+        context->rxHeader.seq == context->rxStatus.expectedSeq - 1) {
+      errorCodeToSend = CHPP_TRANSPORT_ERROR_NONE;
+    }
+
+    chppEnqueueTxPacket(
+        context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(CHPP_TRANSPORT_ATTR_NONE,
+                                                    errorCodeToSend));
   }
 
   if (errorCode == CHPP_TRANSPORT_ERROR_ORDER) {
@@ -767,7 +777,8 @@ static void chppRegisterRxAck(struct ChppTransportState *context) {
       context->rxStatus.receivedAckSeq = rxAckSeq;
       if (context->txStatus.txAttempts > 1) {
         CHPP_LOGW("Seq %" PRIu8 " ACK'd after %" PRIuSIZE " reTX",
-                  context->rxHeader.seq, context->txStatus.txAttempts - 1);
+                  context->rxHeader.ackSeq - 1,
+                  context->txStatus.txAttempts - 1);
       }
       context->txStatus.txAttempts = 0;
 

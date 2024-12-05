@@ -84,23 +84,31 @@ SRAM_REGION_BSS uint32_t gChreIpiAckToHost[2];
 // SCP get ack data from AP (SCP to AP)
 SRAM_REGION_BSS int gChreIpiAckFromHost[2];
 
+#ifdef SCP_CHRE_USE_DMA
+// The min total size of a message to trigger DMA for sending/receiving.
+constexpr uint32_t kMinMessageSizeForDma = 0x1000;  // 4k
+#endif
+
+// The buffer used to receive messages from AP.
+// The size should be consistent with the max sending size on the host side.
+constexpr uint32_t kChreIpiRecvBufferSize = 0x8000;  // 32k
+DRAM_REGION_VARIABLE uint8_t gChreRecvBuffer[kChreIpiRecvBufferSize]
+    __attribute__((aligned(CACHE_LINE_SIZE)));
+
+#ifdef SCP_CHRE_USE_DMA
+// Rounds up the value to be aligned with CACHE_LINE_SIZE.
+static inline uint32_t alignToCacheLine(uint32_t value) {
+  // alignment must be a power of 2.
+  static_assert(CACHE_LINE_SIZE > 0 &&
+                (CACHE_LINE_SIZE & (CACHE_LINE_SIZE - 1)) == 0);
+  return (value + CACHE_LINE_SIZE - 1) & ~(CACHE_LINE_SIZE - 1);
+}
+#endif
+
 void *gChreSubregionRecvAddr;
 size_t gChreSubregionRecvSize;
 void *gChreSubregionSendAddr;
 size_t gChreSubregionSendSize;
-
-// TODO(b/277235389): move it to HostLinkBase, and revisit buffer size
-// payload buffers
-#define CHRE_IPI_RECV_BUFFER_SIZE (CHRE_MESSAGE_TO_HOST_MAX_SIZE + 128)
-DRAM_REGION_VARIABLE uint32_t
-    gChreRecvBuffer[CHRE_IPI_RECV_BUFFER_SIZE / sizeof(uint32_t)]
-    __attribute__((aligned(CACHE_LINE_SIZE)));
-
-#ifdef SCP_CHRE_USE_DMA
-static inline uint32_t align(uint32_t target, uint32_t size) {
-  return (target + size - 1) & ~(size - 1);
-}
-#endif
 
 #define SCP_CHRE_MAGIC 0x67728269
 struct ScpChreIpiMsg {
@@ -162,7 +170,7 @@ struct PendingMessage {
 };
 
 constexpr size_t kOutboundQueueSize = 100;
-DRAM_REGION_VARIABLE FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize>
+SRAM_REGION_VARIABLE FixedSizeBlockingQueue<PendingMessage, kOutboundQueueSize>
     gOutboundQueue;
 
 typedef void(MessageBuilderFunction)(ChreFlatBufferBuilder &builder,
@@ -465,9 +473,9 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
   struct ScpChreIpiMsg msg = *(struct ScpChreIpiMsg *)data;
 
   // check the magic number and payload size need to be copy(if need) */
-  LOGV("%s: msg.magic=0x%x, msg.size=%u", __func__, msg.magic, msg.size);
+  LOGD("%s: Received a message from AP. Size=%u", __func__, msg.size);
   if (msg.magic != SCP_CHRE_MAGIC) {
-    LOGE("Invalid magic number, skip message");
+    LOGE("Invalid magic number: 0x%x, skip message", msg.magic);
     gChreIpiAckToHost[0] = IPI_NO_MEMORY;
     gChreIpiAckToHost[1] = 0;
     return;
@@ -478,25 +486,38 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
       ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionRecvAddr));
 
 #ifdef SCP_CHRE_USE_DMA
-  // Using SCP DMA HW to copy the data from share memory to SCP side, ex:
-  // gChreRecvBuffer gChreRecvBuffer could be a global variables or a SCP heap
-  // memory at SRAM/DRAM
-  scp_dma_transaction_dram(reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]),
-                           srcAddr, msg.size, DMA_MEM_ID, NO_RESERVED);
+  if (msg.size < kMinMessageSizeForDma) {
+    dvfs_enable_DRAM_resource(CHRE_MEM_ID);
+    memcpy(static_cast<void *>(gChreRecvBuffer),
+           reinterpret_cast<void *>(srcAddr), msg.size);
+    dvfs_disable_DRAM_resource(CHRE_MEM_ID);
+  } else {
+    auto dstAddr = reinterpret_cast<uint32_t>(gChreRecvBuffer);
 
-  // Invalid cache to update the newest data before using
-  mrv_dcache_invalid_multi_addr(reinterpret_cast<uint32_t>(&gChreRecvBuffer[0]),
-                                align(msg.size, CACHE_LINE_SIZE));
-#else
+    // destination address for receiving data is in a cacheable memory, it
+    // should be invalidated/flushed before transferring from share buffer to
+    // SCP
+    scp_dcache_flush(dstAddr, alignToCacheLine(msg.size));
+
+    // Using SCP DMA HW to copy the data from share memory to SCP side.
+    // The dstAddr could be a global variables or a SCP heap memory at SRAM/DRAM
+    DMA_RESULT result = scp_dma_transaction_dram(dstAddr, srcAddr, msg.size,
+                                                 DMA_MEM_ID, NO_RESERVED);
+
+    if (result != DMA_RESULT_DONE) {
+      LOGE("Failed to receive a message from AP using DMA");
+    }
+  }
+#else  // SCP_CHRE_USE_DMA
+
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
   memcpy(static_cast<void *>(gChreRecvBuffer),
          reinterpret_cast<void *>(srcAddr), msg.size);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
-#endif
+
+#endif  // SCP_CHRE_USE_DMA
 
   // process the message
-  LOGV("chre_rcvbuf: 0x%x 0x%x 0x%x 0x%x", gChreRecvBuffer[0],
-       gChreRecvBuffer[1], gChreRecvBuffer[2], gChreRecvBuffer[3]);
   receive(static_cast<HostLinkBase *>(prdata), gChreRecvBuffer, msg.size);
 
   // After finishing the job, akc the message to host
@@ -505,11 +526,15 @@ DRAM_REGION_FUNCTION void HostLinkBase::chreIpiHandler(unsigned int id,
 }
 
 DRAM_REGION_FUNCTION void HostLinkBase::initializeIpi(void) {
-  LOGV("%s", __func__);
   bool success = false;
   int ret;
   constexpr size_t kBackgroundTaskStackSize = 1024;
+
+#ifdef PRI_CHRE_BACKGROUND
+  constexpr UBaseType_t kBackgroundTaskPriority = PRI_CHRE_BACKGROUND;
+#else
   constexpr UBaseType_t kBackgroundTaskPriority = 2;
+#endif
 
   // prepared share memory information and register the callback functions
   if (!(ret = scp_get_reserve_mem_by_id(SCP_CHRE_FROM_MEM_ID,
@@ -571,20 +596,49 @@ DRAM_REGION_FUNCTION bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
   msg.magic = SCP_CHRE_MAGIC;
   msg.size = dataLen;
 
-  // Mapping the physical address of share memory for SCP
-  void *dstAddr = reinterpret_cast<void *>(
-      ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr)));
+  uint32_t dstAddr =
+      ap_to_scp(reinterpret_cast<uint32_t>(gChreSubregionSendAddr));
 
 #ifdef SCP_CHRE_USE_DMA
-  // TODO(b/288415339): use DMA for larger payload
-  // No need cache operation, because src_dst handled by SCP CPU and dstAddr is
-  // non-cacheable
+  if (dataLen < kMinMessageSizeForDma) {
+    dvfs_enable_DRAM_resource(CHRE_MEM_ID);
+    memcpy(reinterpret_cast<void *>(dstAddr), data, dataLen);
+    dvfs_disable_DRAM_resource(CHRE_MEM_ID);
+  } else {
+    auto srcAddr = reinterpret_cast<uint32_t>(data);
+    auto msgSize = reinterpret_cast<uint32_t>(msg.size);
+
+    // Separate the message into 2 parts, copySize and dmaSize, and use memcpy
+    // and dma to transfer them respectively. This is needed due to the
+    // alignment requirement of the dma transfer.
+    uint32_t dmaStartSrcAddr = alignToCacheLine(srcAddr);
+    uint32_t copySize = dmaStartSrcAddr - srcAddr;
+    uint32_t dmaSize = msgSize - copySize;
+
+    if (copySize > 0) {
+      dvfs_enable_DRAM_resource(CHRE_MEM_ID);
+      memcpy(reinterpret_cast<void *>(dstAddr), data, copySize);
+      dvfs_disable_DRAM_resource(CHRE_MEM_ID);
+    }
+
+    // source address for sending data is in a cacheable memory, it should
+    // be invalidated/flushed before transferring from SCP to shared buffer
+    scp_dcache_flush(dmaStartSrcAddr, alignToCacheLine(dmaSize));
+
+    // Using SCP DMA HW to copy the data from SCP to shared memory.
+    // The dstAddr could be a global variables or a SCP heap memory at SRAM/DRAM
+    DMA_RESULT result = scp_dma_transaction_dram(
+        dstAddr + copySize, dmaStartSrcAddr, dmaSize, DMA_MEM_ID, NO_RESERVED);
+
+    if (result != DMA_RESULT_DONE) {
+      LOGE("Failed to receive a message from AP using DMA");
+    }
+  }
 #else
   dvfs_enable_DRAM_resource(CHRE_MEM_ID);
-  memcpy(dstAddr, data, dataLen);
+  memcpy(reinterpret_cast<void *>(dstAddr), data, dataLen);
   dvfs_disable_DRAM_resource(CHRE_MEM_ID);
 #endif
-
   // NB: len param for ipi_send is in number of 32-bit words
   int ret = ipi_send_compl(
       IPI_OUT_C_SCP_HOST_CHRE, &msg, sizeof(msg) / sizeof(uint32_t),
@@ -879,6 +933,16 @@ DRAM_REGION_FUNCTION void HostMessageHandlers::handleSelfTestRequest(
 DRAM_REGION_FUNCTION void HostMessageHandlers::handleNanConfigurationUpdate(
     bool /* enabled */) {
   LOGE("%s is unsupported", __func__);
+}
+
+DRAM_REGION_FUNCTION void HostMessageHandlers::handleBtSocketOpen(
+    uint16_t /* hostClientId */, uint64_t /* socketId */,
+    const char * /* name */, uint64_t /* endpointId */, uint64_t /* hubId */,
+    uint32_t /* aclConnectionHandle */, uint32_t /* localCid */,
+    uint32_t /* remoteCid */, uint32_t /* psm */, uint32_t /* localMtu */,
+    uint32_t /* remoteMtu */, uint32_t /* localMps */, uint32_t /* remoteMps */,
+    uint32_t /* initialRxCredits */, uint32_t /* initialTxCredits */) {
+  LOGE("BT Socket offload not supported");
 }
 
 DRAM_REGION_FUNCTION void sendAudioRequest() {
