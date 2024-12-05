@@ -37,7 +37,7 @@
 #define CHRE_ASSERT(condition)                                       \
   do {                                                               \
     if (!(condition)) {                                              \
-      chreLog(CHRE_LOG_ERROR, "CHRE_ASSERT at %s:%d", CHRE_FILENAME, \
+      chreLog(CHRE_LOG_ERROR, "CHRE_ASSERT at " CHRE_FILENAME ":%d", \
               __LINE__);                                             \
       chreAbort(UINT32_MAX);                                         \
     }                                                                \

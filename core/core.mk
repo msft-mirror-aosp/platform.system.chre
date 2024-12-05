@@ -9,6 +9,7 @@ COMMON_CFLAGS += -I$(CHRE_PREFIX)/core/include
 
 # Common Source Files ##########################################################
 
+COMMON_SRCS += $(CHRE_PREFIX)/core/chre_message_hub_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/debug_dump_manager.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/event.cc
 COMMON_SRCS += $(CHRE_PREFIX)/core/event_loop.cc

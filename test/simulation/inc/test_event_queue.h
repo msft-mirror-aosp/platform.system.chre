@@ -22,10 +22,10 @@
 #include <cinttypes>
 
 #include "chre/platform/memory.h"
-#include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/memory.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/singleton.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 #include "test_event.h"
 
 namespace chre {

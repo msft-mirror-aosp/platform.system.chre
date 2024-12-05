@@ -18,6 +18,7 @@
 #define CHRE_UTIL_MEMORY_IMPL_H_
 
 // IWYU pragma: private
+#include <cstddef>
 #include <cstring>
 #include <new>
 #include <type_traits>
