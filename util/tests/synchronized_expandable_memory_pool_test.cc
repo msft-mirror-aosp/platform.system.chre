@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "chre/util/synchronized_expandable_memory_pool.h"
+#include "chre/util/system/synchronized_expandable_memory_pool.h"
 
 #include "gtest/gtest.h"
 

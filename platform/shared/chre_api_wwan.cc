@@ -22,11 +22,12 @@
 
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
+using chre::Nanoapp;
 using chre::NanoappPermissions;
 
 DLL_EXPORT uint32_t chreWwanGetCapabilities() {
 #ifdef CHRE_WWAN_SUPPORT_ENABLED
-  return chre::EventLoopManagerSingleton::get()
+  return EventLoopManagerSingleton::get()
       ->getWwanRequestManager()
       .getCapabilities();
 #else
@@ -36,9 +37,9 @@ DLL_EXPORT uint32_t chreWwanGetCapabilities() {
 
 DLL_EXPORT bool chreWwanGetCellInfoAsync([[maybe_unused]] const void *cookie) {
 #ifdef CHRE_WWAN_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_WWAN) &&
-         chre::EventLoopManagerSingleton::get()
+         EventLoopManagerSingleton::get()
              ->getWwanRequestManager()
              .requestCellInfo(nanoapp, cookie);
 #else

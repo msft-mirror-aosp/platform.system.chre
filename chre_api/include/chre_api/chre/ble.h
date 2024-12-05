@@ -78,6 +78,10 @@ extern "C" {
 
 //! CHRE BLE supports reading the RSSI of a specified LE-ACL connection handle.
 #define CHRE_BLE_CAPABILITIES_READ_RSSI (UINT32_C(1) << 3)
+
+//! CHRE supports offloading a Bluetooth connection socket for bidirectional
+//! data transfer over a Connection-Oriented Channel (COC).
+#define CHRE_BLE_CAPABILITIES_LE_COC_SOCKET UINT32_C (UINT32_C(1) << 4)
 /** @} */
 
 /**
@@ -193,6 +197,47 @@ extern "C" {
  * @since v1.8
  */
 #define CHRE_EVENT_BLE_SCAN_STATUS_CHANGE CHRE_BLE_EVENT_ID(5)
+
+/**
+ * nanoappHandleEvent argument: struct chreBleSocketConnectionEvent
+ *
+ * This is a unicast event that is sent to a nanoapp when an offloaded socket is
+ * connected and is available to be used by the nanoapp. The nanoapp must call
+ * chreBleSocketAccept() to accept ownership of the socket and
+ * subscribe to CHRE_EVENT_BLE_SOCKET_PACKET events.
+ *
+ * @since v1.11
+ */
+#define CHRE_EVENT_BLE_SOCKET_CONNECTION CHRE_BLE_EVENT_ID(6)
+
+/**
+ * nanoappHandleEvent argument: struct chreBleSocketDisconnectionEvent
+ *
+ * This is a unicast event that is sent to a nanoapp when an offloaded socket is
+ * disconnected and can no longer be used by the nanoapp.
+ *
+ * @since v1.11
+ */
+#define CHRE_EVENT_BLE_SOCKET_DISCONNECTION CHRE_BLE_EVENT_ID(7)
+
+/**
+ * nanoappHandleEvent argument: struct chreBleSocketPacketEvent
+ *
+ * This event is sent when the nanoapp receives a packet from the offload
+ * socket.
+ *
+ * @since v1.11
+ */
+#define CHRE_EVENT_BLE_SOCKET_PACKET CHRE_BLE_EVENT_ID(8)
+
+/**
+ * nanoappHandleEvent argument: NULL
+ *
+ * This event is sent when the socket is available to send packets again.
+ *
+ * @since v1.11
+ */
+#define CHRE_EVENT_BLE_SOCKET_SEND_AVAILABLE CHRE_BLE_EVENT_ID(9)
 
 // NOTE: Do not add new events with ID > 15
 /** @} */
@@ -677,6 +722,102 @@ struct chreBleScanStatus {
 };
 
 /**
+ * Notifies a nanoapp that a socket has been connected and offloaded and is
+ * ready to be used. The nanoapp is expected to accept ownership of the socket
+ * by calling the chreBleSocketAccept() API. If the nanoapp does not accept
+ * ownership of the socket, the transfer of ownership to the nanoapp is aborted.
+ *
+ * @since v1.11
+ */
+struct chreBleSocketConnectionEvent {
+  //! Unique identifier for this socket connection. This ID in CHRE matches the
+  //! ID used on the host side. It is valid only while the socket is connected.
+  uint64_t socketId;
+
+  //! Descriptive socket name provided by the host app that initiated the socket
+  //! offload request. This is not guaranteed to be unique across the system,
+  //! but can help the offload app understand the purpose of the socket when it
+  //! receives a socket connection event. This pointer is only valid for the
+  //! duration of the event.
+  const char *socketName;
+
+  //! When sending a packet to the socket via chreBleSocketSend(), the length
+  //! must not exceed this value.
+  uint16_t maxTxPacketLength;
+
+  //! When the nanoapp receives packets from the socket via the
+  //! chreBleSocketPacketEvent, the length will not exceed this value.
+  uint16_t maxRxPacketLength;
+};
+
+/**
+ * Notifies a nanoapp that a socket has been disconnected and can no longer be
+ * used by the nanoapp. Once a socket is disconnected, the same socket ID will
+ * not be reconnected. If the nanoapp wants to continue using an offloaded
+ * socket, a new offloaded socket must be created and connected.
+ *
+ * @since v1.11
+ */
+struct chreBleSocketDisconnectionEvent {
+  //! @see chreBleSocketConnectionEvent.socketId
+  uint64_t socketId;
+};
+
+/**
+ * Notifies a nanoapp that it has received a packet from a socket.
+ *
+ * @since v1.11
+ */
+struct chreBleSocketPacketEvent {
+  //! @see chreBleSocketConnectionEvent.socketId
+  uint64_t socketId;
+
+  //! Length of data in bytes. The length will not exceed the maxRxPacketLength
+  //! provided in the CHRE event CHRE_EVENT_BLE_SOCKET_CONNECTION.
+  uint16_t length;
+
+  //! Packet payload that is length bytes.
+  const uint8_t *data;
+};
+
+/**
+ * Result code used with chreBleSocketSend().
+ *
+ * @since v1.11
+ */
+enum chreBleSocketSendStatus {
+  //! The packet has successfully been sent to the platform layer.
+  CHRE_BLE_SOCKET_SEND_STATUS_SUCCESS = 1,
+
+  //! The packet will not be sent.
+  CHRE_BLE_SOCKET_SEND_STATUS_FAILURE = 2,
+
+  //! The packet cannot be sent at this time because too many packets are in
+  //! flight. The nanoapp will be notified via a
+  //! CHRE_EVENT_BLE_SOCKET_SEND_AVAILABLE event when the socket is available to
+  //! send the packet.
+  CHRE_BLE_SOCKET_SEND_STATUS_QUEUE_FULL = 3,
+};
+
+/**
+ * Callback which frees the packet sent via chreBleSocketSend().
+ *
+ * This callback is (optionally) provided to the chreBleSocketSend() function as
+ * a means for freeing the packet. When this callback is invoked, the packet is
+ * no longer needed and can be released. Note that this in no way assures that
+ * said packet was sent to the offload socket, simply that this memory is no
+ * longer needed.
+ *
+ * @param data The data argument from chreBleSocketSend().
+ * @param length The length argument from chreBleSocketSend().
+ *
+ * @see chreBleSocketSend()
+ *
+ * @since v1.11
+ */
+typedef void(chreBleSocketPacketFreeFunction)(void *data, uint16_t length);
+
+/**
  * Retrieves a set of flags indicating the BLE features supported by the
  * current CHRE implementation. The value returned by this function must be
  * consistent for the entire duration of the nanoapp's execution.
@@ -938,6 +1079,52 @@ bool chreBleReadRssiAsync(uint16_t connectionHandle, const void *cookie);
 bool chreBleGetScanStatus(struct chreBleScanStatus *status);
 
 /**
+ * Accepts that this nanoapp owns the socket and subscribes to
+ * CHRE_EVENT_BLE_SOCKET_PACKET events from this socket. This API is only
+ * valid to call while handling the CHRE_EVENT_BLE_SOCKET_CONNECTION event.
+ *
+ * @param socketId @see chreBleSocketConnectionEvent.socketId
+ * @return True if CHRE confirms that socket ownership has been transferred.
+ *
+ * @since v1.11
+ */
+bool chreBleSocketAccept(uint64_t socketId);
+
+/**
+ * Sends a packet to the socket with the corresponding socketId. This API can
+ * only be used after the nanoapp has received a
+ * CHRE_EVENT_BLE_SOCKET_CONNECTION event indicating the offloaded socket is
+ * connected and has accepted ownership of the socket by calling
+ * chreBleSocketAccept().
+ *
+ * NOTE: freeCallback WILL NOT be invoked if the return status is
+ * CHRE_BLE_SOCKET_SEND_STATUS_QUEUE_FULL.
+ *
+ * @param socketId @see chreBleSocketConnectionEvent.socketId
+ * @param data Packet to be sent to the socket that is length bytes. After this
+ *     API is called, ownership of this memory passes to CHRE and the nanoapp
+ *     must ensure that the packet remains valid and unmodified until the
+ *     freeCallback is invoked.
+  * @param length Length of packet to be sent to the socket in bytes. Cannot
+ *     exceed the maxTxPacketLength provided in the CHRE event
+ *     CHRE_EVENT_BLE_SOCKET_CONNECTION.
+ * @param freeCallback Callback invoked to indicate that the packet data buffer
+ *     is not needed by CHRE anymore. Note that invocation of this function does
+ *     not mean that the packet has been delivered, only that memory can be
+ *     released. This is guaranteed to be invoked if this function returns
+ *     CHRE_BLE_SOCKET_SEND_STATUS_SUCCESS or
+ *     CHRE_BLE_SOCKET_SEND_STATUS_FAILURE, but WILL NOT be invoked for
+ *     CHRE_BLE_SOCKET_SEND_STATUS_QUEUE_FULL. This may be invoked
+ *     synchronously, so nanoapp developers should not call chreBleSocketSend()
+ *     from within the callback to avoid potential infinite recursion.
+ * @return A value from enum chreBleSocketSendStatus.
+ *
+ * @since v1.11
+ */
+int32_t chreBleSocketSend(uint64_t socketId, const void *data, uint16_t length,
+                          chreBleSocketPacketFreeFunction *freeCallback);
+
+/**
  * Definitions for handling unsupported CHRE BLE scenarios.
  */
 #else  // defined(CHRE_NANOAPP_USES_BLE) || !defined(CHRE_IS_NANOAPP_BUILD)
@@ -957,6 +1144,15 @@ bool chreBleGetScanStatus(struct chreBleScanStatus *status);
 
 #define chreBleReadRssiAsync(...) \
   CHRE_BUILD_ERROR(CHRE_BLE_PERM_ERROR_STRING "chreBleReadRssiAsync")
+
+#define chreBleGetScanStatus(...) \
+  CHRE_BUILD_ERROR(CHRE_BLE_PERM_ERROR_STRING "chreBleGetScanStatus")
+
+#define chreBleSocketAccept(...) \
+  CHRE_BUILD_ERROR(CHRE_BLE_PERM_ERROR_STRING "chreBleSocketAccept")
+
+#define chreBleSocketSend(...) \
+  CHRE_BUILD_ERROR(CHRE_BLE_PERM_ERROR_STRING "chreBleSocketSend")
 
 #endif  // defined(CHRE_NANOAPP_USES_BLE) || !defined(CHRE_IS_NANOAPP_BUILD)
 

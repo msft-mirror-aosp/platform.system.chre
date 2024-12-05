@@ -28,7 +28,6 @@
 #include <string>
 #include <thread>
 
-#include <aidl/android/hardware/wifi/WifiStatusCode.h>
 #include <aidl/vendor/google/wifi_ext/BnWifiExtChreCallback.h>
 #include <aidl/vendor/google/wifi_ext/IWifiExt.h>
 #include <android/binder_manager.h>
@@ -44,7 +43,6 @@ namespace chre {
  */
 class WifiExtHalHandler {
  public:
-  using WifiStatusCode = aidl::android::hardware::wifi::WifiStatusCode;
   using IWifiExt = aidl::vendor::google::wifi_ext::IWifiExt;
   using BnWifiExtChreNanCallback =
       aidl::vendor::google::wifi_ext::BnWifiExtChreCallback;
