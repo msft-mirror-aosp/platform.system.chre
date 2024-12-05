@@ -56,6 +56,22 @@ the API be placed outside of the CHRE tree, in a separate Git project under
 `vendor/` in the Android tree, to avoid potential conflicts when upgrading to a
 new version of CHRE.
 
+## Vendor sensor types
+
+CHRE has reserved a range of types for vendors to define their own sensor types.
+The starting point is `CHRE_SENSOR_TYPE_VENDOR_START`. For example, a vendor can
+define their own type as:
+
+```
+#define CHREX_SENSOR_TYPE_NEUTRINO_DETECTOR (CHRE_SENSOR_TYPE_VENDOR_START + X)
+```
+
+In `platform/shared/sensor_pal/platform_sensor_type_helpers.cc` macro
+`CHREX_SENSOR_SUPPORT` is used to select whether vendor sensor types are
+supported or not. Such macro can be defined in the `variant.mk`, e.g.,
+`variant/tinysys/variant.mk` for tinysys, to selectively pull in source files
+from vendor specific projects during compilation.
+
 ### Build Customization
 
 As part of the CHRE framework build system, the `CHRE_VARIANT_MK_INCLUDES`
