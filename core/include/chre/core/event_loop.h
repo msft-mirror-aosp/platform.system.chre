@@ -18,6 +18,8 @@
 #define CHRE_CORE_EVENT_LOOP_H_
 
 #include <pw_function/function.h>
+#include <stddef.h>
+#include <optional>
 
 #include "chre/core/event.h"
 #include "chre/core/nanoapp.h"
@@ -29,13 +31,14 @@
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/debug_dump.h"
+#include "chre/util/system/message_common.h"
 #include "chre/util/system/stats_container.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre/event.h"
 
 #ifdef CHRE_STATIC_EVENT_LOOP
-#include "chre/util/fixed_size_blocking_queue.h"
-#include "chre/util/synchronized_memory_pool.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
+#include "chre/util/system/synchronized_memory_pool.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_MAX_EVENT_COUNT
@@ -47,7 +50,7 @@
 #endif
 #else
 #include "chre/util/blocking_segmented_queue.h"
-#include "chre/util/synchronized_expandable_memory_pool.h"
+#include "chre/util/system/synchronized_expandable_memory_pool.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_EVENT_PER_BLOCK
@@ -69,6 +72,11 @@ namespace chre {
  */
 class EventLoop : public NonCopyable {
  public:
+  /**
+   * Synchronous callback used with forEachNanoapp
+   */
+  typedef void(NanoappCallbackFunction)(const Nanoapp *nanoapp, void *data);
+
   EventLoop()
       :
 #ifndef CHRE_STATIC_EVENT_LOOP
@@ -77,11 +85,6 @@ class EventLoop : public NonCopyable {
         mTimeLastWakeupBucketCycled(SystemTime::getMonotonicTime()),
         mRunning(true) {
   }
-
-  /**
-   * Synchronous callback used with forEachNanoapp
-   */
-  typedef void(NanoappCallbackFunction)(const Nanoapp *nanoapp, void *data);
 
   /**
    * Searches the set of nanoapps managed by this EventLoop for one with the
@@ -376,8 +379,19 @@ class EventLoop : public NonCopyable {
    *
    * @param function The function to execute for each nanoapp.
    */
-  void findFirstMatchingNanoapp(
-      const pw::Function<bool(const Nanoapp &)> &function);
+  void onMatchingNanoappEndpoint(
+      const pw::Function<bool(const message::EndpointInfo &)> &function);
+
+  /**
+   * Returns the EndpointInfo for the given nanoapp.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param appId The nanoapp ID to search for.
+   * @return The EndpointInfo for the given nanoapp, or std::nullopt if not
+   * found.
+   */
+  std::optional<message::EndpointInfo> getEndpointInfo(uint64_t appId);
 
   /**
    * Returns a reference to the power control manager. This allows power
@@ -602,6 +616,18 @@ class EventLoop : public NonCopyable {
    * @param count The number of dangling resources.
    */
   void logDanglingResources(const char *name, uint32_t count);
+
+  /**
+   * Returns the EndpointInfo for the given nanoapp.
+   *
+   * Only safe to call within this EventLoop's thread, or if mNanoappsLock is
+   * held.
+   *
+   * @param nanoapp The nanoapp to get the EndpointInfo for.
+   * @return The EndpointInfo for the given nanoapp
+   */
+  message::EndpointInfo getEndpointInfoFromNanoappLocked(
+      const Nanoapp &nanoapp);
 };
 
 }  // namespace chre

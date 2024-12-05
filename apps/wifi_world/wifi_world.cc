@@ -208,8 +208,6 @@ void handleWifiAsyncResult(const chreAsyncResult *result) {
     if (result->cookie != &kOnDemandScanCookie) {
       LOGE("On-demand scan cookie mismatch");
     }
-
-    requestDelayedWifiScan();
   } else if (result->requestType == CHRE_WIFI_REQUEST_TYPE_RANGING) {
     uint64_t timeSinceRequest = chreGetTime() - gLastRangingTimeNs;
     if (result->success) {
@@ -277,9 +275,10 @@ void prepareRanging(const chreWifiScanEvent *event) {
  * @param event a pointer to the details of the WiFi scan event.
  */
 void handleWifiScanEvent(const chreWifiScanEvent *event) {
-  LOGI("Received Wifi scan event of type %" PRIu8 " with %" PRIu8
-       " results at %" PRIu64 "ns",
-       event->scanType, event->resultCount, event->referenceTime);
+  LOGI("Received Wifi scan event of type %" PRIu8 " index %" PRIu8
+       " with %" PRIu8 "/%" PRIu8 " results completed at %" PRIu64 "ns",
+       event->scanType, event->eventIndex, event->resultCount,
+       event->resultTotal, event->referenceTime);
 
   if (gPendingOnDemandScan) {
     uint64_t timeSinceRequest = chreGetTime() - gLastRequestTimeNs;
@@ -349,6 +348,8 @@ void handleTimerEvent(const void *eventData) {
   } else {
     LOGE("Received invalid timer handle");
   }
+
+  requestDelayedWifiScan();
 }
 
 }  // namespace

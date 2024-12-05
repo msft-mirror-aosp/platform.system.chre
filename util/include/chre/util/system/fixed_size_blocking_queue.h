@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_H_
-#define CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_H_
+#ifndef CHRE_UTIL_SYSTEM_FIXED_SIZE_BLOCKING_QUEUE_H_
+#define CHRE_UTIL_SYSTEM_FIXED_SIZE_BLOCKING_QUEUE_H_
 
 #include <deque>
 
@@ -120,6 +120,6 @@ class FixedSizeBlockingQueue
 
 }  // namespace chre
 
-#include "chre/util/fixed_size_blocking_queue_impl.h"  // IWYU pragma: export
+#include "chre/util/system/fixed_size_blocking_queue_impl.h"  // IWYU pragma: export
 
-#endif  // CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_H_
+#endif  // CHRE_UTIL_SYSTEM_FIXED_SIZE_BLOCKING_QUEUE_H_

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_SENSORS_SUPPORT_ENABLED
+
 #include "chre/core/sensor_request_manager.h"
 
 #include "chre/core/event_loop_manager.h"
@@ -939,3 +941,5 @@ uint16_t SensorRequestManager::getActiveTargetGroupMask(
 }
 
 }  // namespace chre
+
+#endif  // CHRE_SENSORS_SUPPORT_ENABLED

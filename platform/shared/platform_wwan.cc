@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
+
 #include "chre/platform/platform_wwan.h"
 
 #include <cinttypes>
@@ -92,3 +94,5 @@ void PlatformWwanBase::cellInfoResultCallback(
 }
 
 }  // namespace chre
+
+#endif  // CHRE_WWAN_SUPPORT_ENABLED

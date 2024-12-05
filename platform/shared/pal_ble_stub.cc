@@ -16,10 +16,7 @@
 
 #include "chre/pal/ble.h"
 
-#include "chre/util/macros.h"
-
-const struct chrePalBleApi *chrePalBleGetApi(uint32_t requestedApiVersion) {
-  UNUSED_VAR(requestedApiVersion);
+const struct chrePalBleApi *chrePalBleGetApi(uint32_t /*requestedApiVersion*/) {
   // This stub implementation of the CHRE PAL returns nullptr to indicate that
   // it is not supplied by this platform.
   return nullptr;
