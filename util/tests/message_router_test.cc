@@ -42,7 +42,7 @@ static EndpointInfo kEndpointInfos[kNumEndpoints] = {
     EndpointInfo(/* id= */ 1, /* name= */ "endpoint1", /* version= */ 1,
                  EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE),
     EndpointInfo(/* id= */ 2, /* name= */ "endpoint2", /* version= */ 10,
-                 EndpointType::HOST_ENDPOINT, CHRE_MESSAGE_PERMISSION_BLE),
+                 EndpointType::HOST_NATIVE, CHRE_MESSAGE_PERMISSION_BLE),
     EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 
@@ -1188,13 +1188,43 @@ TEST_F(MessageRouterTest, ForEachEndpointOfHub) {
         endpoints.push_back(info);
         return false;
       }));
-  EXPECT_EQ(endpoints.size(), 3);
+  EXPECT_EQ(endpoints.size(), kNumEndpoints);
   for (size_t i = 0; i < endpoints.size(); ++i) {
     EXPECT_EQ(endpoints[i].id, kEndpointInfos[i].id);
     EXPECT_EQ(std::strcmp(endpoints[i].name, kEndpointInfos[i].name), 0);
     EXPECT_EQ(endpoints[i].version, kEndpointInfos[i].version);
     EXPECT_EQ(endpoints[i].type, kEndpointInfos[i].type);
     EXPECT_EQ(endpoints[i].requiredPermissions,
+              kEndpointInfos[i].requiredPermissions);
+  }
+}
+
+TEST_F(MessageRouterTest, ForEachEndpoint) {
+  const char *kHubName = "hub1";
+  constexpr MessageHubId kHubId = 1;
+
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub(kHubName, kHubId, callback);
+  EXPECT_TRUE(messageHub.has_value());
+
+  DynamicVector<std::pair<MessageHubInfo, EndpointInfo>> endpoints;
+  router.forEachEndpoint(
+      [&endpoints](const MessageHubInfo &hubInfo, const EndpointInfo &info) {
+        endpoints.push_back(std::make_pair(hubInfo, info));
+      });
+  EXPECT_EQ(endpoints.size(), kNumEndpoints);
+  for (size_t i = 0; i < endpoints.size(); ++i) {
+    EXPECT_EQ(endpoints[i].first.id, kHubId);
+    EXPECT_STREQ(endpoints[i].first.name, kHubName);
+
+    EXPECT_EQ(endpoints[i].second.id, kEndpointInfos[i].id);
+    EXPECT_STREQ(endpoints[i].second.name, kEndpointInfos[i].name);
+    EXPECT_EQ(endpoints[i].second.version, kEndpointInfos[i].version);
+    EXPECT_EQ(endpoints[i].second.type, kEndpointInfos[i].type);
+    EXPECT_EQ(endpoints[i].second.requiredPermissions,
               kEndpointInfos[i].requiredPermissions);
   }
 }

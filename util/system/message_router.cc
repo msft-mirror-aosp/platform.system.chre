@@ -125,6 +125,29 @@ bool MessageRouter::forEachEndpointOfHub(
   return true;
 }
 
+void MessageRouter::forEachEndpoint(
+    const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
+        &function) {
+  LockGuard<Mutex> lock(mMutex);
+
+  struct Context {
+    decltype(function) function;
+    MessageHubInfo &messageHubInfo;
+  };
+  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+    Context context = {
+        .function = function,
+        .messageHubInfo = messageHubRecord.info,
+    };
+
+    messageHubRecord.callback->forEachEndpoint(
+        [&context](const EndpointInfo &endpointInfo) {
+          context.function(context.messageHubInfo, endpointInfo);
+          return false;
+        });
+  }
+}
+
 std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
     MessageHubId messageHubId, EndpointId endpointId) {
   MessageRouter::MessageHubCallback *callback =

@@ -51,7 +51,6 @@ filegroup {
         "host/common/preloaded_nanoapp_loader.cc",
         "host/common/time_syncer.cc",
         "host/hal_generic/common/hal_client_manager.cc",
-        "host/hal_generic/common/message_hub_manager.cc",
         "host/hal_generic/common/multi_client_context_hub_base.cc",
         "host/hal_generic/common/permissions_util.cc",
     ],
@@ -64,6 +63,8 @@ filegroup {
         "host/common/fragmented_load_transaction.cc",
         "host/common/host_protocol_host.cc",
         "host/common/log.cc",
+        "host/hal_generic/common/context_hub_v4_impl.cc",
+        "host/hal_generic/common/message_hub_manager.cc",
         "platform/shared/host_protocol_common.cc",
     ],
 }
