@@ -124,9 +124,9 @@ pw::Result<std::pair<uint16_t, uint16_t>> HostHub::reserveSessionIdRange(
   return mSessionIdRanges.back();
 }
 
-pw::Result<std::shared_ptr<HostHub>> HostHub::openSession(
-    std::weak_ptr<HostHub> self, const EndpointId &localId,
-    const EndpointId &remoteId, uint16_t sessionId) {
+pw::Result<bool> HostHub::openSession(const EndpointId &localId,
+                                      const EndpointId &remoteId,
+                                      uint16_t sessionId) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
 
@@ -152,16 +152,15 @@ pw::Result<std::shared_ptr<HostHub>> HostHub::openSession(
   }
 
   // Prune a stale session with this id if present.
-  std::shared_ptr<HostHub> prunedHostHub;
-  if (auto it = mManager.mIdToSession.find(sessionId);
-      it != mManager.mIdToSession.end()) {
+  bool sendClose = false;
+  if (auto it = mIdToSession.find(sessionId); it != mIdToSession.end()) {
     SessionStrongRef session(it->second);
     if (session) {
       // If the session is in a valid state, prune it if it was not host
       // initiated and is pending a final ack from message router.
       if (!hostInitiated && !session.pendingDestination &&
           session.pendingMessageRouter) {
-        prunedHostHub = std::move(session.hub);
+        sendClose = true;
       } else if (hostInitiated && session.local->id == localId) {
         LOGE("Hub %ld trying to override its own session %hu", kId, sessionId);
         return pw::Status::InvalidArgument();
@@ -171,40 +170,59 @@ pw::Result<std::shared_ptr<HostHub>> HostHub::openSession(
         return pw::Status::AlreadyExists();
       }
     }
-    mManager.mIdToSession.erase(it);
+    mIdToSession.erase(it);
   }
 
   // Create and map the new session.
-  mManager.mIdToSession.emplace(
-      std::piecewise_construct, std::forward_as_tuple(sessionId),
-      std::forward_as_tuple(self, local, remote, hostInitiated));
-  return prunedHostHub;
+  mIdToSession.emplace(std::piecewise_construct,
+                       std::forward_as_tuple(sessionId),
+                       std::forward_as_tuple(local, remote, hostInitiated));
+  return sendClose;
 }
 
 pw::Status HostHub::closeSession(uint16_t id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
-  auto it = mManager.mIdToSession.find(id);
-  if (it == mManager.mIdToSession.end()) {
+  auto it = mIdToSession.find(id);
+  if (it == mIdToSession.end()) {
     LOGE("Closing unopened session %hu", id);
     return pw::Status::NotFound();
   }
-  SessionStrongRef session(it->second);
-  if (session && session.hub->kPid != kPid) {
-    LOGE("Trying to close session %hu for client %d from client %d (hub %ld)",
-         id, session.hub->kPid, kPid, kId);
-    return pw::Status::PermissionDenied();
-  }
-  mManager.mIdToSession.erase(it);
+  mIdToSession.erase(it);
   return pw::OkStatus();
 }
 
-pw::Status HostHub::ackSession(uint16_t id) {
-  return mManager.ackSessionAndGetHostHub(id).status();
+pw::Status HostHub::checkSessionOpen(uint16_t id) {
+  std::lock_guard lock(mManager.mLock);
+  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
+  if (!session.pendingDestination && !session.pendingMessageRouter)
+    return pw::OkStatus();
+  LOGE("Session %hu is pending", id);
+  return pw::Status::FailedPrecondition();
 }
 
-pw::Status HostHub::checkSessionOpen(uint16_t id) {
-  return mManager.checkSessionOpenAndGetHostHub(id).status();
+pw::Status HostHub::ackSession(uint16_t id) {
+  std::lock_guard lock(mManager.mLock);
+  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
+  bool isBinderCall = AIBinder_isHandlingTransaction();
+  bool isHostSession = id >= kHostSessionIdBase;
+  if (session.pendingDestination) {
+    if (isHostSession == isBinderCall) {
+      LOGE("Session %hu must be acked by other side (host? %d)", id,
+           !isBinderCall);
+      return pw::Status::PermissionDenied();
+    }
+    session.pendingDestination = false;
+  } else if (session.pendingMessageRouter) {
+    if (isBinderCall) {
+      LOGE("Message router must ack session %hu", id);
+      return pw::Status::PermissionDenied();
+    }
+    session.pendingMessageRouter = false;
+  } else {
+    LOGE("Received unexpected ack on session %hu, host: %d", id, isBinderCall);
+  }
+  return pw::OkStatus();
 }
 
 int64_t HostHub::id() const {
@@ -263,6 +281,24 @@ bool HostHub::sessionIdInRangeLocked(uint16_t id) {
   return false;
 }
 
+pw::Result<HostHub::SessionStrongRef> HostHub::checkSessionLocked(uint16_t id) {
+  auto sessionIt = mIdToSession.find(id);
+  if (sessionIt == mIdToSession.end()) {
+    LOGE("Did not find expected session %hu in hub %ld", id, kId);
+    return pw::Status::NotFound();
+  }
+  SessionStrongRef session(sessionIt->second);
+  if (!session) {
+    LOGD(
+        "Pruning session %hu due to one or more of host hub, host endpoint, "
+        "or embedded endpoint going down.",
+        id);
+    mIdToSession.erase(sessionIt);
+    return pw::Status::Unavailable();
+  }
+  return std::move(session);
+}
+
 MessageHubManager::MessageHubManager(HostHubDownCb cb)
     : mHostHubDownCb(std::move(cb)) {
   mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
@@ -283,54 +319,11 @@ std::shared_ptr<HostHub> MessageHubManager::getHostHubByPid(pid_t pid) {
   return hub;
 }
 
-std::shared_ptr<HostHub> MessageHubManager::getHostHubByEndpointId(
-    const EndpointId &id) {
+std::shared_ptr<HostHub> MessageHubManager::getHostHubById(int64_t id) {
   std::lock_guard lock(mLock);
-  if (auto it = mIdToHostHub.find(id.hubId); it != mIdToHostHub.end())
+  if (auto it = mIdToHostHub.find(id); it != mIdToHostHub.end())
     return it->second.lock();
   return {};
-}
-
-pw::Result<std::shared_ptr<HostHub>>
-MessageHubManager::checkSessionOpenAndGetHostHub(uint16_t id) {
-  std::lock_guard lock(mLock);
-  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
-  if (AIBinder_getCallingPid() != session.hub->kPid) {
-    LOGE("Trying to check unowned session %hu", id);
-    return pw::Status::PermissionDenied();
-  }
-  if (!session.pendingDestination && !session.pendingMessageRouter)
-    return std::move(session.hub);
-  LOGE("Session %hu is pending", id);
-  return pw::Status::FailedPrecondition();
-}
-
-pw::Result<std::shared_ptr<HostHub>> MessageHubManager::ackSessionAndGetHostHub(
-    uint16_t id) {
-  std::lock_guard lock(mLock);
-  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
-  bool isBinderCall = AIBinder_isHandlingTransaction();
-  bool isHostSession = id >= kHostSessionIdBase;
-  if (isBinderCall && AIBinder_getCallingPid() != session.hub->kPid) {
-    LOGE("Trying to ack unowned session %hu", id);
-    return pw::Status::PermissionDenied();
-  } else if (session.pendingDestination) {
-    if (isHostSession == isBinderCall) {
-      LOGE("Session %hu must be acked by other side (host? %d)", id,
-           !isBinderCall);
-      return pw::Status::PermissionDenied();
-    }
-    session.pendingDestination = false;
-  } else if (session.pendingMessageRouter) {
-    if (isBinderCall) {
-      LOGE("Message router must ack session %hu", id);
-      return pw::Status::PermissionDenied();
-    }
-    session.pendingMessageRouter = false;
-  } else {
-    LOGE("Received unexpected ack on session %hu, host: %d", id, isBinderCall);
-  }
-  return std::move(session.hub);
 }
 
 void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
@@ -340,25 +333,6 @@ void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
     for (auto &[pid, hub] : mPidToHostHub) hubs.push_back(hub);
   }
   for (auto &hub : hubs) fn(*hub);
-}
-
-pw::Result<MessageHubManager::SessionStrongRef>
-MessageHubManager::checkSessionLocked(uint16_t id) {
-  auto sessionIt = mIdToSession.find(id);
-  if (sessionIt == mIdToSession.end()) {
-    LOGE("Did not find expected session %hu", id);
-    return pw::Status::NotFound();
-  }
-  SessionStrongRef session(sessionIt->second);
-  if (!session) {
-    LOGD(
-        "Pruning session %hu due to one or more of host hub, host endpoint, "
-        "or embedded endpoint going down.",
-        id);
-    mIdToSession.erase(sessionIt);
-    return pw::Status::Unavailable();
-  }
-  return std::move(session);
 }
 
 void MessageHubManager::initEmbeddedHubsAndEndpoints(

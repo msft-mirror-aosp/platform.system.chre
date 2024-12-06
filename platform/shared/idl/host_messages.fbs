@@ -696,7 +696,8 @@ table GetMessageHubsAndEndpointsResponse {
 }
 
 table OpenEndpointSessionRequest {
-  id:ushort;
+  host_hub_id:long;
+  session_id:ushort;
   fromEndpoint:EndpointId;
   toEndpoint:EndpointId;
 
@@ -705,7 +706,8 @@ table OpenEndpointSessionRequest {
 }
 
 table EndpointSessionOpened {
-  id:ushort;
+  host_hub_id:long;
+  session_id:ushort;
 }
 
 /// "Reason"s for stopping an endpoint or session over an endpoint.
@@ -731,11 +733,14 @@ enum Reason : ubyte {
 }
 
 table EndpointSessionClosed {
-  id:ushort;
+  host_hub_id:long;
+  session_id:ushort;
   reason:Reason;
 }
 
 table EndpointSessionMessage {
+  host_hub_id:long;
+
   /// Id of session this message is being sent within
   session_id:ushort;
 
@@ -754,6 +759,8 @@ table EndpointSessionMessage {
 }
 
 table EndpointSessionMessageDeliveryStatus {
+  host_hub_id:long;
+
   /// Id of session the message was sent within
   session_id:ushort;
   status:MessageDeliveryStatus;

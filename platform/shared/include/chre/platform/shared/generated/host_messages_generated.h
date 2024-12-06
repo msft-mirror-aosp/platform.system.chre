@@ -4360,13 +4360,17 @@ inline flatbuffers::Offset<GetMessageHubsAndEndpointsResponse> CreateGetMessageH
 struct OpenEndpointSessionRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef OpenEndpointSessionRequestBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ID = 4,
-    VT_FROMENDPOINT = 6,
-    VT_TOENDPOINT = 8,
-    VT_SERVICEDESCRIPTOR = 10
+    VT_HOST_HUB_ID = 4,
+    VT_SESSION_ID = 6,
+    VT_FROMENDPOINT = 8,
+    VT_TOENDPOINT = 10,
+    VT_SERVICEDESCRIPTOR = 12
   };
-  uint16_t id() const {
-    return GetField<uint16_t>(VT_ID, 0);
+  int64_t host_hub_id() const {
+    return GetField<int64_t>(VT_HOST_HUB_ID, 0);
+  }
+  uint16_t session_id() const {
+    return GetField<uint16_t>(VT_SESSION_ID, 0);
   }
   const chre::fbs::EndpointId *fromEndpoint() const {
     return GetPointer<const chre::fbs::EndpointId *>(VT_FROMENDPOINT);
@@ -4380,7 +4384,8 @@ struct OpenEndpointSessionRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers:
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint16_t>(verifier, VT_ID) &&
+           VerifyField<int64_t>(verifier, VT_HOST_HUB_ID) &&
+           VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
            VerifyOffset(verifier, VT_FROMENDPOINT) &&
            verifier.VerifyTable(fromEndpoint()) &&
            VerifyOffset(verifier, VT_TOENDPOINT) &&
@@ -4395,8 +4400,11 @@ struct OpenEndpointSessionRequestBuilder {
   typedef OpenEndpointSessionRequest Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_id(uint16_t id) {
-    fbb_.AddElement<uint16_t>(OpenEndpointSessionRequest::VT_ID, id, 0);
+  void add_host_hub_id(int64_t host_hub_id) {
+    fbb_.AddElement<int64_t>(OpenEndpointSessionRequest::VT_HOST_HUB_ID, host_hub_id, 0);
+  }
+  void add_session_id(uint16_t session_id) {
+    fbb_.AddElement<uint16_t>(OpenEndpointSessionRequest::VT_SESSION_ID, session_id, 0);
   }
   void add_fromEndpoint(flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint) {
     fbb_.AddOffset(OpenEndpointSessionRequest::VT_FROMENDPOINT, fromEndpoint);
@@ -4421,28 +4429,32 @@ struct OpenEndpointSessionRequestBuilder {
 
 inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequest(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint16_t id = 0,
+    int64_t host_hub_id = 0,
+    uint16_t session_id = 0,
     flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint = 0,
     flatbuffers::Offset<chre::fbs::EndpointId> toEndpoint = 0,
     flatbuffers::Offset<flatbuffers::Vector<int8_t>> serviceDescriptor = 0) {
   OpenEndpointSessionRequestBuilder builder_(_fbb);
+  builder_.add_host_hub_id(host_hub_id);
   builder_.add_serviceDescriptor(serviceDescriptor);
   builder_.add_toEndpoint(toEndpoint);
   builder_.add_fromEndpoint(fromEndpoint);
-  builder_.add_id(id);
+  builder_.add_session_id(session_id);
   return builder_.Finish();
 }
 
 inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSessionRequestDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint16_t id = 0,
+    int64_t host_hub_id = 0,
+    uint16_t session_id = 0,
     flatbuffers::Offset<chre::fbs::EndpointId> fromEndpoint = 0,
     flatbuffers::Offset<chre::fbs::EndpointId> toEndpoint = 0,
     const std::vector<int8_t> *serviceDescriptor = nullptr) {
   auto serviceDescriptor__ = serviceDescriptor ? _fbb.CreateVector<int8_t>(*serviceDescriptor) : 0;
   return chre::fbs::CreateOpenEndpointSessionRequest(
       _fbb,
-      id,
+      host_hub_id,
+      session_id,
       fromEndpoint,
       toEndpoint,
       serviceDescriptor__);
@@ -4451,14 +4463,19 @@ inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSession
 struct EndpointSessionOpened FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef EndpointSessionOpenedBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ID = 4
+    VT_HOST_HUB_ID = 4,
+    VT_SESSION_ID = 6
   };
-  uint16_t id() const {
-    return GetField<uint16_t>(VT_ID, 0);
+  int64_t host_hub_id() const {
+    return GetField<int64_t>(VT_HOST_HUB_ID, 0);
+  }
+  uint16_t session_id() const {
+    return GetField<uint16_t>(VT_SESSION_ID, 0);
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint16_t>(verifier, VT_ID) &&
+           VerifyField<int64_t>(verifier, VT_HOST_HUB_ID) &&
+           VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
            verifier.EndTable();
   }
 };
@@ -4467,8 +4484,11 @@ struct EndpointSessionOpenedBuilder {
   typedef EndpointSessionOpened Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_id(uint16_t id) {
-    fbb_.AddElement<uint16_t>(EndpointSessionOpened::VT_ID, id, 0);
+  void add_host_hub_id(int64_t host_hub_id) {
+    fbb_.AddElement<int64_t>(EndpointSessionOpened::VT_HOST_HUB_ID, host_hub_id, 0);
+  }
+  void add_session_id(uint16_t session_id) {
+    fbb_.AddElement<uint16_t>(EndpointSessionOpened::VT_SESSION_ID, session_id, 0);
   }
   explicit EndpointSessionOpenedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -4484,27 +4504,34 @@ struct EndpointSessionOpenedBuilder {
 
 inline flatbuffers::Offset<EndpointSessionOpened> CreateEndpointSessionOpened(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint16_t id = 0) {
+    int64_t host_hub_id = 0,
+    uint16_t session_id = 0) {
   EndpointSessionOpenedBuilder builder_(_fbb);
-  builder_.add_id(id);
+  builder_.add_host_hub_id(host_hub_id);
+  builder_.add_session_id(session_id);
   return builder_.Finish();
 }
 
 struct EndpointSessionClosed FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef EndpointSessionClosedBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ID = 4,
-    VT_REASON = 6
+    VT_HOST_HUB_ID = 4,
+    VT_SESSION_ID = 6,
+    VT_REASON = 8
   };
-  uint16_t id() const {
-    return GetField<uint16_t>(VT_ID, 0);
+  int64_t host_hub_id() const {
+    return GetField<int64_t>(VT_HOST_HUB_ID, 0);
+  }
+  uint16_t session_id() const {
+    return GetField<uint16_t>(VT_SESSION_ID, 0);
   }
   chre::fbs::Reason reason() const {
     return static_cast<chre::fbs::Reason>(GetField<uint8_t>(VT_REASON, 0));
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint16_t>(verifier, VT_ID) &&
+           VerifyField<int64_t>(verifier, VT_HOST_HUB_ID) &&
+           VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
            VerifyField<uint8_t>(verifier, VT_REASON) &&
            verifier.EndTable();
   }
@@ -4514,8 +4541,11 @@ struct EndpointSessionClosedBuilder {
   typedef EndpointSessionClosed Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_id(uint16_t id) {
-    fbb_.AddElement<uint16_t>(EndpointSessionClosed::VT_ID, id, 0);
+  void add_host_hub_id(int64_t host_hub_id) {
+    fbb_.AddElement<int64_t>(EndpointSessionClosed::VT_HOST_HUB_ID, host_hub_id, 0);
+  }
+  void add_session_id(uint16_t session_id) {
+    fbb_.AddElement<uint16_t>(EndpointSessionClosed::VT_SESSION_ID, session_id, 0);
   }
   void add_reason(chre::fbs::Reason reason) {
     fbb_.AddElement<uint8_t>(EndpointSessionClosed::VT_REASON, static_cast<uint8_t>(reason), 0);
@@ -4534,10 +4564,12 @@ struct EndpointSessionClosedBuilder {
 
 inline flatbuffers::Offset<EndpointSessionClosed> CreateEndpointSessionClosed(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint16_t id = 0,
+    int64_t host_hub_id = 0,
+    uint16_t session_id = 0,
     chre::fbs::Reason reason = chre::fbs::Reason::UNSPECIFIED) {
   EndpointSessionClosedBuilder builder_(_fbb);
-  builder_.add_id(id);
+  builder_.add_host_hub_id(host_hub_id);
+  builder_.add_session_id(session_id);
   builder_.add_reason(reason);
   return builder_.Finish();
 }
@@ -4545,13 +4577,17 @@ inline flatbuffers::Offset<EndpointSessionClosed> CreateEndpointSessionClosed(
 struct EndpointSessionMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef EndpointSessionMessageBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SESSION_ID = 4,
-    VT_TYPE = 6,
-    VT_PERMISSIONS = 8,
-    VT_DATA = 10,
-    VT_FLAGS = 12,
-    VT_SEQUENCE_NUMBER = 14
+    VT_HOST_HUB_ID = 4,
+    VT_SESSION_ID = 6,
+    VT_TYPE = 8,
+    VT_PERMISSIONS = 10,
+    VT_DATA = 12,
+    VT_FLAGS = 14,
+    VT_SEQUENCE_NUMBER = 16
   };
+  int64_t host_hub_id() const {
+    return GetField<int64_t>(VT_HOST_HUB_ID, 0);
+  }
   /// Id of session this message is being sent within
   uint16_t session_id() const {
     return GetField<uint16_t>(VT_SESSION_ID, 0);
@@ -4578,6 +4614,7 @@ struct EndpointSessionMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::Tab
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_HOST_HUB_ID) &&
            VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
            VerifyField<uint32_t>(verifier, VT_TYPE) &&
            VerifyField<uint32_t>(verifier, VT_PERMISSIONS) &&
@@ -4593,6 +4630,9 @@ struct EndpointSessionMessageBuilder {
   typedef EndpointSessionMessage Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
+  void add_host_hub_id(int64_t host_hub_id) {
+    fbb_.AddElement<int64_t>(EndpointSessionMessage::VT_HOST_HUB_ID, host_hub_id, 0);
+  }
   void add_session_id(uint16_t session_id) {
     fbb_.AddElement<uint16_t>(EndpointSessionMessage::VT_SESSION_ID, session_id, 0);
   }
@@ -4625,6 +4665,7 @@ struct EndpointSessionMessageBuilder {
 
 inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(
     flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t host_hub_id = 0,
     uint16_t session_id = 0,
     uint32_t type = 0,
     uint32_t permissions = 0,
@@ -4632,6 +4673,7 @@ inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(
     uint32_t flags = 0,
     uint32_t sequence_number = 0) {
   EndpointSessionMessageBuilder builder_(_fbb);
+  builder_.add_host_hub_id(host_hub_id);
   builder_.add_sequence_number(sequence_number);
   builder_.add_flags(flags);
   builder_.add_data(data);
@@ -4643,6 +4685,7 @@ inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessage(
 
 inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessageDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t host_hub_id = 0,
     uint16_t session_id = 0,
     uint32_t type = 0,
     uint32_t permissions = 0,
@@ -4652,6 +4695,7 @@ inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessageD
   auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
   return chre::fbs::CreateEndpointSessionMessage(
       _fbb,
+      host_hub_id,
       session_id,
       type,
       permissions,
@@ -4663,9 +4707,13 @@ inline flatbuffers::Offset<EndpointSessionMessage> CreateEndpointSessionMessageD
 struct EndpointSessionMessageDeliveryStatus FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef EndpointSessionMessageDeliveryStatusBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SESSION_ID = 4,
-    VT_STATUS = 6
+    VT_HOST_HUB_ID = 4,
+    VT_SESSION_ID = 6,
+    VT_STATUS = 8
   };
+  int64_t host_hub_id() const {
+    return GetField<int64_t>(VT_HOST_HUB_ID, 0);
+  }
   /// Id of session the message was sent within
   uint16_t session_id() const {
     return GetField<uint16_t>(VT_SESSION_ID, 0);
@@ -4675,6 +4723,7 @@ struct EndpointSessionMessageDeliveryStatus FLATBUFFERS_FINAL_CLASS : private fl
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
+           VerifyField<int64_t>(verifier, VT_HOST_HUB_ID) &&
            VerifyField<uint16_t>(verifier, VT_SESSION_ID) &&
            VerifyOffset(verifier, VT_STATUS) &&
            verifier.VerifyTable(status()) &&
@@ -4686,6 +4735,9 @@ struct EndpointSessionMessageDeliveryStatusBuilder {
   typedef EndpointSessionMessageDeliveryStatus Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
+  void add_host_hub_id(int64_t host_hub_id) {
+    fbb_.AddElement<int64_t>(EndpointSessionMessageDeliveryStatus::VT_HOST_HUB_ID, host_hub_id, 0);
+  }
   void add_session_id(uint16_t session_id) {
     fbb_.AddElement<uint16_t>(EndpointSessionMessageDeliveryStatus::VT_SESSION_ID, session_id, 0);
   }
@@ -4706,9 +4758,11 @@ struct EndpointSessionMessageDeliveryStatusBuilder {
 
 inline flatbuffers::Offset<EndpointSessionMessageDeliveryStatus> CreateEndpointSessionMessageDeliveryStatus(
     flatbuffers::FlatBufferBuilder &_fbb,
+    int64_t host_hub_id = 0,
     uint16_t session_id = 0,
     flatbuffers::Offset<chre::fbs::MessageDeliveryStatus> status = 0) {
   EndpointSessionMessageDeliveryStatusBuilder builder_(_fbb);
+  builder_.add_host_hub_id(host_hub_id);
   builder_.add_status(status);
   builder_.add_session_id(session_id);
   return builder_.Finish();
