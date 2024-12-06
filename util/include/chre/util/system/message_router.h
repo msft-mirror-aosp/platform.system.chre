@@ -74,11 +74,13 @@ class MessageRouter {
     //! Callback called to iterate over all endpoints connected to the
     //! MessageHub. Underlying endpoint storage must not change during this
     //! callback. If function returns true, the MessageHub can stop iterating
-    //! over future endpoints.
+    //! over future endpoints. This function should not call any MessageRouter
+    //! or MessageHub functions.
     virtual void forEachEndpoint(
         const pw::Function<bool(const EndpointInfo &)> &function) = 0;
 
-    //! @return The EndpointInfo for the given endpoint ID
+    //! @return The EndpointInfo for the given endpoint ID. This function should
+    //! not call any MessageRouter or MessageHub functions.
     virtual std::optional<EndpointInfo> getEndpointInfo(
         EndpointId endpointId) = 0;
   };
@@ -183,6 +185,12 @@ class MessageRouter {
   bool forEachEndpointOfHub(
       MessageHubId messageHubId,
       const pw::Function<bool(const EndpointInfo &)> &function);
+
+  //! Executes the function for each endpoint connected to all Message Hubs.
+  //! The lock is held when calling the callback.
+  void forEachEndpoint(
+      const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
+          &function);
 
   //! @return The EndpointInfo for the given hub and endpoint IDs
   std::optional<EndpointInfo> getEndpointInfo(MessageHubId messageHubId,

@@ -351,57 +351,70 @@ ScopedAStatus ContextHub::onNanSessionStateChanged(
   return ndk::ScopedAStatus::ok();
 }
 
-ScopedAStatus ContextHub::getHubs(std::vector<HubInfo> * /*hubs*/) {
+ScopedAStatus ContextHub::getHubs(std::vector<HubInfo> *hubs) {
+  if (mV4Impl) return mV4Impl->getHubs(hubs);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::getEndpoints(
-    std::vector<EndpointInfo> * /*endpoints*/) {
+ScopedAStatus ContextHub::getEndpoints(std::vector<EndpointInfo> *endpoints) {
+  if (mV4Impl) return mV4Impl->getEndpoints(endpoints);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::registerEndpoint(const EndpointInfo & /*endpoint*/) {
+ScopedAStatus ContextHub::registerEndpoint(const EndpointInfo &endpoint) {
+  if (mV4Impl) return mV4Impl->registerEndpoint(endpoint);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::unregisterEndpoint(
-    const EndpointInfo & /*endpoint*/) {
+ScopedAStatus ContextHub::unregisterEndpoint(const EndpointInfo &endpoint) {
+  if (mV4Impl) return mV4Impl->unregisterEndpoint(endpoint);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus ContextHub::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> & /*callback*/) {
+    const std::shared_ptr<IEndpointCallback> &callback) {
+  if (mV4Impl) return mV4Impl->registerEndpointCallback(callback);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::requestSessionIdRange(
-    int32_t /*size*/, std::vector<int32_t> * /*ids*/) {
+ScopedAStatus ContextHub::requestSessionIdRange(int32_t size,
+                                                std::vector<int32_t> *ids) {
+  if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus ContextHub::openEndpointSession(
-    int32_t /*sessionId*/, const EndpointId & /*destination*/,
-    const EndpointId & /*initiator*/,
-    const std::optional<std::string> & /*serviceDescriptor*/) {
+    int32_t sessionId, const EndpointId &destination,
+    const EndpointId &initiator,
+    const std::optional<std::string> &serviceDescriptor) {
+  if (mV4Impl) {
+    return mV4Impl->openEndpointSession(sessionId, destination, initiator,
+                                        serviceDescriptor);
+  }
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::sendMessageToEndpoint(int32_t /*sessionId*/,
-                                                const Message & /*msg*/) {
+ScopedAStatus ContextHub::sendMessageToEndpoint(int32_t sessionId,
+                                                const Message &msg) {
+  if (mV4Impl) return mV4Impl->sendMessageToEndpoint(sessionId, msg);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ScopedAStatus ContextHub::sendMessageDeliveryStatusToEndpoint(
-    int32_t /*sessionId*/, const MessageDeliveryStatus & /*msgStatus*/) {
+    int32_t sessionId, const MessageDeliveryStatus &msgStatus) {
+  if (mV4Impl)
+    return mV4Impl->sendMessageDeliveryStatusToEndpoint(sessionId, msgStatus);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::closeEndpointSession(int32_t /*sessionId*/,
-                                               Reason /*reason*/) {
+ScopedAStatus ContextHub::closeEndpointSession(int32_t sessionId,
+                                               Reason reason) {
+  if (mV4Impl) return mV4Impl->closeEndpointSession(sessionId, reason);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::endpointSessionOpenComplete(int32_t /*sessionId*/) {
+ScopedAStatus ContextHub::endpointSessionOpenComplete(int32_t sessionId) {
+  if (mV4Impl) return mV4Impl->endpointSessionOpenComplete(sessionId);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
@@ -513,6 +526,12 @@ void ContextHub::onDebugDumpData(const ::chre::fbs::DebugDumpDataT &data) {
 void ContextHub::onDebugDumpComplete(
     const ::chre::fbs::DebugDumpResponseT & /* response */) {
   debugDumpComplete();
+}
+
+bool ContextHub::onContextHubV4Message(
+    const ::chre::fbs::ChreMessageUnion &message) {
+  if (mV4Impl) return mV4Impl->handleMessageFromChre(message);
+  return false;
 }
 
 void ContextHub::handleServiceDeath() {

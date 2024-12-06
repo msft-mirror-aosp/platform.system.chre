@@ -21,10 +21,14 @@
 #include <cinttypes>
 
 #include "chre/util/system/napp_permissions.h"
+#include "chre_test_common.nanopb.h"
 
 namespace chre {
 
 namespace test_shared {
+
+chre_test_common_TestResult makeTestResultProtoMessage(
+    bool success, const char *errMessage = nullptr);
 
 /**
  * Same as sendTestResultWithMsgToHost, but doesn't accept an error message and
