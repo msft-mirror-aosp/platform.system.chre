@@ -22,12 +22,14 @@ using chre::PriorityQueue;
 namespace {
 class FakeElement {
  public:
-  FakeElement(){};
+  FakeElement() {}
   FakeElement(int index, int value) {
     mValue = value;
     mIndex = index;
-  };
-  ~FakeElement(){};
+  }
+
+  ~FakeElement() {}
+
   void setValue(int value) {
     mValue = value;
   }
@@ -45,7 +47,7 @@ class FakeElement {
 
 bool compareFunction(const FakeElement &left, const FakeElement &right) {
   return left.getValue() > right.getValue();
-};
+}
 
 class CompareClass {
  public:

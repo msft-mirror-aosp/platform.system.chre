@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_WIFI_REQUEST_MANAGER_H_
 #define CHRE_CORE_WIFI_REQUEST_MANAGER_H_
 
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
+
 #include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
@@ -921,5 +923,7 @@ class WifiRequestManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_WIFI_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_WIFI_REQUEST_MANAGER_H_

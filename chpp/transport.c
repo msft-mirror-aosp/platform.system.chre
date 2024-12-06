@@ -540,7 +540,7 @@ static void chppSetResetComplete(struct ChppTransportState *context) {
  */
 static void chppProcessResetAck(struct ChppTransportState *context) {
   if (context->resetState == CHPP_RESET_STATE_NONE) {
-    CHPP_LOGE("Unexpected reset-ack seq=%" PRIu8 " code=0x%" PRIx8,
+    CHPP_LOGW("Unexpected reset-ack seq=%" PRIu8 " code=0x%" PRIx8,
               context->rxHeader.seq, context->rxHeader.packetCode);
     // In a reset race condition with both endpoints sending resets and
     // reset-acks, the sent resets and reset-acks will both have a sequence
@@ -604,8 +604,18 @@ static void chppProcessRxPacket(struct ChppTransportState *context) {
     // There are packets to send out (could be new or retx)
     // Note: For a future ACK window > 1, makes more sense to cap the NACKs
     // to one instead of flooding with out of order NACK errors.
-    chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
-                                     CHPP_TRANSPORT_ATTR_NONE, errorCode));
+
+    // If the sender is retrying a packet we've already received successfully,
+    // send an ACK so it will continue normally
+    enum ChppTransportErrorCode errorCodeToSend = errorCode;
+    if (context->rxHeader.length > 0 &&
+        context->rxHeader.seq == context->rxStatus.expectedSeq - 1) {
+      errorCodeToSend = CHPP_TRANSPORT_ERROR_NONE;
+    }
+
+    chppEnqueueTxPacket(
+        context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(CHPP_TRANSPORT_ATTR_NONE,
+                                                    errorCodeToSend));
   }
 
   if (errorCode == CHPP_TRANSPORT_ERROR_ORDER) {
@@ -767,7 +777,8 @@ static void chppRegisterRxAck(struct ChppTransportState *context) {
       context->rxStatus.receivedAckSeq = rxAckSeq;
       if (context->txStatus.txAttempts > 1) {
         CHPP_LOGW("Seq %" PRIu8 " ACK'd after %" PRIuSIZE " reTX",
-                  context->rxHeader.seq, context->txStatus.txAttempts - 1);
+                  context->rxHeader.ackSeq - 1,
+                  context->txStatus.txAttempts - 1);
       }
       context->txStatus.txAttempts = 0;
 
@@ -1688,11 +1699,13 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
   const uint64_t currentTimeNs = chppGetCurrentTimeNs();
   const bool isTxTimeout = currentTimeNs - context->txStatus.lastTxTimeNs >=
                            CHPP_TRANSPORT_TX_TIMEOUT_NS;
+  const bool isResetting = context->resetState == CHPP_RESET_STATE_RESETTING;
 
   // Call chppTransportDoWork for both TX and request timeouts.
   if (isTxTimeout) {
-    CHPP_LOGE("ACK timeout. Tx t=%" PRIu64,
-              context->txStatus.lastTxTimeNs / CHPP_NSEC_PER_MSEC);
+    CHPP_LOGE("ACK timeout. Tx t=%" PRIu64 ", attempt %zu, isResetting=%d",
+              context->txStatus.lastTxTimeNs / CHPP_NSEC_PER_MSEC,
+              context->txStatus.txAttempts, isResetting);
     chppTransportDoWork(context);
   } else {
     const uint64_t requestTimeoutNs =
@@ -1704,9 +1717,8 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
     }
   }
 
-  if ((context->resetState == CHPP_RESET_STATE_RESETTING) &&
-      (currentTimeNs - context->resetTimeNs >=
-       CHPP_TRANSPORT_RESET_TIMEOUT_NS)) {
+  if (isResetting && (currentTimeNs - context->resetTimeNs >=
+                      CHPP_TRANSPORT_RESET_TIMEOUT_NS)) {
     if (context->resetCount + 1 < CHPP_TRANSPORT_MAX_RESET) {
       CHPP_LOGE("RESET-ACK timeout; retrying");
       context->resetCount++;
@@ -1714,6 +1726,7 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
                 CHPP_TRANSPORT_ERROR_TIMEOUT);
     } else {
       CHPP_LOGE("RESET-ACK timeout; giving up");
+      context->txStatus.txAttempts = 0;
       context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
       chppClearTxDatagramQueue(context);
     }

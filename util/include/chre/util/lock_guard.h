@@ -46,6 +46,6 @@ class LockGuard : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/lock_guard_impl.h"
+#include "chre/util/lock_guard_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_LOCK_GUARD_H_

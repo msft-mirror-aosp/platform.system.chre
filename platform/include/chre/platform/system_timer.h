@@ -107,4 +107,9 @@ class SystemTimer : public SystemTimerBase, public NonCopyable {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/system_timer_impl.h")
+#include "chre/target_platform/system_timer_impl.h"
+#endif  // __has_include("chre/target_platform/system_timer_impl.h")
+
 #endif  // CHRE_PLATFORM_SYSTEM_TIMER_H_

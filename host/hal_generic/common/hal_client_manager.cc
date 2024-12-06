@@ -554,13 +554,20 @@ std::optional<int64_t> HalClientManager::resetPendingUnloadTransaction(
 }
 
 void HalClientManager::handleChreRestart() {
+  const std::lock_guard<std::mutex> lock(mLock);
+  mPendingLoadTransaction.reset();
+  mPendingUnloadTransaction.reset();
+  for (Client &client : mClients) {
+    client.endpointIds.clear();
+  }
+}
+
+std::vector<std::shared_ptr<IContextHubCallback>>
+HalClientManager::getCallbacks() {
   std::vector<std::shared_ptr<IContextHubCallback>> callbacks;
   {
     const std::lock_guard<std::mutex> lock(mLock);
-    mPendingLoadTransaction.reset();
-    mPendingUnloadTransaction.reset();
     for (Client &client : mClients) {
-      client.endpointIds.clear();
       if (client.callback != nullptr) {
         // Create a copy of the callback and call it later without holding the
         // lock to avoid deadlocks.
@@ -568,10 +575,7 @@ void HalClientManager::handleChreRestart() {
       }
     }
   }
-
-  for (const auto &callback : callbacks) {
-    callback->handleContextHubAsyncEvent(AsyncEventType::RESTARTED);
-  }
+  return callbacks;
 }
 
 void HalClientManager::updateClientIdMappingFile() {

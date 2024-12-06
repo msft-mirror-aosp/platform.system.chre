@@ -24,6 +24,7 @@
 #include "chre/core/nanoapp.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
+#include "chre/platform/event_loop_hooks.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/conditional_lock_guard.h"
@@ -34,6 +35,9 @@
 #include "chre/util/throttle.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
+
+using ::chre::message::EndpointInfo;
+using ::chre::message::EndpointType;
 
 namespace chre {
 
@@ -301,25 +305,16 @@ bool EventLoop::hasNoSpaceForHighPriorityEvent() {
                                   targetLowPriorityEventRemove);
 }
 
-bool EventLoop::deliverEventSync(uint16_t nanoappInstanceId,
-                                 uint16_t eventType,
-                                 void *eventData) {
+bool EventLoop::distributeEventSync(uint16_t eventType, void *eventData,
+                                    uint16_t targetInstanceId,
+                                    uint16_t targetGroupMask) {
   CHRE_ASSERT(inEventLoopThread());
-
   Event event(eventType, eventData,
               /* freeCallback= */ nullptr,
               /* isLowPriority= */ false,
-              /* senderInstanceId= */ kSystemInstanceId,
-              /* targetInstanceId= */ nanoappInstanceId,
-              kDefaultTargetGroupMask);
-  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if (app->getInstanceId() == nanoappInstanceId) {
-      deliverNextEvent(app, &event);
-      return true;
-    }
-  }
-
-  return false;
+              /* senderInstanceId= */ kSystemInstanceId, targetInstanceId,
+              targetGroupMask);
+  return distributeEventCommon(&event);
 }
 
 // TODO(b/264108686): Refactor this function and postSystemEvent
@@ -332,6 +327,9 @@ void EventLoop::postEventOrDie(uint16_t eventType, void *eventData,
         !allocateAndPostEvent(eventType, eventData, freeCallback,
                               /* isLowPriority= */ false, kSystemInstanceId,
                               targetInstanceId, targetGroupMask)) {
+      CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+          this, eventType, eventData, freeCallback, kSystemInstanceId,
+          targetInstanceId, targetGroupMask);
       FATAL_ERROR("Failed to post critical system event 0x%" PRIx16, eventType);
     }
   } else if (freeCallback != nullptr) {
@@ -347,6 +345,8 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
   }
 
   if (hasNoSpaceForHighPriorityEvent()) {
+    CHRE_HANDLE_EVENT_QUEUE_FULL_DURING_SYSTEM_POST(this, eventType, eventData,
+                                                    callback, extraData);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": Full of high priority "
                 "events",
@@ -355,6 +355,9 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
 
   Event *event = mEventPool.allocate(eventType, eventData, callback, extraData);
   if (event == nullptr || !mEvents.push(event)) {
+    CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+        this, eventType, eventData, callback, kSystemInstanceId,
+        kBroadcastInstanceId, kDefaultTargetGroupMask);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": out of memory",
                 eventType);
@@ -377,6 +380,9 @@ bool EventLoop::postLowPriorityEventOrFree(
     if (!eventPosted) {
       LOGE("Failed to allocate event 0x%" PRIx16 " to instanceId %" PRIu16,
            eventType, targetInstanceId);
+      CHRE_HANDLE_LOW_PRIORITY_ENQUEUE_FAILURE(
+          this, eventType, eventData, freeCallback, senderInstanceId,
+          targetInstanceId, targetGroupMask);
       ++mNumDroppedLowPriEvents;
     }
   }
@@ -408,6 +414,11 @@ Nanoapp *EventLoop::findNanoappByInstanceId(uint16_t instanceId) const {
   return lookupAppByInstanceId(instanceId);
 }
 
+Nanoapp *EventLoop::findNanoappByAppId(uint64_t appId) const {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+  return lookupAppByAppId(appId);
+}
+
 bool EventLoop::populateNanoappInfoForAppId(
     uint64_t appId, struct chreNanoappInfo *info) const {
   ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
@@ -432,8 +443,6 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
                   mEventPoolUsage.getMax(), kMaxEventCount);
   debugDump.print("  Number of low priority events dropped: %" PRIu32 "\n",
                   mNumDroppedLowPriEvents);
-  debugDump.print("  Mean event pool usage: %" PRIu32 "/%zu\n",
-                  mEventPoolUsage.getMean(), kMaxEventCount);
 
   Nanoseconds timeSince =
       SystemTime::getMonotonicTime() - mTimeLastWakeupBucketCycled;
@@ -462,6 +471,25 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
       app->logMessageHistoryEntry(debugDump);
     }
   }
+}
+
+void EventLoop::onMatchingNanoappEndpoint(
+    const pw::Function<bool(const EndpointInfo &)> &function) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+
+  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+    if (function(getEndpointInfoFromNanoappLocked(*app.get()))) {
+      break;
+    }
+  }
+}
+
+std::optional<EndpointInfo> EventLoop::getEndpointInfo(uint64_t appId) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+  Nanoapp *app = lookupAppByAppId(appId);
+  return app == nullptr
+             ? std::nullopt
+             : std::make_optional(getEndpointInfoFromNanoappLocked(*app));
 }
 
 bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
@@ -516,13 +544,27 @@ void EventLoop::deliverNextEvent(const UniquePtr<Nanoapp> &app, Event *event) {
 }
 
 void EventLoop::distributeEvent(Event *event) {
+  distributeEventCommon(event);
+  CHRE_ASSERT(event->isUnreferenced());
+  freeEvent(event);
+}
+
+bool EventLoop::distributeEventCommon(Event *event) {
   bool eventDelivered = false;
-  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if ((event->targetInstanceId == chre::kBroadcastInstanceId &&
-         app->isRegisteredForBroadcastEvent(event)) ||
-        event->targetInstanceId == app->getInstanceId()) {
-      eventDelivered = true;
-      deliverNextEvent(app, event);
+  if (event->targetInstanceId == kBroadcastInstanceId) {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (app->isRegisteredForBroadcastEvent(event)) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+      }
+    }
+  } else {
+    for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+      if (event->targetInstanceId == app->getInstanceId()) {
+        eventDelivered = true;
+        deliverNextEvent(app, event);
+        break;
+      }
     }
   }
   // Log if an event unicast to a nanoapp isn't delivered, as this is could be
@@ -535,8 +577,7 @@ void EventLoop::distributeEvent(Event *event) {
     LOGW("Dropping event 0x%" PRIx16 " from instanceId %" PRIu16 "->%" PRIu16,
          event->eventType, event->senderInstanceId, event->targetInstanceId);
   }
-  CHRE_ASSERT(event->isUnreferenced());
-  freeEvent(event);
+  return eventDelivered;
 }
 
 void EventLoop::flushInboundEventQueue() {
@@ -681,6 +722,16 @@ void EventLoop::logDanglingResources(const char *name, uint32_t count) {
     LOGE("App 0x%016" PRIx64 " had %" PRIu32 " remaining %s at unload",
          mCurrentApp->getAppId(), count, name);
   }
+}
+
+EndpointInfo EventLoop::getEndpointInfoFromNanoappLocked(
+    const Nanoapp &nanoapp) {
+  return EndpointInfo(
+      /* id= */ nanoapp.getAppId(),
+      /* name= */ nanoapp.getAppName(),
+      /* version= */ nanoapp.getAppVersion(),
+      /* type= */ EndpointType::NANOAPP,
+      /* requiredPermissions= */ nanoapp.getAppPermissions());
 }
 
 }  // namespace chre

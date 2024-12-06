@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
+
 #include "chre/core/wifi_request_manager.h"
 
 #include <cinttypes>
@@ -858,7 +860,11 @@ bool WifiRequestManager::postScanMonitorAsyncResultEvent(
       event->reserved = 0;
       event->cookie = cookie;
 
-      mScanMonitorErrorHistogram[errorCode]++;
+      if (errorCode < CHRE_ERROR_SIZE) {
+        mScanMonitorErrorHistogram[errorCode]++;
+      } else {
+        LOGE("Undefined error in ScanMonitorAsyncResult: %" PRIu8, errorCode);
+      }
 
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
           CHRE_EVENT_WIFI_ASYNC_RESULT, event, freeEventDataCallback,
@@ -896,7 +902,11 @@ bool WifiRequestManager::postScanRequestAsyncResultEvent(
     event->reserved = 0;
     event->cookie = cookie;
 
-    mActiveScanErrorHistogram[errorCode]++;
+    if (errorCode < CHRE_ERROR_SIZE) {
+      mActiveScanErrorHistogram[errorCode]++;
+    } else {
+      LOGE("Undefined error in ScanRequestAsyncResult: %" PRIu8, errorCode);
+    }
 
     EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
         CHRE_EVENT_WIFI_ASYNC_RESULT, event, freeEventDataCallback,
@@ -1410,3 +1420,5 @@ void WifiRequestManager::onSettingChanged(Setting setting, bool enabled) {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_WIFI_SUPPORT_ENABLED

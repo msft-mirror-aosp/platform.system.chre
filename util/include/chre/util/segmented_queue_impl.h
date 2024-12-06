@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 #define CHRE_UTIL_SEGMENTED_QUEUE_IMPL_H
 
+// IWYU pragma: private
 #include <algorithm>
 #include <type_traits>
 #include <utility>

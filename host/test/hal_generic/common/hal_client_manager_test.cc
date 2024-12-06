@@ -535,7 +535,7 @@ TEST_F(HalClientManagerTest, handleDeathClient) {
   EXPECT_THAT(client.endpointIds, IsEmpty());
 }
 
-TEST_F(HalClientManagerTest, handleChreRestartForConnectedClientsOnly) {
+TEST_F(HalClientManagerTest, handleChreRestart) {
   auto halClientManager = std::make_unique<HalClientManagerForTest>(
       mockDeadClientUnlinker, kClientIdMappingFilePath);
   std::shared_ptr<ContextHubCallbackForTest> vendorCallback =
@@ -550,16 +550,34 @@ TEST_F(HalClientManagerTest, handleChreRestartForConnectedClientsOnly) {
   EXPECT_TRUE(halClientManager->registerCallback(
       kVendorPid, vendorCallback, /* deathRecipientCookie= */ nullptr));
 
-  // Only connected clients' handleContextHubAsyncEvent should be called.
+  // Calls to clients' handleContextHubAsyncEvent should be postponed to HAL.
   EXPECT_CALL(*systemCallback,
-              handleContextHubAsyncEvent(AsyncEventType::RESTARTED));
+              handleContextHubAsyncEvent(AsyncEventType::RESTARTED))
+      .Times(0);
   EXPECT_CALL(*vendorCallback,
               handleContextHubAsyncEvent(AsyncEventType::RESTARTED))
       .Times(0);
 
-  // Disconnect the vendor client and handle CHRE restart for the system server
-  halClientManager->handleClientDeath(kVendorPid);
   halClientManager->handleChreRestart();
+}
+
+TEST_F(HalClientManagerTest, getAllConnectedCallbacks) {
+  auto halClientManager = std::make_unique<HalClientManagerForTest>(
+      mockDeadClientUnlinker, kClientIdMappingFilePath);
+  std::shared_ptr<ContextHubCallbackForTest> vendorCallback =
+      ContextHubCallbackForTest::make<ContextHubCallbackForTest>(kVendorUuid);
+  std::shared_ptr<ContextHubCallbackForTest> systemCallback =
+      ContextHubCallbackForTest::make<ContextHubCallbackForTest>(
+          kSystemServerUuid);
+  // Register the system callback
+  EXPECT_TRUE(halClientManager->registerCallback(
+      kSystemServerPid, systemCallback, /* deathRecipientCookie= */ nullptr));
+  // Register the vendor callback
+  EXPECT_TRUE(halClientManager->registerCallback(
+      kVendorPid, vendorCallback, /* deathRecipientCookie= */ nullptr));
+
+  EXPECT_THAT(halClientManager->getCallbacks(),
+              UnorderedElementsAre(vendorCallback, systemCallback));
 }
 
 }  // namespace

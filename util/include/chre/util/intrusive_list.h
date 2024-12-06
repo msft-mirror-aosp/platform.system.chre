@@ -110,7 +110,7 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
     using Node = ::chre::intrusive_list_internal::Node;
 
    public:
-    Iterator(Node *node) : mNode(node){};
+    Iterator(Node *node) : mNode(node) {}
 
     ListNode<ElementType> &operator*() const {
       return *reinterpret_cast<ListNode<ElementType> *>(mNode);
@@ -248,6 +248,6 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
 
 }  // namespace chre
 
-#include "chre/util/intrusive_list_impl.h"
+#include "chre/util/intrusive_list_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_INTRUSIVE_LIST_H_
