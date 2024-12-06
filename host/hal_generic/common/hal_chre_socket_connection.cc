@@ -146,6 +146,10 @@ bool HalChreSocketConnection::requestDebugDump() {
   return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
+bool HalChreSocketConnection::sendRawMessage(uint8_t *data, size_t size) {
+  return mClient.sendMessage(data, size);
+}
+
 bool HalChreSocketConnection::sendSettingChangedNotification(
     ::chre::fbs::Setting fbsSetting, ::chre::fbs::SettingState fbsState) {
   FlatBufferBuilder builder(64);
@@ -310,6 +314,11 @@ void HalChreSocketConnection::SocketCallbacks::handleDebugDumpResponse(
   ALOGV("Got debug dump response, success %d, data count %" PRIu32,
         response.success, response.data_count);
   mCallback->onDebugDumpComplete(response);
+}
+
+bool HalChreSocketConnection::SocketCallbacks::handleContextHubV4Message(
+    const ::chre::fbs::ChreMessageUnion &message) {
+  return mCallback->onContextHubV4Message(message);
 }
 
 bool HalChreSocketConnection::isExpectedLoadResponseLocked(

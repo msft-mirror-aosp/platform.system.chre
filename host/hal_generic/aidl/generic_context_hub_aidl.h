@@ -18,8 +18,10 @@
 #define ANDROID_HARDWARE_CONTEXTHUB_AIDL_CONTEXTHUB_H
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <android_chre_flags.h>
 #include <log/log.h>
 #include <atomic>
+#include <functional>
 #include <future>
 #include <map>
 #include <mutex>
@@ -27,6 +29,7 @@
 #include <unordered_set>
 
 #include "chre_host/napp_header.h"
+#include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_chre_socket_connection.h"
@@ -56,7 +59,13 @@ class ContextHub : public BnContextHub,
  public:
   ContextHub()
       : mDeathRecipient(
-            AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {}
+            AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {
+    if (::android::chre::flags::offload_implementation()) {
+      mV4Impl.emplace([this](uint8_t *data, size_t size) {
+        return mConnection.sendRawMessage(data, size);
+      });
+    }
+  }
   ::ndk::ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *out_contextHubInfos) override;
   ::ndk::ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -123,6 +132,9 @@ class ContextHub : public BnContextHub,
 
   void onDebugDumpComplete(
       const ::chre::fbs::DebugDumpResponseT &response) override;
+
+  bool onContextHubV4Message(
+      const ::chre::fbs::ChreMessageUnion &message) override;
 
   void handleServiceDeath();
   static void onServiceDied(void *cookie);
@@ -258,6 +270,11 @@ class ContextHub : public BnContextHub,
   std::shared_ptr<IContextHubCallback> mCallback;
 
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
+
+  // Implementation of the V4 API.
+  std::optional<
+      ::android::hardware::contexthub::common::implementation::ContextHubV4Impl>
+      mV4Impl{};
 
   std::map<Setting, bool> mSettingEnabled;
   std::optional<bool> mIsWifiAvailable;

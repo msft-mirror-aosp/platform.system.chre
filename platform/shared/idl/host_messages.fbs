@@ -584,6 +584,181 @@ table BtSocketCloseResponse {
   socketId:long;
 }
 
+table VendorHubInfo {
+  /// The name of the hub. Nominally a UTF-8 string, but note that we're not
+  /// using the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  name:[byte];
+
+  /// Hub version
+  version:uint;
+
+  /// Additional vendor-defined data
+  extended_info:[ubyte];
+}
+
+union MessageHubDetails {
+  HubInfoResponse,
+  VendorHubInfo,
+}
+
+table MessageHub {
+  /// The hub id. -1 is reserved and 0 is invalid. 0x416e64726f696400 represents
+  /// the ContextHub service.
+  id:long;
+
+  /// Details of the message hub.
+  details:MessageHubDetails;
+}
+
+table RegisterMessageHub {
+  hub:MessageHub;
+}
+
+table UnregisterMessageHub {
+  id:long;
+}
+
+table EndpointId {
+  /// Id of the hub hosting the endpoint
+  hubId:long;
+
+  /// The id of the endpoint scoped to the hub
+  id:long;
+}
+
+/// An enum describing the type of an endpoint.
+enum EndpointType : ubyte {
+  INVALID = 0,
+  /// The endpoint is part of the Android Framework
+  FRAMEWORK = 1,
+  /// The endpoint is an Android app
+  APP,
+  /// The endpoint is a native Android program
+  NATIVE,
+  /// The endpoint is a nanoapp
+  NANOAPP,
+  /// A generic, non-nanoapp endpoint
+  GENERIC,
+}
+
+enum RpcFormat : ubyte {
+  /// Fully custom format
+  CUSTOM = 0,
+  /// Stable AIDL defined interface using Binder marshalling
+  AIDL,
+  /// Pigweed RPC defined interface using Protobuf marshalling
+  PW_RPC,
+}
+
+table Service {
+  format:RpcFormat;
+
+  /// Service descriptor. Nominally a UTF-8 string, but note that we're not
+  /// using the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  descriptor:[byte];
+
+  /// Breaking changes should bump the major version.
+  major_version:uint;
+  /// Monotonically increasing minor version.
+  minor_version:uint;
+}
+
+table EndpointInfo {
+  id:EndpointId;
+  type:EndpointType;
+
+  /// Endpoing name. Nominally a UTF-8 string, but note that we're not using
+  /// the built-in "string" data type from FlatBuffers here, because the
+  /// generated C++ uses std::string which is not well-supported in CHRE.
+  name:[byte];
+  version:uint;
+
+  /// Values from CHRE_MESSAGE_PERMISSION_*
+  required_permissions:uint;
+  services:[Service];
+}
+
+table RegisterEndpoint {
+  endpoint:EndpointInfo;
+}
+
+table UnregisterEndpoint {
+  endpoint:EndpointId;
+}
+
+/// HAL->CHRE, indicates the HAL is coming up
+table GetMessageHubsAndEndpointsRequest {}
+table GetMessageHubsAndEndpointsResponse {
+  hubs:[MessageHub];
+  endpoints:[EndpointInfo];
+}
+
+table OpenEndpointSessionRequest {
+  id:ushort;
+  fromEndpoint:EndpointId;
+  toEndpoint:EndpointId;
+
+  /// If present, describes the service definition used over the session
+  serviceDescriptor:[byte];
+}
+
+table EndpointSessionOpened {
+  id:ushort;
+}
+
+/// "Reason"s for stopping an endpoint or session over an endpoint.
+enum Reason : ubyte {
+  /// Unspecified reason.
+  UNSPECIFIED = 0,
+  /// Out of memory. There's not enough memory to perform this operation.
+  OUT_OF_MEMORY,
+  /// Timeout. This operation timed out.
+  TIMEOUT,
+  /// Endpoint rejected this openEndpointSession request.
+  OPEN_ENDPOINT_SESSION_REQUEST_REJECTED,
+  /// Endpoint requested closeEndpointSession.
+  CLOSE_ENDPOINT_SESSION_REQUESTED,
+  /// Invalid endpoint.
+  ENDPOINT_INVALID,
+  /// Endpoint is now stopped.
+  ENDPOINT_GONE,
+  /// Endpoint crashed.
+  ENDPOINT_CRASHED,
+  /// Hub was reset or is resetting.
+  HUB_RESET,
+}
+
+table EndpointSessionClosed {
+  id:ushort;
+  reason:Reason;
+}
+
+table EndpointSessionMessage {
+  /// Id of session this message is being sent within
+  session_id:ushort;
+
+  /// Type of the message, specific to the Session protocol
+  type:uint;
+
+  /// Values from CHRE_MESSAGE_PERMISSION_*. Permissions required to read the
+  /// message.
+  permissions:uint;
+  data:[ubyte];
+
+  /// Bitmask of additional flags applied to the message:
+  /// - 0x1: Message delivery status required within 1s
+  flags:uint;
+  sequence_number:uint;
+}
+
+table EndpointSessionMessageDeliveryStatus {
+  /// Id of session the message was sent within
+  session_id:ushort;
+  status:MessageDeliveryStatus;
+}
+
 /// A union that joins together all possible messages. Note that in FlatBuffers,
 /// unions have an implicit type
 union ChreMessage {
@@ -643,6 +818,22 @@ union ChreMessage {
   BtSocketOpenResponse,
   BtSocketClose,
   BtSocketCloseResponse,
+
+  GetMessageHubsAndEndpointsRequest,
+  GetMessageHubsAndEndpointsResponse,
+
+  RegisterMessageHub,
+  UnregisterMessageHub,
+
+  RegisterEndpoint,
+  UnregisterEndpoint,
+
+  OpenEndpointSessionRequest,
+  EndpointSessionOpened,
+  EndpointSessionClosed,
+
+  EndpointSessionMessage,
+  EndpointSessionMessageDeliveryStatus,
 }
 
 struct HostAddress {

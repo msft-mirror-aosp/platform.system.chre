@@ -102,6 +102,7 @@ flag {
   namespace: "context_hub"
   description: "Enables the generic offload APIs"
   bug: "361573382"
+  is_exported: true
 }
 
 flag {
@@ -129,10 +130,20 @@ flag {
 }
 
 flag {
-  name: "bug_fix_hal_init_thread"
+  name: "bug_fix_remove_exit_call_in_hal"
   namespace: "context_hub"
-  description: "Flag enabling multiclient HAL to start anyway if connection to CHRE can't be established"
+  description: "Flag enabling multiclient HAL to gracefully handle connection to CHRE in init/restart"
   bug: "374773993"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "hal_handle_nanoapp_query_test_mode"
+  namespace: "context_hub"
+  description: "Flag guarding the fix for nanoapp query handling when enabling test mode"
+  bug: "379342519"
   metadata {
     purpose: PURPOSE_BUGFIX
   }

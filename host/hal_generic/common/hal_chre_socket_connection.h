@@ -89,6 +89,15 @@ class IChreSocketCallback {
    */
   virtual void onDebugDumpComplete(
       const ::chre::fbs::DebugDumpResponseT &response) = 0;
+
+  /**
+   * Handles a ContextHub V4+ message or returns false.
+   *
+   * @param message The union of possible messages.
+   * @return true on successful handling
+   */
+  virtual bool onContextHubV4Message(
+      const ::chre::fbs::ChreMessageUnion &message) = 0;
 };
 
 /**
@@ -116,6 +125,8 @@ class HalChreSocketConnection {
 
   bool sendSettingChangedNotification(::chre::fbs::Setting fbsSetting,
                                       ::chre::fbs::SettingState fbsState);
+
+  bool sendRawMessage(uint8_t *data, size_t size);
 
   bool onHostEndpointConnected(uint16_t hostEndpointId, uint8_t type,
                                const std::string &package_name,
@@ -155,6 +166,8 @@ class HalChreSocketConnection {
     void handleDebugDumpData(const ::chre::fbs::DebugDumpDataT &data) override;
     void handleDebugDumpResponse(
         const ::chre::fbs::DebugDumpResponseT &response) override;
+    bool handleContextHubV4Message(
+        const ::chre::fbs::ChreMessageUnion &message) override;
 
    private:
     HalChreSocketConnection &mParent;
