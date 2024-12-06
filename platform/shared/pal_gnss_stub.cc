@@ -16,7 +16,8 @@
 
 #include "chre/pal/gnss.h"
 
-const struct chrePalGnssApi *chrePalGnssGetApi(uint32_t requestedApiVersion) {
+const struct chrePalGnssApi *chrePalGnssGetApi(
+    uint32_t /*requestedApiVersion*/) {
   // This stub implementation of the CHRE PAL returns nullptr to indicate that
   // it is not supplied by this platform.
   return nullptr;

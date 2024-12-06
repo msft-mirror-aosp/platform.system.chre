@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
+#include "chre_api/chre/sensor.h"
+
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/sensor_request.h"
-#include "chre/core/sensor_type_helpers.h"
 #include "chre/util/macros.h"
 #include "chre/util/time.h"
-#include "chre_api/chre/sensor.h"
 
 using chre::EventLoopManager;
 using chre::EventLoopManagerSingleton;
+using chre::Nanoapp;
 using chre::Nanoseconds;
 using chre::SensorMode;
 using chre::SensorRequest;
@@ -36,7 +37,7 @@ DLL_EXPORT bool chreSensorFindDefault(uint8_t sensorType, uint32_t *handle) {
 DLL_EXPORT bool chreSensorFind(uint8_t sensorType, uint8_t sensorIndex,
                                uint32_t *handle) {
 #if CHRE_SENSORS_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getSensorRequestManager()
       .getSensorHandleForNanoapp(sensorType, sensorIndex, *nanoapp, handle);
@@ -53,7 +54,7 @@ DLL_EXPORT bool chreGetSensorInfo(uint32_t sensorHandle,
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
   CHRE_ASSERT(info);
 
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
 
   bool success = false;
   if (info != nullptr) {
@@ -92,7 +93,7 @@ DLL_EXPORT bool chreSensorConfigure(uint32_t sensorHandle,
                                     enum chreSensorConfigureMode mode,
                                     uint64_t interval, uint64_t latency) {
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   SensorMode sensorMode = getSensorModeFromEnum(mode);
   SensorRequest sensorRequest(nanoapp->getInstanceId(), sensorMode,
                               Nanoseconds(interval), Nanoseconds(latency));
@@ -111,7 +112,7 @@ DLL_EXPORT bool chreSensorConfigure(uint32_t sensorHandle,
 DLL_EXPORT bool chreSensorConfigureBiasEvents(uint32_t sensorHandle,
                                               bool enable) {
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getSensorRequestManager()
       .configureBiasEvents(nanoapp, sensorHandle, enable);
@@ -138,7 +139,7 @@ DLL_EXPORT bool chreSensorGetThreeAxisBias(
 DLL_EXPORT bool chreSensorFlushAsync(uint32_t sensorHandle,
                                      const void *cookie) {
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
-  chre::Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()->getSensorRequestManager().flushAsync(
       nanoapp, sensorHandle, cookie);
 #else   // CHRE_SENSORS_SUPPORT_ENABLED

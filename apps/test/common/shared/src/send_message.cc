@@ -17,20 +17,17 @@
 #include "send_message.h"
 
 #include <pb_encode.h>
-#include <cinttypes>
 
 #include "chre/util/nanoapp/callbacks.h"
 #include "chre/util/nanoapp/log.h"
 #include "chre/util/system/napp_permissions.h"
 #include "chre_api/chre.h"
-#include "chre_test_common.nanopb.h"
 
 #ifndef LOG_TAG
 #define LOG_TAG "[TestShared]"
 #endif
 
-namespace chre {
-namespace test_shared {
+namespace chre::test_shared {
 namespace {
 
 bool encodeErrorMessage(pb_ostream_t *stream, const pb_field_t * /*field*/,
@@ -46,6 +43,21 @@ bool encodeErrorMessage(pb_ostream_t *stream, const pb_field_t * /*field*/,
 
 }  // namespace
 
+chre_test_common_TestResult makeTestResultProtoMessage(bool success,
+                                                       const char *errMessage) {
+  chre_test_common_TestResult testResult =
+      chre_test_common_TestResult_init_default;
+  testResult.has_code = true;
+  testResult.code = success ? chre_test_common_TestResult_Code_PASSED
+                            : chre_test_common_TestResult_Code_FAILED;
+  if (!success && errMessage != nullptr) {
+    testResult.errorMessage = {.funcs = {.encode = encodeErrorMessage},
+                               .arg = const_cast<char *>(errMessage)};
+    LOGE("%s", errMessage);
+  }
+  return testResult;
+}
+
 void sendTestResultWithMsgToHost(uint16_t hostEndpointId, uint32_t messageType,
                                  bool success, const char *errMessage,
                                  bool abortOnFailure) {
@@ -56,15 +68,8 @@ void sendTestResultWithMsgToHost(uint16_t hostEndpointId, uint32_t messageType,
     success = false;
   }
 
-  chre_test_common_TestResult result = chre_test_common_TestResult_init_default;
-  result.has_code = true;
-  result.code = success ? chre_test_common_TestResult_Code_PASSED
-                        : chre_test_common_TestResult_Code_FAILED;
-  if (!success && errMessage != nullptr) {
-    result.errorMessage = {.funcs = {.encode = encodeErrorMessage},
-                           .arg = const_cast<char *>(errMessage)};
-    LOGE("%s", errMessage);
-  }
+  chre_test_common_TestResult result =
+      makeTestResultProtoMessage(success, errMessage);
 
   sendMessageToHost(hostEndpointId, &result, chre_test_common_TestResult_fields,
                     messageType);
@@ -126,6 +131,4 @@ void sendMessageToHostWithPermissions(uint16_t hostEndpointId,
   }
 }
 
-}  // namespace test_shared
-
-}  // namespace chre
+}  // namespace chre::test_shared
