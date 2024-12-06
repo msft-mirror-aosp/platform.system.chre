@@ -20,7 +20,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -212,6 +211,9 @@ class MessageHubManager {
   // Callback registered to pass up the id of a host hub which disconnected.
   using HostHubDownCb = std::function<void(int64_t hubId)>;
 
+  // The base session id for sessions initiated from host endpoints.
+  static constexpr uint16_t kHostSessionIdBase = 0x8000;
+
   explicit MessageHubManager(HostHubDownCb cb);
   ~MessageHubManager() = default;
 
@@ -261,6 +263,13 @@ class MessageHubManager {
       EXCLUDES(mLock);
 
   /**
+   * Apply the given function to each host hub.
+   *
+   * @param fn The function to apply.
+   */
+  void forEachHostHub(std::function<void(HostHub &hub)> fn);
+
+  /**
    * Wipes and initializes the cache of embedded hubs and endpoints
    *
    * This should only be called once during startup as it invalidates session
@@ -286,8 +295,9 @@ class MessageHubManager {
    * Removes the hub with given id from the cache
    *
    * @param id The id of the hub to remove
+   * @return The ids of all endpoints on the embedded hub
    */
-  void removeEmbeddedHub(int64_t id) EXCLUDES(mLock);
+  std::vector<EndpointId> removeEmbeddedHub(int64_t id) EXCLUDES(mLock);
 
   /**
    * Returns the cached list of embedded message hubs
@@ -390,9 +400,6 @@ class MessageHubManager {
 
   // The Linux uid of the system_server.
   static constexpr uid_t kSystemServerUid = 1000;
-
-  // The base session id for sessions initiated from host endpoints.
-  static constexpr uint16_t kHostSessionIdBase = 0x8000;
 
   // Invoked on client death. Cleans up references to the client.
   static void onClientDeath(void *cookie);
