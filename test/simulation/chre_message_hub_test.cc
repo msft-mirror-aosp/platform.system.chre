@@ -46,7 +46,7 @@ EndpointInfo kEndpointInfos[kNumEndpoints] = {
     EndpointInfo(/* id= */ 1, /* name= */ "endpoint1", /* version= */ 1,
                  EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE),
     EndpointInfo(/* id= */ 2, /* name= */ "endpoint2", /* version= */ 10,
-                 EndpointType::HOST_ENDPOINT, CHRE_MESSAGE_PERMISSION_BLE),
+                 EndpointType::HOST_NATIVE, CHRE_MESSAGE_PERMISSION_BLE),
     EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 
