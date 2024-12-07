@@ -203,7 +203,11 @@ class MessageRouter {
       const pw::Function<bool(const MessageHubInfo &)> &function);
 
  private:
-  //! Unregisters a MessageHub from the MessageRouter.
+  //! Unregisters a MessageHub from the MessageRouter. This function will
+  //! close all sessions that were initiated by or connected to the MessageHub
+  //! and destroy the MessageHubRecord. This function will call the callback
+  //! for each session that was closed only for the other message hub in the
+  //! session.
   //! @return true if the MessageHub was unregistered, false if the MessageHub
   //! was not found.
   bool unregisterMessageHub(MessageHubId fromMessageHubId);
