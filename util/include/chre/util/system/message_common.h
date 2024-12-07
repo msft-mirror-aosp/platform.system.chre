@@ -35,10 +35,10 @@ using EndpointId = uint64_t;
 using SessionId = uint16_t;
 
 //! An invalid MessageHub ID
-constexpr MessageHubId MESSAGE_HUB_ID_INVALID = UINT64_MAX;
+constexpr MessageHubId MESSAGE_HUB_ID_INVALID = 0;
 
 //! An invalid endpoint ID
-constexpr EndpointId ENDPOINT_ID_INVALID = UINT64_MAX;
+constexpr EndpointId ENDPOINT_ID_INVALID = 0;
 
 //! An invalid session ID
 constexpr SessionId SESSION_ID_INVALID = UINT16_MAX;
