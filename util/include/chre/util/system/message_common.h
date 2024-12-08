@@ -34,17 +34,35 @@ using EndpointId = uint64_t;
 //! The ID of a session
 using SessionId = uint16_t;
 
-//! An invalid session ID
-constexpr static SessionId SESSION_ID_INVALID = UINT16_MAX;
-
 //! An invalid MessageHub ID
-constexpr static MessageHubId MESSAGE_HUB_ID_INVALID = UINT64_MAX;
+constexpr MessageHubId MESSAGE_HUB_ID_INVALID = 0;
+
+//! An invalid endpoint ID
+constexpr EndpointId ENDPOINT_ID_INVALID = 0;
+
+//! An invalid session ID
+constexpr SessionId SESSION_ID_INVALID = UINT16_MAX;
 
 //! Endpoint types
 enum class EndpointType : uint8_t {
-  NANOAPP = 0,
-  GENERIC = 1,
-  HOST_ENDPOINT = 2,
+  HOST_FRAMEWORK = 1,
+  HOST_APP = 2,
+  HOST_NATIVE = 3,
+  NANOAPP = 4,
+  GENERIC = 5,
+};
+
+//! Endpoint permissions
+//! This should match CHRE permissions.
+// TODO(b/373417024): Update permissions to this typed name in all MessageRouter
+// code
+enum class EndpointPermission : uint32_t {
+  NONE = 0,
+  AUDIO = 1,
+  GNSS = 1 << 1,
+  WIFI = 1 << 2,
+  WWAN = 1 << 3,
+  BLE = 1 << 4,
 };
 
 //! Represents a single endpoint connected to a MessageHub

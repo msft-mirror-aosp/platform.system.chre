@@ -74,11 +74,13 @@ class MessageRouter {
     //! Callback called to iterate over all endpoints connected to the
     //! MessageHub. Underlying endpoint storage must not change during this
     //! callback. If function returns true, the MessageHub can stop iterating
-    //! over future endpoints.
+    //! over future endpoints. This function should not call any MessageRouter
+    //! or MessageHub functions.
     virtual void forEachEndpoint(
         const pw::Function<bool(const EndpointInfo &)> &function) = 0;
 
-    //! @return The EndpointInfo for the given endpoint ID
+    //! @return The EndpointInfo for the given endpoint ID. This function should
+    //! not call any MessageRouter or MessageHub functions.
     virtual std::optional<EndpointInfo> getEndpointInfo(
         EndpointId endpointId) = 0;
   };
@@ -184,6 +186,12 @@ class MessageRouter {
       MessageHubId messageHubId,
       const pw::Function<bool(const EndpointInfo &)> &function);
 
+  //! Executes the function for each endpoint connected to all Message Hubs.
+  //! The lock is held when calling the callback.
+  void forEachEndpoint(
+      const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
+          &function);
+
   //! @return The EndpointInfo for the given hub and endpoint IDs
   std::optional<EndpointInfo> getEndpointInfo(MessageHubId messageHubId,
                                               EndpointId endpointId);
@@ -195,7 +203,11 @@ class MessageRouter {
       const pw::Function<bool(const MessageHubInfo &)> &function);
 
  private:
-  //! Unregisters a MessageHub from the MessageRouter.
+  //! Unregisters a MessageHub from the MessageRouter. This function will
+  //! close all sessions that were initiated by or connected to the MessageHub
+  //! and destroy the MessageHubRecord. This function will call the callback
+  //! for each session that was closed only for the other message hub in the
+  //! session.
   //! @return true if the MessageHub was unregistered, false if the MessageHub
   //! was not found.
   bool unregisterMessageHub(MessageHubId fromMessageHubId);

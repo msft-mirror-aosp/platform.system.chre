@@ -17,8 +17,10 @@
 #include <inttypes.h>
 #include <cstring>
 #include <optional>
+#include <utility>
 
 #include "chre/platform/log.h"
+#include "chre/util/dynamic_vector.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
@@ -125,6 +127,29 @@ bool MessageRouter::forEachEndpointOfHub(
   return true;
 }
 
+void MessageRouter::forEachEndpoint(
+    const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
+        &function) {
+  LockGuard<Mutex> lock(mMutex);
+
+  struct Context {
+    decltype(function) function;
+    MessageHubInfo &messageHubInfo;
+  };
+  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+    Context context = {
+        .function = function,
+        .messageHubInfo = messageHubRecord.info,
+    };
+
+    messageHubRecord.callback->forEachEndpoint(
+        [&context](const EndpointInfo &endpointInfo) {
+          context.function(context.messageHubInfo, endpointInfo);
+          return false;
+        });
+  }
+}
+
 std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
     MessageHubId messageHubId, EndpointId endpointId) {
   MessageRouter::MessageHubCallback *callback =
@@ -148,21 +173,47 @@ void MessageRouter::forEachMessageHub(
 }
 
 bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
-  LockGuard<Mutex> lock(mMutex);
+  DynamicVector<std::pair<MessageHubCallback *, Session>> sessionsToDestroy;
 
-  // Sessions will be cleaned up asynchronously when an operation is called
-  // using them. We do not clean them up here to avoid a race condition where
-  // the hub is being destructed but the lock is not held due to calling the
-  // callback. We prefer to not copy sessions and callbacks in some dynamic
-  // structure and instead prefer to let the session close asynchronously.
+  {
+    LockGuard<Mutex> lock(mMutex);
 
-  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
-    if (messageHubRecord.info.id == fromMessageHubId) {
-      mMessageHubs.erase(&messageHubRecord);
-      return true;
+    bool success = false;
+    for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+      if (messageHubRecord.info.id == fromMessageHubId) {
+        mMessageHubs.erase(&messageHubRecord);
+        success = true;
+        break;
+      }
+    }
+    if (!success) {
+      return false;
+    }
+
+    for (size_t i = 0; i < mSessions.size();) {
+      Session &session = mSessions[i];
+      bool initiatorIsFromHub =
+          session.initiator.messageHubId == fromMessageHubId;
+      bool peerIsFromHub = session.peer.messageHubId == fromMessageHubId;
+
+      if (initiatorIsFromHub || peerIsFromHub) {
+        MessageHubCallback *callback = getCallbackFromMessageHubIdLocked(
+            initiatorIsFromHub ? session.peer.messageHubId
+                               : session.initiator.messageHubId);
+        sessionsToDestroy.push_back(std::make_pair(callback, session));
+        mSessions.erase(&mSessions[i]);
+      } else {
+        ++i;
+      }
     }
   }
-  return false;
+
+  for (auto [callback, session] : sessionsToDestroy) {
+    if (callback != nullptr) {
+      callback->onSessionClosed(session);
+    }
+  }
+  return true;
 }
 
 SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
@@ -171,7 +222,8 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
                                      EndpointId toEndpointId) {
   if (fromMessageHubId == toMessageHubId) {
     LOGE(
-        "Failed to open session: initiator and peer message hubs are the same");
+        "Failed to open session: initiator and peer message hubs are the "
+        "same");
     return SESSION_ID_INVALID;
   }
 

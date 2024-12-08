@@ -37,13 +37,14 @@
 
 namespace android::hardware::contexthub::common::implementation {
 
-MessageHubManager::HostHub::~HostHub() {
+using HostHub = MessageHubManager::HostHub;
+
+HostHub::~HostHub() {
   std::lock_guard lock(mManager.mLock);
   unlinkCallbackIfNecessaryLocked();
 }
 
-pw::Status MessageHubManager::HostHub::setCallback(
-    std::shared_ptr<IEndpointCallback> callback) {
+pw::Status HostHub::setCallback(std::shared_ptr<IEndpointCallback> callback) {
   std::lock_guard lock(mManager.mLock);
   auto *cookie = new DeathRecipientCookie{&mManager, kPid};
   if (AIBinder_linkToDeath(callback->asBinder().get(),
@@ -60,14 +61,13 @@ pw::Status MessageHubManager::HostHub::setCallback(
   return pw::OkStatus();
 }
 
-std::shared_ptr<IEndpointCallback> MessageHubManager::HostHub::getCallback()
-    const {
+std::shared_ptr<IEndpointCallback> HostHub::getCallback() const {
   std::lock_guard lock(mManager.mLock);
   return mCallback;
 }
 
-pw::Status MessageHubManager::HostHub::addEndpoint(std::weak_ptr<HostHub> self,
-                                                   const EndpointInfo &info) {
+pw::Status HostHub::addEndpoint(std::weak_ptr<HostHub> self,
+                                const EndpointInfo &info) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
   int64_t id = info.id.id;
@@ -93,7 +93,7 @@ pw::Status MessageHubManager::HostHub::addEndpoint(std::weak_ptr<HostHub> self,
   return pw::OkStatus();
 }
 
-pw::Status MessageHubManager::HostHub::removeEndpoint(const EndpointId &id) {
+pw::Status HostHub::removeEndpoint(const EndpointId &id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
   if (auto it = mIdToEndpoint.find(id.id); it != mIdToEndpoint.end()) {
@@ -105,8 +105,8 @@ pw::Status MessageHubManager::HostHub::removeEndpoint(const EndpointId &id) {
   return pw::Status::NotFound();
 }
 
-pw::Result<std::pair<uint16_t, uint16_t>>
-MessageHubManager::HostHub::reserveSessionIdRange(uint16_t size) {
+pw::Result<std::pair<uint16_t, uint16_t>> HostHub::reserveSessionIdRange(
+    uint16_t size) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
   if (!size || size > kSessionIdMaxRange) {
@@ -124,11 +124,9 @@ MessageHubManager::HostHub::reserveSessionIdRange(uint16_t size) {
   return mSessionIdRanges.back();
 }
 
-pw::Result<std::shared_ptr<MessageHubManager::HostHub>>
-MessageHubManager::HostHub::openSession(std::weak_ptr<HostHub> self,
-                                        const EndpointId &localId,
-                                        const EndpointId &remoteId,
-                                        uint16_t sessionId) {
+pw::Result<std::shared_ptr<HostHub>> HostHub::openSession(
+    std::weak_ptr<HostHub> self, const EndpointId &localId,
+    const EndpointId &remoteId, uint16_t sessionId) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
 
@@ -183,7 +181,7 @@ MessageHubManager::HostHub::openSession(std::weak_ptr<HostHub> self,
   return prunedHostHub;
 }
 
-pw::Status MessageHubManager::HostHub::closeSession(uint16_t id) {
+pw::Status HostHub::closeSession(uint16_t id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
   auto it = mManager.mIdToSession.find(id);
@@ -201,20 +199,20 @@ pw::Status MessageHubManager::HostHub::closeSession(uint16_t id) {
   return pw::OkStatus();
 }
 
-pw::Status MessageHubManager::HostHub::ackSession(uint16_t id) {
+pw::Status HostHub::ackSession(uint16_t id) {
   return mManager.ackSessionAndGetHostHub(id).status();
 }
 
-pw::Status MessageHubManager::HostHub::checkSessionOpen(uint16_t id) {
+pw::Status HostHub::checkSessionOpen(uint16_t id) {
   return mManager.checkSessionOpenAndGetHostHub(id).status();
 }
 
-int64_t MessageHubManager::HostHub::id() const {
+int64_t HostHub::id() const {
   std::lock_guard lock(mManager.mLock);
   return kId;
 }
 
-int64_t MessageHubManager::MessageHubManager::HostHub::unlinkFromManager() {
+int64_t MessageHubManager::HostHub::unlinkFromManager() {
   std::lock_guard lock(mManager.mLock);
   // TODO(b/378545373): Release the session id range.
   if (kId != kHubIdInvalid) mManager.mIdToHostHub.erase(kId);
@@ -223,7 +221,7 @@ int64_t MessageHubManager::MessageHubManager::HostHub::unlinkFromManager() {
   return kId;
 }
 
-void MessageHubManager::HostHub::unlinkCallbackIfNecessaryLocked() {
+void HostHub::unlinkCallbackIfNecessaryLocked() {
   if (!mCallback) return;
   if (AIBinder_unlinkToDeath(mCallback->asBinder().get(),
                              mManager.mDeathRecipient.get(),
@@ -234,7 +232,7 @@ void MessageHubManager::HostHub::unlinkCallbackIfNecessaryLocked() {
   mCookie = nullptr;
 }
 
-pw::Status MessageHubManager::HostHub::checkValidLocked() {
+pw::Status HostHub::checkValidLocked() {
   if (!mCallback) {
     ALOGW("Endpoint APIs invoked by client %d before callback registered",
           kPid);
@@ -246,8 +244,8 @@ pw::Status MessageHubManager::HostHub::checkValidLocked() {
   return pw::OkStatus();
 }
 
-pw::Result<std::shared_ptr<EndpointInfo>>
-MessageHubManager::HostHub::getEndpointLocked(const EndpointId &id) {
+pw::Result<std::shared_ptr<EndpointInfo>> HostHub::getEndpointLocked(
+    const EndpointId &id) {
   if (id.hubId != kId) {
     LOGE("Rejecting lookup on unowned endpoint (%ld, %ld) from hub %ld",
          id.hubId, id.id, kId);
@@ -258,7 +256,7 @@ MessageHubManager::HostHub::getEndpointLocked(const EndpointId &id) {
   return pw::Status::NotFound();
 }
 
-bool MessageHubManager::HostHub::sessionIdInRangeLocked(uint16_t id) {
+bool HostHub::sessionIdInRangeLocked(uint16_t id) {
   for (auto range : mSessionIdRanges) {
     if (id >= range.first && id <= range.second) return true;
   }
@@ -276,8 +274,7 @@ MessageHubManager::MessageHubManager(HostHubDownCb cb)
       });
 }
 
-std::shared_ptr<MessageHubManager::HostHub> MessageHubManager::getHostHubByPid(
-    pid_t pid) {
+std::shared_ptr<HostHub> MessageHubManager::getHostHubByPid(pid_t pid) {
   std::lock_guard lock(mLock);
   if (auto it = mPidToHostHub.find(pid); it != mPidToHostHub.end())
     return it->second;
@@ -286,15 +283,15 @@ std::shared_ptr<MessageHubManager::HostHub> MessageHubManager::getHostHubByPid(
   return hub;
 }
 
-std::shared_ptr<MessageHubManager::HostHub>
-MessageHubManager::getHostHubByEndpointId(const EndpointId &id) {
+std::shared_ptr<HostHub> MessageHubManager::getHostHubByEndpointId(
+    const EndpointId &id) {
   std::lock_guard lock(mLock);
   if (auto it = mIdToHostHub.find(id.hubId); it != mIdToHostHub.end())
     return it->second.lock();
   return {};
 }
 
-pw::Result<std::shared_ptr<MessageHubManager::HostHub>>
+pw::Result<std::shared_ptr<HostHub>>
 MessageHubManager::checkSessionOpenAndGetHostHub(uint16_t id) {
   std::lock_guard lock(mLock);
   PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
@@ -308,8 +305,8 @@ MessageHubManager::checkSessionOpenAndGetHostHub(uint16_t id) {
   return pw::Status::FailedPrecondition();
 }
 
-pw::Result<std::shared_ptr<MessageHubManager::HostHub>>
-MessageHubManager::ackSessionAndGetHostHub(uint16_t id) {
+pw::Result<std::shared_ptr<HostHub>> MessageHubManager::ackSessionAndGetHostHub(
+    uint16_t id) {
   std::lock_guard lock(mLock);
   PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
   bool isBinderCall = AIBinder_isHandlingTransaction();
@@ -334,6 +331,15 @@ MessageHubManager::ackSessionAndGetHostHub(uint16_t id) {
     LOGE("Received unexpected ack on session %hu, host: %d", id, isBinderCall);
   }
   return std::move(session.hub);
+}
+
+void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
+  std::list<std::shared_ptr<HostHub>> hubs;
+  {
+    std::lock_guard lock(mLock);
+    for (auto &[pid, hub] : mPidToHostHub) hubs.push_back(hub);
+  }
+  for (auto &hub : hubs) fn(*hub);
 }
 
 pw::Result<MessageHubManager::SessionStrongRef>
@@ -370,9 +376,16 @@ void MessageHubManager::addEmbeddedHub(const HubInfo &hub) {
   mIdToEmbeddedHub[hub.hubId].info = hub;
 }
 
-void MessageHubManager::removeEmbeddedHub(int64_t id) {
+std::vector<EndpointId> MessageHubManager::removeEmbeddedHub(int64_t id) {
   std::lock_guard lock(mLock);
-  mIdToEmbeddedHub.erase(id);
+  std::vector<EndpointId> endpoints;
+  auto it = mIdToEmbeddedHub.find(id);
+  if (it != mIdToEmbeddedHub.end()) {
+    for (const auto &[endpointId, info] : it->second.idToEndpoint)
+      endpoints.push_back({.id = endpointId, .hubId = id});
+    mIdToEmbeddedHub.erase(it);
+  }
+  return endpoints;
 }
 
 std::vector<HubInfo> MessageHubManager::getEmbeddedHubs() const {
