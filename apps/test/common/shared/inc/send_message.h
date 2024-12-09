@@ -46,7 +46,9 @@ void sendTestResultToHost(uint16_t hostEndpointId, uint32_t messageType,
  * @param success True if the test succeeded.
  * @param errMessage Nullable error message to send to the host. Error message
  *     will only be sent if success is false.
- * @param abortOnFailure If true, calls chreAbort() if success is false.
+ * @param abortOnFailure If true, calls chreAbort() if success is false. This
+ *     should only be set to true in legacy tests, as crashing CHRE makes the
+ *     test failure more difficult to understand.
  */
 void sendTestResultWithMsgToHost(uint16_t hostEndpointId, uint32_t messageType,
                                  bool success, const char *errMessage,
