@@ -24,6 +24,7 @@
 #include "chre/core/nanoapp.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
+#include "chre/platform/event_loop_hooks.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/conditional_lock_guard.h"
@@ -326,6 +327,9 @@ void EventLoop::postEventOrDie(uint16_t eventType, void *eventData,
         !allocateAndPostEvent(eventType, eventData, freeCallback,
                               /* isLowPriority= */ false, kSystemInstanceId,
                               targetInstanceId, targetGroupMask)) {
+      CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+          this, eventType, eventData, freeCallback, kSystemInstanceId,
+          targetInstanceId, targetGroupMask);
       FATAL_ERROR("Failed to post critical system event 0x%" PRIx16, eventType);
     }
   } else if (freeCallback != nullptr) {
@@ -341,6 +345,8 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
   }
 
   if (hasNoSpaceForHighPriorityEvent()) {
+    CHRE_HANDLE_EVENT_QUEUE_FULL_DURING_SYSTEM_POST(this, eventType, eventData,
+                                                    callback, extraData);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": Full of high priority "
                 "events",
@@ -349,6 +355,9 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
 
   Event *event = mEventPool.allocate(eventType, eventData, callback, extraData);
   if (event == nullptr || !mEvents.push(event)) {
+    CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+        this, eventType, eventData, callback, kSystemInstanceId,
+        kBroadcastInstanceId, kDefaultTargetGroupMask);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": out of memory",
                 eventType);
@@ -371,6 +380,9 @@ bool EventLoop::postLowPriorityEventOrFree(
     if (!eventPosted) {
       LOGE("Failed to allocate event 0x%" PRIx16 " to instanceId %" PRIu16,
            eventType, targetInstanceId);
+      CHRE_HANDLE_LOW_PRIORITY_ENQUEUE_FAILURE(
+          this, eventType, eventData, freeCallback, senderInstanceId,
+          targetInstanceId, targetGroupMask);
       ++mNumDroppedLowPriEvents;
     }
   }

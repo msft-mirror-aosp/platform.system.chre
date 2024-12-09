@@ -704,7 +704,7 @@ table OpenEndpointSessionRequest {
   serviceDescriptor:[byte];
 }
 
-table OnEndpointSessionOpened {
+table EndpointSessionOpened {
   id:ushort;
 }
 
@@ -730,7 +730,7 @@ enum Reason : ubyte {
   HUB_RESET,
 }
 
-table OnEndpointSessionClosed {
+table EndpointSessionClosed {
   id:ushort;
   reason:Reason;
 }
@@ -829,8 +829,8 @@ union ChreMessage {
   UnregisterEndpoint,
 
   OpenEndpointSessionRequest,
-  OnEndpointSessionOpened,
-  OnEndpointSessionClosed,
+  EndpointSessionOpened,
+  EndpointSessionClosed,
 
   EndpointSessionMessage,
   EndpointSessionMessageDeliveryStatus,
