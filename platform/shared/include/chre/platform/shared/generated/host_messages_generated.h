@@ -162,11 +162,11 @@ struct GetMessageHubsAndEndpointsResponseBuilder;
 struct OpenEndpointSessionRequest;
 struct OpenEndpointSessionRequestBuilder;
 
-struct OnEndpointSessionOpened;
-struct OnEndpointSessionOpenedBuilder;
+struct EndpointSessionOpened;
+struct EndpointSessionOpenedBuilder;
 
-struct OnEndpointSessionClosed;
-struct OnEndpointSessionClosedBuilder;
+struct EndpointSessionClosed;
+struct EndpointSessionClosedBuilder;
 
 struct EndpointSessionMessage;
 struct EndpointSessionMessageBuilder;
@@ -666,8 +666,8 @@ enum class ChreMessage : uint8_t {
   RegisterEndpoint = 41,
   UnregisterEndpoint = 42,
   OpenEndpointSessionRequest = 43,
-  OnEndpointSessionOpened = 44,
-  OnEndpointSessionClosed = 45,
+  EndpointSessionOpened = 44,
+  EndpointSessionClosed = 45,
   EndpointSessionMessage = 46,
   EndpointSessionMessageDeliveryStatus = 47,
   MIN = NONE,
@@ -720,8 +720,8 @@ inline const ChreMessage (&EnumValuesChreMessage())[48] {
     ChreMessage::RegisterEndpoint,
     ChreMessage::UnregisterEndpoint,
     ChreMessage::OpenEndpointSessionRequest,
-    ChreMessage::OnEndpointSessionOpened,
-    ChreMessage::OnEndpointSessionClosed,
+    ChreMessage::EndpointSessionOpened,
+    ChreMessage::EndpointSessionClosed,
     ChreMessage::EndpointSessionMessage,
     ChreMessage::EndpointSessionMessageDeliveryStatus
   };
@@ -774,8 +774,8 @@ inline const char * const *EnumNamesChreMessage() {
     "RegisterEndpoint",
     "UnregisterEndpoint",
     "OpenEndpointSessionRequest",
-    "OnEndpointSessionOpened",
-    "OnEndpointSessionClosed",
+    "EndpointSessionOpened",
+    "EndpointSessionClosed",
     "EndpointSessionMessage",
     "EndpointSessionMessageDeliveryStatus",
     nullptr
@@ -965,12 +965,12 @@ template<> struct ChreMessageTraits<chre::fbs::OpenEndpointSessionRequest> {
   static const ChreMessage enum_value = ChreMessage::OpenEndpointSessionRequest;
 };
 
-template<> struct ChreMessageTraits<chre::fbs::OnEndpointSessionOpened> {
-  static const ChreMessage enum_value = ChreMessage::OnEndpointSessionOpened;
+template<> struct ChreMessageTraits<chre::fbs::EndpointSessionOpened> {
+  static const ChreMessage enum_value = ChreMessage::EndpointSessionOpened;
 };
 
-template<> struct ChreMessageTraits<chre::fbs::OnEndpointSessionClosed> {
-  static const ChreMessage enum_value = ChreMessage::OnEndpointSessionClosed;
+template<> struct ChreMessageTraits<chre::fbs::EndpointSessionClosed> {
+  static const ChreMessage enum_value = ChreMessage::EndpointSessionClosed;
 };
 
 template<> struct ChreMessageTraits<chre::fbs::EndpointSessionMessage> {
@@ -4448,8 +4448,8 @@ inline flatbuffers::Offset<OpenEndpointSessionRequest> CreateOpenEndpointSession
       serviceDescriptor__);
 }
 
-struct OnEndpointSessionOpened FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  typedef OnEndpointSessionOpenedBuilder Builder;
+struct EndpointSessionOpened FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointSessionOpenedBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ID = 4
   };
@@ -4463,35 +4463,35 @@ struct OnEndpointSessionOpened FLATBUFFERS_FINAL_CLASS : private flatbuffers::Ta
   }
 };
 
-struct OnEndpointSessionOpenedBuilder {
-  typedef OnEndpointSessionOpened Table;
+struct EndpointSessionOpenedBuilder {
+  typedef EndpointSessionOpened Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
   void add_id(uint16_t id) {
-    fbb_.AddElement<uint16_t>(OnEndpointSessionOpened::VT_ID, id, 0);
+    fbb_.AddElement<uint16_t>(EndpointSessionOpened::VT_ID, id, 0);
   }
-  explicit OnEndpointSessionOpenedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit EndpointSessionOpenedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  OnEndpointSessionOpenedBuilder &operator=(const OnEndpointSessionOpenedBuilder &);
-  flatbuffers::Offset<OnEndpointSessionOpened> Finish() {
+  EndpointSessionOpenedBuilder &operator=(const EndpointSessionOpenedBuilder &);
+  flatbuffers::Offset<EndpointSessionOpened> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<OnEndpointSessionOpened>(end);
+    auto o = flatbuffers::Offset<EndpointSessionOpened>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<OnEndpointSessionOpened> CreateOnEndpointSessionOpened(
+inline flatbuffers::Offset<EndpointSessionOpened> CreateEndpointSessionOpened(
     flatbuffers::FlatBufferBuilder &_fbb,
     uint16_t id = 0) {
-  OnEndpointSessionOpenedBuilder builder_(_fbb);
+  EndpointSessionOpenedBuilder builder_(_fbb);
   builder_.add_id(id);
   return builder_.Finish();
 }
 
-struct OnEndpointSessionClosed FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
-  typedef OnEndpointSessionClosedBuilder Builder;
+struct EndpointSessionClosed FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointSessionClosedBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ID = 4,
     VT_REASON = 6
@@ -4510,33 +4510,33 @@ struct OnEndpointSessionClosed FLATBUFFERS_FINAL_CLASS : private flatbuffers::Ta
   }
 };
 
-struct OnEndpointSessionClosedBuilder {
-  typedef OnEndpointSessionClosed Table;
+struct EndpointSessionClosedBuilder {
+  typedef EndpointSessionClosed Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
   void add_id(uint16_t id) {
-    fbb_.AddElement<uint16_t>(OnEndpointSessionClosed::VT_ID, id, 0);
+    fbb_.AddElement<uint16_t>(EndpointSessionClosed::VT_ID, id, 0);
   }
   void add_reason(chre::fbs::Reason reason) {
-    fbb_.AddElement<uint8_t>(OnEndpointSessionClosed::VT_REASON, static_cast<uint8_t>(reason), 0);
+    fbb_.AddElement<uint8_t>(EndpointSessionClosed::VT_REASON, static_cast<uint8_t>(reason), 0);
   }
-  explicit OnEndpointSessionClosedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+  explicit EndpointSessionClosedBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  OnEndpointSessionClosedBuilder &operator=(const OnEndpointSessionClosedBuilder &);
-  flatbuffers::Offset<OnEndpointSessionClosed> Finish() {
+  EndpointSessionClosedBuilder &operator=(const EndpointSessionClosedBuilder &);
+  flatbuffers::Offset<EndpointSessionClosed> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = flatbuffers::Offset<OnEndpointSessionClosed>(end);
+    auto o = flatbuffers::Offset<EndpointSessionClosed>(end);
     return o;
   }
 };
 
-inline flatbuffers::Offset<OnEndpointSessionClosed> CreateOnEndpointSessionClosed(
+inline flatbuffers::Offset<EndpointSessionClosed> CreateEndpointSessionClosed(
     flatbuffers::FlatBufferBuilder &_fbb,
     uint16_t id = 0,
     chre::fbs::Reason reason = chre::fbs::Reason::UNSPECIFIED) {
-  OnEndpointSessionClosedBuilder builder_(_fbb);
+  EndpointSessionClosedBuilder builder_(_fbb);
   builder_.add_id(id);
   builder_.add_reason(reason);
   return builder_.Finish();
@@ -4860,11 +4860,11 @@ struct MessageContainer FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const chre::fbs::OpenEndpointSessionRequest *message_as_OpenEndpointSessionRequest() const {
     return message_type() == chre::fbs::ChreMessage::OpenEndpointSessionRequest ? static_cast<const chre::fbs::OpenEndpointSessionRequest *>(message()) : nullptr;
   }
-  const chre::fbs::OnEndpointSessionOpened *message_as_OnEndpointSessionOpened() const {
-    return message_type() == chre::fbs::ChreMessage::OnEndpointSessionOpened ? static_cast<const chre::fbs::OnEndpointSessionOpened *>(message()) : nullptr;
+  const chre::fbs::EndpointSessionOpened *message_as_EndpointSessionOpened() const {
+    return message_type() == chre::fbs::ChreMessage::EndpointSessionOpened ? static_cast<const chre::fbs::EndpointSessionOpened *>(message()) : nullptr;
   }
-  const chre::fbs::OnEndpointSessionClosed *message_as_OnEndpointSessionClosed() const {
-    return message_type() == chre::fbs::ChreMessage::OnEndpointSessionClosed ? static_cast<const chre::fbs::OnEndpointSessionClosed *>(message()) : nullptr;
+  const chre::fbs::EndpointSessionClosed *message_as_EndpointSessionClosed() const {
+    return message_type() == chre::fbs::ChreMessage::EndpointSessionClosed ? static_cast<const chre::fbs::EndpointSessionClosed *>(message()) : nullptr;
   }
   const chre::fbs::EndpointSessionMessage *message_as_EndpointSessionMessage() const {
     return message_type() == chre::fbs::ChreMessage::EndpointSessionMessage ? static_cast<const chre::fbs::EndpointSessionMessage *>(message()) : nullptr;
@@ -5063,12 +5063,12 @@ template<> inline const chre::fbs::OpenEndpointSessionRequest *MessageContainer:
   return message_as_OpenEndpointSessionRequest();
 }
 
-template<> inline const chre::fbs::OnEndpointSessionOpened *MessageContainer::message_as<chre::fbs::OnEndpointSessionOpened>() const {
-  return message_as_OnEndpointSessionOpened();
+template<> inline const chre::fbs::EndpointSessionOpened *MessageContainer::message_as<chre::fbs::EndpointSessionOpened>() const {
+  return message_as_EndpointSessionOpened();
 }
 
-template<> inline const chre::fbs::OnEndpointSessionClosed *MessageContainer::message_as<chre::fbs::OnEndpointSessionClosed>() const {
-  return message_as_OnEndpointSessionClosed();
+template<> inline const chre::fbs::EndpointSessionClosed *MessageContainer::message_as<chre::fbs::EndpointSessionClosed>() const {
+  return message_as_EndpointSessionClosed();
 }
 
 template<> inline const chre::fbs::EndpointSessionMessage *MessageContainer::message_as<chre::fbs::EndpointSessionMessage>() const {
@@ -5349,12 +5349,12 @@ inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, 
       auto ptr = reinterpret_cast<const chre::fbs::OpenEndpointSessionRequest *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case ChreMessage::OnEndpointSessionOpened: {
-      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionOpened *>(obj);
+    case ChreMessage::EndpointSessionOpened: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionOpened *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case ChreMessage::OnEndpointSessionClosed: {
-      auto ptr = reinterpret_cast<const chre::fbs::OnEndpointSessionClosed *>(obj);
+    case ChreMessage::EndpointSessionClosed: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointSessionClosed *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case ChreMessage::EndpointSessionMessage: {
