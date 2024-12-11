@@ -113,7 +113,6 @@ void ChreMessageHubManager::onSessionClosedCallback(
 }
 
 bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
-                                              size_t length,
                                               uint32_t messageType,
                                               uint32_t messagePermissions,
                                               const Session &session,
@@ -129,7 +128,7 @@ bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
       .messageType = messageType,
       .messagePermissions = messagePermissions,
       .message = data.get(),
-      .messageSize = length,
+      .messageSize = data.size(),
       .sessionId = session.sessionId,
   };
   messageCallbackData->data = std::move(data);
