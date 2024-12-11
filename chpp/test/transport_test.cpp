@@ -72,7 +72,6 @@ class TransportTests : public testing::TestWithParam<int> {
   void SetUp() override {
     chppClearTotalAllocBytes();
     memset(&gChppLinuxLinkContext, 0, sizeof(struct ChppLinuxLinkState));
-    gChppLinuxLinkContext.manualSendCycle = true;
     gChppLinuxLinkContext.linkEstablished = true;
     gChppLinuxLinkContext.isLinkActive = true;
     const struct ChppLinkApi *linkApi = getLinuxLinkApi();
@@ -145,7 +144,7 @@ TEST_P(TransportTests, RxPayloadOfZeros) {
 
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   if (len <= kMaxChunkSize) {
     size_t loc = 0;
@@ -212,7 +211,7 @@ TEST_P(TransportTests, RxPayloadOfZeros) {
                 CHPP_TRANSPORT_ERROR_NONE);
       EXPECT_EQ(mTransportContext.txDatagramQueue.pending, 0);
 
-      WaitForTransport(&mTransportContext);
+      waitForLinkSendDone();
 
       // Check response packet fields
       struct ChppTransportHeader *txHeader =
@@ -251,7 +250,7 @@ TEST_F(TransportTests, LinkSendDonePreamble) {
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   size_t loc = 0;
   addPreambleToBuf(mBuf, &loc);
@@ -279,7 +278,7 @@ TEST_F(TransportTests, LinkSendDoneHeader) {
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   size_t loc = 0;
   addPreambleToBuf(mBuf, &loc);
@@ -307,7 +306,7 @@ TEST_F(TransportTests, LinkSendDonePayload) {
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   size_t loc = 0;
   addPreambleToBuf(mBuf, &loc);
@@ -340,7 +339,7 @@ TEST_F(TransportTests, LinkSendDoneFooter) {
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   size_t loc = 0;
   addPreambleToBuf(mBuf, &loc);
@@ -417,7 +416,7 @@ TEST_P(TransportTests, LoopbackPayloadOfZeros) {
 
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
   t1.join();
 
@@ -449,7 +448,7 @@ TEST_P(TransportTests, DiscoveryAndTransactionID) {
 
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
   t1.join();
 
@@ -581,7 +580,7 @@ TEST_F(TransportTests, CRC32DaisyChained) {
 TEST_F(TransportTests, WwanOpen) {
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   uint8_t ackSeq = 1;
   uint8_t seq = 0;
@@ -624,7 +623,7 @@ TEST_F(TransportTests, WwanOpen) {
 TEST_F(TransportTests, WifiOpen) {
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   uint8_t ackSeq = 1;
   uint8_t seq = 0;
@@ -668,7 +667,7 @@ TEST_F(TransportTests, WifiOpen) {
 TEST_F(TransportTests, GnssOpen) {
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   uint8_t ackSeq = 1;
   uint8_t seq = 0;
@@ -715,7 +714,7 @@ TEST_F(TransportTests, Discovery) {
 
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   addPreambleToBuf(mBuf, &len);
 
@@ -772,7 +771,7 @@ TEST_F(TransportTests, UnopenedClient) {
 
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
   t1.join();
 
@@ -793,7 +792,7 @@ TEST_F(TransportTests, UnopenedClient) {
 TEST_F(TransportTests, DiscardedPacketTest) {
   mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
-  WaitForTransport(&mTransportContext);
+  waitForLinkSendDone();
 
   // Send packet to RX thread after manually setting to resetting state.
   // We expect this packet to get dropped, but this test checks for any
@@ -847,7 +846,7 @@ void messageToInvalidHandle(ChppTransportState *transportContext,
 
   transportContext->txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, transportContext);
-  WaitForTransport(transportContext);
+  waitForLinkSendDone();
   chppWorkThreadStop(transportContext);
   t1.join();
 

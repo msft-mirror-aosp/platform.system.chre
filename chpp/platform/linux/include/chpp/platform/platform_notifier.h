@@ -29,7 +29,8 @@ extern "C" {
 struct ChppNotifier {
   pthread_cond_t cond;     // Condition variable
   struct ChppMutex mutex;  // Platform-specific mutex
-  uint32_t signal;
+  uint32_t signal;         // The 32-bit signal value stored when calling
+                           // chppNotifierSignal().
 };
 
 /**
