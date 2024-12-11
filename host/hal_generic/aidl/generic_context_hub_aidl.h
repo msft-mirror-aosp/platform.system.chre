@@ -106,7 +106,7 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus registerEndpointCallback(
       const std::shared_ptr<IEndpointCallback> &callback) override;
   ::ndk::ScopedAStatus requestSessionIdRange(
-      int32_t size, std::vector<int32_t> *ids) override;
+      int32_t size, std::array<int32_t, 2> *ids) override;
   ::ndk::ScopedAStatus openEndpointSession(
       int32_t sessionId, const EndpointId &destination,
       const EndpointId &initiator,
