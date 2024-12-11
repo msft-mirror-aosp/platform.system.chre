@@ -63,7 +63,7 @@ class MessageRouter {
     //! initiator of the session
     //! @return true if the message was accepted for processing
     virtual bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
-                                   size_t length, uint32_t messageType,
+                                   uint32_t messageType,
                                    uint32_t messagePermissions,
                                    const Session &session,
                                    bool sentBySessionInitiator) = 0;
@@ -127,16 +127,14 @@ class MessageRouter {
     //! is closed and subsequent calls to this function with the same sessionId
     //! will return false.
     //! @param data The data to send
-    //! @param length The length of the data to send
     //! @param messageType The type of the message, a bit flagged value
     //! @param messagePermissions The permissions of the message, a bit flagged
     //! value
     //! @param sessionId The session to send the message on
     //! @return true if the message was sent, false if the message could not be
     //! sent
-    bool sendMessage(pw::UniquePtr<std::byte[]> &&data, size_t length,
-                     uint32_t messageType, uint32_t messagePermissions,
-                     SessionId sessionId);
+    bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
+                     uint32_t messagePermissions, SessionId sessionId);
 
     //! @return The MessageHub ID of the currently connected MessageHub
     MessageHubId getId();
@@ -238,9 +236,9 @@ class MessageRouter {
   //! @see MessageHub::sendMessage
   //! @return true if the message was sent, false if the message could not be
   //! sent
-  bool sendMessage(pw::UniquePtr<std::byte[]> &&data, size_t length,
-                   uint32_t messageType, uint32_t messagePermissions,
-                   SessionId sessionId, MessageHubId fromMessageHubId);
+  bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
+                   uint32_t messagePermissions, SessionId sessionId,
+                   MessageHubId fromMessageHubId);
 
   //! @return The MessageHubRecord for the given MessageHub ID
   const MessageHubRecord *getMessageHubRecordLocked(MessageHubId messageHubId);
