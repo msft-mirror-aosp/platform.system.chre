@@ -32,6 +32,7 @@
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <array>
 #include <chrono>
 #include <deque>
 #include <memory>
@@ -99,7 +100,7 @@ class MultiClientContextHubBase
   ScopedAStatus registerEndpointCallback(
       const std::shared_ptr<IEndpointCallback> &callback) override;
   ScopedAStatus requestSessionIdRange(int32_t size,
-                                      std::vector<int32_t> *ids) override;
+                                      std::array<int32_t, 2> *ids) override;
   ScopedAStatus openEndpointSession(
       int32_t sessionId, const EndpointId &destination,
       const EndpointId &initiator,
