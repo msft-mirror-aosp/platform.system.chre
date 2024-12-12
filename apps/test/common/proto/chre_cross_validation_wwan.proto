@@ -1,0 +1,48 @@
+syntax = "proto2";
+
+package chre_cross_validation_wwan;
+
+option java_package = "com.google.android.chre.nanoapp.proto";
+option java_outer_classname = "ChreCrossValidationWwan";
+
+enum MessageType {
+  // Reserved for corrupted messages
+  UNDEFINED = 0;
+
+  // CHRE to Host: Indicates an error occurred in the nanoapp. The payload is
+  // in the format of ChreTestCommon.TestResult
+  WWAN_NANOAPP_ERROR = 1;
+
+  // Host to CHRE: Requests CHRE to provide the WWAN Capabilities. No payload.
+  WWAN_CAPABILITIES_REQUEST = 2;
+
+  // CHRE to Host: Nanoapp response to WWAN_CAPABILITIES_REQUEST. The payload
+  // must be a WwanCapabilities message.
+  WWAN_CAPABILITIES = 3;
+
+  // Host to CHRE: Requests Cell Info. No payload.
+  WWAN_CELL_INFO_REQUEST = 4;
+
+  // CHRE to Host: Nanoapp response to WWAN_CELL_INFO_REQUEST. The payload must
+  // be a WwanScanResult
+  WWAN_CELL_INFO_RESULTS = 5;
+}
+
+/*
+ * The wwan capabilities listed in
+ * //system/chre/chre_api/include/chre_api/chre/wwan.h
+ */
+message WwanCapabilities {
+  optional uint32 wwanCapabilities = 1;
+}
+
+/*
+ * Derived from the chreWwanCellInfoResult in the wwan CHRE API @
+ * //system/chre/chre_api/include/chre_api/chre/wwan.h
+ */
+message WwanCellInfoResult {
+  // The error code taken from the chreWwanCellInfoResult
+  optional uint32 errorCode = 1;
+  // The total number of results that will be sent to the AP.
+  optional uint32 cellInfoCount = 2;
+}

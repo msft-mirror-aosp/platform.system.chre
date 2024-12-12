@@ -26,9 +26,19 @@
 
 namespace chre {
 
+namespace {
+bool inline isRpcChannelIdHost(uint32_t id) {
+  return id >> 16 == 1;
+}
+
+bool inline isRpcChannelIdNanoapp(uint32_t id) {
+  return id >> 16 == 0;
+}
+}  // namespace
+
 bool rpcEndpointsMatch(uint32_t expectedId, uint32_t actualId) {
   if ((expectedId & kRpcClientIdMask) != (actualId & kRpcClientIdMask)) {
-    LOGE("Invalid endpoint 0x%04" PRIx32 " expected 0x%04" PRIx32, actualId,
+    LOGE("Invalid endpoint 0x%04" PRIx32 ", expected 0x%04" PRIx32, actualId,
          expectedId);
     return false;
   }
@@ -36,21 +46,14 @@ bool rpcEndpointsMatch(uint32_t expectedId, uint32_t actualId) {
   return true;
 }
 
-bool isRpcChannelIdHost(uint32_t id) {
-  return id >> 16 == 1;
-}
-
-bool isRpcChannelIdNanoapp(uint32_t id) {
-  return id >> 16 == 0;
-}
-
 bool validateHostChannelId(const chreMessageFromHostData *msg,
                            uint32_t channelId) {
-  struct chreHostEndpointInfo info;
+  struct chreHostEndpointInfo info {};
 
   if (!isRpcChannelIdHost(channelId) ||
       !chreGetHostEndpointInfo(msg->hostEndpoint, &info)) {
-    LOGE("Invalid channelId for a host client 0x%08" PRIx32, channelId);
+    LOGE("Invalid channelId 0x%" PRIx32 "for host endpoint %" PRIu16, channelId,
+         msg->hostEndpoint);
     return false;
   }
 

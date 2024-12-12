@@ -610,7 +610,7 @@ ScopedAStatus MultiClientContextHubBase::registerEndpointCallback(
 }
 
 ScopedAStatus MultiClientContextHubBase::requestSessionIdRange(
-    int32_t size, std::vector<int32_t> *ids) {
+    int32_t size, std::array<int32_t, 2> *ids) {
   if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
