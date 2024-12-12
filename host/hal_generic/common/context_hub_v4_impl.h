@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <array>
 #include <functional>
 #include <optional>
 #include <string>
@@ -61,7 +62,8 @@ class ContextHubV4Impl {
   ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint);
   ScopedAStatus registerEndpointCallback(
       const std::shared_ptr<IEndpointCallback> &callback);
-  ScopedAStatus requestSessionIdRange(int32_t size, std::vector<int32_t> *ids);
+  ScopedAStatus requestSessionIdRange(int32_t size,
+                                      std::array<int32_t, 2> *ids);
   ScopedAStatus openEndpointSession(
       int32_t sessionId, const EndpointId &destination,
       const EndpointId &initiator,

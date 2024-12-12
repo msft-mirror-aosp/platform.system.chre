@@ -68,12 +68,12 @@ std::optional<Session> MessageRouter::MessageHub::getSessionWithId(
 }
 
 bool MessageRouter::MessageHub::sendMessage(pw::UniquePtr<std::byte[]> &&data,
-                                            size_t length, uint32_t messageType,
+                                            uint32_t messageType,
                                             uint32_t messagePermissions,
                                             SessionId sessionId) {
   return mRouter == nullptr
              ? false
-             : mRouter->sendMessage(std::move(data), length, messageType,
+             : mRouter->sendMessage(std::move(data), messageType,
                                     messagePermissions, sessionId, mHubId);
 }
 
@@ -319,7 +319,7 @@ std::optional<Session> MessageRouter::getSessionWithId(
 }
 
 bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
-                                size_t length, uint32_t messageType,
+                                uint32_t messageType,
                                 uint32_t messagePermissions,
                                 SessionId sessionId,
                                 MessageHubId fromMessageHubId) {
@@ -346,7 +346,7 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
   bool success = false;
   if (receiverCallback != nullptr) {
     success = receiverCallback->onMessageReceived(
-        std::move(data), length, messageType, messagePermissions, session,
+        std::move(data), messageType, messagePermissions, session,
         session.initiator.messageHubId == fromMessageHubId);
   }
 
