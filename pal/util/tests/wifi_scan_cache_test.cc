@@ -20,14 +20,22 @@
 #include <cinttypes>
 #include <cstring>
 
+#include "chre/platform/linux/system_time.h"
 #include "chre/platform/log.h"
 #include "chre/platform/shared/pal_system_api.h"
 #include "chre/util/fixed_size_vector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nanoapp/wifi.h"
 #include "chre/util/optional.h"
+#include "chre/util/time.h"
 #include "chre_api/chre/common.h"
 #include "gtest/gtest.h"
+
+using chre::Milliseconds;
+using chre::Nanoseconds;
+using chre::Seconds;
+using chre::platform_linux::clearMonotonicTimeOverride;
+using chre::platform_linux::overrideMonotonicTime;
 
 namespace {
 
@@ -72,6 +80,7 @@ class WifiScanCacheTests : public ::testing::Test {
 
   void TearDown() override {
     chreWifiScanCacheDeinit();
+    clearMonotonicTimeOverride();
   }
 
   void clearTestState() {
@@ -488,4 +497,57 @@ TEST_F(WifiScanCacheTests, IncomingRequestDuringCachePopulationTest) {
   EXPECT_EQ(gWifiScanResponse->pending, true);
   EXPECT_EQ(gWifiScanResponse->errorCode, CHRE_ERROR_NONE);
   EXPECT_EQ(gWifiScanResultList.size(), 2);
+}
+
+TEST_F(WifiScanCacheTests, AgeCalculatedCorrectly) {
+  constexpr auto kStartTime = Seconds(4);
+  overrideMonotonicTime(kStartTime);
+  beginDefaultWifiCache(nullptr /* scannedFreqList */,
+                        0 /* scannedFreqListLen */);
+
+  overrideMonotonicTime(kStartTime + Milliseconds(100));
+  chreWifiScanResult result = {};
+  chreWifiScanCacheScanEventAdd(&result);
+
+  overrideMonotonicTime(kStartTime + Milliseconds(500));
+  chreWifiScanCacheScanEventEnd(CHRE_ERROR_NONE);
+
+  ASSERT_EQ(gWifiScanResultList.size(), 1);
+  EXPECT_EQ(gWifiScanResultList[0].ageMs, 500 - 100);
+}
+
+TEST_F(WifiScanCacheTests, AgeLongUptime) {
+  constexpr auto kStartTime = Seconds(60 * 60 * 24 * 50);  // 50 days
+  overrideMonotonicTime(kStartTime);
+  beginDefaultWifiCache(nullptr /* scannedFreqList */,
+                        0 /* scannedFreqListLen */);
+
+  overrideMonotonicTime(kStartTime + Milliseconds(500));
+  chreWifiScanResult result = {};
+  chreWifiScanCacheScanEventAdd(&result);
+
+  overrideMonotonicTime(kStartTime + Milliseconds(4000));
+  chreWifiScanCacheScanEventEnd(CHRE_ERROR_NONE);
+
+  ASSERT_EQ(gWifiScanResultList.size(), 1);
+  EXPECT_EQ(gWifiScanResultList[0].ageMs, 4000 - 500);
+}
+
+TEST_F(WifiScanCacheTests, AgeAvoidsUnderflow) {
+  constexpr auto kStartTime = Seconds(30);
+  constexpr auto kEndTime = kStartTime + Seconds(5);
+  overrideMonotonicTime(kStartTime);
+  beginDefaultWifiCache(nullptr /* scannedFreqList */,
+                        0 /* scannedFreqListLen */);
+
+  overrideMonotonicTime(Nanoseconds(0));
+  chreWifiScanResult result = {};
+  chreWifiScanCacheScanEventAdd(&result);
+
+  overrideMonotonicTime(kEndTime);
+  chreWifiScanCacheScanEventEnd(CHRE_ERROR_NONE);
+
+  ASSERT_EQ(gWifiScanResultList.size(), 1);
+  EXPECT_LT(gWifiScanResultList[0].ageMs,
+            Milliseconds(kEndTime - kStartTime).getMilliseconds());
 }

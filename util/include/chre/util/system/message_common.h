@@ -106,24 +106,21 @@ struct Message {
   Endpoint recipient;
   SessionId sessionId;
   pw::UniquePtr<std::byte[]> data;
-  size_t length;
   uint32_t messageType;
   uint32_t messagePermissions;
 
   Message()
       : sessionId(SESSION_ID_INVALID),
         data(nullptr),
-        length(0),
         messageType(0),
         messagePermissions(0) {}
-  Message(pw::UniquePtr<std::byte[]> &&data, size_t length,
+  Message(pw::UniquePtr<std::byte[]> &&data,
           uint32_t messageType, uint32_t messagePermissions, Session session,
           bool sentBySessionInitiator)
       : sender(sentBySessionInitiator ? session.initiator : session.peer),
         recipient(sentBySessionInitiator ? session.peer : session.initiator),
         sessionId(session.sessionId),
         data(std::move(data)),
-        length(length),
         messageType(messageType),
         messagePermissions(messagePermissions) {}
   Message(Message &&other)
@@ -131,7 +128,6 @@ struct Message {
         recipient(other.recipient),
         sessionId(other.sessionId),
         data(std::move(other.data)),
-        length(other.length),
         messageType(other.messageType),
         messagePermissions(other.messagePermissions) {}
 
@@ -143,7 +139,6 @@ struct Message {
     recipient = other.recipient;
     sessionId = other.sessionId;
     data = std::move(other.data);
-    length = other.length;
     messageType = other.messageType;
     messagePermissions = other.messagePermissions;
     return *this;

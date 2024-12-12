@@ -1571,6 +1571,7 @@ bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
 // TODO(b/192359485): Consider removing this function, or making it more robust.
 void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
                                 enum ChppTransportErrorCode errorCode) {
+  chppMutexLock(&context->mutex);
   bool resetting = (context->resetState == CHPP_RESET_STATE_RESETTING);
   if (resetting) {
     CHPP_LOGE("Discarding app error 0x%" PRIx8 " (resetting)", errorCode);
@@ -1593,6 +1594,7 @@ void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
     chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
                                      CHPP_TRANSPORT_ATTR_NONE, errorCode));
   }
+  chppMutexUnlock(&context->mutex);
 }
 
 uint64_t chppTransportGetTimeUntilNextDoWorkNs(

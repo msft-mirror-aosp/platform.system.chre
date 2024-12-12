@@ -73,7 +73,7 @@ class ChreMessageHubManager
 
   //! Definitions for MessageHubCallback
   //! @see MessageRouter::MessageHubCallback
-  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data, size_t length,
+  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                          uint32_t messageType, uint32_t messagePermissions,
                          const message::Session &session,
                          bool sentBySessionInitiator) override;
