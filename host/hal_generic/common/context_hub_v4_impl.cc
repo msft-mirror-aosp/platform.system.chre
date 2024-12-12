@@ -114,7 +114,7 @@ ScopedAStatus ContextHubV4Impl::registerEndpointCallback(
 }
 
 ScopedAStatus ContextHubV4Impl::requestSessionIdRange(
-    int32_t size, std::vector<int32_t> *ids) {
+    int32_t size, std::array<int32_t, 2> *ids) {
   std::shared_ptr<HostHub> hub =
       mManager.getHostHubByPid(AIBinder_getCallingPid());
   assert(hub != nullptr);
@@ -125,7 +125,6 @@ ScopedAStatus ContextHubV4Impl::requestSessionIdRange(
          size, hub->id(), statusOrRange.status().code());
     return fromPwStatus(statusOrRange.status());
   }
-  ids->resize(2);
   (*ids)[0] = statusOrRange->first;
   (*ids)[1] = statusOrRange->second;
   return ScopedAStatus::ok();
