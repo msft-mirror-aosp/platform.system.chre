@@ -45,7 +45,11 @@ void DramVoteClient::issueDramVote(bool /*enabled*/) {}
 void forceDramAccess() {}
 
 void nanoappBinaryFree(void *pointer) {
+#ifdef NANOAPP_ALWAYS_IN_DRAM
+  aligned_dram_free(pointer);
+#else
   aligned_free(pointer);
+#endif
 }
 
 void nanoappBinaryDramFree(void *pointer) {
@@ -69,6 +73,9 @@ void palSystemApiMemoryFree(void *pointer) {
 }
 
 void *nanoappBinaryAlloc(size_t size, size_t alignment) {
+#ifdef NANOAPP_ALWAYS_IN_DRAM
+  return aligned_dram_malloc(size, alignment);
+#endif
   return aligned_malloc(size, alignment);
 }
 
