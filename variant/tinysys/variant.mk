@@ -1,3 +1,8 @@
+#
+# Google Reference CHRE framework build customization for tinysys platforms.
+#
+# Build customization of nanoapps can be found in aosp_riscv*_tinysys.mk.
+#
 
 ifeq ($(ANDROID_BUILD_TOP),)
 $(error "You should supply an ANDROID_BUILD_TOP environment variable \
@@ -68,7 +73,7 @@ TINYSYS_CFLAGS += -DCHRE_MAX_EVENT_BLOCKS=4
 CHRE_AUDIO_SUPPORT_ENABLED = true
 CHRE_GNSS_SUPPORT_ENABLED = true
 CHRE_SENSORS_SUPPORT_ENABLED = true
-CHRE_WIFI_SUPPORT_ENABLED = false
+CHRE_WIFI_SUPPORT_ENABLED = true
 CHRE_WWAN_SUPPORT_ENABLED = false
 CHRE_BLE_SUPPORT_ENABLED = true
 

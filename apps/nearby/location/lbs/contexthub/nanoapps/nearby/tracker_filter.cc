@@ -58,6 +58,8 @@ void TrackerFilter::Update(
       filter_config.notify_threshold_tracker_count;
   batch_config_.max_history_count = filter_config.max_history_count;
   batch_config_.lost_timeout_ms = filter_config.lost_timeout_ms;
+  batch_config_.opportunistic_flush_threshold_time_ms =
+      filter_config.opportunistic_flush_threshold_time_ms;
 }
 
 void TrackerFilter::MatchAndSave(

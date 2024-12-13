@@ -17,65 +17,18 @@
 #include "chre/util/system/stats_container.h"
 #include "gtest/gtest.h"
 
-TEST(StatsContainer, MeanBasicTest) {
+TEST(StatsContainer, MaxBasicTest) {
   chre::StatsContainer<uint8_t> testContainer;
 
-  ASSERT_EQ(testContainer.getMean(), 0);
+  ASSERT_EQ(testContainer.getMax(), 0);
 
-  testContainer.addValue(10);
   testContainer.addValue(20);
-  ASSERT_EQ(testContainer.getMean(), 15);
+  testContainer.addValue(10);
+  ASSERT_EQ(testContainer.getMax(), 20);
 
   testContainer.addValue(40);
-  ASSERT_EQ(testContainer.getMean(), (10 + 20 + 40) / 3);
-}
+  ASSERT_EQ(testContainer.getMax(), 40);
 
-TEST(StatsContainer, UINTMeanOverflowTest) {
-  chre::StatsContainer<uint8_t> testContainer;
-
-  testContainer.addValue(200);
-  testContainer.addValue(100);
-  ASSERT_EQ(testContainer.getMean(), 150);
-}
-
-TEST(StatsContainer, AddSmallerValueThanMeanCheck) {
-  chre::StatsContainer<uint16_t> testContainer;
-
-  testContainer.addValue(10);
-  testContainer.addValue(20);
   testContainer.addValue(30);
-  ASSERT_EQ(testContainer.getMean(), 20);
-
-  testContainer.addValue(4);
-  ASSERT_EQ(testContainer.getMean(), 16);
-}
-
-TEST(StatsContainer, AddBiggerValueThanMeanCheck) {
-  chre::StatsContainer<uint16_t> testContainer;
-
-  testContainer.addValue(10);
-  testContainer.addValue(20);
-  testContainer.addValue(30);
-  ASSERT_EQ(testContainer.getMean(), 20);
-
-  testContainer.addValue(40);
-  ASSERT_EQ(testContainer.getMean(), 25);
-}
-
-TEST(StatsContainer, OverAverageWindowCheck) {
-  uint64_t maxCount = 3;
-  chre::StatsContainer<uint16_t> testContainer(maxCount);
-
-  testContainer.addValue(10);
-  testContainer.addValue(20);
-  testContainer.addValue(30);
-  ASSERT_EQ(testContainer.getMean(), 20);
-
-  testContainer.addValue(40);
-
-  /**
-   * Only check if StatsContainer still works after have more element than its
-   * averageWindow. Does not check the correctness of the estimated value
-   */
-  ASSERT_GT(testContainer.getMean(), 20);
+  ASSERT_EQ(testContainer.getMax(), 40);
 }

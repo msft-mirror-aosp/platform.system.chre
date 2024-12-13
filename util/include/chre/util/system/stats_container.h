@@ -17,7 +17,6 @@
 #ifndef CHRE_UTIL_SYSTEM_STATS_CONTAINER_H_
 #define CHRE_UTIL_SYSTEM_STATS_CONTAINER_H_
 
-#include <cinttypes>
 #include <type_traits>
 
 #include "chre/util/macros.h"
@@ -36,38 +35,16 @@ class StatsContainer {
  public:
   /**
    * @brief Construct a new Stats Container object
-   *
-   * @param averageWindow_ how many data stored before prioritizing new data,
-   * it should not be bigger than the default value to prevent rounding to 0
    */
-  StatsContainer(uint32_t averageWindow_ = 512)
-      : mAverageWindow(averageWindow_) {}
+  StatsContainer() {}
 
   /**
-   * Add a new value to the metric collection and update mean/max value
-   * Mean calculated in rolling bases to prevent overflow by accumulating too
-   * much data.
+   * Add a new value to the metric collection and update max value
    *
-   * Before mCount reaches mAverageWindow, it calculates the normal average
-   * After mCount reaches mAverageWindow, weighted average is used to prioritize
-   * recent data where the new value always contributes 1/mAverageWindow amount
-   * to the average
    * @param value a T instance
    */
   void addValue(T value) {
-    if (mCount < mAverageWindow) {
-      ++mCount;
-    }
-    mMean = (mCount - 1) * (mMean / mCount) + value / mCount;
     mMax = MAX(value, mMax);
-  }
-
-  /**
-   * @return the average value calculated by the description of the
-   * addValue method
-   */
-  T getMean() const {
-    return mMean;
   }
 
   /**
@@ -77,20 +54,7 @@ class StatsContainer {
     return mMax;
   }
 
-  /**
-   * @return the average window
-   */
-  uint32_t getAverageWindow() const {
-    return mAverageWindow;
-  }
-
  private:
-  //! Mean of the collections of this stats
-  T mMean = 0;
-  //! Number of collections of this stats
-  uint32_t mCount = 0;
-  //! The Window that the container will not do weighted average
-  uint32_t mAverageWindow;
   //! Max of stats
   T mMax = 0;
 };

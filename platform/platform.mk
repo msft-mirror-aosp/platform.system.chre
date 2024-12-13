@@ -182,7 +182,6 @@ endif
 
 SLPI_QSH_SRCS += platform/slpi/see/island_vote_client.cc
 SLPI_QSH_SRCS += platform/slpi/see/power_control_manager.cc
-SLPI_QSH_SRCS += platform/slpi/qsh/qsh_proto_shim.cc
 
 ifeq ($(CHRE_USE_BUFFERED_LOGGING), true)
 SLPI_QSH_SRCS += platform/shared/log_buffer.cc
@@ -527,9 +526,3 @@ TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
 
-TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
-TINYSYS_CFLAGS += $(MBEDTLS_CFLAGS)
-
-TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
-TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
-TINYSYS_CFLAGS += -DCHRE_NANOAPP_LOAD_ALIGNMENT=4096

@@ -589,7 +589,11 @@ bool GnssSession::postAsyncResultEvent(uint16_t instanceId, bool success,
       event->reserved = 0;
       event->cookie = cookie;
 
-      mGnssErrorHistogram[errorCode]++;
+      if (errorCode < CHRE_ERROR_SIZE) {
+        mGnssErrorHistogram[errorCode]++;
+      } else {
+        LOGE("Undefined error in gnssAsyncResult: %" PRIu8, errorCode);
+      }
 
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
           CHRE_EVENT_GNSS_ASYNC_RESULT, event, freeEventDataCallback,

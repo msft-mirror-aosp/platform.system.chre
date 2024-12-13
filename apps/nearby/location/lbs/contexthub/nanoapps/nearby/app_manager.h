@@ -122,6 +122,9 @@ class AppManager : public TrackerStorageCallbackInterface {
   // BLE scan keep alive timer callback.
   void OnBleScanKeepAliveTimerCallback();
 
+  // Handles host awake event.
+  void HandleHostAwakeEvent();
+
   // Handles tracker filter config request from the host.
   bool HandleExtTrackerFilterConfig(
       const chreHostEndpointInfo &host_info,
@@ -188,6 +191,7 @@ class AppManager : public TrackerStorageCallbackInterface {
       screen_on_filter_extension_results_;
   uint64_t fp_filter_cache_time_nanosec_;
   uint64_t fp_filter_cache_expire_nanosec_ = kFpFilterResultExpireTimeNanoSec;
+  uint64_t last_tracker_report_flush_time_nanosec_;
 #ifdef NEARBY_PROFILE
   ashProfileData profile_data_;
 #endif

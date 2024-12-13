@@ -180,6 +180,6 @@ class Optional {
 
 }  // namespace chre
 
-#include "chre/util/optional_impl.h"
+#include "chre/util/optional_impl.h"  // IWYU pragma: export
 
 #endif  // UTIL_CHRE_OPTIONAL_H_
