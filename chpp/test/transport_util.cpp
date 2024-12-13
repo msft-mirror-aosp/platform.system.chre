@@ -34,6 +34,7 @@
 #include "chpp/common/wifi_types.h"
 #include "chpp/common/wwan.h"
 #include "chpp/crc.h"
+#include "chpp/log.h"
 #include "chpp/macros.h"
 #include "chpp/memory.h"
 #include "chpp/platform/platform_link.h"
@@ -44,21 +45,6 @@
 #include "chre/pal/wwan.h"
 
 namespace chpp::test {
-
-/**
- * Wait for chppTransportDoWork() to finish after it is notified by
- * chppEnqueueTxPacket to run.
- */
-void WaitForTransport(struct ChppTransportState *transportContext) {
-  // Start sending data out.
-  cycleSendThread();
-  // Wait for data to be received and processed.
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-  // Should have reset loc and length for next packet / datagram
-  EXPECT_EQ(transportContext->rxStatus.locInDatagram, 0);
-  EXPECT_EQ(transportContext->rxDatagram.length, 0);
-}
 
 /**
  * Validates a ChppTestResponse. Since the error field within the
@@ -234,7 +220,7 @@ void openService(ChppTransportState *transportContext, uint8_t *buf,
   EXPECT_EQ(transportContext->rxStatus.state, CHPP_STATE_PREAMBLE);
 
   // Wait for response
-  WaitForTransport(transportContext);
+  waitForLinkSendDone();
 
   // Validate common response fields
   EXPECT_EQ(validateChppTestResponse(chppLinuxLinkContext.buf, nextSeq, handle,
@@ -288,7 +274,7 @@ void sendCommandToService(ChppTransportState *transportContext, uint8_t *buf,
   EXPECT_EQ(transportContext->rxStatus.state, CHPP_STATE_PREAMBLE);
 
   // Wait for response
-  WaitForTransport(transportContext);
+  waitForLinkSendDone();
 
   // Validate common response fields
   EXPECT_EQ(validateChppTestResponse(chppLinuxLinkContext.buf, nextSeq, handle,

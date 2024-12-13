@@ -34,19 +34,6 @@ namespace chre {
  * @return whether the nanoapp IDs match (lower 16b).
  */
 bool rpcEndpointsMatch(uint32_t expectedId, uint32_t actualId);
-
-/**
- * @param id Channel ID.
- * @return whether the channel ID is a host client.
- */
-bool isRpcChannelIdHostClient(uint32_t id);
-
-/**
- * @param id Channel ID.
- * @return whether the channel ID is a nanoapp client.
- */
-bool isRpcChannelIdNanoappClient(uint32_t id);
-
 /**
  * Validates that the host client sending the message matches the expected
  * channel ID.

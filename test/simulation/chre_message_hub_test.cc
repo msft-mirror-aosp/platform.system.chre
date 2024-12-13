@@ -79,7 +79,7 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
   MessageHubCallbackStoreData(Message *message, Session *session)
       : mMessage(message), mSession(session) {}
 
-  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data, size_t length,
+  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                          uint32_t messageType, uint32_t messagePermissions,
                          const Session &session,
                          bool sentBySessionInitiator) override {
@@ -90,7 +90,6 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
           sentBySessionInitiator ? session.peer : session.initiator;
       mMessage->sessionId = session.sessionId;
       mMessage->data = std::move(data);
-      mMessage->length = length;
       mMessage->messageType = messageType;
       mMessage->messagePermissions = messagePermissions;
     }
@@ -276,7 +275,7 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoapp) {
 
   // Send the message to the nanoapp
   std::unique_lock<std::mutex> lock(mutex);
-  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData), kMessageSize,
+  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
   condVar.wait(lock);
@@ -339,7 +338,7 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoappPermissionFailure) {
   // Send the message to the nanoapp
   std::unique_lock<std::mutex> lock(mutex);
   ASSERT_TRUE(messageHub->sendMessage(
-      std::move(messageData), kMessageSize,
+      std::move(messageData),
       /* messageType= */ 1,
       /* messagePermissions= */ CHRE_PERMS_AUDIO | CHRE_PERMS_GNSS, sessionId));
 
