@@ -42,7 +42,7 @@ class MessageRouterCallbackAllocator : public pw::Allocator {
 
   //! The callback used to free a message
   using MessageFreeCallback = pw::Function<void(
-      std::byte *message, size_t length, const Metadata &metadata)>;
+      std::byte *message, size_t length, Metadata &&metadata)>;
 
   //! A record of a message and its free callback
   struct FreeCallbackRecord {
