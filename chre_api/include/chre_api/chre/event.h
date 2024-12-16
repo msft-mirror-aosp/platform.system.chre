@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <chre/common.h>
 #include <chre/toolchain.h>
 
 #ifdef __cplusplus
@@ -203,31 +204,6 @@ extern "C" {
 #define CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT UINT16_C(0x000B)
 
 /**
- * nanoappHandleEvent argument: struct chreMessageFromEndpointData
- *
- * The format of the 'message' part of this structure is left undefined,
- * and it's up to the nanoapp and endpoint to have an established protocol
- * beforehand.
- *
- * On receiving the first message from an endpoint, the nanoapp can assume
- * a session with the sessionId has been created and can be used to send
- * messages to the endpoint. The nanoapp will receive a
- * CHRE_EVENT_ENDPOINT_SESSION_CLOSED event when the session is closed.
- *
- * @since v1.11
- */
-#define CHRE_EVENT_MESSAGE_FROM_ENDPOINT UINT16_C(0x000C)
-
-/**
- * nanoappHandleEvent argument: struct chreEndpointSessionClosedData
- *
- * Indicates that a session with an endpoint has been closed.
- *
- * @since v1.11
- */
-#define CHRE_EVENT_ENDPOINT_SESSION_CLOSED UINT16_C(0x000D)
-
-/**
  * First possible value for CHRE_EVENT_SENSOR events.
  *
  * This allows us to separately define our CHRE_EVENT_SENSOR_* events in
@@ -286,6 +262,13 @@ extern "C" {
  */
 #define CHRE_EVENT_BLE_FIRST_EVENT UINT16_C(0x0350)
 #define CHRE_EVENT_BLE_LAST_EVENT  UINT16_C(0x035F)
+
+/**
+ * First event in the block reserved for session-based messaging. These events
+ * are defined in chre/msg.h.
+ */
+#define CHRE_EVENT_MSG_FIRST_EVENT UINT16_C(0x0360)
+#define CHRE_EVENT_MSG_LAST_EVENT UINT16_C(0x036F)
 
 /**
  * First in the extended range of values dedicated for internal CHRE
@@ -448,68 +431,6 @@ struct chreMessageFromHostData {
      * @since v1.1
      */
     uint16_t hostEndpoint;
-};
-
-/**
- * Data provided with CHRE_EVENT_MESSAGE_FROM_ENDPOINT.
- */
-struct chreMessageFromEndpointData {
-    /**
-     * Message type supplied by the endpoint.
-     */
-    uint32_t messageType;
-
-    /**
-     * Message permissions supplied by the endpoint. The format is specified by
-     * the CHRE_MESSAGE_PERMISSION_* values if the endpoint is a nanoapp, else
-     * it is specified by the endpoint. These permissions are enforced by CHRE.
-     * A nanoapp without the required permissions will not receive the message.
-     */
-    uint32_t messagePermissions;
-
-    /**
-     * The message from the endpoint.
-     *
-     * These contents are of a format that the endpoint and nanoapp must have
-     * established beforehand.
-     *
-     * This data is 'messageSize' bytes in length.  Note that if 'messageSize'
-     * is 0, this might contain NULL.
-     */
-    const void *message;
-
-    /**
-     * The size, in bytes of the following 'message'.
-     *
-     * This can be 0.
-     */
-    size_t messageSize;
-
-    /**
-     * The session ID of the message. A session is the active connection between
-     * two endpoints. The receiving nanoapp or endpoint initiated the session
-     * before sending this message. If the nanoapp has not yet received a
-     * message with this session ID, it can assume the session was created by
-     * the nanoapp or other endpoint. The nanoapp may send messages to the other
-     * endpoint with this session ID.
-     */
-    uint16_t sessionId;
-};
-
-/**
- * Data provided with CHRE_EVENT_ENDPOINT_SESSION_CLOSED.
- */
-struct chreEndpointSessionClosedData {
-    /**
-     * The message hub ID and endpoint ID of the other party in the session.
-     */
-    uint64_t hubId;
-    uint64_t endpointId;
-
-    /**
-     * The ID of the session that was closed.
-     */
-    uint16_t sessionId;
 };
 
 /**
@@ -1097,6 +1018,17 @@ bool chreConfigureHostEndpointNotifications(uint16_t hostEndpointId,
  * @return true if the publishing is successful.
  *
  * @since v1.6
+ *
+ * @deprecated Use chreMsgPublishServices() instead. If this function is
+ * called with CHRE API version v1.11 or above, it will convert each
+ * struct chreNanoappRpcService to a struct chreMsgEndpointServiceInfo and
+ * call chreMsgPublishServices() instead. The conversion will be mapped as
+ * follows:
+ *   - majorVersion = chreNanoappRpcService.majorVersion
+ *   - minorVersion = 0
+ *   - serviceDescriptor = FORMAT_STRING(
+ *     "chre.nanoapp_0x%016x.service_0x%016x", nanoapp_id, service_id)
+ *   - serviceFormat = CHRE_ENDPOINT_SERVICE_FORMAT_PW_RPC_PROTOBUF
  */
 bool chrePublishRpcServices(struct chreNanoappRpcService *services,
                             size_t numServices);
