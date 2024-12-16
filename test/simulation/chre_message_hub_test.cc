@@ -46,7 +46,7 @@ EndpointInfo kEndpointInfos[kNumEndpoints] = {
     EndpointInfo(/* id= */ 1, /* name= */ "endpoint1", /* version= */ 1,
                  EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE),
     EndpointInfo(/* id= */ 2, /* name= */ "endpoint2", /* version= */ 10,
-                 EndpointType::HOST_ENDPOINT, CHRE_MESSAGE_PERMISSION_BLE),
+                 EndpointType::HOST_NATIVE, CHRE_MESSAGE_PERMISSION_BLE),
     EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 
@@ -79,7 +79,7 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
   MessageHubCallbackStoreData(Message *message, Session *session)
       : mMessage(message), mSession(session) {}
 
-  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data, size_t length,
+  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                          uint32_t messageType, uint32_t messagePermissions,
                          const Session &session,
                          bool sentBySessionInitiator) override {
@@ -90,7 +90,6 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
           sentBySessionInitiator ? session.peer : session.initiator;
       mMessage->sessionId = session.sessionId;
       mMessage->data = std::move(data);
-      mMessage->length = length;
       mMessage->messageType = messageType;
       mMessage->messagePermissions = messagePermissions;
     }
@@ -276,7 +275,7 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoapp) {
 
   // Send the message to the nanoapp
   std::unique_lock<std::mutex> lock(mutex);
-  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData), kMessageSize,
+  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
   condVar.wait(lock);
@@ -339,7 +338,7 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoappPermissionFailure) {
   // Send the message to the nanoapp
   std::unique_lock<std::mutex> lock(mutex);
   ASSERT_TRUE(messageHub->sendMessage(
-      std::move(messageData), kMessageSize,
+      std::move(messageData),
       /* messageType= */ 1,
       /* messagePermissions= */ CHRE_PERMS_AUDIO | CHRE_PERMS_GNSS, sessionId));
 

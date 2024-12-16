@@ -32,10 +32,15 @@
 #define SIGNAL_DATA UINT32_C(1 << 1)
 #define SIGNAL_DATA_RX UINT32_C(1 << 2)
 
-struct ChppNotifier gCycleSendThreadNotifier;
+struct ChppNotifier gLinkSendDoneNotifier;
 
-void cycleSendThread(void) {
-  chppNotifierSignal(&gCycleSendThreadNotifier, 1);
+void waitForLinkSendDone(void) {
+  // We use a sufficiently long timeout here to avoid tests from hanging.
+  const uint64_t kTimeoutNs = 5 * CHPP_NSEC_PER_SEC;
+  uint32_t signal = chppNotifierTimedWait(&gLinkSendDoneNotifier, kTimeoutNs);
+  if (signal == 0) {
+    CHPP_LOGE("waitForLinkSendDone timed out");
+  }
 }
 
 /**
@@ -47,9 +52,6 @@ static void *linkSendThread(void *linkContext) {
   struct ChppLinuxLinkState *context =
       (struct ChppLinuxLinkState *)(linkContext);
   while (true) {
-    if (context->manualSendCycle) {
-      chppNotifierWait(&gCycleSendThreadNotifier);
-    }
     uint32_t signal = chppNotifierTimedWait(&context->notifier, CHPP_TIME_MAX);
 
     if (signal & SIGNAL_EXIT) {
@@ -62,7 +64,6 @@ static void *linkSendThread(void *linkContext) {
       chppMutexLock(&context->mutex);
 
       if (context->remoteLinkState == NULL) {
-        CHPP_LOGW("remoteLinkState is NULL");
         error = CHPP_LINK_ERROR_NONE_SENT;
 
       } else if (!context->linkEstablished) {
@@ -89,6 +90,7 @@ static void *linkSendThread(void *linkContext) {
 
       context->bufLen = 0;
       chppLinkSendDoneCb(context->transportContext, error);
+      chppNotifierSignal(&gLinkSendDoneNotifier, 1);
 
       chppMutexUnlock(&context->mutex);
     }
@@ -116,7 +118,7 @@ static void init(void *linkContext,
   chppMutexInit(&context->mutex);
   chppNotifierInit(&context->notifier);
   chppNotifierInit(&context->rxNotifier);
-  chppNotifierInit(&gCycleSendThreadNotifier);
+  chppNotifierInit(&gLinkSendDoneNotifier);
   pthread_create(&context->linkSendThread, NULL /* attr */, linkSendThread,
                  context);
   if (context->linkThreadName != NULL) {
@@ -129,14 +131,10 @@ static void deinit(void *linkContext) {
       (struct ChppLinuxLinkState *)(linkContext);
   context->bufLen = 0;
   chppNotifierSignal(&context->notifier, SIGNAL_EXIT);
-  if (context->manualSendCycle) {
-    // Unblock the send thread so it exits.
-    cycleSendThread();
-  }
   pthread_join(context->linkSendThread, NULL /* retval */);
   chppNotifierDeinit(&context->notifier);
   chppNotifierDeinit(&context->rxNotifier);
-  chppNotifierDeinit(&gCycleSendThreadNotifier);
+  chppNotifierDeinit(&gLinkSendDoneNotifier);
   chppMutexDeinit(&context->mutex);
 }
 

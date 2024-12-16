@@ -41,6 +41,7 @@ filegroup {
     name: "hal_aidl_generic_srcs",
     srcs: [
         "aidl/generic_context_hub_aidl.cc",
+        "common/bluetooth_socket_base.cc",
         "common/hal_chre_socket_connection.cc",
         "common/permissions_util.cc",
     ],
@@ -61,6 +62,9 @@ cc_defaults {
     cflags: [
         "-DCHRE_HAL_SOCKET_METRICS_ENABLED",
         "-Wthread-safety", // Need to be explicitly set
+    ],
+    shared_libs: [
+        "android.hardware.bluetooth.socket-V1-ndk",
     ],
     static_libs: [
         "chre_config_util",

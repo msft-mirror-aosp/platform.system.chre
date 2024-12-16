@@ -26,11 +26,13 @@
 #include "chre_host/napp_header.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
 #include "chre_host/time_syncer.h"
+#include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <array>
 #include <chrono>
 #include <deque>
 #include <memory>
@@ -98,7 +100,7 @@ class MultiClientContextHubBase
   ScopedAStatus registerEndpointCallback(
       const std::shared_ptr<IEndpointCallback> &callback) override;
   ScopedAStatus requestSessionIdRange(int32_t size,
-                                      std::vector<int32_t> *ids) override;
+                                      std::array<int32_t, 2> *ids) override;
   ScopedAStatus openEndpointSession(
       int32_t sessionId, const EndpointId &destination,
       const EndpointId &initiator,
@@ -219,6 +221,10 @@ class MultiClientContextHubBase
   // HalClientManager maintains states of hal clients. Each HAL should only have
   // one instance of a HalClientManager.
   std::unique_ptr<HalClientManager> mHalClientManager{};
+
+  // Implementation of the V4+ API. Should be instantiated by the target HAL
+  // implementation.
+  std::optional<ContextHubV4Impl> mV4Impl{};
 
   std::unique_ptr<PreloadedNanoappLoader> mPreloadedNanoappLoader{};
 

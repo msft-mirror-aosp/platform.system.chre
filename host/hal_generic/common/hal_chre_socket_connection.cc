@@ -20,6 +20,7 @@
 #include "hal_chre_socket_connection.h"
 
 #include <log/log.h>
+#include <cstddef>
 
 #ifdef CHRE_HAL_SOCKET_METRICS_ENABLED
 #include <chre_atoms_log.h>
@@ -146,6 +147,10 @@ bool HalChreSocketConnection::requestDebugDump() {
   return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
+bool HalChreSocketConnection::sendRawMessage(uint8_t *data, size_t size) {
+  return mClient.sendMessage(data, size);
+}
+
 bool HalChreSocketConnection::sendSettingChangedNotification(
     ::chre::fbs::Setting fbsSetting, ::chre::fbs::SettingState fbsState) {
   FlatBufferBuilder builder(64);
@@ -173,6 +178,12 @@ bool HalChreSocketConnection::onHostEndpointDisconnected(
 bool HalChreSocketConnection::isLoadTransactionPending() {
   std::lock_guard<std::mutex> lock(mPendingLoadTransactionMutex);
   return mPendingLoadTransaction.has_value();
+}
+
+void HalChreSocketConnection::setBtSocketCallback(
+    ::android::hardware::bluetooth::socket::common::implementation::
+        BluetoothSocketConnectionCallback *btSocketCallback) {
+  mSocketCallbacks->setBtSocketCallback(btSocketCallback);
 }
 
 HalChreSocketConnection::SocketCallbacks::SocketCallbacks(
@@ -310,6 +321,35 @@ void HalChreSocketConnection::SocketCallbacks::handleDebugDumpResponse(
   ALOGV("Got debug dump response, success %d, data count %" PRIu32,
         response.success, response.data_count);
   mCallback->onDebugDumpComplete(response);
+}
+
+bool HalChreSocketConnection::SocketCallbacks::handleContextHubV4Message(
+    const ::chre::fbs::ChreMessageUnion &message) {
+  return mCallback->onContextHubV4Message(message);
+}
+
+void HalChreSocketConnection::SocketCallbacks::handleBtSocketOpenResponse(
+    const ::chre::fbs::BtSocketOpenResponseT &response) {
+  if (mBtSocketCallback == nullptr) {
+    ALOGE("Received BT socket message but callback not set");
+  } else {
+    mBtSocketCallback->handleBtSocketOpenResponse(response);
+  }
+}
+
+void HalChreSocketConnection::SocketCallbacks::handleBtSocketClose(
+    const ::chre::fbs::BtSocketCloseT &message) {
+  if (mBtSocketCallback == nullptr) {
+    ALOGE("Received BT socket message but callback not set");
+  } else {
+    mBtSocketCallback->handleBtSocketClose(message);
+  }
+}
+
+void HalChreSocketConnection::SocketCallbacks::setBtSocketCallback(
+    ::android::hardware::bluetooth::socket::common::implementation::
+        BluetoothSocketConnectionCallback *btSocketCallback) {
+  mBtSocketCallback = btSocketCallback;
 }
 
 bool HalChreSocketConnection::isExpectedLoadResponseLocked(
