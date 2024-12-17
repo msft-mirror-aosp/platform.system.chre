@@ -52,34 +52,15 @@ class MessageHubManager {
    */
   class HostHub {
    public:
-    ~HostHub();
-
-    /**
-     * Sets the callback for sending endpoint events back to the HAL client
-     *
-     * @param callback The callback provided by the client
-     * @return pw::OkStatus() on success.
-     */
-    pw::Status setCallback(std::shared_ptr<IEndpointCallback> callback)
-        EXCLUDES(mManager.mLock);
-
-    /**
-     * Returns the callback registered in setCallback()
-     *
-     * @return The previously registered callback
-     */
-    std::shared_ptr<IEndpointCallback> getCallback() const
-        EXCLUDES(mManager.mLock);
+    ~HostHub() = default;
 
     /**
      * Adds an endpoint to this message hub
      *
-     * @param self Self-reference for mapping from hub id
      * @param info Description of the endpoint
      * @return pw::OkStatus() on success
      */
-    pw::Status addEndpoint(std::weak_ptr<HostHub> self,
-                           const EndpointInfo &info) EXCLUDES(mManager.mLock);
+    pw::Status addEndpoint(const EndpointInfo &info) EXCLUDES(mManager.mLock);
 
     /**
      * Removes an endpoint from this message hub
@@ -141,11 +122,24 @@ class MessageHubManager {
     pw::Status closeSession(uint16_t id) EXCLUDES(mManager.mLock);
 
     /**
-     * Returns the registered id of this message hub.
+     * Unregisters this HostHub.
      *
-     * @return kId
+     * @return pw::OkStatus() if the host hub was successfully initialized and
+     * not yet unregistered.
      */
-    int64_t id() const;
+    pw::Status unregister() EXCLUDES(mManager.mLock);
+
+    /** Returns the callback for the associated client */
+    std::shared_ptr<IEndpointCallback> callback() const {
+      return mCallback;
+    }
+
+    /**
+     * Returns the registered id of this message hub.
+     */
+    int64_t id() const {
+      return kInfo.hubId;
+    }
 
    private:
     friend class MessageHubManager;
@@ -204,22 +198,20 @@ class MessageHubManager {
     // Cookie associated with each registered client callback.
     struct DeathRecipientCookie {
       MessageHubManager *manager;
-      pid_t pid;
+      int64_t hubId;
     };
 
     static constexpr uint16_t kSessionIdMaxRange = 1024;
 
     static constexpr int64_t kHubIdInvalid = 0;
 
-    HostHub(MessageHubManager &manager, pid_t pid)
-        : mManager(manager), kPid(pid) {}
+    HostHub(MessageHubManager &manager,
+            std::shared_ptr<IEndpointCallback> callback, const HubInfo &info);
 
     // Unlinks this hub from the manager, destroying internal references.
-    // Returns the id so that it can be propagated to CHRE.
-    int64_t unlinkFromManager() EXCLUDES(mManager.mLock);
-
-    // Unlink the current callback from the manager's death recipient.
-    void unlinkCallbackIfNecessaryLocked() REQUIRES(mManager.mLock);
+    // Propagates the unlinking to CHRE. If already unlinked, returns early with
+    // error.
+    pw::Status unlinkFromManager() EXCLUDES(mManager.mLock);
 
     // Returns pw::OkStatus() if the hub is in a valid state.
     pw::Status checkValidLocked() REQUIRES(mManager.mLock);
@@ -236,16 +228,9 @@ class MessageHubManager {
         REQUIRES(mManager.mLock);
 
     MessageHubManager &mManager;
-    const pid_t kPid;
-
-    // Hub id, set when the first endpoint is registered.
-    int64_t kId GUARDED_BY(mManager.mLock) = kHubIdInvalid;
-
-    // Callback to HAL client.
-    std::shared_ptr<IEndpointCallback> mCallback GUARDED_BY(mManager.mLock);
-
-    // Cookie associated with mCallback.
-    DeathRecipientCookie *mCookie GUARDED_BY(mManager.mLock);
+    std::shared_ptr<IEndpointCallback> mCallback;  // Callback to client.
+    DeathRecipientCookie *mCookie;  // Death cookie associated with mCallback.
+    const HubInfo kInfo;            // Details of this hub.
 
     // Used to lookup a host endpoint. Owns the associated EndpointInfo.
     std::unordered_map<int64_t, std::shared_ptr<EndpointInfo>> mIdToEndpoint
@@ -274,16 +259,15 @@ class MessageHubManager {
   ~MessageHubManager() = default;
 
   /**
-   * Retrieves the HostHub instance for the calling process
+   * Registers a new client, creating a HostHub instance for it
    *
-   * This API should be used for any HostHub lookup coming from the
-   * IContextHub interface. The first call to this API by any client process
-   * will trigger the creation of a HostHub for that client.
-   *
-   * @param pid The caller's system process id
-   * @return shared_ptr to the HostHub instance
+   * @param callback Interface for communicating with the client
+   * @param info Details of the hub being registered
+   * @return On success, shared_ptr to the HostHub instance
    */
-  std::shared_ptr<HostHub> getHostHubByPid(pid_t pid) EXCLUDES(mLock);
+  pw::Result<std::shared_ptr<HostHub>> createHostHub(
+      std::shared_ptr<IEndpointCallback> callback, const HubInfo &info)
+      EXCLUDES(mLock);
 
   /**
    * Retrieves a HostHub instance given its id
@@ -291,7 +275,7 @@ class MessageHubManager {
    * @param id The HostHub id
    * @return shared_ptr to the HostHub instance, nullptr if not found
    */
-  std::shared_ptr<HostHub> getHostHubById(int64_t id) EXCLUDES(mLock);
+  std::shared_ptr<HostHub> getHostHub(int64_t id) EXCLUDES(mLock);
 
   /**
    * Apply the given function to each host hub.
@@ -400,14 +384,8 @@ class MessageHubManager {
   // Map of EmbeddedHubs.
   std::unordered_map<int64_t, EmbeddedHub> mIdToEmbeddedHub GUARDED_BY(mLock);
 
-  // Used to look up the HostHub associated with the client on IContextHub
-  // calls.
-  std::unordered_map<pid_t, std::shared_ptr<HostHub>> mPidToHostHub
-      GUARDED_BY(mLock);
-
-  // Used when an embedded endpoint wants to start a session with an endpoint
-  // hosted by a specific HostHub.
-  std::unordered_map<int64_t, std::weak_ptr<HostHub>> mIdToHostHub
+  // Map of HostHubs for registered IContextHub V4+ clients.
+  std::unordered_map<int64_t, std::shared_ptr<HostHub>> mIdToHostHub
       GUARDED_BY(mLock);
 
   // Next session id from which to allocate ranges.

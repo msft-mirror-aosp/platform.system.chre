@@ -16,7 +16,6 @@
 
 #include "context_hub_v4_impl.h"
 
-#include <assert.h>
 #include <inttypes.h>
 
 #include <functional>
@@ -25,6 +24,7 @@
 #include <vector>
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <aidl/android/hardware/contexthub/BnEndpointCommunication.h>
 #include <chre_host/generated/host_messages_generated.h>
 #include <chre_host/log.h>
 
@@ -48,7 +48,7 @@ ScopedAStatus fromPwStatus(pw::Status status) {
     case PW_STATUS_NOT_FOUND:
       [[fallthrough]];
     case PW_STATUS_ALREADY_EXISTS:
-      [[fallthrough]];
+      return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     case PW_STATUS_OUT_OF_RANGE:
       [[fallthrough]];
     case PW_STATUS_PERMISSION_DENIED:
@@ -76,53 +76,53 @@ ScopedAStatus ContextHubV4Impl::getEndpoints(
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus ContextHubV4Impl::registerEndpoint(const EndpointInfo &endpoint) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->addEndpoint(hub, endpoint); !status.ok()) {
+ScopedAStatus ContextHubV4Impl::registerEndpointHub(
+    const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
+    std::shared_ptr<IEndpointCommunication> * /*hubInterface*/) {
+  auto statusOrHub = mManager.createHostHub(callback, hubInfo);
+  if (!statusOrHub.ok()) {
+    LOGE("Failed to register message hub %" PRId64 " with %" PRId32,
+         hubInfo.hubId, statusOrHub.status().ok());
+    return fromPwStatus(statusOrHub.status());
+  }
+  // TODO(b/378545373): Register the hub with CHRE.
+  // *hubInterface =
+  //     ndk::SharedRefBase::make<HostHubInterface>(std::move(*statusOrHub));
+  // return ScopedAStatus::ok();
+  (*statusOrHub)->unregister();
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus HostHubInterface::registerEndpoint(const EndpointInfo &endpoint) {
+  if (auto status = mHub->addEndpoint(endpoint); !status.ok()) {
     LOGE("Failed to register endpoint %" PRId64 " on hub %" PRId64
          " with %" PRId32,
-         endpoint.id.id, hub->id(), status.code());
+         endpoint.id.id, mHub->id(), status.code());
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Send the endpoint info to CHRE.
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::unregisterEndpoint(
+ScopedAStatus HostHubInterface::unregisterEndpoint(
     const EndpointInfo &endpoint) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->removeEndpoint(endpoint.id); !status.ok()) {
+  if (auto status = mHub->removeEndpoint(endpoint.id); !status.ok()) {
     LOGE("Failed to unregister endpoint %" PRId32 " on hub %" PRId32
          " with %" PRId32,
-         endpoint.id.id, hub->id(), status.code());
+         endpoint.id.id, mHub->id(), status.code());
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Send the endpoint info to CHRE.
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> &callback) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  return fromPwStatus(hub->setCallback(callback));
-}
-
-ScopedAStatus ContextHubV4Impl::requestSessionIdRange(
+ScopedAStatus HostHubInterface::requestSessionIdRange(
     int32_t size, std::array<int32_t, 2> *ids) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  auto statusOrRange = hub->reserveSessionIdRange(size);
+  auto statusOrRange = mHub->reserveSessionIdRange(size);
   if (!statusOrRange.ok()) {
     LOGE("Failed to reserve %" PRId32 " session ids on hub %" PRId64
          " with %" PRId32,
-         size, hub->id(), statusOrRange.status().code());
+         size, mHub->id(), statusOrRange.status().code());
     return fromPwStatus(statusOrRange.status());
   }
   (*ids)[0] = statusOrRange->first;
@@ -130,16 +130,13 @@ ScopedAStatus ContextHubV4Impl::requestSessionIdRange(
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus ContextHubV4Impl::openEndpointSession(
+ScopedAStatus HostHubInterface::openEndpointSession(
     int32_t sessionId, const EndpointId &destination,
     const EndpointId &initiator,
     const std::optional<std::string> & /*serviceDescriptor*/) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
   // Ignore the flag to send a close. This hub overriding its own session is an
   // should just return error.
-  auto status = hub->openSession(initiator, destination, sessionId).status();
+  auto status = mHub->openSession(initiator, destination, sessionId).status();
   if (!status.ok()) {
     LOGE("Failed to open session %" PRId32 " from (%" PRId64 ", %" PRId64
          ") to (%" PRId64 ", %" PRId64 ") with %" PRId32,
@@ -151,19 +148,16 @@ ScopedAStatus ContextHubV4Impl::openEndpointSession(
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::sendMessageToEndpoint(int32_t sessionId,
+ScopedAStatus HostHubInterface::sendMessageToEndpoint(int32_t sessionId,
                                                       const Message & /*msg*/) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->checkSessionOpen(sessionId); !status.ok()) {
+  if (auto status = mHub->checkSessionOpen(sessionId); !status.ok()) {
     if (status.IsUnavailable()) {
-      hub->getCallback()->onCloseEndpointSession(sessionId,
-                                                 Reason::ENDPOINT_GONE);
+      mHub->callback()->onCloseEndpointSession(sessionId,
+                                               Reason::ENDPOINT_GONE);
     } else {
       LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
            " with %" PRId32,
-           sessionId, hub->id(), status.code());
+           sessionId, mHub->id(), status.code());
     }
     return fromPwStatus(status);
   }
@@ -172,19 +166,16 @@ ScopedAStatus ContextHubV4Impl::sendMessageToEndpoint(int32_t sessionId,
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::sendMessageDeliveryStatusToEndpoint(
+ScopedAStatus HostHubInterface::sendMessageDeliveryStatusToEndpoint(
     int32_t sessionId, const MessageDeliveryStatus & /*msgStatus*/) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->checkSessionOpen(sessionId); !status.ok()) {
+  if (auto status = mHub->checkSessionOpen(sessionId); !status.ok()) {
     if (status.IsUnavailable()) {
-      hub->getCallback()->onCloseEndpointSession(sessionId,
-                                                 Reason::ENDPOINT_GONE);
+      mHub->callback()->onCloseEndpointSession(sessionId,
+                                               Reason::ENDPOINT_GONE);
     } else {
       LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
            " with %" PRId32,
-           sessionId, hub->id(), status.code());
+           sessionId, mHub->id(), status.code());
     }
     return fromPwStatus(status);
   }
@@ -192,38 +183,36 @@ ScopedAStatus ContextHubV4Impl::sendMessageDeliveryStatusToEndpoint(
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::closeEndpointSession(int32_t sessionId,
+ScopedAStatus HostHubInterface::closeEndpointSession(int32_t sessionId,
                                                      Reason /*reason*/) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->closeSession(sessionId); !status.ok()) {
+  if (auto status = mHub->closeSession(sessionId); !status.ok()) {
     LOGE("Failed to close session %" PRId32 " on hub %" PRId64 " with %" PRId32,
-         sessionId, hub->id(), status.code());
+         sessionId, mHub->id(), status.code());
     return fromPwStatus(status);
   }
-  hub->getCallback()->onCloseEndpointSession(
+  mHub->callback()->onCloseEndpointSession(
       sessionId, Reason::CLOSE_ENDPOINT_SESSION_REQUESTED);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHubV4Impl::endpointSessionOpenComplete(int32_t sessionId) {
-  std::shared_ptr<HostHub> hub =
-      mManager.getHostHubByPid(AIBinder_getCallingPid());
-  assert(hub != nullptr);
-  if (auto status = hub->ackSession(sessionId); !status.ok()) {
+ScopedAStatus HostHubInterface::endpointSessionOpenComplete(int32_t sessionId) {
+  if (auto status = mHub->ackSession(sessionId); !status.ok()) {
     if (status.IsUnavailable()) {
-      hub->getCallback()->onCloseEndpointSession(sessionId,
-                                                 Reason::ENDPOINT_GONE);
+      mHub->callback()->onCloseEndpointSession(sessionId,
+                                               Reason::ENDPOINT_GONE);
     } else {
       LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
            " with %" PRId32,
-           sessionId, hub->id(), status.code());
+           sessionId, mHub->id(), status.code());
     }
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Send the session id to CHRE.
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus HostHubInterface::unregister() {
+  return fromPwStatus(mHub->unregister());
 }
 
 bool ContextHubV4Impl::handleMessageFromChre(
@@ -291,7 +280,7 @@ void ContextHubV4Impl::onUnregisterMessageHub(
   std::vector<EndpointId> endpoints = mManager.removeEmbeddedHub(id);
   if (!endpoints.empty()) {
     mManager.forEachHostHub([&endpoints](HostHub &hub) {
-      hub.getCallback()->onEndpointStopped(endpoints, Reason::HUB_RESET);
+      hub.callback()->onEndpointStopped(endpoints, Reason::HUB_RESET);
     });
   }
 }
@@ -304,7 +293,7 @@ void ContextHubV4Impl::onRegisterEndpoint(
        endpoint.id.id);
   mManager.addEmbeddedEndpoint(endpoint);
   mManager.forEachHostHub([&endpoint](HostHub &hub) {
-    hub.getCallback()->onEndpointStarted({endpoint});
+    hub.callback()->onEndpointStarted({endpoint});
   });
 }
 
@@ -316,7 +305,7 @@ void ContextHubV4Impl::onUnregisterEndpoint(
        endpoint.id);
   mManager.removeEmbeddedEndpoint(endpoint);
   mManager.forEachHostHub([&endpoint](HostHub &hub) {
-    hub.getCallback()->onEndpointStopped({endpoint}, Reason::ENDPOINT_GONE);
+    hub.callback()->onEndpointStopped({endpoint}, Reason::ENDPOINT_GONE);
   });
 }
 
@@ -331,7 +320,7 @@ void ContextHubV4Impl::onOpenEndpointSessionRequest(
        ") to "
        "(%" PRId64 ", %" PRId64 ")",
        sessionId, remote.hubId, remote.id, local.hubId, local.id);
-  std::shared_ptr<HostHub> hub = mManager.getHostHubById(hubId);
+  std::shared_ptr<HostHub> hub = mManager.getHostHub(hubId);
   if (!hub) {
     LOGW("Unable to find host hub");
     return;
@@ -352,8 +341,8 @@ void ContextHubV4Impl::onOpenEndpointSessionRequest(
     LOGD("Pruned session %" PRIu16 " with status %" PRId32, sessionId,
          status.code());
   }
-  hub->getCallback()->onEndpointSessionOpenRequest(
-      sessionId, local, remote, std::move(serviceDescriptor));
+  hub->callback()->onEndpointSessionOpenRequest(sessionId, local, remote,
+                                                std::move(serviceDescriptor));
 }
 
 namespace {
@@ -375,7 +364,7 @@ void ContextHubV4Impl::onEndpointSessionOpened(
   int64_t hubId = 0;
   uint16_t sessionId = 0;
   LOGD("New session ack for id %" PRIu16 " on hub %" PRId64, sessionId, hubId);
-  std::shared_ptr<HostHub> hub = mManager.getHostHubById(hubId);
+  std::shared_ptr<HostHub> hub = mManager.getHostHub(hubId);
   if (!hub) {
     LOGW("Unable to find host hub");
     return;
@@ -388,7 +377,7 @@ void ContextHubV4Impl::onEndpointSessionOpened(
   // Only send a session open complete message to the host hub client if it was
   // the initiator.
   if (sessionId >= MessageHubManager::kHostSessionIdBase)
-    hub->getCallback()->onEndpointSessionOpenComplete(sessionId);
+    hub->callback()->onEndpointSessionOpenComplete(sessionId);
 }
 
 void ContextHubV4Impl::onEndpointSessionClosed(
@@ -398,13 +387,13 @@ void ContextHubV4Impl::onEndpointSessionClosed(
   uint16_t sessionId = 0;
   Reason reason = Reason::UNSPECIFIED;
   LOGD("Closing session id %" PRIu16 " for %" PRIu8, sessionId, reason);
-  std::shared_ptr<HostHub> hub = mManager.getHostHubById(hubId);
+  std::shared_ptr<HostHub> hub = mManager.getHostHub(hubId);
   if (!hub) {
     LOGW("Unable to find host hub");
     return;
   }
   if (!hub->closeSession(sessionId).ok()) return;
-  hub->getCallback()->onCloseEndpointSession(sessionId, reason);
+  hub->callback()->onCloseEndpointSession(sessionId, reason);
 }
 
 void ContextHubV4Impl::onEndpointSessionMessage(
@@ -413,7 +402,7 @@ void ContextHubV4Impl::onEndpointSessionMessage(
   Message message;
   int64_t hubId = 0;
   uint16_t sessionId = 0;
-  std::shared_ptr<HostHub> hub = mManager.getHostHubById(hubId);
+  std::shared_ptr<HostHub> hub = mManager.getHostHub(hubId);
   if (!hub) {
     LOGW("Unable to find host hub");
     return;
@@ -423,7 +412,7 @@ void ContextHubV4Impl::onEndpointSessionMessage(
     // TODO(b/378545373): Send a notification back to CHRE.
     return;
   }
-  hub->getCallback()->onMessageReceived(sessionId, message);
+  hub->callback()->onMessageReceived(sessionId, message);
 }
 
 void ContextHubV4Impl::onEndpointSessionMessageDeliveryStatus(
@@ -432,7 +421,7 @@ void ContextHubV4Impl::onEndpointSessionMessageDeliveryStatus(
   MessageDeliveryStatus status;
   int64_t hubId = 0;
   uint16_t sessionId = 0;
-  std::shared_ptr<HostHub> hub = mManager.getHostHubById(hubId);
+  std::shared_ptr<HostHub> hub = mManager.getHostHub(hubId);
   if (!hub) {
     LOGW("Unable to find host hub");
     return;
@@ -443,7 +432,7 @@ void ContextHubV4Impl::onEndpointSessionMessageDeliveryStatus(
     return;
   }
   // TODO(b/378545373): Handle reliable messages.
-  hub->getCallback()->onMessageDeliveryStatusReceived(sessionId, status);
+  hub->callback()->onMessageDeliveryStatusReceived(sessionId, status);
 }
 
 void ContextHubV4Impl::onHostHubDown(int64_t /*id*/) {

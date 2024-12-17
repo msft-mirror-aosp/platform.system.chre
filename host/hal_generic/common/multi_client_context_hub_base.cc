@@ -581,63 +581,11 @@ ScopedAStatus MultiClientContextHubBase::getEndpoints(
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus MultiClientContextHubBase::registerEndpoint(
-    const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->registerEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::unregisterEndpoint(
-    const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->unregisterEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> &callback) {
-  if (mV4Impl) return mV4Impl->registerEndpointCallback(callback);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::requestSessionIdRange(
-    int32_t size, std::array<int32_t, 2> *ids) {
-  if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::openEndpointSession(
-    int32_t sessionId, const EndpointId &destination,
-    const EndpointId &initiator,
-    const std::optional<std::string> &serviceDescriptor) {
-  if (mV4Impl) {
-    return mV4Impl->openEndpointSession(sessionId, destination, initiator,
-                                        serviceDescriptor);
-  }
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::sendMessageToEndpoint(
-    int32_t sessionId, const Message &msg) {
-  if (mV4Impl) return mV4Impl->sendMessageToEndpoint(sessionId, msg);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToEndpoint(
-    int32_t sessionId, const MessageDeliveryStatus &msgStatus) {
+ScopedAStatus MultiClientContextHubBase::registerEndpointHub(
+    const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
+    std::shared_ptr<IEndpointCommunication> *hubInterface) {
   if (mV4Impl)
-    return mV4Impl->sendMessageDeliveryStatusToEndpoint(sessionId, msgStatus);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::closeEndpointSession(int32_t sessionId,
-                                                              Reason reason) {
-  if (mV4Impl) return mV4Impl->closeEndpointSession(sessionId, reason);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::endpointSessionOpenComplete(
-    int32_t sessionId) {
-  if (mV4Impl) return mV4Impl->endpointSessionOpenComplete(sessionId);
+    return mV4Impl->registerEndpointHub(callback, hubInfo, hubInterface);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 

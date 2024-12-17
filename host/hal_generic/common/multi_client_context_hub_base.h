@@ -95,22 +95,10 @@ class MultiClientContextHubBase
       const MessageDeliveryStatus &messageDeliveryStatus) override;
   ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
   ScopedAStatus getEndpoints(std::vector<EndpointInfo> *endpoints) override;
-  ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
-  ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint) override;
-  ScopedAStatus registerEndpointCallback(
-      const std::shared_ptr<IEndpointCallback> &callback) override;
-  ScopedAStatus requestSessionIdRange(int32_t size,
-                                      std::array<int32_t, 2> *ids) override;
-  ScopedAStatus openEndpointSession(
-      int32_t sessionId, const EndpointId &destination,
-      const EndpointId &initiator,
-      const std::optional<std::string> &serviceDescriptor) override;
-  ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
-                                      const Message &msg) override;
-  ScopedAStatus sendMessageDeliveryStatusToEndpoint(
-      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
-  ScopedAStatus closeEndpointSession(int32_t sessionId, Reason reason) override;
-  ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
+  ScopedAStatus registerEndpointHub(
+      const std::shared_ptr<IEndpointCallback> &callback,
+      const HubInfo &hubInfo,
+      std::shared_ptr<IEndpointCommunication> *hubInterface) override;
 
   // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
