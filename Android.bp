@@ -1028,6 +1028,7 @@ cc_library_static {
         "platform/shared/chre_api_ble.cc",
         "platform/shared/chre_api_core.cc",
         "platform/shared/chre_api_gnss.cc",
+        "platform/shared/chre_api_msg.cc",
         "platform/shared/chre_api_re.cc",
         "platform/shared/chre_api_sensor.cc",
         "platform/shared/chre_api_user_settings.cc",

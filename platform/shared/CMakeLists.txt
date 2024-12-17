@@ -128,6 +128,43 @@ pw_add_library(chre.platform.shared.chre_api_gnss STATIC
     chre.util.system
 )
 
+# Implements chre_api/chre/msg.h's:
+# - bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
+#                               struct chreMsgEndpointInfo *info)
+# - size_t chreMsgGetEndpointServiceCount(uint64_t hubId, uint64_t endpointId)
+# - bool chreMsgGetEndpointServices(uint64_t hubId, uint64_t endpointId,
+#                                   struct chreMsgEndpointServiceInfo *services,
+#                                   size_t *numServices)
+# - bool chreMsgConfigureEndpointNotifications(uint64_t hubId,
+#                                              uint64_t endpointId,
+#                                              bool enable)
+# - bool chreMsgGetSessionInfo(uint16_t sessionId,
+#                              struct chreMsgEndpointSessionInfo *info)
+# - bool chreMsgPublishRpcServices(struct chreMsgEndpointServiceInfo *services,
+#                                  size_t numServices)
+# - uint16_t chreMsgOpenEndpointSessionAsync(uint64_t hubId,
+#                                            uint64_t endpointId)
+# - uint16_t chreMsgOpenEndpointSessionWithServiceAsync(
+#       uint64_t hubId, uint64_t endpointId, const char *serviceDescriptor)
+# - uint16_t chreMsgOpenDefaultEndpointSessionAsync(uint64_t endpointId)
+# - uint16_t chreMsgOpenDefaultEndpointSessionWithServiceAsync(
+#       uint64_t endpointId, const char *serviceDescriptor)
+# - uint16_t chreMsgOpenServiceEndpointSessionAsync(const char *serviceDescriptor)
+# - bool chreMsgCloseEndpointSessionAsync(uint16_t sessionId)
+# - bool chreMsgSendReliableEndpointMessageAsync(
+#       void *message, size_t messageSize, uint32_t messageType,
+#       uint16_t sessionId, uint32_t messagePermissions,
+#       chreMessageFreeFunction *freeCallback, const void *cookie)
+pw_add_library(chre.platform.shared.chre_api_msg STATIC
+  SOURCES
+    chre_api_msg.cc
+  PRIVATE_DEPS
+    chre.chre_api.facade
+    chre.core
+    chre.util
+    chre.util.system
+)
+
 # Implements chre_api/chre/re.h's:
 # - uint32_t chreGetCapabilities()
 # - uint32_t chreGetMessageToHostMaxSize()

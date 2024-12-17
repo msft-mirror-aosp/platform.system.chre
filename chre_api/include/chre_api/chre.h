@@ -33,6 +33,7 @@
 #include <chre/common.h>
 #include <chre/event.h>
 #include <chre/gnss.h>
+#include <chre/msg.h>
 #include <chre/nanoapp.h>
 #include <chre/re.h>
 #include <chre/sensor.h>

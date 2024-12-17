@@ -54,7 +54,7 @@ class BluetoothSocketBase
   std::shared_ptr<IBluetoothSocketCallback> mCallback{};
 
  private:
-  void sendOpenedCompleteMessage(long socketId, Status status,
+  void sendOpenedCompleteMessage(int64_t socketId, Status status,
                                  std::string reason);
 };
 

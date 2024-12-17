@@ -193,11 +193,11 @@ class MessageTestApp : public TestNanoapp {
   void handleEvent(uint32_t, uint16_t eventType,
                    const void *eventData) override {
     switch (eventType) {
-      case CHRE_EVENT_MESSAGE_FROM_ENDPOINT: {
+      case CHRE_EVENT_MSG_FROM_ENDPOINT: {
         {
           std::unique_lock<std::mutex> lock(mMutex);
           auto *message =
-              static_cast<const struct chreMessageFromEndpointData *>(
+              static_cast<const struct chreMsgMessageFromEndpointData *>(
                   eventData);
           EXPECT_EQ(message->messageType, 1);
           EXPECT_EQ(message->messagePermissions, 0);
@@ -212,12 +212,11 @@ class MessageTestApp : public TestNanoapp {
         mCondVar.notify_one();
         break;
       }
-      case CHRE_EVENT_ENDPOINT_SESSION_CLOSED: {
+      case CHRE_EVENT_MSG_SESSION_CLOSED: {
         {
           std::unique_lock<std::mutex> lock(mMutex);
           auto *session =
-              static_cast<const struct chreEndpointSessionClosedData *>(
-                  eventData);
+              static_cast<const struct chreMsgSessionInfo *>(eventData);
           EXPECT_EQ(session->hubId, kOtherMessageHubId);
           EXPECT_EQ(session->endpointId, kEndpointInfos[0].id);
           mSessionClosed = true;

@@ -764,8 +764,7 @@ TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
       10>
       freeCallbackRecords;
   MessageRouterCallbackAllocator<FreeCallbackContext> allocator(
-      [](std::byte *message, size_t length,
-         const FreeCallbackContext &context) {
+      [](std::byte *message, size_t length, FreeCallbackContext &&context) {
         *context.freeCallbackCalled =
             message == context.message && length == context.length;
       },
