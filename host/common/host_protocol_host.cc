@@ -87,6 +87,14 @@ bool HostProtocolHost::decodeMessageFromChre(const void *message,
         handlers.handleSelfTestResponse(*msg.AsSelfTestResponse());
         break;
 
+      case fbs::ChreMessage::BtSocketOpenResponse:
+        handlers.handleBtSocketOpenResponse(*msg.AsBtSocketOpenResponse());
+        break;
+
+      case fbs::ChreMessage::BtSocketClose:
+        handlers.handleBtSocketClose(*msg.AsBtSocketClose());
+        break;
+
       default:
         success = handlers.handleContextHubV4Message(msg);
     }

@@ -24,10 +24,12 @@
 #include <functional>
 #include <future>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_set>
 
+#include "bluetooth_socket_connection_callback.h"
 #include "chre_host/napp_header.h"
 #include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
@@ -56,13 +58,17 @@ class ContextHub : public BnContextHub,
                    public ::android::hardware::contexthub::DebugDumpHelper,
                    public ::android::hardware::contexthub::common::
                        implementation::IChreSocketCallback {
+  using HalChreSocketConnection = ::android::hardware::contexthub::common::
+      implementation::HalChreSocketConnection;
+
  public:
   ContextHub()
       : mDeathRecipient(
             AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {
+    mConnection = std::make_shared<HalChreSocketConnection>(this);
     if (::android::chre::flags::offload_implementation()) {
       mV4Impl.emplace([this](uint8_t *data, size_t size) {
-        return mConnection.sendRawMessage(data, size);
+        return mConnection->sendRawMessage(data, size);
       });
     }
   }
@@ -142,12 +148,16 @@ class ContextHub : public BnContextHub,
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   bool requestDebugDump() override {
-    return mConnection.requestDebugDump();
+    return mConnection->requestDebugDump();
   }
 
   void debugDumpFinish() override;
 
   void writeToDebugFile(const char *str) override;
+
+  std::shared_ptr<HalChreSocketConnection> getConnection() {
+    return mConnection;
+  }
 
  private:
   /**
@@ -159,8 +169,8 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus enableTestMode();
 
   /**
-   * Disables test mode. Reverses the affects of enableTestMode() by loading all
-   * preloaded nanoapps. This puts CHRE back in a normal state.
+   * Disables test mode. Reverses the affects of enableTestMode() by loading
+   * all preloaded nanoapps. This puts CHRE back in a normal state.
    *
    * @return                            the status.
    */
@@ -228,10 +238,11 @@ class ContextHub : public BnContextHub,
 
   /**
    * Get the preloaded nanoapp IDs from the config file and headers. All IDs,
-   * names and headers are in the same order (one nanoapp has the same index in
-   * each).
+   * names and headers are in the same order (one nanoapp has the same index
+   * in each).
    *
-   * @param out_preloadedNanoapps       out parameter, the nanoapp information.
+   * @param out_preloadedNanoapps       out parameter, the nanoapp
+   * information.
    * @param out_directory               out parameter, optional, the directory
    * that contains the nanoapps.
    * @return true                       the operation was successful.
@@ -261,8 +272,7 @@ class ContextHub : public BnContextHub,
                    : chre::fbs::SettingState::DISABLED;
   }
 
-  ::android::hardware::contexthub::common::implementation::
-      HalChreSocketConnection mConnection{this};
+  std::shared_ptr<HalChreSocketConnection> mConnection;
 
   // A mutex to protect concurrent modifications to the callback pointer and
   // access (invocations).
