@@ -18,15 +18,20 @@
 #define ANDROID_HARDWARE_CONTEXTHUB_AIDL_CONTEXTHUB_H
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <android_chre_flags.h>
 #include <log/log.h>
 #include <atomic>
+#include <functional>
 #include <future>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_set>
 
+#include "bluetooth_socket_connection_callback.h"
 #include "chre_host/napp_header.h"
+#include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_chre_socket_connection.h"
@@ -53,10 +58,20 @@ class ContextHub : public BnContextHub,
                    public ::android::hardware::contexthub::DebugDumpHelper,
                    public ::android::hardware::contexthub::common::
                        implementation::IChreSocketCallback {
+  using HalChreSocketConnection = ::android::hardware::contexthub::common::
+      implementation::HalChreSocketConnection;
+
  public:
   ContextHub()
       : mDeathRecipient(
-            AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {}
+            AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {
+    mConnection = std::make_shared<HalChreSocketConnection>(this);
+    if (::android::chre::flags::offload_implementation()) {
+      mV4Impl.emplace([this](uint8_t *data, size_t size) {
+        return mConnection->sendRawMessage(data, size);
+      });
+    }
+  }
   ::ndk::ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *out_contextHubInfos) override;
   ::ndk::ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -88,6 +103,27 @@ class ContextHub : public BnContextHub,
       char16_t in_hostEndpointId) override;
   ::ndk::ScopedAStatus onNanSessionStateChanged(
       const NanSessionStateUpdate &in_update) override;
+  ::ndk::ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
+  ::ndk::ScopedAStatus getEndpoints(
+      std::vector<EndpointInfo> *endpoints) override;
+  ::ndk::ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
+  ::ndk::ScopedAStatus unregisterEndpoint(
+      const EndpointInfo &endpoint) override;
+  ::ndk::ScopedAStatus registerEndpointCallback(
+      const std::shared_ptr<IEndpointCallback> &callback) override;
+  ::ndk::ScopedAStatus requestSessionIdRange(
+      int32_t size, std::array<int32_t, 2> *ids) override;
+  ::ndk::ScopedAStatus openEndpointSession(
+      int32_t sessionId, const EndpointId &destination,
+      const EndpointId &initiator,
+      const std::optional<std::string> &serviceDescriptor) override;
+  ::ndk::ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
+                                             const Message &msg) override;
+  ::ndk::ScopedAStatus sendMessageDeliveryStatusToEndpoint(
+      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
+  ::ndk::ScopedAStatus closeEndpointSession(int32_t sessionId,
+                                            Reason reason) override;
+  ::ndk::ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
 
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) override;
 
@@ -103,18 +139,25 @@ class ContextHub : public BnContextHub,
   void onDebugDumpComplete(
       const ::chre::fbs::DebugDumpResponseT &response) override;
 
+  bool onContextHubV4Message(
+      const ::chre::fbs::ChreMessageUnion &message) override;
+
   void handleServiceDeath();
   static void onServiceDied(void *cookie);
 
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   bool requestDebugDump() override {
-    return mConnection.requestDebugDump();
+    return mConnection->requestDebugDump();
   }
 
   void debugDumpFinish() override;
 
   void writeToDebugFile(const char *str) override;
+
+  std::shared_ptr<HalChreSocketConnection> getConnection() {
+    return mConnection;
+  }
 
  private:
   /**
@@ -126,8 +169,8 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus enableTestMode();
 
   /**
-   * Disables test mode. Reverses the affects of enableTestMode() by loading all
-   * preloaded nanoapps. This puts CHRE back in a normal state.
+   * Disables test mode. Reverses the affects of enableTestMode() by loading
+   * all preloaded nanoapps. This puts CHRE back in a normal state.
    *
    * @return                            the status.
    */
@@ -195,10 +238,11 @@ class ContextHub : public BnContextHub,
 
   /**
    * Get the preloaded nanoapp IDs from the config file and headers. All IDs,
-   * names and headers are in the same order (one nanoapp has the same index in
-   * each).
+   * names and headers are in the same order (one nanoapp has the same index
+   * in each).
    *
-   * @param out_preloadedNanoapps       out parameter, the nanoapp information.
+   * @param out_preloadedNanoapps       out parameter, the nanoapp
+   * information.
    * @param out_directory               out parameter, optional, the directory
    * that contains the nanoapps.
    * @return true                       the operation was successful.
@@ -228,8 +272,7 @@ class ContextHub : public BnContextHub,
                    : chre::fbs::SettingState::DISABLED;
   }
 
-  ::android::hardware::contexthub::common::implementation::
-      HalChreSocketConnection mConnection{this};
+  std::shared_ptr<HalChreSocketConnection> mConnection;
 
   // A mutex to protect concurrent modifications to the callback pointer and
   // access (invocations).
@@ -237,6 +280,11 @@ class ContextHub : public BnContextHub,
   std::shared_ptr<IContextHubCallback> mCallback;
 
   ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
+
+  // Implementation of the V4 API.
+  std::optional<
+      ::android::hardware::contexthub::common::implementation::ContextHubV4Impl>
+      mV4Impl{};
 
   std::map<Setting, bool> mSettingEnabled;
   std::optional<bool> mIsWifiAvailable;

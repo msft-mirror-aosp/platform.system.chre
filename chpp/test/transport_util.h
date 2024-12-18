@@ -58,12 +58,6 @@ constexpr uint8_t kChppPreamble1 = 0x43;
  ***********************************************/
 
 /**
- * Wait for chppTransportDoWork() to finish after it is notified by
- * chppEnqueueTxPacket to run.
- */
-void WaitForTransport(struct ChppTransportState *transportContext);
-
-/**
  * Validates a ChppTestResponse. Since the error field within the
  * ChppAppHeader struct is optional (and not used for common services), this
  * function returns the error field to be checked if desired, depending on the

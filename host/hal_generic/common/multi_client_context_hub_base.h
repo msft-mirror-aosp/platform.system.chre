@@ -26,16 +26,20 @@
 #include "chre_host/napp_header.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
 #include "chre_host/time_syncer.h"
+#include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <array>
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 namespace android::hardware::contexthub::common::implementation {
 
@@ -89,11 +93,32 @@ class MultiClientContextHubBase
   ScopedAStatus sendMessageDeliveryStatusToHub(
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
+  ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
+  ScopedAStatus getEndpoints(std::vector<EndpointInfo> *endpoints) override;
+  ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus registerEndpointCallback(
+      const std::shared_ptr<IEndpointCallback> &callback) override;
+  ScopedAStatus requestSessionIdRange(int32_t size,
+                                      std::array<int32_t, 2> *ids) override;
+  ScopedAStatus openEndpointSession(
+      int32_t sessionId, const EndpointId &destination,
+      const EndpointId &initiator,
+      const std::optional<std::string> &serviceDescriptor) override;
+  ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
+                                      const Message &msg) override;
+  ScopedAStatus sendMessageDeliveryStatusToEndpoint(
+      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
+  ScopedAStatus closeEndpointSession(int32_t sessionId, Reason reason) override;
+  ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
 
   // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
+  void onChreDisconnected() override {
+    mIsChreReady = false;
+  }
 
   // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -197,6 +222,10 @@ class MultiClientContextHubBase
   // one instance of a HalClientManager.
   std::unique_ptr<HalClientManager> mHalClientManager{};
 
+  // Implementation of the V4+ API. Should be instantiated by the target HAL
+  // implementation.
+  std::optional<ContextHubV4Impl> mV4Impl{};
+
   std::unique_ptr<PreloadedNanoappLoader> mPreloadedNanoappLoader{};
 
   std::unique_ptr<ContextHubInfo> mContextHubInfo;
@@ -241,6 +270,12 @@ class MultiClientContextHubBase
   // Used to map message sequence number to host endpoint ID
   std::mutex mReliableMessageMutex;
   std::deque<ReliableMessageRecord> mReliableMessageQueue;
+
+  // A thread safe flag indicating if CHRE is ready for operations.
+  // Outside of the constructor, this boolean flag should only be written by
+  // onChreDisconnected and onChreRestarted, the order of which should be
+  // guaranteed by the CHRE's disconnection handler.
+  std::atomic_bool mIsChreReady = true;
 
   // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;

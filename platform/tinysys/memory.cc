@@ -30,7 +30,6 @@ extern "C" {
 #include "encoding.h"
 #include "mt_heap.h"
 #include "resource_req.h"
-#include "sensorhub/heap.h"
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -46,7 +45,11 @@ void DramVoteClient::issueDramVote(bool /*enabled*/) {}
 void forceDramAccess() {}
 
 void nanoappBinaryFree(void *pointer) {
+#ifdef NANOAPP_ALWAYS_IN_DRAM
+  aligned_dram_free(pointer);
+#else
   aligned_free(pointer);
+#endif
 }
 
 void nanoappBinaryDramFree(void *pointer) {
@@ -70,6 +73,9 @@ void palSystemApiMemoryFree(void *pointer) {
 }
 
 void *nanoappBinaryAlloc(size_t size, size_t alignment) {
+#ifdef NANOAPP_ALWAYS_IN_DRAM
+  return aligned_dram_malloc(size, alignment);
+#endif
   return aligned_malloc(size, alignment);
 }
 
@@ -80,7 +86,7 @@ void *nanoappBinaryDramAlloc(size_t size, size_t alignment) {
 }
 
 void *memoryAlloc(size_t size) {
-  void *address = heap_alloc(size);
+  void *address = pvPortMalloc(size);
   if (address == nullptr && size > 0) {
     // Try dram if allocation from sram fails.
     // DramVoteClient tracks the duration of the allocations falling back to
@@ -103,7 +109,7 @@ void memoryFree(void *pointer) {
     vPortDramFree(pointer);
     DramVoteClientSingleton::get()->decrementDramVoteCount();
   } else {
-    heap_free(pointer);
+    vPortFree(pointer);
   }
 }
 }  // namespace chre

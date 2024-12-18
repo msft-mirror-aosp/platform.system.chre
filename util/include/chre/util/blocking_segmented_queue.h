@@ -17,8 +17,8 @@
 #ifndef CHRE_UTIL_BLOCKING_SEGMENTED_QUEUE_H_
 #define CHRE_UTIL_BLOCKING_SEGMENTED_QUEUE_H_
 
-#include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/segmented_queue.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
 namespace chre {
 /**
  * Similar but memory efficient version of chre::FixedSizeBlockingQueue.

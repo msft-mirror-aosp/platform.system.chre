@@ -1,5 +1,6 @@
 #include "location/lbs/contexthub/nanoapps/nearby/tracker_filter.h"
 
+#include <inttypes.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -51,6 +52,10 @@ void TrackerFilter::Update(
   }
   scan_filter_config_.hardware_filters = std::move(hardware_filters);
   scan_filter_config_.rssi_threshold = filter_config.rssi_threshold;
+  scan_filter_config_.active_interval_ms = filter_config.active_interval_ms;
+  scan_filter_config_.active_window_ms = filter_config.active_window_ms;
+  ConfigureActiveState();
+  ConfigureScanControlTimers();
   // Sets batch configuration
   batch_config_.sample_interval_ms = filter_config.sample_interval_ms;
   batch_config_.max_tracker_count = filter_config.max_tracker_count;
@@ -60,6 +65,42 @@ void TrackerFilter::Update(
   batch_config_.lost_timeout_ms = filter_config.lost_timeout_ms;
   batch_config_.opportunistic_flush_threshold_time_ms =
       filter_config.opportunistic_flush_threshold_time_ms;
+}
+
+void TrackerFilter::ConfigureActiveState() {
+  if (!scan_filter_config_.hardware_filters.empty()) {
+    SetActiveState();
+  } else {
+    ClearActiveState();
+  }
+}
+
+void TrackerFilter::ConfigureScanControlTimers() {
+  // The timer based scan is only enabled when the hardware scan filters are not
+  // empty and the active window and interval are valid. The active interval
+  // must be greater than the active window so that the timer based scan can
+  // function properly.
+  if (!scan_filter_config_.hardware_filters.empty() &&
+      scan_filter_config_.active_window_ms > 0) {
+    if (scan_filter_config_.active_interval_ms <=
+        scan_filter_config_.active_window_ms) {
+      LOGE("Invalid active interval %" PRIu32
+           " ms, must be greater than active window %" PRIu32 " ms.",
+           scan_filter_config_.active_interval_ms,
+           scan_filter_config_.active_window_ms);
+      return;
+    }
+    // Sets active interval and window timer duration.
+    active_interval_timer_.SetDurationMs(
+        scan_filter_config_.active_interval_ms);
+    active_window_timer_.SetDurationMs(scan_filter_config_.active_window_ms);
+    // Starts active interval and window timers.
+    if (active_interval_timer_.StartTimer()) {
+      active_window_timer_.StartTimer();
+    }
+  } else if (scan_filter_config_.hardware_filters.empty()) {
+    active_interval_timer_.StopTimer();
+  }
 }
 
 void TrackerFilter::MatchAndSave(

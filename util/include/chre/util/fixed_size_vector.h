@@ -211,6 +211,6 @@ class FixedSizeVector : public NonCopyable {
 
 }  // namespace chre
 
-#include "chre/util/fixed_size_vector_impl.h"
+#include "chre/util/fixed_size_vector_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_FIXED_SIZE_VECTOR_H_

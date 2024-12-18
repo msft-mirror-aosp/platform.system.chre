@@ -17,6 +17,7 @@
 #include "chre_host/config_util.h"
 #include "chre_host/log.h"
 
+#include <algorithm>
 #include <dirent.h>
 #include <json/json.h>
 #include <filesystem>
@@ -39,10 +40,12 @@ bool findAllNanoappsInFolder(const std::string &path,
     if (!std::regex_match(entry->d_name, match, regex)) {
       continue;
     }
-    LOGD("Found nanoapp: %s", match[1]);
-    outNanoapps.push_back(match[1]);
+    std::string nanoapp_name = match[1];
+    LOGD("Found nanoapp: %s", nanoapp_name.c_str());
+    outNanoapps.push_back(nanoapp_name);
   }
   closedir(dir);
+  std::sort(outNanoapps.begin(), outNanoapps.end());
   return true;
 }
 

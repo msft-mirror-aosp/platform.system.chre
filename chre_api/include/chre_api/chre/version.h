@@ -164,12 +164,22 @@ extern "C" {
  * This version of the CHRE API is shipped with Android V. It adds support for
  * reliable messaging.
  *
+ * @see CHRE_API_VERSION
+ */
+#define CHRE_API_VERSION_1_10 UINT32_C(0x010a0000)
+
+/**
+ * Value for version 1.11 of the Context Hub Runtime Environment API interface.
+ *
+ * This version of the CHRE API is shipped with Android 16. It adds definitions
+ * for WWAN Cell Neighbors.
+ *
  * @note This version of the CHRE API has not been finalized yet, and is
  * currently considered a preview that is subject to change.
  *
  * @see CHRE_API_VERSION
  */
-#define CHRE_API_VERSION_1_10 UINT32_C(0x010a0000)
+#define CHRE_API_VERSION_1_11 UINT32_C(0x010b0000)
 
 /**
  * Major and Minor Version of this Context Hub Runtime Environment API.
@@ -188,7 +198,7 @@ extern "C" {
  * Note that version numbers can always be numerically compared with
  * expected results, so 1.0.0 < 1.0.4 < 1.1.0 < 2.0.300 < 3.5.0.
  */
-#define CHRE_API_VERSION CHRE_API_VERSION_1_10
+#define CHRE_API_VERSION CHRE_API_VERSION_1_11
 
 /**
  * Utility macro to extract only the API major version of a composite CHRE
@@ -270,6 +280,8 @@ uint32_t chreGetVersion(void);
  * be shipped with a workaround that would use this value, and chreGetVersion(),
  * to have code that can conditionally work around the bug on a buggy version.
  * Thus, we require this uniqueness to allow such a setup to work.
+ *
+ * This platform ID is also the message hub ID for CHRE.
  *
  * @return The platform ID.
  *

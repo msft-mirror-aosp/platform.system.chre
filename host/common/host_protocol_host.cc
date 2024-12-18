@@ -87,10 +87,16 @@ bool HostProtocolHost::decodeMessageFromChre(const void *message,
         handlers.handleSelfTestResponse(*msg.AsSelfTestResponse());
         break;
 
+      case fbs::ChreMessage::BtSocketOpenResponse:
+        handlers.handleBtSocketOpenResponse(*msg.AsBtSocketOpenResponse());
+        break;
+
+      case fbs::ChreMessage::BtSocketClose:
+        handlers.handleBtSocketClose(*msg.AsBtSocketClose());
+        break;
+
       default:
-        LOGW("Got invalid/unexpected message type %" PRIu8,
-             static_cast<uint8_t>(msg.type));
-        success = false;
+        success = handlers.handleContextHubV4Message(msg);
     }
   }
 
