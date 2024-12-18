@@ -281,6 +281,8 @@ uint32_t chreGetVersion(void);
  * to have code that can conditionally work around the bug on a buggy version.
  * Thus, we require this uniqueness to allow such a setup to work.
  *
+ * This platform ID is also the message hub ID for CHRE.
+ *
  * @return The platform ID.
  *
  * @see CHRE_EXTRACT_VENDOR_ID

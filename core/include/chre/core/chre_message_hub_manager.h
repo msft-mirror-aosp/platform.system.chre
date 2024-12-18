@@ -24,6 +24,7 @@
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/unique_ptr.h"
+#include "chre_api/chre.h"
 
 #include <cinttypes>
 #include <optional>
@@ -49,14 +50,14 @@ class ChreMessageHubManager
  private:
   //! Data to be passed to the message callback
   struct MessageCallbackData {
-    chreMessageFromEndpointData messageToNanoapp;
+    chreMsgMessageFromEndpointData messageToNanoapp;
     pw::UniquePtr<std::byte[]> data;
     uint64_t nanoappId;
   };
 
   //! Data to be passed to the session closed callback
   struct SessionClosedCallbackData {
-    chreEndpointSessionClosedData sessionClosedData;
+    chreMsgSessionInfo sessionClosedData;
     uint64_t nanoappId;
   };
 

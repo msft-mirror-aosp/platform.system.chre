@@ -15,6 +15,7 @@
  */
 
 #include "bluetooth_socket_base.h"
+#include <cstdint>
 
 #include "chre/platform/shared/host_protocol_common.h"
 #include "chre_connection.h"
@@ -123,7 +124,7 @@ void BluetoothSocketBase::handleBtSocketClose(
   mCallback->close(message.socketId, reason);
 }
 
-void BluetoothSocketBase::sendOpenedCompleteMessage(long socketId,
+void BluetoothSocketBase::sendOpenedCompleteMessage(int64_t socketId,
                                                     Status status,
                                                     std::string reason) {
   if (mCallback == nullptr) {

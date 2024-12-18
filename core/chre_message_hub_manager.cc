@@ -71,7 +71,7 @@ void ChreMessageHubManager::onMessageToNanoappCallback(
          data->messageToNanoapp.messagePermissions);
   } else if (!EventLoopManagerSingleton::get()
                   ->getEventLoop()
-                  .distributeEventSync(CHRE_EVENT_MESSAGE_FROM_ENDPOINT,
+                  .distributeEventSync(CHRE_EVENT_MSG_FROM_ENDPOINT,
                                        &data->messageToNanoapp,
                                        nanoapp->getInstanceId())) {
     LOGE("Unable to distribute message to nanoapp with ID 0x%" PRIx64,
@@ -104,7 +104,7 @@ void ChreMessageHubManager::onSessionClosedCallback(
 
   bool success =
       EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
-          CHRE_EVENT_ENDPOINT_SESSION_CLOSED, &data->sessionClosedData,
+          CHRE_EVENT_MSG_SESSION_CLOSED, &data->sessionClosedData,
           nanoapp->getInstanceId());
   if (!success) {
     LOGE("Unable to process session closed event to nanoapp with ID 0x%" PRIx64,

@@ -61,7 +61,7 @@ void MessageRouterCallbackAllocator<Metadata>::DoDeallocate(void *ptr) {
 
   if (freeCallbackRecord.has_value()) {
     mCallback(freeCallbackRecord->message, freeCallbackRecord->messageSize,
-              freeCallbackRecord->metadata);
+              std::move(freeCallbackRecord->metadata));
   }
 }
 
