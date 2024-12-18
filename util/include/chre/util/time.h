@@ -308,6 +308,6 @@ constexpr bool operator>(const Nanoseconds &nanos_a,
 
 }  // namespace chre
 
-#include "chre/util/time_impl.h"
+#include "chre/util/time_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_TIME_H_
