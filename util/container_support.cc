@@ -50,5 +50,6 @@ void chreLog(enum chreLogLevel level, const char *formatStr, ...) {
   va_list argList;
   va_start(argList, formatStr);
   vprintf(formatStr, argList);
+  printf("\n");
   va_end(argList);
 }

@@ -17,11 +17,13 @@
 #include "gtest/gtest.h"
 
 #include "chre/util/memory_pool.h"
+#include "chre/util/nested_data_ptr.h"
 
 #include <random>
 #include <vector>
 
-using chre::MemoryPool;
+using ::chre::MemoryPool;
+using ::chre::NestedDataPtr;
 
 TEST(MemoryPool, ExhaustPool) {
   MemoryPool<int, 3> memoryPool;
@@ -129,6 +131,142 @@ TEST(MemoryPool, ExhaustPoolThenRandomDeallocate) {
 
       // Remove the freed allocation from the allocation list.
       allocations.erase(allocations.begin() + deallocateIndex);
+    }
+  }
+}
+
+TEST(MemoryPool, FindAnElement) {
+  MemoryPool<int, 4> memoryPool;
+
+  // Exhaust the pool.
+  int *element1 = memoryPool.allocate();
+  int *element2 = memoryPool.allocate();
+  int *element3 = memoryPool.allocate();
+  int *element4 = memoryPool.allocate();
+
+  // Perform some simple assignments. There is a chance we crash here if things
+  // are not implemented correctly.
+  *element1 = 0xcafe;
+  *element2 = 0xbeef;
+  *element3 = 0xface;
+  *element4 = 0xface;
+
+  // Do a find with a known element.
+  int *foundElement = memoryPool.find(
+      [](int *element, void *data) {
+        NestedDataPtr<int> value(data);
+        return *element == value;
+      },
+      NestedDataPtr<int>(0xface));
+  EXPECT_NE(foundElement, nullptr);
+  EXPECT_EQ(foundElement, element3);
+
+  // Do a find with an unknown element.
+  foundElement = memoryPool.find(
+      [](int *element, void *data) {
+        NestedDataPtr<int> value(data);
+        return *element == value;
+      },
+      NestedDataPtr<int>(0xaaaa));
+  EXPECT_EQ(foundElement, nullptr);
+}
+
+TEST(MemoryPool, FindAnElementAfterDeallocation) {
+  MemoryPool<int, 4> memoryPool;
+
+  // Exhaust the pool.
+  int *element1 = memoryPool.allocate();
+  int *element2 = memoryPool.allocate();
+  int *element3 = memoryPool.allocate();
+  int *element4 = memoryPool.allocate();
+
+  // Perform some simple assignments. There is a chance we crash here if things
+  // are not implemented correctly.
+  *element1 = 0xcafe;
+  *element2 = 0xbeef;
+  *element3 = 0xface;
+  *element4 = 0xface;
+
+  // Deallocate element 3 then try to find element 4.
+  memoryPool.deallocate(element3);
+  int *foundElement = memoryPool.find(
+      [](int *element, void *data) {
+        NestedDataPtr<int> value(data);
+        return *element == value;
+      },
+      NestedDataPtr<int>(0xface));
+  EXPECT_NE(foundElement, nullptr);
+  EXPECT_EQ(foundElement, element4);
+}
+
+TEST(MemoryPool, FindAnElementAfterAllMatchingAreDeallocated) {
+  MemoryPool<int, 4> memoryPool;
+
+  // Exhaust the pool.
+  int *element1 = memoryPool.allocate();
+  int *element2 = memoryPool.allocate();
+  int *element3 = memoryPool.allocate();
+  int *element4 = memoryPool.allocate();
+
+  // Perform some simple assignments. There is a chance we crash here if things
+  // are not implemented correctly.
+  *element1 = 0xcafe;
+  *element2 = 0xbeef;
+  *element3 = 0xface;
+  *element4 = 0xface;
+
+  // Deallocate element 3 then try to find element 4.
+  memoryPool.deallocate(element3);
+  int *foundElement = memoryPool.find(
+      [](int *element, void *data) {
+        NestedDataPtr<int> value(data);
+        return *element == value;
+      },
+      NestedDataPtr<int>(0xface));
+  EXPECT_NE(foundElement, nullptr);
+  EXPECT_EQ(foundElement, element4);
+
+  // Deallocate element 4 and try to find again.
+  memoryPool.deallocate(element4);
+  foundElement = memoryPool.find(
+      [](int *element, void *data) {
+        NestedDataPtr<int> value(data);
+        return *element == value;
+      },
+      NestedDataPtr<int>(0xface));
+  EXPECT_EQ(foundElement, nullptr);
+}
+
+TEST(MemoryPool, FindAnElementAfterDeallocationLargeSize) {
+  constexpr size_t kNumElements = 1000;
+  MemoryPool<int, kNumElements> memoryPool;
+  int *elements[kNumElements];
+
+  for (size_t i = 0; i < kNumElements; ++i) {
+    elements[i] = memoryPool.allocate();
+    *elements[i] = i;
+  }
+
+  // Deallocate even elements.
+  for (size_t i = 0; i < kNumElements; ++i) {
+    if (i % 2 == 0) {
+      memoryPool.deallocate(elements[i]);
+    }
+  }
+
+  // Find odd elements.
+  for (size_t i = 0; i < kNumElements; ++i) {
+    int *foundElement = memoryPool.find(
+        [](int *element, void *data) {
+          NestedDataPtr<int> value(data);
+          return *element == value;
+        },
+        NestedDataPtr<int>(i));
+    if (i % 2 == 0) {
+      EXPECT_EQ(foundElement, nullptr);
+    } else {
+      EXPECT_NE(foundElement, nullptr);
+      EXPECT_EQ(foundElement, elements[i]);
     }
   }
 }

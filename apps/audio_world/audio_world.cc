@@ -16,6 +16,7 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <cstddef>
 
 #include "chre/util/macros.h"
 #include "chre/util/nanoapp/audio.h"
@@ -44,7 +45,7 @@ bool gAudioRequested = false;
 uint32_t gAudioHandle;
 
 //! State for Kiss FFT and logging.
-uint8_t gKissFftBuffer[4096];
+alignas(std::max_align_t) uint8_t gKissFftBuffer[4096];
 kiss_fftr_cfg gKissFftConfig;
 kiss_fft_cpx gKissFftOutput[(kNumFrequencies / 2) + 1];
 Milliseconds gFirstAudioEventTimestamp = Milliseconds(0);

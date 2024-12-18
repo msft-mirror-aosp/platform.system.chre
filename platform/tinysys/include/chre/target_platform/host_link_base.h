@@ -67,6 +67,20 @@ class HostLinkBase {
    */
   static bool send(uint8_t * /*data*/, size_t /*dataLen*/);
 
+  /**
+   * Enqueues a nanoapp token database info message to be sent to the host if a
+   * token database section is found in the nanoapp binary.
+   *
+   * @param appId The ID of the associated nanoapp
+   * @param tokenDatabaseOffset The size offset of the token database
+   * from the start of the address of the ELF binary in bytes.
+   * @param tokenDatabaseSize The size of the token database section
+   * in the ELF binary in bytes.
+   */
+  static void sendNanoappTokenDatabaseInfo(uint64_t appId,
+                                           uint32_t tokenDatabaseOffset,
+                                           size_t tokenDatabaseSize);
+
   void setInitialized(bool initialized) {
     mInitialized = initialized;
   }
@@ -90,6 +104,14 @@ class HostLinkBase {
   void sendLogMessageV2(const uint8_t * /*logMessage*/,
                         size_t /*logMessageSize*/,
                         uint32_t /*num_logs_dropped*/);
+
+  /**
+   * Enqueues a NAN configuration request to be sent to the host.
+   *
+   * @param enable Requests that NAN be enabled or disabled based on the
+   *        boolean's value.
+   */
+  void sendNanConfiguration(bool enable);
 
  private:
   AtomicBool mInitialized = false;

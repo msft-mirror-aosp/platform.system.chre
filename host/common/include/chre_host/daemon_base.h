@@ -25,9 +25,6 @@
  * implement.
  */
 
-// TODO(b/298459533): metrics_reporter_in_the_daemon ramp up -> remove old
-// code
-
 #include <atomic>
 #include <csignal>
 #include <cstdint>
@@ -271,12 +268,6 @@ class ChreDaemonBase {
 #ifdef CHRE_DAEMON_METRIC_ENABLED
   android::chre::MetricsReporter mMetricsReporter;
 #endif  // CHRE_DAEMON_METRIC_ENABLED
-
-  //! This is used to find the nanoapp name with its app ID.
-  std::unordered_map<uint64_t, std::string> mNanoappAppIdToFileNames;
-
-  //! This is used to find the nanoapp app ID with its instance ID.
-  std::unordered_map<uint16_t, uint64_t> mNanoappInstanceIdtoAppId;
 
  private:
   LogMessageParser mLogger;

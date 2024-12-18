@@ -21,6 +21,17 @@
 #include "chre/util/macros.h"
 
 /************************************************
+ *  Constants
+ ***********************************************/
+
+// Constants used in chreWifiScanCacheInitialAgeMsValue() and
+// chreWifiScanCacheFinalizeAgeMs()
+// These values are selected because msec = nsec / 1000000 and
+// 1000000 = 64 * 15625 = (1 << 6) * 15625
+#define CHRE_WIFI_SCAN_CACHE_AGE_MS_SHIFT (6)
+#define CHRE_WIFI_SCAN_CACHE_AGE_MS_DIVISOR (15625)
+
+/************************************************
  *  Prototypes
  ***********************************************/
 
@@ -30,7 +41,7 @@ struct chreWifiScanCacheState {
   bool started;
 
   //! true if the current scan cache is a result of a CHRE active scan request.
-  bool activeScanResult;
+  bool scanRequestedByChre;
 
   //! The number of chreWifiScanResults dropped due to OOM.
   uint16_t numWifiScanResultsDropped;
@@ -46,6 +57,8 @@ struct chreWifiScanCacheState {
   bool scanMonitoringEnabled;
 
   uint32_t scannedFreqList[CHRE_WIFI_FREQUENCY_LIST_MAX_LEN];
+
+  uint64_t scanStartTimeNs;
 };
 
 /************************************************
@@ -81,6 +94,7 @@ static bool isFrequencyListValid(const uint32_t *frequencyList,
 static bool paramsMatchScanCache(const struct chreWifiScanParams *params) {
   uint64_t timeNs = gWifiCacheState.event.referenceTime;
   bool scan_within_age =
+      gWifiCacheState.started ||
       (timeNs >= gSystemApi->getCurrentTime() -
                      (params->maxScanAgeMs * kOneMillisecondInNanoseconds));
 
@@ -142,6 +156,9 @@ static void chreWifiScanCacheDispatchAll(void) {
       // (e.g. an array of chreWifiScanEvent's).
       gWifiCacheState.numWifiEventsPendingRelease++;
       gCallbacks->scanEventCallback(&gWifiCacheState.event);
+      if (gWifiCacheState.numWifiEventsPendingRelease != 0) {
+        gSystemApi->log(CHRE_LOG_ERROR, "Scan event not released immediately");
+      }
     }
   }
 }
@@ -163,6 +180,77 @@ static bool isWifiScanResultInCache(const struct chreWifiScanResult *result,
   }
 
   return false;
+}
+
+static bool isLowerRssiScanResultInCache(
+    const struct chreWifiScanResult *result, size_t *index) {
+  int8_t lowestRssi = result->rssi;
+  bool foundWeakerResult = false;
+  for (uint8_t i = 0; i < gWifiCacheState.event.resultTotal; i++) {
+    const struct chreWifiScanResult *cacheResult =
+        &gWifiCacheState.resultList[i];
+    // Filter based on RSSI to determine weakest result in cache.
+    if (cacheResult->rssi < lowestRssi) {
+      lowestRssi = cacheResult->rssi;
+      *index = i;
+      foundWeakerResult = true;
+    }
+  }
+
+  return foundWeakerResult;
+}
+
+static uint32_t chreWifiScanCacheInitialAgeMsValue() {
+  // ageMs will be finalized via chreWifiScanCacheFinalizeAgeMs() once the scan
+  // finishes, because it is relative to the scan end time that we can't know
+  // yet. Before the end of the scan, populate ageMs with the time since the
+  // start of the scan.
+  //
+  // We avoid 64-bit integer division by:
+  //  - Only considering the delta between this result and the start of the
+  //    scan, which constrains the range of expected values to what should be
+  //    only a few seconds
+  //  - Instead of directly dividing by 1000000, we first divide by 64 (right
+  //    shift by 6), then truncate to 32 bits, then later we'll do integer
+  //    division by 15625 to get milliseconds
+  //    - This works because x/1000000 = x/(64 * 15625) = (x/64)/15625
+  //    - The largest delta we can fit here is 2^32/15625 ms = 274877 ms or
+  //      about 4.5 minutes
+  uint64_t timeSinceScanStartNs =
+      (gSystemApi->getCurrentTime() - gWifiCacheState.scanStartTimeNs);
+  return (timeSinceScanStartNs >> CHRE_WIFI_SCAN_CACHE_AGE_MS_SHIFT);
+}
+
+static void chreWifiScanCacheFinalizeAgeMs() {
+  // Convert ageMs from the chreWifiScanCacheInitialAgeMsValue() to its final,
+  // correct value using the formula derived from these steps:
+  //  ageMs = (referenceTimeNs - absoluteScanResultTimeNs) / 1000000
+  //        = (referenceTimeNs - (scanStartTimeNs + scanOffsetNs)) / 1000000
+  //        = ((referenceTimeNs - scanStartTimeNs) - scanOffsetNs) / 1000000
+  //        = (scanDuration / 64 - scanOffsetNs / 64) / 15625
+  //  ageMs = (scanDurationShifted - currentAgeMsValue) / 15625
+  uint64_t referenceTimeNs = gWifiCacheState.event.referenceTime;
+  uint64_t scanStartTimeNs = gWifiCacheState.scanStartTimeNs;
+  uint32_t scanDurationShifted =
+      (referenceTimeNs - scanStartTimeNs) >> CHRE_WIFI_SCAN_CACHE_AGE_MS_SHIFT;
+  if (referenceTimeNs < scanStartTimeNs) {
+    gSystemApi->log(CHRE_LOG_ERROR, "Invalid scan timestamp, clamping");
+    // Use a smaller number to avoid very large ageMs values
+    scanDurationShifted = 78125000;  // 5 seconds --> 5*10e9 / 64
+  }
+
+  for (uint16_t i = 0; i < gWifiCacheState.event.resultTotal; i++) {
+    if (scanDurationShifted < gWifiCacheState.resultList[i].ageMs) {
+      gSystemApi->log(CHRE_LOG_ERROR,
+                      "Invalid result timestamp %" PRIu32 " vs. %" PRIu32,
+                      gWifiCacheState.resultList[i].ageMs, scanDurationShifted);
+      gWifiCacheState.resultList[i].ageMs = 0;
+    } else {
+      gWifiCacheState.resultList[i].ageMs =
+          (scanDurationShifted - gWifiCacheState.resultList[i].ageMs) /
+          CHRE_WIFI_SCAN_CACHE_AGE_MS_DIVISOR;
+    }
+  }
 }
 
 /************************************************
@@ -192,7 +280,7 @@ bool chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
                                      const uint32_t *scannedFreqList,
                                      uint16_t scannedFreqListLength,
                                      uint8_t radioChainPref,
-                                     bool activeScanResult) {
+                                     bool scanRequestedByChre) {
   bool success = false;
   if (chreWifiScanCacheIsInitialized()) {
     enum chreError error = CHRE_ERROR_NONE;
@@ -218,11 +306,12 @@ bool chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
       gWifiCacheState.event.scannedFreqListLen = scannedFreqListLength;
       gWifiCacheState.event.radioChainPref = radioChainPref;
 
-      gWifiCacheState.activeScanResult = activeScanResult;
+      gWifiCacheState.scanRequestedByChre = scanRequestedByChre;
       gWifiCacheState.started = true;
+      gWifiCacheState.scanStartTimeNs = gSystemApi->getCurrentTime();
     }
 
-    if (activeScanResult && !success) {
+    if (scanRequestedByChre && !success) {
       gCallbacks->scanResponseCallback(false /* pending */, error);
     }
   }
@@ -233,29 +322,30 @@ bool chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
 void chreWifiScanCacheScanEventAdd(const struct chreWifiScanResult *result) {
   if (!gWifiCacheState.started) {
     gSystemApi->log(CHRE_LOG_ERROR, "Cannot add to cache before starting it");
-  } else {
-    size_t index;
-    bool exists = isWifiScanResultInCache(result, &index);
-    if (!exists && gWifiCacheState.event.resultTotal >=
-                       CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY) {
-      // TODO(b/174510884): Filter based on e.g. RSSI if full
+    return;
+  }
+
+  size_t index;
+  if (!isWifiScanResultInCache(result, &index)) {
+    if (gWifiCacheState.event.resultTotal >=
+        CHRE_PAL_WIFI_SCAN_CACHE_CAPACITY) {
       gWifiCacheState.numWifiScanResultsDropped++;
-    } else {
-      if (!exists) {
-        // Only add a new entry if the result was not already cached.
-        index = gWifiCacheState.event.resultTotal;
-        gWifiCacheState.event.resultTotal++;
+      // Determine weakest result in cache to replace with the new result.
+      if (!isLowerRssiScanResultInCache(result, &index)) {
+        return;
       }
-
-      memcpy(&gWifiCacheState.resultList[index], result,
-             sizeof(const struct chreWifiScanResult));
-
-      // ageMs will be properly populated in chreWifiScanCacheScanEventEnd
-      gWifiCacheState.resultList[index].ageMs =
-          (uint32_t)gSystemApi->getCurrentTime() /
-          (uint32_t)kOneMillisecondInNanoseconds;
+    } else {
+      // Result was not already cached, add new entry to the end of the cache
+      index = gWifiCacheState.event.resultTotal;
+      gWifiCacheState.event.resultTotal++;
     }
   }
+
+  memcpy(&gWifiCacheState.resultList[index], result,
+         sizeof(const struct chreWifiScanResult));
+
+  gWifiCacheState.resultList[index].ageMs =
+      chreWifiScanCacheInitialAgeMsValue();
 }
 
 void chreWifiScanCacheScanEventEnd(enum chreError errorCode) {
@@ -265,28 +355,21 @@ void chreWifiScanCacheScanEventEnd(enum chreError errorCode) {
                       "Dropped total of %" PRIu32 " access points",
                       gWifiCacheState.numWifiScanResultsDropped);
     }
-    if (gWifiCacheState.activeScanResult) {
+    if (gWifiCacheState.scanRequestedByChre) {
       gCallbacks->scanResponseCallback(
           errorCode == CHRE_ERROR_NONE /* pending */, errorCode);
     }
 
     if (errorCode == CHRE_ERROR_NONE &&
-        (gWifiCacheState.activeScanResult || gScanMonitoringEnabled)) {
+        (gWifiCacheState.scanRequestedByChre || gScanMonitoringEnabled)) {
       gWifiCacheState.event.referenceTime = gSystemApi->getCurrentTime();
       gWifiCacheState.event.scannedFreqList = gWifiCacheState.scannedFreqList;
-
-      uint32_t referenceTimeMs = (uint32_t)gWifiCacheState.event.referenceTime /
-                                 (uint32_t)kOneMillisecondInNanoseconds;
-      for (uint16_t i = 0; i < gWifiCacheState.event.resultTotal; i++) {
-        gWifiCacheState.resultList[i].ageMs =
-            referenceTimeMs - gWifiCacheState.resultList[i].ageMs;
-      }
-
+      chreWifiScanCacheFinalizeAgeMs();
       chreWifiScanCacheDispatchAll();
     }
 
     gWifiCacheState.started = false;
-    gWifiCacheState.activeScanResult = false;
+    gWifiCacheState.scanRequestedByChre = false;
   }
 }
 
@@ -296,16 +379,28 @@ bool chreWifiScanCacheDispatchFromCache(
     return false;
   }
 
-  if (paramsMatchScanCache(params) &&
-      !isWifiScanCacheBusy(false /* logOnBusy */)) {
-    // TODO(b/174511061): Handle scenario where cache is working on delivering
-    // a scan event. Ideally the library will wait until it is complete to
-    // dispatch from the cache if it meets the criteria, rather than scheduling
-    // a fresh scan.
-    gCallbacks->scanResponseCallback(true /* pending */, CHRE_ERROR_NONE);
-    chreWifiScanCacheDispatchAll();
-    return true;
+  if (paramsMatchScanCache(params)) {
+    if (!isWifiScanCacheBusy(false /* logOnBusy */)) {
+      // Satisfied by cache
+      gCallbacks->scanResponseCallback(true /* pending */, CHRE_ERROR_NONE);
+      chreWifiScanCacheDispatchAll();
+      return true;
+    } else if (gWifiCacheState.started) {
+      // Will be satisfied by cache once the scan completes
+      gSystemApi->log(CHRE_LOG_INFO, "Using in-progress scan for CHRE request");
+      gWifiCacheState.scanRequestedByChre = true;
+      return true;
+    } else {
+      // Assumed: busy because !areAllScanEventsReleased()
+      // TODO(b/174511061): the current code assumes scan events are released
+      // synchronously, so this should never happen
+      gSystemApi->log(CHRE_LOG_ERROR,
+                      "Unexpected scan request while delivering results");
+      return false;
+    }
   } else {
+    // Cache contains results from incompatible scan parameters (either too old
+    // or different scan type), so a new scan is needed
     return false;
   }
 }

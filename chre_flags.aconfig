@@ -2,34 +2,6 @@ package: "android.chre.flags"
 container: "system"
 
 flag {
-  name: "flag_log_nanoapp_load_metrics"
-  namespace: "context_hub"
-  description: "This flag controls nanoapp load failure logging in the HAL and the addition of MetricsReporter"
-  bug: "298459533"
-}
-
-flag {
-  name: "metrics_reporter_in_the_daemon"
-  namespace: "context_hub"
-  description: "This flag controls the addition of MetricsReporter into the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
-  name: "wait_for_preloaded_nanoapp_start"
-  namespace: "context_hub"
-  description: "This flag controls the waiting-for-nanoapp-start behavior in the CHRE daemon"
-  bug: "298459533"
-}
-
-flag {
-  name: "remove_ap_wakeup_metric_report_limit"
-  namespace: "context_hub"
-  description: "This flag controls removing a count limit on reporting the AP wakeup metric"
-  bug: "298459533"
-}
-
-flag {
   name: "context_hub_callback_uuid_enabled"
   namespace: "context_hub"
   description: "Call IContextHubCallback.getUuid() to retrieve the UUID when this flag is on"
@@ -37,7 +9,22 @@ flag {
 }
 
 flag {
+  name: "abort_if_no_context_hub_found"
+  namespace: "context_hub"
+  description: "Abort the HAL process if no context hub info found. For debug purpose only."
+  bug: "344642685"
+}
+
+flag {
+  name: "reconnect_host_endpoints_after_hal_restart"
+  namespace: "context_hub"
+  description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
+  bug: "348253728"
+}
+
+flag {
   name: "reliable_message"
+  is_exported: true
   namespace: "context_hub"
   description: "Enable the reliable message APIs"
   bug: "314081414"
@@ -48,4 +35,86 @@ flag {
   namespace: "context_hub"
   description: "Enable support for reliable messages in CHRE"
   bug: "314081414"
+}
+
+flag {
+  name: "reliable_message_duplicate_detection_service"
+  namespace: "context_hub"
+  description: "Enable duplicate detection for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_retry_support_service"
+  namespace: "context_hub"
+  description: "Enable retries for reliable messages in the Context Hub Service"
+  bug: "331795143"
+}
+
+flag {
+  name: "reliable_message_test_mode_behavior"
+  namespace: "context_hub"
+  description: "Enables test mode behaviors in the Context Hub Service for reliable messages"
+  bug: "333567339"
+}
+
+flag {
+  name: "bug_fix_hal_reliable_message_record"
+  namespace: "context_hub"
+  description: "A flag guarding the fix of how the Context Hub HAL stores the reliable message records."
+  bug: "333567700"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "fix_api_check"
+  namespace: "context_hub"
+  description: "Fixes API check errors in Context Hub classes"
+  bug: "340880058"
+}
+
+flag {
+  name: "refactor_hal_xport_agnostic"
+  namespace: "context_hub"
+  description: "Flag guarding refactor of ContextHub HAL to be transport agnostic"
+  bug: "360926711"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "remove_old_context_hub_apis"
+  namespace: "context_hub"
+  description: "Removes the implementation of the deprecated old ContextHub APIs"
+  bug: "359925548"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "unified_metrics_reporting_api"
+  namespace: "context_hub"
+  description: "The API for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
+}
+
+flag {
+  name: "unified_metrics_reporting_implementation"
+  namespace: "context_hub"
+  description: "The implementation for unified metrics reporting in the Context Hub Service"
+  bug: "361804033"
+}
+
+flag {
+  name: "reduce_locking_context_hub_transaction_manager"
+  namespace: "context_hub"
+  description: "Reduces locking in the ContextHubTransactionManager"
+  bug: "362299144"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

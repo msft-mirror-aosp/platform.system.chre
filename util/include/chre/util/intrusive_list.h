@@ -60,6 +60,15 @@ struct ListNode {
   ~ListNode() {
     CHRE_ASSERT(node.prev == nullptr && node.next == nullptr);
   }
+
+  /**
+   * Checks if this list node is linked in a list.
+   *
+   * @return true if the list node is part of a list.
+   */
+  bool isLinked() const {
+    return node.prev != nullptr && node.next != nullptr;
+  }
 };
 
 /**
@@ -161,9 +170,16 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
   }
 
   /**
+   * Link a new node to the front of the linked list.
+   *
+   * @param newNode: the node to push to the front of the linked list.
+   */
+  void link_front(ListNode<ElementType> *newNode);
+
+  /**
    * Link a new node to the end of the linked list.
    *
-   * @param newNode: the node to push to the pack of the linked list.
+   * @param newNode: the node to push to the back of the linked list.
    */
   void link_back(ListNode<ElementType> *newNode);
 
@@ -232,6 +248,6 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
 
 }  // namespace chre
 
-#include "chre/util/intrusive_list_impl.h"
+#include "chre/util/intrusive_list_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_INTRUSIVE_LIST_H_

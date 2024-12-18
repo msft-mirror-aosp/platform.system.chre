@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
 #define CHRE_UTIL_SYNCHRONIZED_MEMORY_POOL_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/lock_guard.h"
 #include "chre/util/synchronized_memory_pool.h"
 
@@ -35,6 +36,13 @@ void SynchronizedMemoryPool<ElementType, kSize>::deallocate(
     ElementType *element) {
   LockGuard<Mutex> lock(mMutex);
   mMemoryPool.deallocate(element);
+}
+
+template <typename ElementType, size_t kSize>
+ElementType *SynchronizedMemoryPool<ElementType, kSize>::find(
+    MatchingFunction *matchingFunction, void *data) {
+  LockGuard<Mutex> lock(mMutex);
+  return mMemoryPool.find(matchingFunction, data);
 }
 
 template <typename ElementType, size_t kSize>

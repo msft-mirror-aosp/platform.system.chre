@@ -41,12 +41,16 @@ class HostLink : public HostLinkBase, public NonCopyable {
  public:
   /**
    * Flush (or purge) any messages sent by the given app ID that are currently
-   * pending delivery to the host. At the point that this function is called, it
-   * is guaranteed that no new messages will be generated from this nanoapp.
+   * pending delivery to the host. Note that this doesn't need to guarantee that
+   * messages have arrived on the host side, only that the memory associated
+   * with them is no longer referenced by HostLink, i.e.
+   * HostCommsManager::onMessageToHostComplete() has been invoked. This function
+   * must impose strict ordering constraints, such that after it returns, it is
+   * guaranteed that HostCommsManager::onMessageToHostComplete will not be
+   * invoked for the app with the given ID.
    *
-   * This function must impose strict ordering constraints, such that after it
-   * returns, it is guaranteed that HostCommsManager::onMessageToHostComplete
-   * will not be invoked for the app with the given ID.
+   * At the point that this function is called, it is guaranteed that no new
+   * messages will be generated from this nanoapp.
    */
   void flushMessagesSentByNanoapp(uint64_t appId);
 
@@ -62,6 +66,17 @@ class HostLink : public HostLinkBase, public NonCopyable {
    * @return true if the message was successfully queued
    */
   bool sendMessage(const MessageToHost *message);
+
+  /**
+   * Sends a transaction status to the host.
+   *
+   * @param messageSequenceNumber The message sequence number.
+   * @param errorCode The error code from enum chreError.
+   *
+   * @return whether the status was successfully sent.
+   */
+  bool sendMessageDeliveryStatus(uint32_t messageSequenceNumber,
+                                 uint8_t errorCode);
 
   /**
    * Sends a metric message to the host.

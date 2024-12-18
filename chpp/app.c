@@ -36,6 +36,12 @@
 #include "chpp/macros.h"
 #include "chpp/notifier.h"
 #include "chpp/pal_api.h"
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+#include "chpp/platform/vendor_clients.h"
+#endif
+#ifdef CHPP_SERVICE_ENABLED_VENDOR
+#include "chpp/platform/vendor_services.h"
+#endif
 #include "chpp/services.h"
 #include "chpp/services/discovery.h"
 #include "chpp/services/loopback.h"
@@ -635,10 +641,16 @@ void chppAppInitWithClientServiceSet(
 
 #ifdef CHPP_SERVICE_ENABLED
   chppRegisterCommonServices(appContext);
+#ifdef CHPP_SERVICE_ENABLED_VENDOR
+  chppRegisterVendorServices(appContext);
+#endif
 #endif
 
 #ifdef CHPP_CLIENT_ENABLED
   chppRegisterCommonClients(appContext);
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+  chppRegisterVendorClients(appContext);
+#endif
   chppInitBasicClients(appContext);
 #endif
 }
@@ -650,10 +662,16 @@ void chppAppDeinit(struct ChppAppState *appContext) {
   chppDeinitMatchedClients(appContext);
   chppDeinitBasicClients(appContext);
   chppDeregisterCommonClients(appContext);
+#ifdef CHPP_CLIENT_ENABLED_VENDOR
+  chppDeregisterVendorClients(appContext);
+#endif
 #endif
 
 #ifdef CHPP_SERVICE_ENABLED
   chppDeregisterCommonServices(appContext);
+#ifdef CHPP_SERVICE_ENABLED_VENDOR
+  chppDeregisterVendorServices(appContext);
+#endif
 #endif
 
   chppPalSystemApiDeinit(appContext);
@@ -889,6 +907,10 @@ void chppTimestampOutgoingRequest(struct ChppAppState *appState,
   CHPP_ASSERT(msgType == CHPP_MESSAGE_TYPE_CLIENT_REQUEST ||
               msgType == CHPP_MESSAGE_TYPE_SERVICE_REQUEST);
 
+  // Hold the mutex to avoid concurrent read of a partially modified outReqState
+  // structure by the RX thread
+  chppMutexLock(&appState->transportContext->mutex);
+
   if (outReqState->requestState == CHPP_REQUEST_STATE_REQUEST_SENT) {
     CHPP_LOGE("Dupe req ID=%" PRIu8 " existing ID=%" PRIu8 " from t=%" PRIu64,
               requestHeader->transaction, outReqState->transaction,
@@ -915,6 +937,8 @@ void chppTimestampOutgoingRequest(struct ChppAppState *appState,
     *nextRequestTimeoutNs =
         MIN(*nextRequestTimeoutNs, outReqState->responseTimeNs);
   }
+
+  chppMutexUnlock(&appState->transportContext->mutex);
 
   CHPP_LOGD("Timestamp req ID=%" PRIu8 " at t=%" PRIu64 " timeout=%" PRIu64
             " (requested=%" PRIu64 "), next timeout=%" PRIu64,

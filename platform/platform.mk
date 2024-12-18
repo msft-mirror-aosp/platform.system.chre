@@ -182,7 +182,6 @@ endif
 
 SLPI_QSH_SRCS += platform/slpi/see/island_vote_client.cc
 SLPI_QSH_SRCS += platform/slpi/see/power_control_manager.cc
-SLPI_QSH_SRCS += platform/slpi/qsh/qsh_proto_shim.cc
 
 ifeq ($(CHRE_USE_BUFFERED_LOGGING), true)
 SLPI_QSH_SRCS += platform/shared/log_buffer.cc
@@ -510,21 +509,20 @@ ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/tinysys/platform_audio.cc
 endif
 
+ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_gnss.cc
+endif
+
 # Compiler flags
 
 # Variables
-TINYSYS_PLATFORM = mt6985
+TINYSYS_PLATFORM = mt6989
 
 # CHRE include paths
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
-TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
 
-TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
-TINYSYS_CFLAGS += $(MBEDTLS_CFLAGS)
-
-TINYSYS_CFLAGS += -DCFG_DRAM_HEAP_SUPPORT
-TINYSYS_CFLAGS += -DCHRE_LOADER_ARCH=EM_RISCV
-TINYSYS_CFLAGS += -DCHRE_NANOAPP_LOAD_ALIGNMENT=4096

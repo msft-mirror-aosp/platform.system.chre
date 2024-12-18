@@ -17,9 +17,10 @@
 #ifndef CHRE_UTIL_HEAP_IMPL_H_
 #define CHRE_UTIL_HEAP_IMPL_H_
 
+// IWYU pragma: private
 #include <utility>
 
-#include "chre/platform/assert.h"
+#include "chre/util/container_support.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/fixed_size_vector.h"
 

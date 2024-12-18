@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <optional>
 #include <thread>
 
 #include <json/json.h>
@@ -44,7 +45,9 @@ using ndk::ScopedAStatus;
 
 using ::testing::_;
 using ::testing::ByMove;
+using ::testing::Eq;
 using ::testing::IsEmpty;
+using ::testing::Optional;
 using ::testing::Return;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAre;
@@ -379,7 +382,7 @@ TEST_F(HalClientManagerTest, TransactionRegistryLoadAndUnload) {
       kSystemServerPid, callback, /* deathRecipientCookie= */ nullptr));
 
   EXPECT_TRUE(halClientManager->registerPendingUnloadTransaction(
-      kSystemServerPid, /* transactionId= */ 1));
+      kSystemServerPid, /* transactionId= */ 1, /* nanoappId= */ 2));
 
   // Load and unload transaction can't coexist because unloading a nanoapp that
   // is being loaded can cause problems.
@@ -402,6 +405,8 @@ TEST_F(HalClientManagerTest, EndpointRegistry) {
   std::shared_ptr<ContextHubCallbackForTest> vendorCallback =
       ContextHubCallbackForTest::make<ContextHubCallbackForTest>(kVendorUuid);
 
+  EXPECT_THAT(halClientManager->getAllConnectedEndpoints(kSystemServerPid),
+              Eq(std::nullopt));
   halClientManager->registerCallback(kSystemServerPid, systemCallback,
                                      /* deathRecipientCookie= */ nullptr);
   halClientManager->registerCallback(kVendorPid, vendorCallback,
@@ -409,14 +414,23 @@ TEST_F(HalClientManagerTest, EndpointRegistry) {
 
   std::vector<HalClient> clients = halClientManager->getClients();
   EXPECT_THAT(clients, SizeIs(2));
-  // only system server can register endpoint ids > 63.
+  EXPECT_THAT(halClientManager->getAllConnectedEndpoints(kSystemServerPid),
+              Optional(IsEmpty()));
+  EXPECT_THAT(halClientManager->getAllConnectedEndpoints(kVendorPid),
+              Optional(IsEmpty()));
 
+  // only system server can register endpoint ids > 63.
   EXPECT_TRUE(halClientManager->registerEndpointId(kSystemServerPid,
                                                    /* endpointId= */ 64));
+  EXPECT_THAT(halClientManager->getAllConnectedEndpoints(kSystemServerPid),
+              Optional(UnorderedElementsAre(64)));
+
   EXPECT_TRUE(halClientManager->registerEndpointId(kVendorPid,
                                                    /*endpointId= */ 63));
   EXPECT_FALSE(halClientManager->registerEndpointId(kVendorPid,
                                                     /* endpointId= */ 64));
+  EXPECT_THAT(halClientManager->getAllConnectedEndpoints(kVendorPid),
+              Optional(UnorderedElementsAre(63)));
 }
 
 TEST_F(HalClientManagerTest, EndpointIdMutationForVendorClient) {

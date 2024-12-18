@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_INTRUSIVE_LIST_IMPL_H_
 #define CHRE_UTIL_INTRUSIVE_LIST_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/intrusive_list.h"
 
 #include "chre/util/container_support.h"
@@ -26,6 +27,11 @@ namespace chre {
 template <typename ElementType>
 IntrusiveList<ElementType>::~IntrusiveList() {
   IntrusiveListBase::doUnlinkAll();
+}
+
+template <typename ElementType>
+void IntrusiveList<ElementType>::link_front(ListNode<ElementType> *newNode) {
+  return IntrusiveListBase::doLinkFront(&newNode->node);
 }
 
 template <typename ElementType>

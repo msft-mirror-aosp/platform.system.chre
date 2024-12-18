@@ -31,6 +31,12 @@
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <chrono>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <unordered_map>
+
 namespace android::hardware::contexthub::common::implementation {
 
 using namespace aidl::android::hardware::contexthub;
@@ -40,7 +46,7 @@ using ::ndk::ScopedAStatus;
 /**
  * The base class of multiclient HAL.
  *
- * A subclass should initiate mConnection, mHalClientManager and
+ * <p>A subclass should initiate mConnection, mHalClientManager and
  * mPreloadedNanoappLoader in its constructor.
  */
 class MultiClientContextHubBase
@@ -54,7 +60,7 @@ class MultiClientContextHubBase
 
   MultiClientContextHubBase();
 
-  // functions implementing IContextHub
+  // Functions implementing IContextHub.
   ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *contextHubInfos) override;
   ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -84,17 +90,21 @@ class MultiClientContextHubBase
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
 
-  // The callback function implementing ChreConnectionCallback
+  // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
 
-  // The functions for dumping debug information
+  // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
   bool requestDebugDump() override;
   void writeToDebugFile(const char *str) override;
 
  protected:
+  // The timeout for a reliable message.
+  constexpr static std::chrono::nanoseconds kReliableMessageTimeout =
+      std::chrono::seconds(1);
+
   // The data needed by the death client to clear states of a client.
   struct HalDeathRecipientCookie {
     MultiClientContextHubBase *hal;
@@ -102,6 +112,22 @@ class MultiClientContextHubBase
     HalDeathRecipientCookie(MultiClientContextHubBase *hal, pid_t pid) {
       this->hal = hal;
       this->clientPid = pid;
+    }
+  };
+
+  // Contains information about a reliable message that has been received.
+  struct ReliableMessageRecord {
+    std::chrono::time_point<std::chrono::steady_clock> timestamp;
+    int32_t messageSequenceNumber;
+    HostEndpointId hostEndpointId;
+
+    bool isExpired() const {
+      return timestamp + kReliableMessageTimeout <
+             std::chrono::steady_clock::now();
+    }
+
+    bool operator>(const ReliableMessageRecord &other) const {
+      return timestamp > other.timestamp;
     }
   };
 
@@ -132,15 +158,7 @@ class MultiClientContextHubBase
       const ::chre::fbs::DebugDumpResponseT & /* response */);
   void onMetricLog(const ::chre::fbs::MetricLogT &metricMessage);
   void handleClientDeath(pid_t pid);
-
-  /**
-   * Returns true to allow metrics to be reported to stats service.
-   *
-   * <p>Subclasses can override to turn it off.
-   */
-  virtual bool isMetricEnabled() {
-    return true;
-  }
+  void handleLogMessageV2(const ::chre::fbs::LogMessageV2T &logMessage);
 
   /**
    * Enables test mode by unloading all the nanoapps except the system nanoapps.
@@ -163,6 +181,12 @@ class MultiClientContextHubBase
     return mSettingEnabled.find(setting) != mSettingEnabled.end() &&
            mSettingEnabled[setting];
   }
+
+  /**
+   * Removes messages from the reliable message queue that have been received
+   * by the host more than kReliableMessageTimeout ago.
+   */
+  void cleanupReliableMessageQueueLocked();
 
   HalClientManager::DeadClientUnlinker mDeadClientUnlinker;
 
@@ -211,9 +235,14 @@ class MultiClientContextHubBase
   // The parser of buffered logs from CHRE
   LogMessageParser mLogger;
 
-  MetricsReporter mMetricsReporter;
+  // Metrics reporter that will report metrics if it is initialized to non-null.
+  std::unique_ptr<MetricsReporter> mMetricsReporter;
 
   // Used to map message sequence number to host endpoint ID
+  std::mutex mReliableMessageMutex;
+  std::deque<ReliableMessageRecord> mReliableMessageQueue;
+
+  // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;
 };
 }  // namespace android::hardware::contexthub::common::implementation

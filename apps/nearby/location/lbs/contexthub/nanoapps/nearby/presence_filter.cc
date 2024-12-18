@@ -20,9 +20,6 @@
 
 #include <cstddef>
 
-#include "location/lbs/contexthub/nanoapps/nearby/crypto_non_encryption.h"
-#include "location/lbs/contexthub/nanoapps/nearby/presence_crypto_identity_v1.h"
-#include "location/lbs/contexthub/nanoapps/nearby/presence_crypto_v1.h"
 #include "location/lbs/contexthub/nanoapps/nearby/presence_decoder_v1.h"
 #include "location/lbs/contexthub/nanoapps/nearby/presence_service_data.h"
 #include "location/lbs/contexthub/nanoapps/nearby/proto/ble_filter.nanopb.h"
@@ -33,8 +30,8 @@
 
 namespace nearby {
 
-constexpr int kAuthenticityKeyLength = 16;
-constexpr int kMetaDataEncryptionTagLength = 8;
+constexpr int kAuthenticityKeyLength = 32;
+constexpr int kMetaDataEncryptionTagLength = 32;
 
 static bool addDataElementToResult(nearby_DataElement_ElementType de_type,
                                    const ByteArray &de_value,
@@ -189,7 +186,6 @@ static bool MatchExtendedDE(
 
 bool MatchPresenceV1(const nearby_BleFilter &filter,
                      const BleScanRecord &scan_record, const Crypto &crypto,
-                     const Crypto &identity_crypto,
                      nearby_BleFilterResult *result) {
   LOGD_SENSITIVE_INFO("Filter Presence V1 with %" PRIu16 " certificates",
                       filter.certificate_count);
@@ -215,8 +211,7 @@ bool MatchPresenceV1(const nearby_BleFilter &filter,
         if (decoder.Decode(
                 ByteArray(const_cast<uint8_t *>(ble_service_data.data),
                           ble_service_data.length),
-                crypto, identity_crypto, authenticity_key,
-                metadata_encryption_key_tag)) {
+                crypto, authenticity_key, metadata_encryption_key_tag)) {
           result->has_public_credential = true;
           result->public_credential.has_encrypted_metadata_tag = true;
           for (size_t i = 0; i < kMetaDataEncryptionTagLength; i++) {

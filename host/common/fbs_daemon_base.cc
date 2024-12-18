@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// TODO(b/298459533): metrics_reporter_in_the_daemon ramp up -> remove old
-// code
-
 #include <cstdlib>
 #include <fstream>
 
@@ -45,7 +42,6 @@ using ::aidl::android::frameworks::stats::IStats;
 using ::aidl::android::frameworks::stats::VendorAtom;
 using ::aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::chre::Atoms::ChreHalNanoappLoadFailed;
-using ::android::chre::flags::metrics_reporter_in_the_daemon;
 #endif  // CHRE_DAEMON_METRIC_ENABLED
 
 bool FbsDaemonBase::sendNanoappLoad(uint64_t appId, uint32_t appVersion,
@@ -117,23 +113,21 @@ void FbsDaemonBase::onMessageReceived(const unsigned char *messageBuffer,
     hostClientId = ::chre::kHostClientIdUnspecified;
   }
 
+  std::unique_ptr<fbs::MessageContainerT> container =
+      fbs::UnPackMessageContainer(messageBuffer);
+
   if (messageType == fbs::ChreMessage::LogMessage) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *logMessage = container->message.AsLogMessage();
     const std::vector<int8_t> &logData = logMessage->buffer;
 
     getLogger().log(reinterpret_cast<const uint8_t *>(logData.data()),
                     logData.size());
   } else if (messageType == fbs::ChreMessage::LogMessageV2) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *logMessage = container->message.AsLogMessageV2();
     const std::vector<int8_t> &logDataBuffer = logMessage->buffer;
     const auto *logData =
         reinterpret_cast<const uint8_t *>(logDataBuffer.data());
     uint32_t numLogsDropped = logMessage->num_logs_dropped;
-
     getLogger().logV2(logData, logDataBuffer.size(), numLogsDropped);
   } else if (messageType == fbs::ChreMessage::TimeSyncRequest) {
     sendTimeSync(true /* logOnError */);
@@ -143,14 +137,10 @@ void FbsDaemonBase::onMessageReceived(const unsigned char *messageBuffer,
     configureLpma(false /* enabled */);
   } else if (messageType == fbs::ChreMessage::MetricLog) {
 #ifdef CHRE_DAEMON_METRIC_ENABLED
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     const auto *metricMsg = container->message.AsMetricLog();
     handleMetricLog(metricMsg);
 #endif  // CHRE_DAEMON_METRIC_ENABLED
   } else if (messageType == fbs::ChreMessage::NanConfigurationRequest) {
-    std::unique_ptr<fbs::MessageContainerT> container =
-        fbs::UnPackMessageContainer(messageBuffer);
     handleNanConfigurationRequest(
         container->message.AsNanConfigurationRequest());
   } else if (messageType == fbs::ChreMessage::NanoappTokenDatabaseInfo) {
@@ -187,26 +177,11 @@ void FbsDaemonBase::handleDaemonMessage(const uint8_t *message) {
              mPreloadedNanoappPendingTransactions.front().transactionId);
 
 #ifdef CHRE_DAEMON_METRIC_ENABLED
-        if (metrics_reporter_in_the_daemon()) {
-          if (!mMetricsReporter.logNanoappLoadFailed(
-                  mPreloadedNanoappPendingTransactions.front().nanoappId,
-                  ChreHalNanoappLoadFailed::TYPE_PRELOADED,
-                  ChreHalNanoappLoadFailed::REASON_ERROR_GENERIC)) {
-            LOGE("Could not log the nanoapp load failed metric");
-          }
-        } else {
-          std::vector<VendorAtomValue> values(3);
-          values[0].set<VendorAtomValue::longValue>(
-              mPreloadedNanoappPendingTransactions.front().nanoappId);
-          values[1].set<VendorAtomValue::intValue>(
-              Atoms::ChreHalNanoappLoadFailed::TYPE_PRELOADED);
-          values[2].set<VendorAtomValue::intValue>(
-              Atoms::ChreHalNanoappLoadFailed::REASON_ERROR_GENERIC);
-          const VendorAtom atom{
-              .atomId = Atoms::CHRE_HAL_NANOAPP_LOAD_FAILED,
-              .values{std::move(values)},
-          };
-          reportMetric(atom);
+        if (!mMetricsReporter.logNanoappLoadFailed(
+                mPreloadedNanoappPendingTransactions.front().nanoappId,
+                ChreHalNanoappLoadFailed::TYPE_PRELOADED,
+                ChreHalNanoappLoadFailed::REASON_ERROR_GENERIC)) {
+          LOGE("Could not log the nanoapp load failed metric");
         }
 #endif  // CHRE_DAEMON_METRIC_ENABLED
       }

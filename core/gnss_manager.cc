@@ -184,7 +184,9 @@ void GnssManager::handleRequestStateResyncCallbackSync() {
   mPlatformPassiveLocationListenerEnabled = false;
   if (!mPassiveLocationListenerNanoapps.empty()) {
     if (!platformConfigurePassiveLocationListener(true /* enable */)) {
-      FATAL_ERROR("Failed to resync passive location listener");
+      // TODO(b/330789214): Change LOGE back to FATAL_ERROR once the odd
+      //                    peripheral behavior is resolved.
+      LOGE("Failed to resync passive location listener");
     }
   }
 }
@@ -587,7 +589,11 @@ bool GnssSession::postAsyncResultEvent(uint16_t instanceId, bool success,
       event->reserved = 0;
       event->cookie = cookie;
 
-      mGnssErrorHistogram[errorCode]++;
+      if (errorCode < CHRE_ERROR_SIZE) {
+        mGnssErrorHistogram[errorCode]++;
+      } else {
+        LOGE("Undefined error in gnssAsyncResult: %" PRIu8, errorCode);
+      }
 
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
           CHRE_EVENT_GNSS_ASYNC_RESULT, event, freeEventDataCallback,

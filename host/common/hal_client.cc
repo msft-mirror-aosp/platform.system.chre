@@ -22,6 +22,7 @@
 #include "chre_host/log.h"
 
 #include <android-base/properties.h>
+#include <android_chre_flags.h>
 #include <utils/SystemClock.h>
 
 #include <cinttypes>
@@ -36,6 +37,9 @@ using ::ndk::ScopedAStatus;
 
 namespace {
 constexpr char kHalEnabledProperty[]{"vendor.chre.multiclient_hal.enabled"};
+
+// Multiclient HAL needs getUuid() added since V3 to identify each client.
+constexpr int kMinHalInterfaceVersion = 3;
 }  // namespace
 
 bool HalClient::isServiceAvailable() {
@@ -55,21 +59,20 @@ std::unique_ptr<HalClient> HalClient::create(
     return nullptr;
   }
 
-  auto halClient =
-      std::unique_ptr<HalClient>(new HalClient(callback, contextHubId));
-  HalError result = halClient->initConnection();
-  if (result != HalError::SUCCESS) {
-    LOGE("Failed to create a hal client. Error code: %" PRIi32, result);
+  if (callback->version < kMinHalInterfaceVersion) {
+    LOGE("Callback interface version is %" PRIi32 ". It must be >= %" PRIi32,
+         callback->version, kMinHalInterfaceVersion);
     return nullptr;
   }
-  return halClient;
+
+  return std::unique_ptr<HalClient>(new HalClient(callback, contextHubId));
 }
 
 HalError HalClient::initConnection() {
   std::lock_guard<std::shared_mutex> lockGuard{mConnectionLock};
 
   if (mContextHub != nullptr) {
-    LOGW("Context hub is already connected");
+    LOGW("%s is already connected to CHRE HAL", mClientName.c_str());
     return HalError::SUCCESS;
   }
 
@@ -97,36 +100,55 @@ HalError HalClient::initConnection() {
     return HalError::NULL_CONTEXT_HUB_FROM_BINDER;
   }
 
+  // Enforce the required interface version for the service.
+  int32_t version = 0;
+  mContextHub->getInterfaceVersion(&version);
+  if (version < kMinHalInterfaceVersion) {
+    LOGE("CHRE multiclient HAL interface version is %" PRIi32
+         ". It must be >= %" PRIi32,
+         version, kMinHalInterfaceVersion);
+    mContextHub = nullptr;
+    return HalError::VERSION_TOO_LOW;
+  }
+
   // Register an IContextHubCallback.
   ScopedAStatus status =
       mContextHub->registerCallback(kDefaultContextHubId, mCallback);
   if (!status.isOk()) {
     LOGE("Unable to register callback: %s", status.getDescription().c_str());
+    // At this moment it's guaranteed that mCallback is not null and
+    // kDefaultContextHubId is valid. So if the registerCallback() still fails
+    // it's a hard failure and CHRE HAL is treated as disconnected.
+    mContextHub = nullptr;
     return HalError::CALLBACK_REGISTRATION_FAILED;
   }
-  LOGI("Successfully connected to HAL");
+  mIsHalConnected = true;
+  LOGI("%s is successfully (re)connected to CHRE HAL", mClientName.c_str());
   return HalError::SUCCESS;
 }
 
 void HalClient::onHalDisconnected(void *cookie) {
-  LOGW("CHRE HAL is disconnected. Reconnecting...");
   int64_t startTime = ::android::elapsedRealtime();
   auto *halClient = static_cast<HalClient *>(cookie);
   {
-    std::lock_guard<std::shared_mutex> lock(halClient->mConnectionLock);
+    std::lock_guard<std::shared_mutex> lockGuard(halClient->mConnectionLock);
     halClient->mContextHub = nullptr;
+    halClient->mIsHalConnected = false;
   }
+  LOGW("%s is disconnected from CHRE HAL. Reconnecting...",
+       halClient->mClientName.c_str());
 
   HalError result = halClient->initConnection();
   uint64_t duration = ::android::elapsedRealtime() - startTime;
   if (result != HalError::SUCCESS) {
-    LOGE("Failed to fully reconnect to HAL after %" PRIu64
+    LOGE("Failed to fully reconnect to CHRE HAL after %" PRIu64
          "ms, HalErrorCode: %" PRIi32,
          duration, result);
     return;
   }
   tryReconnectEndpoints(halClient);
-  LOGI("Reconnected to HAL after %" PRIu64 "ms", duration);
+  LOGI("%s is reconnected to CHRE HAL after %" PRIu64 "ms",
+       halClient->mClientName.c_str(), duration);
 }
 
 ScopedAStatus HalClient::connectEndpoint(
@@ -135,15 +157,18 @@ ScopedAStatus HalClient::connectEndpoint(
   if (isEndpointConnected(endpointId)) {
     // Connecting the endpoint again even though it is already connected to let
     // HAL and/or CHRE be the single place to control the behavior.
-    LOGW("Endpoint id %" PRIu16 " is already connected", endpointId);
+    LOGW("Endpoint id %" PRIu16 " of %s is already connected", endpointId,
+         mClientName.c_str());
   }
   ScopedAStatus result = callIfConnected(
-      [&]() { return mContextHub->onHostEndpointConnected(hostEndpointInfo); });
+      [&hostEndpointInfo](const std::shared_ptr<IContextHub> &hub) {
+        return hub->onHostEndpointConnected(hostEndpointInfo);
+      });
   if (result.isOk()) {
     insertConnectedEndpoint(hostEndpointInfo);
   } else {
-    LOGE("Failed to connect the endpoint id %" PRIu16,
-         hostEndpointInfo.hostEndpointId);
+    LOGE("Failed to connect endpoint id %" PRIu16 " of %s",
+         hostEndpointInfo.hostEndpointId, mClientName.c_str());
   }
   return result;
 }
@@ -152,15 +177,18 @@ ScopedAStatus HalClient::disconnectEndpoint(HostEndpointId hostEndpointId) {
   if (!isEndpointConnected(hostEndpointId)) {
     // Disconnecting the endpoint again even though it is already disconnected
     // to let HAL and/or CHRE be the single place to control the behavior.
-    LOGW("Endpoint id %" PRIu16 " is already disconnected", hostEndpointId);
+    LOGW("Endpoint id %" PRIu16 " of %s is already disconnected",
+         hostEndpointId, mClientName.c_str());
   }
-  ScopedAStatus result = callIfConnected([&]() {
-    return mContextHub->onHostEndpointDisconnected(hostEndpointId);
-  });
+  ScopedAStatus result = callIfConnected(
+      [&hostEndpointId](const std::shared_ptr<IContextHub> &hub) {
+        return hub->onHostEndpointDisconnected(hostEndpointId);
+      });
   if (result.isOk()) {
     removeConnectedEndpoint(hostEndpointId);
   } else {
-    LOGE("Failed to disconnect the endpoint id %" PRIu16, hostEndpointId);
+    LOGE("Failed to disconnect the endpoint id %" PRIu16 " of %s",
+         hostEndpointId, mClientName.c_str());
   }
   return result;
 }
@@ -170,30 +198,51 @@ ScopedAStatus HalClient::sendMessage(const ContextHubMessage &message) {
   if (!isEndpointConnected(hostEndpointId)) {
     // This is still allowed now but in the future an error will be returned.
     LOGW("Endpoint id %" PRIu16
-         " is unknown or disconnected. Message sending will be skipped in the "
-         "future");
+         " of %s is unknown or disconnected. Message sending will be skipped "
+         "in the future",
+         hostEndpointId, mClientName.c_str());
   }
-  return callIfConnected(
-      [&]() { return mContextHub->sendMessageToHub(mContextHubId, message); });
+  return callIfConnected([&](const std::shared_ptr<IContextHub> &hub) {
+    return hub->sendMessageToHub(mContextHubId, message);
+  });
 }
 
 void HalClient::tryReconnectEndpoints(HalClient *halClient) {
-  LOGW("CHRE has restarted. Reconnecting endpoints");
-  std::lock_guard<std::shared_mutex> lock(halClient->mConnectedEndpointsLock);
+  LOGW("CHRE has restarted. Reconnecting endpoints of %s",
+       halClient->mClientName.c_str());
+  std::lock_guard<std::shared_mutex> lockGuard(
+      halClient->mConnectedEndpointsLock);
   for (const auto &[endpointId, endpointInfo] :
        halClient->mConnectedEndpoints) {
     if (!halClient
-             ->callIfConnected([&]() {
-               return halClient->mContextHub->onHostEndpointConnected(
-                   endpointInfo);
-             })
+             ->callIfConnected(
+                 [&endpointInfo](const std::shared_ptr<IContextHub> &hub) {
+                   return hub->onHostEndpointConnected(endpointInfo);
+                 })
              .isOk()) {
       LOGE("Failed to set up the connected state for endpoint %" PRIu16
-           " after HAL restarts.",
-           endpointId);
+           " of %s after HAL restarts.",
+           endpointId, halClient->mClientName.c_str());
       halClient->mConnectedEndpoints.erase(endpointId);
     } else {
-      LOGI("Reconnected endpoint %" PRIu16 " to CHRE HAL", endpointId);
+      LOGI("Reconnected endpoint %" PRIu16 " of %s to CHRE HAL", endpointId,
+           halClient->mClientName.c_str());
+    }
+  }
+}
+
+HalClient::~HalClient() {
+  std::lock_guard<std::mutex> lock(mBackgroundConnectionFuturesLock);
+  for (const auto &future : mBackgroundConnectionFutures) {
+    // Calling std::thread.join() has chance to hang if the background thread
+    // being joined is still waiting for connecting to the service. Therefore
+    // waiting for the thread to finish here instead and logging the timeout
+    // every second until system kills the process to report the abnormality.
+    while (future.wait_for(std::chrono::seconds(1)) !=
+           std::future_status::ready) {
+      LOGE(
+          "Failed to finish a background connection in time when HalClient is "
+          "being destructed. Waiting...");
     }
   }
 }

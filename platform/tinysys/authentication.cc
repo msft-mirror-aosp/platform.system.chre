@@ -30,7 +30,7 @@ namespace chre {
 namespace {
 
 // A data structure needed for SCP chip frequency change
-DECLARE_OPPDEV(gChreScpFreqVote);
+DECLARE_OPPDEV_CPLUSPLUS(gChreScpFreqVote);
 
 // All the size below are in bytes
 constexpr uint32_t kEcdsaP256SigSize = 64;
