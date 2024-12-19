@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <optional>
 
 #include "chre/core/event_loop_manager.h"
@@ -23,6 +24,7 @@
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/napp_permissions.h"
+#include "chre_api/chre.h"
 #include "chre_api/chre/event.h"
 
 #include "pw_allocator/allocator.h"
@@ -37,6 +39,9 @@
 
 namespace chre::message {
 namespace {
+
+CREATE_CHRE_TEST_EVENT(TRIGGER_COND_VAR, 0);
+CREATE_CHRE_TEST_EVENT(TEST_GET_EVENT_INFO, 1);
 
 constexpr size_t kNumEndpoints = 3;
 constexpr size_t kMessageSize = 5;
@@ -109,7 +114,7 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
 
 class ChreMessageHubTest : public TestBase {};
 
-TEST_F(ChreMessageHubTest, MessageRouterNanoappsAreEndpointsToChreMessageHub) {
+TEST_F(ChreMessageHubTest, NanoappsAreEndpointsToChreMessageHub) {
   class App : public TestNanoapp {
    public:
     App() : TestNanoapp(TestNanoappInfo{.name = "TEST1", .id = 0x1234}) {}
@@ -136,8 +141,82 @@ TEST_F(ChreMessageHubTest, MessageRouterNanoappsAreEndpointsToChreMessageHub) {
             nanoapp->getAppPermissions());
 }
 
-TEST_F(ChreMessageHubTest,
-       MessageRouterMultipleNanoappsAreEndpointsToChreMessageHub) {
+//! Nanoapp used to test getting endpoint info
+class EndpointInfoTestApp : public TestNanoapp {
+ public:
+  EndpointInfoTestApp(std::mutex &mutex, std::condition_variable &condVar,
+                      const TestNanoappInfo &info)
+      : TestNanoapp(info), mMutex(mutex), mCondVar(condVar) {}
+
+  void handleEvent(uint32_t, uint16_t eventType,
+                   const void *eventData) override {
+    switch (eventType) {
+      case CHRE_EVENT_TEST_EVENT: {
+        auto event = static_cast<const TestEvent *>(eventData);
+        switch (event->type) {
+          case TEST_GET_EVENT_INFO: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+
+              for (size_t i = 0; i < kNumEndpoints; ++i) {
+                chreMsgEndpointInfo info = {};
+                EXPECT_TRUE(chreMsgGetEndpointInfo(
+                    kOtherMessageHubId, kEndpointInfos[i].id, &info));
+
+                EXPECT_EQ(info.hubId, kOtherMessageHubId);
+                EXPECT_EQ(info.endpointId, kEndpointInfos[i].id);
+                EXPECT_EQ(info.version, kEndpointInfos[i].version);
+                EXPECT_EQ(info.type,
+                          EventLoopManagerSingleton::get()
+                              ->getChreMessageHubManager()
+                              .toChreEndpointType(kEndpointInfos[i].type));
+                EXPECT_EQ(info.requiredPermissions,
+                          kEndpointInfos[i].requiredPermissions);
+                EXPECT_STREQ(info.name, kEndpointInfos[i].name);
+              }
+            }
+            mCondVar.notify_one();
+            break;
+          }
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  std::mutex &mMutex;
+  std::condition_variable &mCondVar;
+};
+
+TEST_F(ChreMessageHubTest, NanoappGetsEndpointInfo) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointInfoTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_GET_ENDPOINT_INFO", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+
+  // Test getting endpoint info
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_GET_EVENT_INFO);
+  condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, MultipleNanoappsAreEndpointsToChreMessageHub) {
   class App : public TestNanoapp {
    public:
     App() : TestNanoapp(TestNanoappInfo{.name = "TEST1", .id = 0x1234}) {}
@@ -159,8 +238,8 @@ TEST_F(ChreMessageHubTest,
   DynamicVector<EndpointInfo> endpointInfos;
   EXPECT_TRUE(MessageRouterSingleton::get()->forEachEndpointOfHub(
       EventLoopManagerSingleton::get()
-           ->getChreMessageHubManager()
-           .kChreMessageHubId,
+          ->getChreMessageHubManager()
+          .kChreMessageHubId,
       [&endpointInfos](const EndpointInfo &endpointInfo) {
         endpointInfos.push_back(endpointInfo);
         return false;
@@ -224,6 +303,19 @@ class MessageTestApp : public TestNanoapp {
         mCondVar.notify_one();
         break;
       }
+      case CHRE_EVENT_TEST_EVENT: {
+        auto event = static_cast<const TestEvent *>(eventData);
+        switch (event->type) {
+          case TRIGGER_COND_VAR: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+            }
+            mCondVar.notify_one();
+            break;
+          }
+        }
+        break;
+      }
       default: {
         break;
       }
@@ -236,7 +328,7 @@ class MessageTestApp : public TestNanoapp {
   bool &mSessionClosed;
 };
 
-TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoapp) {
+TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
   constexpr uint64_t kNanoappId = 0x1234;
   std::mutex mutex;
   std::condition_variable condVar;
@@ -264,12 +356,11 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoapp) {
   ASSERT_TRUE(messageHub.has_value());
 
   // Open the session from the other hub:1 to the nanoapp
-  SessionId sessionId =
-      messageHub->openSession(kEndpointInfos[0].id,
-                              EventLoopManagerSingleton::get()
-                                   ->getChreMessageHubManager()
-                                   .kChreMessageHubId,
-                              kNanoappId);
+  SessionId sessionId = messageHub->openSession(kEndpointInfos[0].id,
+                                                EventLoopManagerSingleton::get()
+                                                    ->getChreMessageHubManager()
+                                                    .kChreMessageHubId,
+                                                kNanoappId);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
 
   // Send the message to the nanoapp
@@ -295,9 +386,7 @@ class MessagePermissionTestApp : public MessageTestApp {
                        sessionClosed, info) {}
 };
 
-TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoappPermissionFailure) {
-  CREATE_CHRE_TEST_EVENT(TRIGGER_COND_VAR, 0);
-
+TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
   constexpr uint64_t kNanoappId = 0x1234;
   std::mutex mutex;
   std::condition_variable condVar;
@@ -326,12 +415,11 @@ TEST_F(ChreMessageHubTest, MessageRouterSendMessageToNanoappPermissionFailure) {
   ASSERT_TRUE(messageHub.has_value());
 
   // Open the session from the other hub:1 to the nanoapp
-  SessionId sessionId =
-      messageHub->openSession(kEndpointInfos[0].id,
-                              EventLoopManagerSingleton::get()
-                                   ->getChreMessageHubManager()
-                                   .kChreMessageHubId,
-                              kNanoappId);
+  SessionId sessionId = messageHub->openSession(kEndpointInfos[0].id,
+                                                EventLoopManagerSingleton::get()
+                                                    ->getChreMessageHubManager()
+                                                    .kChreMessageHubId,
+                                                kNanoappId);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
 
   // Send the message to the nanoapp

@@ -42,10 +42,20 @@ class ChreMessageHubManager
   //! Initializes the ChreMessageHubManager
   void init();
 
-  //! Returns the MessageHub for the CHRE Message Hub
+  //! @return the MessageHub for the CHRE Message Hub
   message::MessageRouter::MessageHub &getMessageHub() {
     return mChreMessageHub;
   }
+
+  //! Gets endpoint information for the given hub and endpoint IDs.
+  //! @return whether the endpoint information was successfully populated.
+  bool getEndpointInfo(message::MessageHubId hubId,
+                       message::EndpointId endpointId,
+                       chreMsgEndpointInfo &info);
+
+  //! Converts a message::EndpointType to a CHRE endpoint type
+  //! @return the CHRE endpoint type
+  chreMsgEndpointType toChreEndpointType(message::EndpointType type);
 
  private:
   //! Data to be passed to the message callback
