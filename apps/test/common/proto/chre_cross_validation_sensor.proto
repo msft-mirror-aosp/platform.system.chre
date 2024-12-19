@@ -62,6 +62,7 @@ message SensorInfoResponse {
   optional uint32 chreSensorType = 1;
   optional bool isAvailable = 2;
   optional uint32 sensorIndex = 3;
+  optional bytes sensorName = 4;
 }
 
 message Data {

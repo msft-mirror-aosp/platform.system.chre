@@ -1242,3 +1242,21 @@ cc_aconfig_library {
     host_supported: true,
     vendor_available: true,
 }
+
+filegroup {
+    name: "chre_daemon_srcs",
+    srcs: [
+        "host/common/bt_snoop_log_parser.cc",
+        "host/common/config_util.cc",
+        "host/common/daemon_base.cc",
+        "host/common/fbs_daemon_base.cc",
+        "host/common/file_stream.cc",
+        "host/common/fragmented_load_transaction.cc",
+        "host/common/host_protocol_host.cc",
+        "host/common/log_message_parser.cc",
+        "host/common/socket_server.cc",
+        "host/common/st_hal_lpma_handler.cc",
+        "host/common/wifi_ext_hal_handler.cc",
+        "platform/shared/host_protocol_common.cc",
+    ],
+}

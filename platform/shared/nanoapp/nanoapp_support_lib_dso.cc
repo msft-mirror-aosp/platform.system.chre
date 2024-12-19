@@ -418,6 +418,40 @@ bool chreGnssConfigurePassiveLocationListener(bool enable) {
 }
 #endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_2 */
 
+#if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11
+WEAK_SYMBOL
+bool chreGnssLocationSessionStartAsyncV1_11(uint32_t minIntervalMs,
+                                            uint32_t minTimeToNextFixMs,
+                                            const void *cookie,
+                                            enum chreGnssSource source) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreGnssLocationSessionStartAsyncV1_11);
+  if (fptr != nullptr) {
+    return fptr(minIntervalMs, minTimeToNextFixMs, cookie, source);
+  }
+  if (source == CHRE_GNSS_SOURCE_UNSPECIFIED ||
+      source == CHRE_GNSS_SOURCE_LOCAL) {
+    return chreGnssLocationSessionStartAsync(minIntervalMs, minTimeToNextFixMs,
+                                             cookie);
+  }
+  return false;
+}
+
+WEAK_SYMBOL
+bool chreGnssMeasurementSessionStartAsyncV1_11(uint32_t minIntervalMs,
+                                               const void *cookie,
+                                               enum chreGnssSource source) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreGnssMeasurementSessionStartAsyncV1_11);
+  if (fptr != nullptr) {
+    return fptr(minIntervalMs, cookie, source);
+  }
+  if (source == CHRE_GNSS_SOURCE_UNSPECIFIED ||
+      source == CHRE_GNSS_SOURCE_LOCAL) {
+    return chreGnssMeasurementSessionStartAsync(minIntervalMs, cookie);
+  }
+  return false;
+}
+#endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11 */
+
 #endif /* CHRE_NANOAPP_USES_GNSS */
 
 #ifdef CHRE_NANOAPP_USES_WIFI
