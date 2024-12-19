@@ -39,6 +39,11 @@ namespace cross_validator_sensor {
 
 namespace {
 
+struct SensorNameCallbackData {
+  const void *sensorName;
+  size_t size;
+};
+
 bool decodeSensorName(pb_istream_t *stream, const pb_field_s *field,
                       void **arg) {
   UNUSED_VAR(field);
@@ -50,6 +55,24 @@ bool decodeSensorName(pb_istream_t *stream, const pb_field_s *field,
   size_t bytesToCopy = stream->bytes_left;
   if (!pb_read(stream, name, stream->bytes_left)) return false;
   name[bytesToCopy] = '\0';
+
+  return true;
+}
+
+bool encodeSensorName(pb_ostream_t *stream, const pb_field_t *field,
+                      void *const *arg) {
+  const SensorNameCallbackData *sensorNameData =
+      static_cast<const SensorNameCallbackData *>(*arg);
+
+  if (sensorNameData->size > 0) {
+    if (pb_encode_tag_for_field(stream, field) &&
+        pb_encode_string(
+            stream, static_cast<const pb_byte_t *>(sensorNameData->sensorName),
+            sensorNameData->size)) {
+      return true;
+    }
+    return false;
+  }
 
   return true;
 }
@@ -459,6 +482,11 @@ void Manager::handleInfoMessage(uint16_t hostEndpoint,
           infoResponse.isAvailable = true;
           infoResponse.has_sensorIndex = true;
           infoResponse.sensorIndex = i;
+          SensorNameCallbackData nameData = {
+              .sensorName = info.sensorName,
+              .size = strlen(info.sensorName) + 1};
+          infoResponse.sensorName.funcs.encode = encodeSensorName;
+          infoResponse.sensorName.arg = &nameData;
           break;
         }
       }
