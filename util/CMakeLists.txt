@@ -115,6 +115,9 @@ pw_add_library(chre.util.nanoapp STATIC
     chre.chre_api
     chre.platform.assert
     chre.platform.log
+    # TODO(b/376488392): Add chre.platform.tagged_log once migrated
+    # For the transition this dep will be provided by chre.variant.config
+    # PUBLIC_DEPS.
     chre.util
     chre.variant.config
     pw_tokenizer

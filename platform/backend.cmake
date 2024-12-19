@@ -77,6 +77,9 @@ pw_add_backend_variable(chre.platform.system_time_BACKEND)
 # Backend for chre.platform.system_timer.
 pw_add_backend_variable(chre.platform.system_timer_BACKEND)
 
+# Backend for chre.platform.tagged_log.
+pw_add_backend_variable(chre.platform.tagged_log_BACKEND)
+
 # Backend for chre.platform.thread_handle.
 pw_add_backend_variable(chre.platform.thread_handle_BACKEND)
 
