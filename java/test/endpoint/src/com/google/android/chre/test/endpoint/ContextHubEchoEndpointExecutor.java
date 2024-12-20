@@ -231,6 +231,10 @@ public class ContextHubEchoEndpointExecutor {
             builder.setMessageCallback(messageCallback);
         }
         HubEndpoint endpoint = builder.build();
+        Assert.assertNotNull(endpoint);
+        Assert.assertEquals(endpoint.getLifecycleCallback(), callback);
+        Assert.assertEquals(endpoint.getMessageCallback(), messageCallback);
+
         try {
             mContextHubManager.registerEndpoint(endpoint);
             Log.i(TAG, "Successfully registered endpoint");
