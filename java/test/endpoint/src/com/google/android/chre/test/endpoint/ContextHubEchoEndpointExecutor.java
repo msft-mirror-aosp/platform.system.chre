@@ -189,10 +189,9 @@ public class ContextHubEchoEndpointExecutor {
 
             final int messageType = 1234;
             HubMessage message =
-                    new HubMessage(
+                    new HubMessage.Builder(
                             messageType,
-                            new byte[] {1, 2, 3, 4, 5},
-                            new HubMessage.DeliveryParams(true));
+                            new byte[] {1, 2, 3, 4, 5}).setResponseRequired(true).build();
             ContextHubTransaction<Void> txn = session.sendMessage(message);
             txn.waitForResponse(TIMEOUT_MESSAGE_SECONDS, TimeUnit.SECONDS);
             HubMessage response = messageCallback.waitForMessage();
