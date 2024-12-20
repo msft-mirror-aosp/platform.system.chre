@@ -229,6 +229,11 @@ cc_test_host {
     name: "chre_chpp_fake_link_sync_tests",
     defaults: ["chre_chpp_core_without_link"],
     cflags: [
+        "-DCHPP_CLIENT_ENABLED_DISCOVERY",
+        "-DCHPP_CLIENT_ENABLED_WIFI",
+        "-DCHPP_DEBUG_ASSERT_ENABLED",
+        "-DCHPP_ENABLE_WORK_MONITOR",
+        "-DCHPP_WIFI_DEFAULT_CAPABILITIES=0xf",
         // Speed up tests by setting timeouts to 50 ms.
         // Note: the value shouldn't be too low to avoid timeouts on slow test servers.
         "-DCHPP_TRANSPORT_RX_TIMEOUT_NS=50000000",
@@ -243,6 +248,10 @@ cc_test_host {
         "platform/linux/include",
     ],
     srcs: [
+        "clients/discovery.c",
+        "clients/wifi.c",
+        "common/wifi_convert.c",
+        "common/wifi_utils.c",
         "test/fake_link.cpp",
         "test/fake_link_sync_test.cpp",
         "test/packet_util.cpp",

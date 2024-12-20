@@ -18,16 +18,21 @@
 
 #include <string.h>
 #include <cstdint>
+#include <future>
 #include <iostream>
 #include <thread>
 #include <type_traits>
+#include <vector>
 
 #include "chpp/app.h"
-#include "chpp/crc.h"
+#include "chpp/clients/wifi.h"
+#include "chpp/common/wifi.h"
 #include "chpp/link.h"
 #include "chpp/log.h"
 #include "chpp/platform/platform_link.h"
 #include "chpp/transport.h"
+#include "chre/pal/wifi.h"
+#include "chre/platform/shared/pal_system_api.h"
 #include "fake_link.h"
 #include "packet_util.h"
 
@@ -88,15 +93,36 @@ namespace chpp::test {
 class FakeLinkSyncTests : public testing::Test {
  protected:
   void SetUp() override {
+    pthread_setname_np(pthread_self(), "test");
     memset(&mLinkContext, 0, sizeof(mLinkContext));
     chppTransportInit(&mTransportContext, &mAppContext, &mLinkContext,
                       &gLinkApi);
-    chppAppInitWithClientServiceSet(&mAppContext, &mTransportContext,
-                                    /*clientServiceSet=*/{});
+    initChppAppLayer();
     mFakeLink = reinterpret_cast<FakeLink *>(mLinkContext.fake);
 
-    mWorkThread = std::thread(chppWorkThreadStart, &mTransportContext);
+    // Note that while the tests tend to primarily execute in the main thread,
+    // some behaviors rely on the work thread, which can create some flakiness,
+    // e.g. if the thread doesn't get scheduled within the timeout. It would be
+    // possible to "pause" the work thread by sending a link signal that blocks
+    // indefinitely, so we can execute any pending operations synchronously in
+    // waitForTxPacket(), but it would be best to combine this approach with
+    // simulated timestamps/delays so we can guarantee no unexpected timeouts
+    // and so we can force timeout behavior without having to delay test
+    // execution (as seen in CHRE's TransactionManagerTest).
+    mWorkThread = std::thread([this] {
+      pthread_setname_np(pthread_self(), "worker");
+      chppWorkThreadStart(&mTransportContext);
+    });
+    performHandshake();
+  }
 
+  virtual void initChppAppLayer() {
+    chppAppInitWithClientServiceSet(&mAppContext, &mTransportContext,
+                                    /*clientServiceSet=*/{});
+    mAppContext.isDiscoveryComplete = true;  // Skip discovery
+  }
+
+  void performHandshake() {
     // Proceed to the initialized state by performing the CHPP 3-way handshake
     CHPP_LOGI("Send a RESET packet");
     ASSERT_TRUE(mFakeLink->waitForTxPacket());
@@ -109,7 +135,13 @@ class FakeLinkSyncTests : public testing::Test {
     chppRxDataCb(&mTransportContext, reinterpret_cast<uint8_t *>(&resetAck),
                  sizeof(resetAck));
 
-    // chppProcessResetAck() results in sending a no error packet.
+    // Handling of the ACK to RESET-ACK depends on configuration
+    handleFirstPacket();
+  }
+
+  virtual void handleFirstPacket() {
+    // chppProcessResetAck() results in sending a no error packet, with no
+    // payload when discovery is disabled
     CHPP_LOGI("Send CHPP_TRANSPORT_ERROR_NONE packet");
     ASSERT_TRUE(mFakeLink->waitForTxPacket());
     std::vector<uint8_t> ackPkt = mFakeLink->popTxPacket();
@@ -118,10 +150,41 @@ class FakeLinkSyncTests : public testing::Test {
     CHPP_LOGI("CHPP handshake complete");
   }
 
+  void discardTxPacket() {
+    ASSERT_TRUE(mFakeLink->waitForTxPacket());
+    EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+    (void)mFakeLink->popTxPacket();
+  }
+
+  std::vector<uint8_t> getNextPacket() {
+    if (!mFakeLink->waitForTxPacket()) {
+      CHPP_LOGE("Didn't get expected packet");
+      return std::vector<uint8_t>();
+    }
+    EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+    return mFakeLink->popTxPacket();
+  }
+
+  template <typename PacketType>
+  bool deliverRxPacket(const PacketType &packet) {
+    CHPP_LOGW("Debug dump of RX packet:");
+    std::vector<uint8_t> vec;
+    vec.resize(sizeof(packet));
+    memcpy(vec.data(), &packet, sizeof(packet));
+    std::cout << asChpp(vec);
+    return chppRxDataCb(&mTransportContext,
+                        reinterpret_cast<const uint8_t *>(&packet),
+                        sizeof(packet));
+  }
+
   void TearDown() override {
     chppWorkThreadStop(&mTransportContext);
     mWorkThread.join();
     EXPECT_EQ(mFakeLink->getTxPacketCount(), 0);
+    std::cout << "Unexpected extra packet(s):" << std::endl;
+    while (mFakeLink->getTxPacketCount() > 0) {
+      mFakeLink->popTxPacket();
+    }
   }
 
   void txPacket() {
@@ -137,6 +200,49 @@ class FakeLinkSyncTests : public testing::Test {
   ChppTestLinkState mLinkContext;
   FakeLink *mFakeLink;
   std::thread mWorkThread;
+};
+
+class FakeLinkWithClientSyncTests : public FakeLinkSyncTests {
+ public:
+  void initChppAppLayer() override {
+    // We use the WiFi client to simulate real-world integrations, but any
+    // service (including a dedicated test client/service) would work
+    ChppClientServiceSet set = {
+        .wifiClient = 1,
+    };
+    chppAppInitWithClientServiceSet(&mAppContext, &mTransportContext, set);
+    mAppContext.isDiscoveryComplete = true;  // Bypass initial discovery
+  }
+
+  virtual void handleFirstPacket() override {
+    ASSERT_TRUE(mFakeLink->waitForTxPacket());
+    std::vector<uint8_t> ackPkt = mFakeLink->popTxPacket();
+    ASSERT_TRUE(comparePacket(ackPkt, generateEmptyPacket()))
+        << "Full packet: " << asChpp(ackPkt);
+    CHPP_LOGI("CHPP handshake complete");
+
+    mAppContext.matchedClientCount = mAppContext.discoveredServiceCount = 1;
+    // Initialize the client similar to how discovery would
+    EXPECT_TRUE(mAppContext.registeredClients[0]->initFunctionPtr(
+        mAppContext.registeredClientStates[0]->context,
+        CHPP_SERVICE_HANDLE_OF_INDEX(0), /*version=*/{1, 0, 0}));
+  }
+
+  void sendOpenResp(const ChppPacketWithAppHeader &openReq) {
+    ChppAppHeader appHdr = {
+        .handle = openReq.appHeader.handle,
+        .type = CHPP_MESSAGE_TYPE_SERVICE_RESPONSE,
+        .transaction = openReq.appHeader.transaction,
+        .error = CHPP_APP_ERROR_NONE,
+        .command = openReq.appHeader.command,
+    };
+    std::span<uint8_t, sizeof(appHdr)> payload(
+        reinterpret_cast<uint8_t *>(&appHdr), sizeof(appHdr));
+    auto rsp = generatePacketWithPayload<sizeof(appHdr)>(
+        openReq.transportHeader.seq + 1, openReq.transportHeader.ackSeq,
+        &payload);
+    deliverRxPacket(rsp);
+  }
 };
 
 TEST_F(FakeLinkSyncTests, CheckRetryOnTimeout) {
@@ -195,11 +301,9 @@ TEST_F(FakeLinkSyncTests, MultipleNotifications) {
 // packet, then don't send an ACK in the expected time so it gets retried, then
 // after the retry, we send two equivalent ACKs back-to-back
 TEST_F(FakeLinkSyncTests, DelayedThenDupeAck) {
-  // Post the TX packet
+  // Post the TX packet, discard the first ACK
   txPacket();
-  ASSERT_TRUE(mFakeLink->waitForTxPacket());
-  ASSERT_EQ(mFakeLink->getTxPacketCount(), 1);
-  (void)mFakeLink->popTxPacket();  // discard the first packet
+  discardTxPacket();
 
   // Second wait should yield timeout + retry
   ASSERT_TRUE(mFakeLink->waitForTxPacket());
@@ -264,6 +368,62 @@ TEST_F(FakeLinkSyncTests, ResendAckOnDupe) {
   pkt = mFakeLink->popTxPacket();
   EXPECT_TRUE(comparePacket(pkt, generateEmptyPacket(kSeq + 2)))
       << "Expected ACK for seq 2 but got: " << asEmptyPacket(pkt);
+}
+
+TEST_F(FakeLinkWithClientSyncTests, RecoverFromAbortedOpen) {
+  // Setting all callbacks as null here since none should be invoked
+  const struct chrePalWifiCallbacks kCallbacks = {};
+  const struct chrePalWifiApi *api =
+      chppPalWifiGetApi(CHPP_PAL_WIFI_API_VERSION);
+  ASSERT_NE(api, nullptr);
+
+  // Calling open() blocks until the open response is received, so spin off
+  // another thread to wait on the open request and post the response.
+  // This puts us in the opened state - we are mainly interested in testing
+  auto result = std::async(std::launch::async, [this] {
+    if (mFakeLink->waitForTxPacket()) {
+      std::vector<uint8_t> rawPkt = mFakeLink->popTxPacket();
+      const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
+      ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
+      sendOpenResp(pkt);
+    }
+  });
+  ASSERT_TRUE(api->open(&chre::gChrePalSystemApi, &kCallbacks));
+
+  // Confirm our open response was ACKed
+  ASSERT_TRUE(comparePacket(getNextPacket(), generateEmptyPacket(2)));
+
+  // Now we're in the opened state and can trigger the test condition: feed in a
+  // RESET, discard the RESET_ACK, confirm we got OPEN_REQ, but instead of
+  // OPEN_RESP, send another RESET, then confirm we can open successfully
+  CHPP_LOGI("Triggering RESET after successful open");
+  auto resetPkt = generateResetPacket();
+  deliverRxPacket(resetPkt);
+  auto rawPkt = getNextPacket();
+  ASSERT_TRUE(comparePacket(rawPkt, generateResetAckPacket()));
+  // It shouldn't send anything until we ack RESET-ACK, which we aren't going to
+  // do here
+  ASSERT_EQ(mFakeLink->getTxPacketCount(), 0);
+
+  CHPP_LOGI("Triggering abort of open request via another RESET");
+  deliverRxPacket(resetPkt);
+  rawPkt = getNextPacket();
+  ASSERT_TRUE(comparePacket(rawPkt, generateResetAckPacket()));
+  auto ackForResetAck = generateEmptyPacket();
+  deliverRxPacket(ackForResetAck);
+
+  // Confirm we get OPEN request, send OPEN response
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  rawPkt = getNextPacket();
+  const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
+  ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
+  sendOpenResp(pkt);
+
+  // Confirm we got an ACK to our OPEN_RESP
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  rawPkt = getNextPacket();
+  EXPECT_TRUE(comparePacket(rawPkt, generateEmptyPacket(2)))
+      << "Full packet: " << asChpp(rawPkt);
 }
 
 }  // namespace chpp::test

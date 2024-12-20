@@ -29,6 +29,7 @@ COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_status/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/fit/include
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/include
 
+COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/allocator.cc
 COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/unique_ptr.cc
 
 # Common Source Files ##########################################################
