@@ -23,8 +23,10 @@
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/unique_ptr.h"
+#include "chre_api/chre.h"
 
 #include <cinttypes>
+#include <cstring>
 #include <optional>
 
 using ::chre::message::Endpoint;
@@ -32,6 +34,7 @@ using ::chre::message::EndpointId;
 using ::chre::message::EndpointInfo;
 using ::chre::message::EndpointType;
 using ::chre::message::Message;
+using ::chre::message::MessageHubId;
 using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
 using ::chre::message::Session;
@@ -46,6 +49,44 @@ void ChreMessageHubManager::init() {
     mChreMessageHub = std::move(*chreMessageHub);
   } else {
     LOGE("Failed to register the CHRE MessageHub");
+  }
+}
+
+bool ChreMessageHubManager::getEndpointInfo(MessageHubId hubId,
+                                            EndpointId endpointId,
+                                            chreMsgEndpointInfo &info) {
+  std::optional<EndpointInfo> endpointInfo =
+      MessageRouterSingleton::get()->getEndpointInfo(hubId, endpointId);
+  if (!endpointInfo.has_value()) {
+    return false;
+  }
+
+  info.hubId = hubId;
+  info.endpointId = endpointId;
+  info.type = toChreEndpointType(endpointInfo->type);
+  info.version = endpointInfo->version;
+  info.requiredPermissions = endpointInfo->requiredPermissions;
+  std::strncpy(info.name, endpointInfo->name, CHRE_MAX_ENDPOINT_NAME_LEN);
+  info.name[CHRE_MAX_ENDPOINT_NAME_LEN - 1] = '\0';
+  return true;
+}
+
+chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
+    message::EndpointType type) {
+  switch (type) {
+    case message::EndpointType::HOST_FRAMEWORK:
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_FRAMEWORK;
+    case message::EndpointType::HOST_APP:
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_APP;
+    case message::EndpointType::HOST_NATIVE:
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_NATIVE;
+    case message::EndpointType::NANOAPP:
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_NANOAPP;
+    case message::EndpointType::GENERIC:
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_GENERIC;
+    default:
+      LOGE("Unknown endpoint type: %" PRIu8, type);
+      return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_INVALID;
   }
 }
 

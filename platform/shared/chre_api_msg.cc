@@ -24,13 +24,20 @@
 #include <cstdio>
 #include <cstring>
 
+using ::chre::EventLoopManagerSingleton;
+
 DLL_EXPORT bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
                                        struct chreMsgEndpointInfo *info) {
-  // TODO(b/371009029): Implement this.
+#if CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  return info != nullptr && EventLoopManagerSingleton::get()
+                                ->getChreMessageHubManager()
+                                .getEndpointInfo(hubId, endpointId, *info);
+#else
   UNUSED_VAR(hubId);
   UNUSED_VAR(endpointId);
   UNUSED_VAR(info);
   return false;
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 }
 
 DLL_EXPORT bool chreMsgConfigureEndpointReadyEvents(uint64_t hubId,
