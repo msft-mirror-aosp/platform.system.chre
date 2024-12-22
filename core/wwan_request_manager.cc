@@ -66,6 +66,14 @@ void WwanRequestManager::handleCellInfoResultSync(
     chreWwanCellInfoResult *result) {
   if (mCellInfoRequestingNanoappInstanceId.has_value()) {
     result->cookie = mCellInfoRequestingNanoappCookie;
+
+    uint8_t errorCode = result->errorCode;
+    if (errorCode < CHRE_ERROR_SIZE) {
+      mCellInfoErrorHistogram[errorCode]++;
+    } else {
+      LOGE("Undefined error in cellInfoResult: %" PRIu8, errorCode);
+    }
+
     EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
         CHRE_EVENT_WWAN_CELL_INFO_RESULT, result, freeCellInfoResultCallback,
         mCellInfoRequestingNanoappInstanceId.value());
@@ -80,6 +88,11 @@ void WwanRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     debugDump.print(" WWAN request pending nanoappId=%" PRIu16 "\n",
                     mCellInfoRequestingNanoappInstanceId.value());
   }
+
+  debugDump.print(" API error distribution (error-code indexed):\n");
+  debugDump.print("   Cell Scan:\n");
+  debugDump.logErrorHistogram(mCellInfoErrorHistogram,
+                              ARRAY_SIZE(mCellInfoErrorHistogram));
 }
 
 void WwanRequestManager::handleFreeCellInfoResult(

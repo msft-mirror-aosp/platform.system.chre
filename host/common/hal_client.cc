@@ -46,10 +46,6 @@ bool HalClient::isServiceAvailable() {
   return GetBoolProperty(kHalEnabledProperty, /* default_value= */ false);
 }
 
-bool HalClient::reduceLockHolding() {
-  return flags::bug_fix_reduce_lock_holding_period();
-}
-
 std::unique_ptr<HalClient> HalClient::create(
     const std::shared_ptr<IContextHubCallback> &callback,
     int32_t contextHubId) {
@@ -126,6 +122,7 @@ HalError HalClient::initConnection() {
     mContextHub = nullptr;
     return HalError::CALLBACK_REGISTRATION_FAILED;
   }
+  mIsHalConnected = true;
   LOGI("%s is successfully (re)connected to CHRE HAL", mClientName.c_str());
   return HalError::SUCCESS;
 }
@@ -136,6 +133,7 @@ void HalClient::onHalDisconnected(void *cookie) {
   {
     std::lock_guard<std::shared_mutex> lockGuard(halClient->mConnectionLock);
     halClient->mContextHub = nullptr;
+    halClient->mIsHalConnected = false;
   }
   LOGW("%s is disconnected from CHRE HAL. Reconnecting...",
        halClient->mClientName.c_str());

@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_LOCK_GUARD_IMPL_H_
 #define CHRE_UTIL_LOCK_GUARD_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/lock_guard.h"
 
 namespace chre {

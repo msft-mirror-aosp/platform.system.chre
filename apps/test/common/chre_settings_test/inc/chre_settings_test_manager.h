@@ -112,6 +112,13 @@ class Manager {
   void handleDataFromChre(uint16_t eventType, const void *eventData);
 
   /**
+   * Requests the ranging wifi scan for the WIFI_RTT Feature.
+   *
+   * @return true if the request was accepted by CHRE
+   */
+  bool requestRangingForFeatureWifiRtt();
+
+  /**
    * Starts a test for a given feature.
    *
    * @param feature The feature to test.
@@ -159,7 +166,7 @@ class Manager {
   /*
    * @param data CHRE event data containing the cookie used to set the timer.
    */
-  void handleTimeout(const void *data);
+  void handleTimerEvent(const void *data);
 
   /**
    * Handles the BLE async result
@@ -188,6 +195,9 @@ class Manager {
   //! True if we have received a chreAudioSourceStatusEvent with suspended ==
   //! false.
   bool mAudioSamplingEnabled;
+
+  //! The number of retries available for requesting wifi scans before quitting
+  uint8_t mWifiRequestRetries;
 };
 
 // The settings test manager singleton.

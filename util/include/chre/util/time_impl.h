@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_TIME_IMPL_H_
 #define CHRE_UTIL_TIME_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/time.h"
 
 namespace chre {

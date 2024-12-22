@@ -17,6 +17,7 @@
 #ifndef CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
 #define CHRE_UTIL_FIXED_SIZE_BLOCKING_QUEUE_IMPL_H_
 
+// IWYU pragma: private
 #include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/lock_guard.h"
 
