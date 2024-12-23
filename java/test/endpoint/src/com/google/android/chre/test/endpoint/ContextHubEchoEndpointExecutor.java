@@ -29,6 +29,7 @@ import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
 
 import org.junit.Assert;
@@ -37,6 +38,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -182,19 +185,34 @@ public class ContextHubEchoEndpointExecutor {
         }
     }
 
+    public void testEndpointMessaging() throws Exception {
+        doTestEndpointMessaging(/* executor= */ null);
+    }
+
+    public void testEndpointThreadedMessaging() throws Exception {
+        ScheduledThreadPoolExecutor executor =
+                new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
+        doTestEndpointMessaging(executor);
+    }
+
     /**
      * Creates a local endpoint and validates that a session can be opened with the echo service
      * endpoint, receives an onSessionOpened callback, and confirms that a message can be echoed
      * through the service.
+     *
+     * @param executor An optional executor to invoke callbacks on.
      */
-    public void testEndpointMessaging() throws Exception {
+    private void doTestEndpointMessaging(@Nullable Executor executor) throws Exception {
         List<HubDiscoveryInfo> infoList = getEchoServiceList();
         for (HubDiscoveryInfo info : infoList) {
             HubEndpointInfo targetEndpointInfo = info.getHubEndpointInfo();
 
             TestLifecycleCallback callback = new TestLifecycleCallback();
             TestMessageCallback messageCallback = new TestMessageCallback();
-            mRegisteredEndpoint = registerDefaultEndpoint(callback, messageCallback);
+            mRegisteredEndpoint =
+                    (executor == null)
+                            ? registerDefaultEndpoint(callback, messageCallback)
+                            : registerDefaultEndpoint(callback, messageCallback, executor);
             openSessionOrFail(mRegisteredEndpoint, targetEndpointInfo);
             HubEndpointSession session = callback.waitForEndpointSession();
             Assert.assertNotNull(session);
@@ -229,19 +247,35 @@ public class ContextHubEchoEndpointExecutor {
     }
 
     private HubEndpoint registerDefaultEndpoint() {
-        return registerDefaultEndpoint(null, null);
+        return registerDefaultEndpoint(
+                /* callback= */ null, /* messageCallback= */ null, /* executor= */ null);
     }
 
     private HubEndpoint registerDefaultEndpoint(
             HubEndpointLifecycleCallback callback, HubEndpointMessageCallback messageCallback) {
+        return registerDefaultEndpoint(callback, messageCallback, /* executor= */ null);
+    }
+
+    private HubEndpoint registerDefaultEndpoint(
+            HubEndpointLifecycleCallback callback,
+            HubEndpointMessageCallback messageCallback,
+            Executor executor) {
         Context context = InstrumentationRegistry.getTargetContext();
         HubEndpoint.Builder builder = new HubEndpoint.Builder(context);
         builder.setTag(TAG);
         if (callback != null) {
-            builder.setLifecycleCallback(callback);
+            if (executor != null) {
+                builder.setLifecycleCallback(executor, callback);
+            } else {
+                builder.setLifecycleCallback(callback);
+            }
         }
         if (messageCallback != null) {
-            builder.setMessageCallback(messageCallback);
+            if (executor != null) {
+                builder.setMessageCallback(executor, messageCallback);
+            } else {
+                builder.setMessageCallback(messageCallback);
+            }
         }
         HubEndpoint endpoint = builder.build();
         Assert.assertNotNull(endpoint);
