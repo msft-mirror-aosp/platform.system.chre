@@ -36,7 +36,10 @@ import androidx.test.InstrumentationRegistry;
 
 import org.junit.Assert;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -56,6 +59,9 @@ public class ContextHubEchoEndpointExecutor {
     private static final String ECHO_SERVICE_DESCRIPTOR =
             "android.hardware.contexthub.test.EchoService";
 
+    private static final int ECHO_SERVICE_MAJOR_VERSION = 1;
+    private static final int ECHO_SERVICE_MINOR_VERSION = 0;
+
     private static final long ECHO_NANOAPP_ID = 0x476f6f6754fffffbL;
 
     private static final int TIMEOUT_MESSAGE_SECONDS = 5;
@@ -68,12 +74,21 @@ public class ContextHubEchoEndpointExecutor {
     private HubEndpoint mRegisteredEndpoint = null;
 
     static class TestLifecycleCallback implements HubEndpointLifecycleCallback {
+        TestLifecycleCallback() {
+            this(/* acceptSession= */ false);
+        }
+
+        TestLifecycleCallback(boolean acceptSession) {
+            mAcceptSession = acceptSession;
+        }
+
         @Override
         public HubEndpointSessionResult onSessionOpenRequest(
                 HubEndpointInfo requester, String serviceDescriptor) {
             Log.e(TAG, "onSessionOpenRequest");
-            // We don't expect any open requests from the remote endpoint.
-            return HubEndpointSessionResult.reject("Unexpected request");
+            return mAcceptSession
+                    ? HubEndpointSessionResult.accept()
+                    : HubEndpointSessionResult.reject("Unexpected request");
         }
 
         @Override
@@ -91,7 +106,10 @@ public class ContextHubEchoEndpointExecutor {
             return mSessionQueue.poll(TIMEOUT_SESSION_OPEN_SECONDS, TimeUnit.SECONDS);
         }
 
-        private BlockingQueue<HubEndpointSession> mSessionQueue = new ArrayBlockingQueue<>(1);
+        /** If true, accepts incoming sessions */
+        private final boolean mAcceptSession;
+
+        private final BlockingQueue<HubEndpointSession> mSessionQueue = new ArrayBlockingQueue<>(1);
     }
 
     static class TestMessageCallback implements HubEndpointMessageCallback {
@@ -320,6 +338,33 @@ public class ContextHubEchoEndpointExecutor {
         mContextHubManager.unregisterEndpointDiscoveryCallback(callback);
     }
 
+    /**
+     * A test to see if a echo test service can be registered by the application. For CHRE-capable
+     * devices, we will also confirm that a connection can be started from the embedded client and
+     * echo works as intended.
+     */
+    public void testApplicationEchoService() throws Exception {
+        Collection<HubServiceInfo> serviceList = new ArrayList<>();
+        HubServiceInfo.Builder builder =
+                new HubServiceInfo.Builder(
+                        ECHO_SERVICE_DESCRIPTOR,
+                        HubServiceInfo.FORMAT_CUSTOM,
+                        ECHO_SERVICE_MAJOR_VERSION,
+                        ECHO_SERVICE_MINOR_VERSION);
+        HubServiceInfo info = builder.build();
+        Assert.assertNotNull(info);
+        serviceList.add(info);
+
+        TestLifecycleCallback callback = new TestLifecycleCallback(/* acceptSession= */ true);
+        mRegisteredEndpoint =
+                registerDefaultEndpoint(
+                        callback, /* messageCallback= */ null, /* executor= */ null, serviceList);
+
+        // TODO(b/385765805): Add CHRE client and test echo
+
+        unregisterEndpoint(mRegisteredEndpoint);
+    }
+
     private void printHubDiscoveryInfo(HubDiscoveryInfo info) {
         Log.d(TAG, "Found hub: ");
         Log.d(TAG, " - Endpoint info: " + info.getHubEndpointInfo());
@@ -328,18 +373,32 @@ public class ContextHubEchoEndpointExecutor {
 
     private HubEndpoint registerDefaultEndpoint() {
         return registerDefaultEndpoint(
-                /* callback= */ null, /* messageCallback= */ null, /* executor= */ null);
+                /* callback= */ null,
+                /* messageCallback= */ null,
+                /* executor= */ null,
+                Collections.emptyList());
     }
 
     private HubEndpoint registerDefaultEndpoint(
             HubEndpointLifecycleCallback callback, HubEndpointMessageCallback messageCallback) {
-        return registerDefaultEndpoint(callback, messageCallback, /* executor= */ null);
+        return registerDefaultEndpoint(
+                callback, messageCallback, /* executor= */ null, Collections.emptyList());
     }
 
     private HubEndpoint registerDefaultEndpoint(
             HubEndpointLifecycleCallback callback,
             HubEndpointMessageCallback messageCallback,
             Executor executor) {
+        return registerDefaultEndpoint(
+                callback, messageCallback, executor, Collections.emptyList());
+    }
+
+    private HubEndpoint registerDefaultEndpoint(
+            HubEndpointLifecycleCallback callback,
+            HubEndpointMessageCallback messageCallback,
+            Executor executor,
+            Collection<HubServiceInfo> serviceList) {
+        Assert.assertNotNull(serviceList);
         Context context = InstrumentationRegistry.getTargetContext();
         HubEndpoint.Builder builder = new HubEndpoint.Builder(context);
         builder.setTag(TAG);
@@ -357,12 +416,13 @@ public class ContextHubEchoEndpointExecutor {
                 builder.setMessageCallback(messageCallback);
             }
         }
+        builder.setServiceInfoCollection(serviceList);
         HubEndpoint endpoint = builder.build();
         Assert.assertNotNull(endpoint);
         Assert.assertEquals(endpoint.getTag(), TAG);
         Assert.assertEquals(endpoint.getLifecycleCallback(), callback);
         Assert.assertEquals(endpoint.getMessageCallback(), messageCallback);
-        Assert.assertEquals(endpoint.getServiceInfoCollection().size(), 0);
+        Assert.assertEquals(endpoint.getServiceInfoCollection().size(), serviceList.size());
 
         try {
             mContextHubManager.registerEndpoint(endpoint);
