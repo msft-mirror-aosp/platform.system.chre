@@ -18,6 +18,7 @@ package com.google.android.chre.test.endpoint;
 import android.content.Context;
 import android.hardware.contexthub.HubDiscoveryInfo;
 import android.hardware.contexthub.HubEndpoint;
+import android.hardware.contexthub.HubEndpointDiscoveryCallback;
 import android.hardware.contexthub.HubEndpointInfo;
 import android.hardware.contexthub.HubEndpointLifecycleCallback;
 import android.hardware.contexthub.HubEndpointMessageCallback;
@@ -29,6 +30,7 @@ import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
 
@@ -53,6 +55,8 @@ public class ContextHubEchoEndpointExecutor {
     /** The service descriptor for an echo service. */
     private static final String ECHO_SERVICE_DESCRIPTOR =
             "android.hardware.contexthub.test.EchoService";
+
+    private static final long ECHO_NANOAPP_ID = 0x476f6f6754fffffbL;
 
     private static final int TIMEOUT_MESSAGE_SECONDS = 5;
 
@@ -102,6 +106,24 @@ public class ContextHubEchoEndpointExecutor {
         }
 
         private BlockingQueue<HubMessage> mMessageQueue = new ArrayBlockingQueue<>(1);
+    }
+
+    static class TestDiscoveryCallback implements HubEndpointDiscoveryCallback {
+        @Override
+        public void onEndpointsStarted(@NonNull List<HubDiscoveryInfo> discoveryInfoList) {
+            Log.d(TAG, "onEndpointsStarted: discovery size=" + discoveryInfoList.size());
+        }
+
+        @Override
+        public void onEndpointsStopped(
+                @NonNull List<HubDiscoveryInfo> discoveryInfoList, int reason) {
+            Log.d(
+                    TAG,
+                    "onEndpointsStarted: discovery size="
+                            + discoveryInfoList.size()
+                            + ", reason="
+                            + reason);
+        }
     }
 
     public ContextHubEchoEndpointExecutor(ContextHubManager manager) {
@@ -238,6 +260,64 @@ public class ContextHubEchoEndpointExecutor {
 
             unregisterEndpoint(mRegisteredEndpoint);
         }
+    }
+
+    public void testEndpointDiscovery() {
+        doTestEndpointDiscovery(/* executor= */ null);
+    }
+
+    public void testThreadedEndpointDiscovery() {
+        ScheduledThreadPoolExecutor executor =
+                new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
+        doTestEndpointDiscovery(executor);
+    }
+
+    /**
+     * Registers an endpoint discovery callback for endpoints with the echo service descriptor.
+     *
+     * @param executor An optional executor to invoke callbacks on.
+     */
+    private void doTestEndpointDiscovery(@Nullable Executor executor) {
+        TestDiscoveryCallback callback = new TestDiscoveryCallback();
+        if (executor != null) {
+            mContextHubManager.registerEndpointDiscoveryCallback(
+                    executor, callback, ECHO_SERVICE_DESCRIPTOR);
+        } else {
+            mContextHubManager.registerEndpointDiscoveryCallback(callback, ECHO_SERVICE_DESCRIPTOR);
+        }
+
+        // TODO(b/385765805): Add CHRE/dynamic discovery
+
+        mContextHubManager.unregisterEndpointDiscoveryCallback(callback);
+    }
+
+    public void testEndpointIdDiscovery() {
+        doTestEndpointDiscovery(/* executor= */ null);
+    }
+
+    public void testThreadedEndpointIdDiscovery() {
+        ScheduledThreadPoolExecutor executor =
+                new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
+        doTestEndpointDiscovery(executor);
+    }
+
+    /**
+     * Registers an endpoint discovery callback for endpoints with the echo message nanoapp ID.
+     *
+     * @param executor An optional executor to invoke callbacks on.
+     */
+    private void doTestEndpointIdDiscovery(@Nullable Executor executor) {
+        TestDiscoveryCallback callback = new TestDiscoveryCallback();
+        if (executor != null) {
+            mContextHubManager.registerEndpointDiscoveryCallback(
+                    executor, callback, ECHO_NANOAPP_ID);
+        } else {
+            mContextHubManager.registerEndpointDiscoveryCallback(callback, ECHO_NANOAPP_ID);
+        }
+
+        // TODO(b/385765805): Add CHRE/dynamic discovery
+
+        mContextHubManager.unregisterEndpointDiscoveryCallback(callback);
     }
 
     private void printHubDiscoveryInfo(HubDiscoveryInfo info) {
