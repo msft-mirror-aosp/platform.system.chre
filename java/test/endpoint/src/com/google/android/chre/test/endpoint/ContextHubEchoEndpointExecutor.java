@@ -152,7 +152,7 @@ public class ContextHubEchoEndpointExecutor {
             HubEndpointInfo targetEndpointInfo = info.getHubEndpointInfo();
             Assert.assertNotNull(targetEndpointInfo);
             mRegisteredEndpoint = registerDefaultEndpoint();
-            openSessionOrFail(mRegisteredEndpoint, targetEndpointInfo);
+            openSessionOrFailNoDescriptor(mRegisteredEndpoint, targetEndpointInfo);
             unregisterEndpoint(mRegisteredEndpoint);
         }
     }
@@ -259,6 +259,17 @@ public class ContextHubEchoEndpointExecutor {
     private void openSessionOrFail(HubEndpoint endpoint, HubEndpointInfo target) {
         try {
             mContextHubManager.openSession(endpoint, target, ECHO_SERVICE_DESCRIPTOR);
+        } catch (Exception e) {
+            Assert.fail("Failed to open session: " + e);
+        }
+    }
+
+    /**
+     * Same as openSessionOrFail but with no service descriptor.
+     */
+    private void openSessionOrFailNoDescriptor(HubEndpoint endpoint, HubEndpointInfo target) {
+        try {
+            mContextHubManager.openSession(endpoint, target);
         } catch (Exception e) {
             Assert.fail("Failed to open session: " + e);
         }
