@@ -24,6 +24,7 @@ import android.hardware.contexthub.HubEndpointMessageCallback;
 import android.hardware.contexthub.HubEndpointSession;
 import android.hardware.contexthub.HubEndpointSessionResult;
 import android.hardware.contexthub.HubMessage;
+import android.hardware.contexthub.HubServiceInfo;
 import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.util.Log;
@@ -121,8 +122,16 @@ public class ContextHubEchoEndpointExecutor {
         List<HubDiscoveryInfo> infoList = mContextHubManager.findEndpoints(ECHO_SERVICE_DESCRIPTOR);
         for (HubDiscoveryInfo info : infoList) {
             printHubDiscoveryInfo(info);
-            Assert.assertEquals(
-                    ECHO_SERVICE_DESCRIPTOR, info.getHubServiceInfo().getServiceDescriptor());
+            HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
+            Assert.assertNotNull(endpointInfo);
+            // The first valid endpoint info type is 1
+            Assert.assertNotEquals(endpointInfo.getType(), 0);
+            HubEndpointInfo.HubEndpointIdentifier identifier = endpointInfo.getIdentifier();
+            Assert.assertNotNull(identifier);
+
+            HubServiceInfo serviceInfo = info.getHubServiceInfo();
+            Assert.assertNotNull(serviceInfo);
+            Assert.assertEquals(ECHO_SERVICE_DESCRIPTOR, serviceInfo.getServiceDescriptor());
         }
         return infoList;
     }
@@ -223,6 +232,7 @@ public class ContextHubEchoEndpointExecutor {
             HubEndpointLifecycleCallback callback, HubEndpointMessageCallback messageCallback) {
         Context context = InstrumentationRegistry.getTargetContext();
         HubEndpoint.Builder builder = new HubEndpoint.Builder(context);
+        builder.setTag(TAG);
         if (callback != null) {
             builder.setLifecycleCallback(callback);
         }
@@ -231,8 +241,10 @@ public class ContextHubEchoEndpointExecutor {
         }
         HubEndpoint endpoint = builder.build();
         Assert.assertNotNull(endpoint);
+        Assert.assertEquals(endpoint.getTag(), TAG);
         Assert.assertEquals(endpoint.getLifecycleCallback(), callback);
         Assert.assertEquals(endpoint.getMessageCallback(), messageCallback);
+        Assert.assertEquals(endpoint.getServiceInfoCollection().size(), 0);
 
         try {
             mContextHubManager.registerEndpoint(endpoint);
