@@ -132,6 +132,10 @@ public class ContextHubEchoEndpointExecutor {
             HubServiceInfo serviceInfo = info.getHubServiceInfo();
             Assert.assertNotNull(serviceInfo);
             Assert.assertEquals(ECHO_SERVICE_DESCRIPTOR, serviceInfo.getServiceDescriptor());
+
+            List<HubDiscoveryInfo> identifierDiscoveryList =
+                    mContextHubManager.findEndpoints(identifier.getEndpoint());
+            Assert.assertNotEquals(identifierDiscoveryList.size(), 0);
         }
         return infoList;
     }
