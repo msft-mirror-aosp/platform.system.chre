@@ -24,10 +24,12 @@ import android.hardware.contexthub.HubEndpointMessageCallback;
 import android.hardware.contexthub.HubEndpointSession;
 import android.hardware.contexthub.HubEndpointSessionResult;
 import android.hardware.contexthub.HubMessage;
+import android.hardware.contexthub.HubServiceInfo;
 import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
 
 import org.junit.Assert;
@@ -36,6 +38,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -121,8 +125,20 @@ public class ContextHubEchoEndpointExecutor {
         List<HubDiscoveryInfo> infoList = mContextHubManager.findEndpoints(ECHO_SERVICE_DESCRIPTOR);
         for (HubDiscoveryInfo info : infoList) {
             printHubDiscoveryInfo(info);
-            Assert.assertEquals(
-                    ECHO_SERVICE_DESCRIPTOR, info.getHubServiceInfo().getServiceDescriptor());
+            HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
+            Assert.assertNotNull(endpointInfo);
+            // The first valid endpoint info type is 1
+            Assert.assertNotEquals(endpointInfo.getType(), 0);
+            HubEndpointInfo.HubEndpointIdentifier identifier = endpointInfo.getIdentifier();
+            Assert.assertNotNull(identifier);
+
+            HubServiceInfo serviceInfo = info.getHubServiceInfo();
+            Assert.assertNotNull(serviceInfo);
+            Assert.assertEquals(ECHO_SERVICE_DESCRIPTOR, serviceInfo.getServiceDescriptor());
+
+            List<HubDiscoveryInfo> identifierDiscoveryList =
+                    mContextHubManager.findEndpoints(identifier.getEndpoint());
+            Assert.assertNotEquals(identifierDiscoveryList.size(), 0);
         }
         return infoList;
     }
@@ -143,7 +159,7 @@ public class ContextHubEchoEndpointExecutor {
             HubEndpointInfo targetEndpointInfo = info.getHubEndpointInfo();
             Assert.assertNotNull(targetEndpointInfo);
             mRegisteredEndpoint = registerDefaultEndpoint();
-            openSessionOrFail(mRegisteredEndpoint, targetEndpointInfo);
+            openSessionOrFailNoDescriptor(mRegisteredEndpoint, targetEndpointInfo);
             unregisterEndpoint(mRegisteredEndpoint);
         }
     }
@@ -169,19 +185,34 @@ public class ContextHubEchoEndpointExecutor {
         }
     }
 
+    public void testEndpointMessaging() throws Exception {
+        doTestEndpointMessaging(/* executor= */ null);
+    }
+
+    public void testEndpointThreadedMessaging() throws Exception {
+        ScheduledThreadPoolExecutor executor =
+                new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
+        doTestEndpointMessaging(executor);
+    }
+
     /**
      * Creates a local endpoint and validates that a session can be opened with the echo service
      * endpoint, receives an onSessionOpened callback, and confirms that a message can be echoed
      * through the service.
+     *
+     * @param executor An optional executor to invoke callbacks on.
      */
-    public void testEndpointMessaging() throws Exception {
+    private void doTestEndpointMessaging(@Nullable Executor executor) throws Exception {
         List<HubDiscoveryInfo> infoList = getEchoServiceList();
         for (HubDiscoveryInfo info : infoList) {
             HubEndpointInfo targetEndpointInfo = info.getHubEndpointInfo();
 
             TestLifecycleCallback callback = new TestLifecycleCallback();
             TestMessageCallback messageCallback = new TestMessageCallback();
-            mRegisteredEndpoint = registerDefaultEndpoint(callback, messageCallback);
+            mRegisteredEndpoint =
+                    (executor == null)
+                            ? registerDefaultEndpoint(callback, messageCallback)
+                            : registerDefaultEndpoint(callback, messageCallback, executor);
             openSessionOrFail(mRegisteredEndpoint, targetEndpointInfo);
             HubEndpointSession session = callback.waitForEndpointSession();
             Assert.assertNotNull(session);
@@ -216,23 +247,42 @@ public class ContextHubEchoEndpointExecutor {
     }
 
     private HubEndpoint registerDefaultEndpoint() {
-        return registerDefaultEndpoint(null, null);
+        return registerDefaultEndpoint(
+                /* callback= */ null, /* messageCallback= */ null, /* executor= */ null);
     }
 
     private HubEndpoint registerDefaultEndpoint(
             HubEndpointLifecycleCallback callback, HubEndpointMessageCallback messageCallback) {
+        return registerDefaultEndpoint(callback, messageCallback, /* executor= */ null);
+    }
+
+    private HubEndpoint registerDefaultEndpoint(
+            HubEndpointLifecycleCallback callback,
+            HubEndpointMessageCallback messageCallback,
+            Executor executor) {
         Context context = InstrumentationRegistry.getTargetContext();
         HubEndpoint.Builder builder = new HubEndpoint.Builder(context);
+        builder.setTag(TAG);
         if (callback != null) {
-            builder.setLifecycleCallback(callback);
+            if (executor != null) {
+                builder.setLifecycleCallback(executor, callback);
+            } else {
+                builder.setLifecycleCallback(callback);
+            }
         }
         if (messageCallback != null) {
-            builder.setMessageCallback(messageCallback);
+            if (executor != null) {
+                builder.setMessageCallback(executor, messageCallback);
+            } else {
+                builder.setMessageCallback(messageCallback);
+            }
         }
         HubEndpoint endpoint = builder.build();
         Assert.assertNotNull(endpoint);
+        Assert.assertEquals(endpoint.getTag(), TAG);
         Assert.assertEquals(endpoint.getLifecycleCallback(), callback);
         Assert.assertEquals(endpoint.getMessageCallback(), messageCallback);
+        Assert.assertEquals(endpoint.getServiceInfoCollection().size(), 0);
 
         try {
             mContextHubManager.registerEndpoint(endpoint);
@@ -247,6 +297,17 @@ public class ContextHubEchoEndpointExecutor {
     private void openSessionOrFail(HubEndpoint endpoint, HubEndpointInfo target) {
         try {
             mContextHubManager.openSession(endpoint, target, ECHO_SERVICE_DESCRIPTOR);
+        } catch (Exception e) {
+            Assert.fail("Failed to open session: " + e);
+        }
+    }
+
+    /**
+     * Same as openSessionOrFail but with no service descriptor.
+     */
+    private void openSessionOrFailNoDescriptor(HubEndpoint endpoint, HubEndpointInfo target) {
+        try {
+            mContextHubManager.openSession(endpoint, target);
         } catch (Exception e) {
             Assert.fail("Failed to open session: " + e);
         }
