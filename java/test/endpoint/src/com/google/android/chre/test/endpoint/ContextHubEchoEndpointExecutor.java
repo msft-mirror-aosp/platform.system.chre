@@ -323,13 +323,13 @@ public class ContextHubEchoEndpointExecutor {
     }
 
     public void testEndpointIdDiscovery() {
-        doTestEndpointDiscovery(/* executor= */ null);
+        doTestEndpointIdDiscovery(/* executor= */ null);
     }
 
     public void testThreadedEndpointIdDiscovery() {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
-        doTestEndpointDiscovery(executor);
+        doTestEndpointIdDiscovery(executor);
     }
 
     /**
