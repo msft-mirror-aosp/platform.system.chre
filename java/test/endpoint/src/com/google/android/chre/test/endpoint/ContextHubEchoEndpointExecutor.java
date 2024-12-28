@@ -35,6 +35,7 @@ import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
 
 import org.junit.Assert;
+import org.junit.Assume;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +47,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * A test to validate endpoint connection and messaging with an service on the device. The device
@@ -311,15 +313,20 @@ public class ContextHubEchoEndpointExecutor {
     private void doTestEndpointDiscovery(@Nullable Executor executor) {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
-            mContextHubManager.registerEndpointDiscoveryCallback(
-                    executor, callback, ECHO_SERVICE_DESCRIPTOR);
+            checkApiSupport(
+                    (manager) ->
+                            manager.registerEndpointDiscoveryCallback(
+                                    executor, callback, ECHO_SERVICE_DESCRIPTOR));
         } else {
-            mContextHubManager.registerEndpointDiscoveryCallback(callback, ECHO_SERVICE_DESCRIPTOR);
+            checkApiSupport(
+                    (manager) ->
+                            manager.registerEndpointDiscoveryCallback(
+                                    callback, ECHO_SERVICE_DESCRIPTOR));
         }
 
         // TODO(b/385765805): Add CHRE/dynamic discovery
 
-        mContextHubManager.unregisterEndpointDiscoveryCallback(callback);
+        checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
     public void testEndpointIdDiscovery() {
@@ -340,15 +347,20 @@ public class ContextHubEchoEndpointExecutor {
     private void doTestEndpointIdDiscovery(@Nullable Executor executor) {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
-            mContextHubManager.registerEndpointDiscoveryCallback(
-                    executor, callback, ECHO_NANOAPP_ID);
+            checkApiSupport(
+                    (manager) ->
+                            manager.registerEndpointDiscoveryCallback(
+                                    executor, callback, ECHO_NANOAPP_ID));
         } else {
-            mContextHubManager.registerEndpointDiscoveryCallback(callback, ECHO_NANOAPP_ID);
+            checkApiSupport(
+                    (manager) ->
+                            manager.registerEndpointDiscoveryCallback(
+                                    callback, ECHO_NANOAPP_ID));
         }
 
         // TODO(b/385765805): Add CHRE/dynamic discovery
 
-        mContextHubManager.unregisterEndpointDiscoveryCallback(callback);
+        checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
     /**
@@ -437,49 +449,40 @@ public class ContextHubEchoEndpointExecutor {
         Assert.assertEquals(endpoint.getMessageCallback(), messageCallback);
         Assert.assertEquals(endpoint.getServiceInfoCollection().size(), serviceList.size());
 
-        try {
-            mContextHubManager.registerEndpoint(endpoint);
-            Log.i(TAG, "Successfully registered endpoint");
-        } catch (Exception e) {
-            Log.e(TAG, "Exception when registering endpoint", e);
-            Assert.fail("Failed to register endpoint");
-        }
+        checkApiSupport((manager) -> manager.registerEndpoint(endpoint));
         return endpoint;
     }
 
     private void openSessionOrFail(HubEndpoint endpoint, HubEndpointInfo target) {
-        try {
-            mContextHubManager.openSession(endpoint, target, ECHO_SERVICE_DESCRIPTOR);
-        } catch (Exception e) {
-            Assert.fail("Failed to open session: " + e);
-        }
+        checkApiSupport(
+                (manager) -> manager.openSession(endpoint, target, ECHO_SERVICE_DESCRIPTOR));
     }
 
     /**
      * Same as openSessionOrFail but with no service descriptor.
      */
     private void openSessionOrFailNoDescriptor(HubEndpoint endpoint, HubEndpointInfo target) {
-        try {
-            mContextHubManager.openSession(endpoint, target);
-        } catch (Exception e) {
-            Assert.fail("Failed to open session: " + e);
-        }
+        checkApiSupport((manager) -> manager.openSession(endpoint, target));
     }
 
     private void unregisterEndpointNoThrow(HubEndpoint endpoint) {
         try {
             unregisterEndpoint(mRegisteredEndpoint);
-        } catch (AssertionError e) {
+        } catch (Exception e) {
             Log.e(TAG, "Exception when unregistering endpoint", e);
         }
     }
 
     private void unregisterEndpoint(HubEndpoint endpoint) throws AssertionError {
+        checkApiSupport((manager) -> manager.unregisterEndpoint(endpoint));
+    }
+
+    private void checkApiSupport(Consumer<ContextHubManager> consumer) {
         try {
-            mContextHubManager.unregisterEndpoint(mRegisteredEndpoint);
-            Log.i(TAG, "Successfully unregistered endpoint");
-        } catch (Exception e) {
-            Assert.fail("Failed to unregister endpoint");
+            consumer.accept(mContextHubManager);
+        } catch (UnsupportedOperationException e) {
+            // Forced assumption
+            Assume.assumeTrue("Skipping endpoint test on unsupported device", false);
         }
     }
 }
