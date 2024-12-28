@@ -86,9 +86,22 @@ public class ContextHubEchoEndpointExecutor {
         public HubEndpointSessionResult onSessionOpenRequest(
                 HubEndpointInfo requester, String serviceDescriptor) {
             Log.e(TAG, "onSessionOpenRequest");
-            return mAcceptSession
-                    ? HubEndpointSessionResult.accept()
-                    : HubEndpointSessionResult.reject("Unexpected request");
+            HubEndpointSessionResult result =
+                    mAcceptSession
+                            ? HubEndpointSessionResult.accept()
+                            : HubEndpointSessionResult.reject("Unexpected request");
+            // TODO(b/385765805): Change to assert once callback path is explicitly validated
+            if (result.isAccepted() != mAcceptSession) {
+                Log.w(
+                        TAG,
+                        "Unexpected session result status: expected "
+                                + mAcceptSession
+                                + " got "
+                                + result.isAccepted()
+                                + " reason="
+                                + result.getReason());
+            }
+            return result;
         }
 
         @Override
@@ -310,13 +323,13 @@ public class ContextHubEchoEndpointExecutor {
     }
 
     public void testEndpointIdDiscovery() {
-        doTestEndpointDiscovery(/* executor= */ null);
+        doTestEndpointIdDiscovery(/* executor= */ null);
     }
 
     public void testThreadedEndpointIdDiscovery() {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
-        doTestEndpointDiscovery(executor);
+        doTestEndpointIdDiscovery(executor);
     }
 
     /**
