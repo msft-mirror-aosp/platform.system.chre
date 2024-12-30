@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <mutex>
 
+#include "bluetooth_socket_offload_link.h"
 #include "bluetooth_socket_offload_link_callback.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
@@ -105,7 +106,8 @@ class IChreSocketCallback {
 /**
  * A helper class that can be used to connect to the CHRE socket.
  */
-class HalChreSocketConnection {
+class HalChreSocketConnection : public ::aidl::android::hardware::bluetooth::
+                                    socket::impl::BluetoothSocketOffloadLink {
  private:
   using BluetoothSocketOffloadLinkCallback = ::aidl::android::hardware::
       bluetooth::socket::impl::BluetoothSocketOffloadLinkCallback;
@@ -132,7 +134,7 @@ class HalChreSocketConnection {
   bool sendSettingChangedNotification(::chre::fbs::Setting fbsSetting,
                                       ::chre::fbs::SettingState fbsState);
 
-  bool sendRawMessage(uint8_t *data, size_t size);
+  bool sendRawMessage(void *data, size_t size);
 
   bool onHostEndpointConnected(uint16_t hostEndpointId, uint8_t type,
                                const std::string &package_name,
@@ -149,8 +151,17 @@ class HalChreSocketConnection {
    */
   bool isLoadTransactionPending();
 
-  void setBtSocketCallback(
-      BluetoothSocketOffloadLinkCallback *btSocketCallback);
+  // Implementation of the BluetoothSocketOffloadLink interface:
+  bool initOffloadLink() {
+    return true;
+  }
+
+  bool sendMessageToOffloadStack(void *data, size_t size) override {
+    return sendRawMessage(data, size);
+  }
+
+  void setBluetoothSocketCallback(
+      BluetoothSocketOffloadLinkCallback *btSocketCallback) override;
 
  private:
   class SocketCallbacks : public ::android::chre::SocketClient::ICallbacks,
@@ -178,7 +189,7 @@ class HalChreSocketConnection {
     bool handleContextHubV4Message(
         const ::chre::fbs::ChreMessageUnion &message) override;
     void handleBluetoothSocketMessage(const void *message, size_t messageLen);
-    void setBtSocketCallback(
+    void setBluetoothSocketCallback(
         BluetoothSocketOffloadLinkCallback *btSocketCallback);
 
    private:

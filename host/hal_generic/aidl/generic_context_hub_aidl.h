@@ -29,6 +29,7 @@
 #include <optional>
 #include <unordered_set>
 
+#include "bluetooth_socket_offload_link.h"
 #include "chre_host/napp_header.h"
 #include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
@@ -57,8 +58,11 @@ class ContextHub : public BnContextHub,
                    public ::android::hardware::contexthub::DebugDumpHelper,
                    public ::android::hardware::contexthub::common::
                        implementation::IChreSocketCallback {
+ private:
   using HalChreSocketConnection = ::android::hardware::contexthub::common::
       implementation::HalChreSocketConnection;
+  using BluetoothSocketOffloadLink = ::aidl::android::hardware::bluetooth::
+      socket::impl::BluetoothSocketOffloadLink;
 
  public:
   ContextHub()
@@ -140,8 +144,8 @@ class ContextHub : public BnContextHub,
 
   void writeToDebugFile(const char *str) override;
 
-  std::shared_ptr<HalChreSocketConnection> getConnection() {
-    return mConnection;
+  std::shared_ptr<BluetoothSocketOffloadLink> getBluetoothSocketOffloadLink() {
+    return std::static_pointer_cast<BluetoothSocketOffloadLink>(mConnection);
   }
 
  private:

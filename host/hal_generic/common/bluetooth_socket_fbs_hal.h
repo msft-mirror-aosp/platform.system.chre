@@ -16,23 +16,28 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "aidl/android/hardware/bluetooth/socket/BnBluetoothSocket.h"
+#include "bluetooth_socket_offload_link.h"
 #include "bluetooth_socket_offload_link_callback.h"
 #include "chre_host/generated/host_messages_generated.h"
-#include "hal_chre_socket_connection.h"
 
 namespace aidl::android::hardware::bluetooth::socket::impl {
 
 /**
- * The base class of BT Socket HAL.
- *
- * A subclass should initiate mConnection.
+ * Implementationof the BT Socket HAL using flatbuffer encoding and decoding for
+ * offload messages.
  */
 class BluetoothSocketFbsHal : public BnBluetoothSocket,
                               public BluetoothSocketOffloadLinkCallback {
  public:
+  BluetoothSocketFbsHal(std::shared_ptr<BluetoothSocketOffloadLink> offloadLink)
+      : mOffloadLink(offloadLink) {
+    mOffloadLink->setBluetoothSocketCallback(this);
+  }
+
   // Functions implementing IBluetoothSocket.
   ndk::ScopedAStatus registerCallback(
       const std::shared_ptr<IBluetoothSocketCallback> &callback) override;
@@ -41,16 +46,26 @@ class BluetoothSocketFbsHal : public BnBluetoothSocket,
   ndk::ScopedAStatus closed(int64_t socketId) override;
 
   // Functions implementing BluetoothSocketOffloadLinkCallback.
+  void onOffloadLinkDisconnected() override {
+    mOffloadLinkAvailable = false;
+  }
+  void onOffloadLinkReconnected() override {
+    mOffloadLinkAvailable = true;
+  }
   void handleMessageFromOffloadStack(const void *message,
                                      size_t length) override;
 
- protected:
-  std::shared_ptr<::android::hardware::contexthub::common::implementation::
-                      HalChreSocketConnection>
-      mConnection;
+ private:
+  std::shared_ptr<BluetoothSocketOffloadLink> mOffloadLink;
+
   std::shared_ptr<IBluetoothSocketCallback> mCallback{};
 
- private:
+  // A thread safe flag indicating if the offload link is ready for operations.
+  // Outside of the constructor, this boolean flag should only be written by
+  // onOffloadLinkDisconnected and onOffloadLinkReconnected, the order of which
+  // should be guaranteed by the BT Socket offload link's disconnection handler.
+  std::atomic_bool mOffloadLinkAvailable = true;
+
   void sendOpenedCompleteMessage(int64_t socketId, Status status,
                                  std::string reason);
 

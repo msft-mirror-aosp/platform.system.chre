@@ -147,7 +147,7 @@ bool HalChreSocketConnection::requestDebugDump() {
   return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
-bool HalChreSocketConnection::sendRawMessage(uint8_t *data, size_t size) {
+bool HalChreSocketConnection::sendRawMessage(void *data, size_t size) {
   return mClient.sendMessage(data, size);
 }
 
@@ -180,9 +180,9 @@ bool HalChreSocketConnection::isLoadTransactionPending() {
   return mPendingLoadTransaction.has_value();
 }
 
-void HalChreSocketConnection::setBtSocketCallback(
+void HalChreSocketConnection::setBluetoothSocketCallback(
     BluetoothSocketOffloadLinkCallback *btSocketCallback) {
-  mSocketCallbacks->setBtSocketCallback(btSocketCallback);
+  mSocketCallbacks->setBluetoothSocketCallback(btSocketCallback);
 }
 
 HalChreSocketConnection::SocketCallbacks::SocketCallbacks(
@@ -332,7 +332,7 @@ void HalChreSocketConnection::SocketCallbacks::handleBluetoothSocketMessage(
   mBtSocketCallback->handleMessageFromOffloadStack(message, length);
 }
 
-void HalChreSocketConnection::SocketCallbacks::setBtSocketCallback(
+void HalChreSocketConnection::SocketCallbacks::setBluetoothSocketCallback(
     BluetoothSocketOffloadLinkCallback *btSocketCallback) {
   mBtSocketCallback = btSocketCallback;
 }

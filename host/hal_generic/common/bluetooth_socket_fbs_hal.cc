@@ -15,10 +15,10 @@
  */
 
 #include "bluetooth_socket_fbs_hal.h"
+
 #include <cstdint>
 
 #include "chre/platform/shared/host_protocol_common.h"
-#include "chre_connection.h"
 #include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/host_protocol_host.h"
 #include "chre_host/log.h"
@@ -47,7 +47,12 @@ ScopedAStatus BluetoothSocketFbsHal::getSocketCapabilities(
 
 ScopedAStatus BluetoothSocketFbsHal::opened(const SocketContext &context) {
   LOGD("Host opened BT offload socket ID=%" PRIu64, context.socketId);
-  flatbuffers::FlatBufferBuilder builder(1028);
+  if (!mOffloadLinkAvailable) {
+    LOGE("BT Socket Offload Link not available");
+    sendOpenedCompleteMessage(context.socketId, Status::FAILURE,
+                              "Offload link not available");
+    return ScopedAStatus::ok();
+  }
   if (context.channelInfo.getTag() != ChannelInfo::Tag::leCocChannelInfo) {
     LOGE("Got open request for unsupported socket type %" PRId32,
          context.channelInfo.getTag());
@@ -55,6 +60,7 @@ ScopedAStatus BluetoothSocketFbsHal::opened(const SocketContext &context) {
                               "Unsupported socket type");
     return ScopedAStatus::ok();
   }
+  flatbuffers::FlatBufferBuilder builder(1028);
   auto socketName = ::chre::HostProtocolCommon::addStringAsByteVector(
       builder, context.name.c_str());
   const auto &socketChannelInfo =
@@ -73,8 +79,8 @@ ScopedAStatus BluetoothSocketFbsHal::opened(const SocketContext &context) {
   ::chre::HostProtocolCommon::finalize(
       builder, ::chre::fbs::ChreMessage::BtSocketOpen, socketOpen.Union());
 
-  if (!mConnection->sendRawMessage(builder.GetBufferPointer(),
-                                   builder.GetSize())) {
+  if (!mOffloadLink->sendMessageToOffloadStack(builder.GetBufferPointer(),
+                                               builder.GetSize())) {
     LOGE("Failed to send BT socket opened message");
     sendOpenedCompleteMessage(context.socketId, Status::FAILURE,
                               "Failed to send BT socket opened message");
@@ -84,16 +90,20 @@ ScopedAStatus BluetoothSocketFbsHal::opened(const SocketContext &context) {
 
 ScopedAStatus BluetoothSocketFbsHal::closed(int64_t socketId) {
   LOGD("Host closed BT offload socket ID=%" PRIu64, socketId);
-  flatbuffers::FlatBufferBuilder builder(64);
-  auto socketCloseResponse =
-      ::chre::fbs::CreateBtSocketCloseResponse(builder, socketId);
-  ::chre::HostProtocolCommon::finalize(
-      builder, ::chre::fbs::ChreMessage::BtSocketCloseResponse,
-      socketCloseResponse.Union());
+  if (!mOffloadLinkAvailable) {
+    LOGE("BT Socket Offload Link not available");
+  } else {
+    flatbuffers::FlatBufferBuilder builder(64);
+    auto socketCloseResponse =
+        ::chre::fbs::CreateBtSocketCloseResponse(builder, socketId);
+    ::chre::HostProtocolCommon::finalize(
+        builder, ::chre::fbs::ChreMessage::BtSocketCloseResponse,
+        socketCloseResponse.Union());
 
-  if (!mConnection->sendRawMessage(builder.GetBufferPointer(),
-                                   builder.GetSize())) {
-    LOGE("Failed to send BT socket closed message");
+    if (!mOffloadLink->sendMessageToOffloadStack(builder.GetBufferPointer(),
+                                                 builder.GetSize())) {
+      LOGE("Failed to send BT socket closed message");
+    }
   }
   return ScopedAStatus::ok();
 }

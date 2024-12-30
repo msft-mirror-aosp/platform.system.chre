@@ -22,14 +22,26 @@
 namespace aidl::android::hardware::bluetooth::socket::impl {
 
 /**
- * The callback interface for handling BT Socket messages from a ChreConnection.
+ * The callback interface for a BluetoothSocketOffloadLink
  *
- * A BT Socket HAL should implement this interface so that the ChreConnection
- * has an API to pass messages to.
+ * A Bluetooth Socket HAL should implement this interface so that the
+ * BluetoothSocketOffloadLink has an API to pass messages to.
  */
 class BluetoothSocketOffloadLinkCallback {
  public:
   virtual ~BluetoothSocketOffloadLinkCallback() = default;
+
+  /**
+   * This method should be called when the offload link is disconnected from
+   * the HAL.
+   */
+  virtual void onOffloadLinkDisconnected() {}
+
+  /**
+   * This method should be called when the offload link is reconnected to the
+   * HAL.
+   */
+  virtual void onOffloadLinkReconnected() {}
 
   /**
    * Handles an encoded message related to an offloaded Bluetooth Socket from
