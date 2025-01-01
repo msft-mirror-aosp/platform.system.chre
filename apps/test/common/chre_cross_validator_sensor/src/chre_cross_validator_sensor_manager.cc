@@ -482,9 +482,8 @@ void Manager::handleInfoMessage(uint16_t hostEndpoint,
           infoResponse.isAvailable = true;
           infoResponse.has_sensorIndex = true;
           infoResponse.sensorIndex = i;
-          SensorNameCallbackData nameData = {
-              .sensorName = info.sensorName,
-              .size = strlen(info.sensorName) + 1};
+          SensorNameCallbackData nameData = {.sensorName = info.sensorName,
+                                             .size = strlen(info.sensorName)};
           infoResponse.sensorName.funcs.encode = encodeSensorName;
           infoResponse.sensorName.arg = &nameData;
           break;
