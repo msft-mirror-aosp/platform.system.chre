@@ -481,6 +481,8 @@ void ContextHub::onNanoappListResponse(
     if (!mQueryNanoappsInternalList) {
       mQueryNanoappsInternalList = appInfoList;
       mQueryNanoappsInternalCondVar.notify_all();
+      // This was an internal HAL request - do not call callback
+      return;
     }
   }
 

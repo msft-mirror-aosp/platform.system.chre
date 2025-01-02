@@ -303,7 +303,7 @@ class ContextHub : public BnContextHub,
   // A mutex and condition variable to synchronize queryNanoappsInternal.
   std::mutex mQueryNanoappsInternalMutex;
   std::condition_variable mQueryNanoappsInternalCondVar;
-  std::optional<std::vector<NanoappInfo>> mQueryNanoappsInternalList;
+  std::optional<std::vector<NanoappInfo>> mQueryNanoappsInternalList{{}};
 
   // State for synchronous loads and unloads. Primarily used for test mode.
   std::mutex mSynchronousLoadUnloadMutex;
