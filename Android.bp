@@ -57,6 +57,11 @@ filegroup {
 }
 
 filegroup {
+    name: "bluetooth_socket_hal_core",
+    srcs: ["host/hal_generic/common/bluetooth_socket_fbs_hal.cc"],
+}
+
+filegroup {
     name: "contexthub_hal_common_srcs",
     srcs: [
         "host/common/file_stream.cc",
