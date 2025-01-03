@@ -23,8 +23,10 @@
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
+#include "chre/util/system/message_router_callback_allocator.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
+#include "pw_containers/vector.h"
 
 #include <cinttypes>
 #include <optional>
@@ -38,6 +40,9 @@ class ChreMessageHubManager
  public:
   //! The ID of the CHRE MessageHub
   constexpr static message::MessageHubId kChreMessageHubId = CHRE_PLATFORM_ID;
+
+  //! Constructor for the ChreMessageHubManager
+  ChreMessageHubManager();
 
   //! Initializes the ChreMessageHubManager
   void init();
@@ -76,6 +81,14 @@ class ChreMessageHubManager
                                message::EndpointId fromEndpointId,
                                message::EndpointId toEndpointId);
 
+  //! Sends a reliable message on the given session. If this function fails,
+  //! the free callback will be called and it will return false.
+  //! @return whether the message was successfully sent
+  bool sendMessage(void *message, size_t messageSize, uint32_t messageType,
+                   uint16_t sessionId, uint32_t messagePermissions,
+                   chreMessageFreeFunction *freeCallback,
+                   message::EndpointId fromEndpointId);
+
   //! Converts a message::EndpointType to a CHRE endpoint type
   //! @return the CHRE endpoint type
   chreMsgEndpointType toChreEndpointType(message::EndpointType type);
@@ -88,11 +101,19 @@ class ChreMessageHubManager
     uint64_t nanoappId;
   };
 
+  //! Data to be passed to the message free callback
+  struct MessageFreeCallbackData {
+    chreMessageFreeFunction *freeCallback;
+    uint64_t nanoappId;
+  };
+
   //! Data to be passed to the session closed callback
   struct SessionCallbackData {
     chreMsgSessionInfo sessionData;
     uint64_t nanoappId;
   };
+
+  constexpr static size_t kMaxFreeCallbackRecords = 25;
 
   //! Callback to process message sent to a nanoapp - used by the event loop
   static void onMessageToNanoappCallback(
@@ -104,6 +125,21 @@ class ChreMessageHubManager
   static void onSessionClosedCallback(
       SystemCallbackType type,
       UniquePtr<ChreMessageHubManager::SessionCallbackData> &&data);
+
+  //! Callback called when a message is freed
+  static void onMessageFreeCallback(std::byte *message, size_t length,
+                                    MessageFreeCallbackData &&callbackData);
+
+  //! Callback passed to deferCallback when handling a message free callback
+  static void handleMessageFreeCallback(uint16_t type, void *data,
+                                        void *extraData);
+
+  //! @return The free callback record from the callback allocator.
+  std::optional<message::MessageRouterCallbackAllocator<
+      MessageFreeCallbackData>::FreeCallbackRecord>
+  getAndRemoveFreeCallbackRecord(void *ptr) {
+    return mAllocator.GetAndRemoveFreeCallbackRecord(ptr);
+  }
 
   //! Definitions for MessageHubCallback
   //! @see MessageRouter::MessageHubCallback
@@ -117,7 +153,19 @@ class ChreMessageHubManager
   std::optional<message::EndpointInfo> getEndpointInfo(
       message::EndpointId endpointId) override;
 
+  //! The MessageHub for the CHRE
   message::MessageRouter::MessageHub mChreMessageHub;
+
+  //! The vector of free callback records - used by the
+  //! MessageRouterCallbackAllocator
+  pw::Vector<message::MessageRouterCallbackAllocator<
+                 MessageFreeCallbackData>::FreeCallbackRecord,
+             kMaxFreeCallbackRecords>
+      mFreeCallbackRecords;
+
+  //! The allocator for message free callbacks - used when sending a message
+  //! from a nanoapp with a free callback
+  message::MessageRouterCallbackAllocator<MessageFreeCallbackData> mAllocator;
 };
 
 }  // namespace chre

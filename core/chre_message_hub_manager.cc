@@ -23,8 +23,10 @@
 #include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
+#include "chre/util/macros.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
+#include "pw_allocator/unique_ptr.h"
 
 #include <cinttypes>
 #include <cstring>
@@ -45,6 +47,10 @@ using ::chre::message::SESSION_ID_INVALID;
 using ::chre::message::SessionId;
 
 namespace chre {
+
+ChreMessageHubManager::ChreMessageHubManager()
+    : mAllocator(ChreMessageHubManager::onMessageFreeCallback,
+                 mFreeCallbackRecords, /* doEraseRecord= */ false) {}
 
 void ChreMessageHubManager::init() {
   std::optional<MessageRouter::MessageHub> chreMessageHub =
@@ -168,6 +174,30 @@ bool ChreMessageHubManager::openDefaultSessionAsync(uint16_t nanoappInstanceId,
                           context.toMessageHubId, toEndpointId);
 }
 
+bool ChreMessageHubManager::sendMessage(
+    void *message, size_t messageSize, uint32_t messageType, uint16_t sessionId,
+    uint32_t messagePermissions, chreMessageFreeFunction *freeCallback,
+    message::EndpointId fromEndpointId) {
+  bool success = false;
+  pw::UniquePtr<std::byte[]> messageData =
+      mAllocator.MakeUniqueArrayWithCallback(
+          reinterpret_cast<std::byte *>(message), messageSize,
+          MessageFreeCallbackData{
+              .freeCallback = freeCallback,
+              .nanoappId = fromEndpointId});
+  if (messageData == nullptr) {
+    LOG_OOM();
+  } else {
+    success = mChreMessageHub.sendMessage(std::move(messageData), messageType,
+                                          messagePermissions, sessionId);
+  }
+
+  if (!success && freeCallback != nullptr) {
+    freeCallback(message, messageSize);
+  }
+  return success;
+}
+
 chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
     message::EndpointType type) {
   switch (type) {
@@ -247,6 +277,37 @@ void ChreMessageHubManager::onSessionClosedCallback(
     LOGE("Unable to process session closed event to nanoapp with ID 0x%" PRIx64,
          nanoapp->getAppId());
   }
+}
+
+void ChreMessageHubManager::onMessageFreeCallback(
+    std::byte *message, size_t length,
+    MessageFreeCallbackData&& callbackData) {
+  UNUSED_VAR(length);
+  if (callbackData.freeCallback == nullptr) {
+    return;
+  }
+
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::EndpointMessageFreeEvent,
+      message,
+      ChreMessageHubManager::handleMessageFreeCallback);
+}
+
+void ChreMessageHubManager::handleMessageFreeCallback(uint16_t /* type */,
+                                                      void *data,
+                                                      void* /* extraData */) {
+  std::optional<message::MessageRouterCallbackAllocator<
+      MessageFreeCallbackData>::FreeCallbackRecord>
+      record = EventLoopManagerSingleton::get()
+                    ->getChreMessageHubManager()
+                    .getAndRemoveFreeCallbackRecord(data);
+  if (!record.has_value()) {
+    return;
+  }
+
+  EventLoopManagerSingleton::get()->getEventLoop().invokeMessageFreeFunction(
+      record->metadata.nanoappId, record->metadata.freeCallback,
+      record->message, record->messageSize);
 }
 
 bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,

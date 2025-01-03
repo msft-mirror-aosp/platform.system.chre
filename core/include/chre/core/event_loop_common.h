@@ -78,6 +78,7 @@ enum class SystemCallbackType : uint16_t {
   TransactionManagerTimeout,
   EndpointMessageToNanoappEvent,
   EndpointSessionClosedEvent,
+  EndpointMessageFreeEvent,
 };
 
 //! Deferred/delayed callbacks use the event subsystem but are invariably sent

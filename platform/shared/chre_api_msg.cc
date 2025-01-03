@@ -135,7 +135,13 @@ DLL_EXPORT bool chreMsgSessionCloseAsync(uint16_t sessionId) {
 DLL_EXPORT bool chreMsgSend(
     void *message, size_t messageSize, uint32_t messageType, uint16_t sessionId,
     uint32_t messagePermissions, chreMessageFreeFunction *freeCallback) {
-  // TODO(b/371009029): Implement this.
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  return EventLoopManagerSingleton::get()
+      ->getChreMessageHubManager()
+      .sendMessage(message, messageSize, messageType, sessionId,
+                   messagePermissions, freeCallback, nanoapp->getAppId());
+#else
   UNUSED_VAR(message);
   UNUSED_VAR(messageSize);
   UNUSED_VAR(messageType);
@@ -143,4 +149,5 @@ DLL_EXPORT bool chreMsgSend(
   UNUSED_VAR(messagePermissions);
   UNUSED_VAR(freeCallback);
   return false;
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 }
