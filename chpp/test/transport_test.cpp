@@ -142,7 +142,6 @@ TEST_P(TransportTests, RxPayloadOfZeros) {
   size_t len = static_cast<size_t>(GetParam());
   bool isLenValid = (len <= chppTransportRxMtuSize(&mTransportContext));
 
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -248,7 +247,6 @@ TEST_F(TransportTests, LinkSendDonePreamble) {
   size_t partLenPreamble = CHPP_PREAMBLE_LEN_BYTES - 1;
 
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -276,7 +274,6 @@ TEST_F(TransportTests, LinkSendDoneHeader) {
       CHPP_PREAMBLE_LEN_BYTES + sizeof(ChppTransportHeader) - 1;
 
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -304,7 +301,6 @@ TEST_F(TransportTests, LinkSendDonePayload) {
   size_t partLenPayload = 500;
 
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -337,7 +333,6 @@ TEST_F(TransportTests, LinkSendDoneFooter) {
                          payloadLen + sizeof(ChppTransportFooter) - 1;
 
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -414,7 +409,6 @@ TEST_P(TransportTests, LoopbackPayloadOfZeros) {
   mTransportContext.rxStatus.state = CHPP_STATE_PREAMBLE;
   size_t len = static_cast<size_t>(GetParam());
 
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
@@ -446,7 +440,6 @@ TEST_P(TransportTests, DiscoveryAndTransactionID) {
   uint8_t transactionID = static_cast<uint8_t>(GetParam());
   size_t len = 0;
 
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
@@ -578,7 +571,6 @@ TEST_F(TransportTests, CRC32DaisyChained) {
  * WWAN service Open and GetCapabilities.
  */
 TEST_F(TransportTests, WwanOpen) {
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -621,7 +613,6 @@ TEST_F(TransportTests, WwanOpen) {
  * WiFi service Open and GetCapabilities.
  */
 TEST_F(TransportTests, WifiOpen) {
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -665,7 +656,6 @@ TEST_F(TransportTests, WifiOpen) {
  * GNSS service Open and GetCapabilities.
  */
 TEST_F(TransportTests, GnssOpen) {
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -712,7 +702,6 @@ TEST_F(TransportTests, GnssOpen) {
 TEST_F(TransportTests, Discovery) {
   size_t len = 0;
 
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -769,7 +758,6 @@ TEST_F(TransportTests, UnopenedClient) {
   size_t len = 0;
   uint8_t *buf = (uint8_t *)chppMalloc(100);
 
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
   chppWorkThreadStop(&mTransportContext);
@@ -790,7 +778,6 @@ TEST_F(TransportTests, UnopenedClient) {
 }
 
 TEST_F(TransportTests, DiscardedPacketTest) {
-  mTransportContext.txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, &mTransportContext);
   waitForLinkSendDone();
 
@@ -844,7 +831,6 @@ void messageToInvalidHandle(ChppTransportState *transportContext,
   size_t len = 0;
   uint8_t *buf = (uint8_t *)chppMalloc(100);
 
-  transportContext->txStatus.hasPacketsToSend = true;
   std::thread t1(chppWorkThreadStart, transportContext);
   waitForLinkSendDone();
   chppWorkThreadStop(transportContext);

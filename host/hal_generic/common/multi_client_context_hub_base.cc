@@ -25,6 +25,7 @@
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/hal_error.h"
 #include "chre_host/host_protocol_host.h"
+#include "hal_client_id.h"
 #include "permissions_util.h"
 
 #include <android_chre_flags.h>
@@ -364,19 +365,8 @@ ScopedAStatus MultiClientContextHubBase::onSettingChanged(Setting setting,
 }
 
 ScopedAStatus MultiClientContextHubBase::queryNanoapps(int32_t contextHubId) {
-  if (!mIsChreReady) {
-    LOGE("%s() can't be processed as CHRE is not ready", __func__);
-    return fromServiceError(HalError::CHRE_NOT_READY);
-  }
-  if (!isValidContextHubId(contextHubId)) {
-    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-  }
-  flatbuffers::FlatBufferBuilder builder(64);
-  HostProtocolHost::encodeNanoappListRequest(builder);
-  HostProtocolHost::mutateHostClientId(
-      builder.GetBufferPointer(), builder.GetSize(),
-      mHalClientManager->getClientId(AIBinder_getCallingPid()));
-  return fromResult(mConnection->sendMessage(builder));
+  return queryNanoappsWithClientId(
+      contextHubId, mHalClientManager->getClientId(AIBinder_getCallingPid()));
 }
 
 ScopedAStatus MultiClientContextHubBase::getPreloadedNanoappIds(
@@ -591,77 +581,21 @@ ScopedAStatus MultiClientContextHubBase::getEndpoints(
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus MultiClientContextHubBase::registerEndpoint(
-    const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->registerEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::unregisterEndpoint(
-    const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->unregisterEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> &callback) {
-  if (mV4Impl) return mV4Impl->registerEndpointCallback(callback);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::requestSessionIdRange(
-    int32_t size, std::array<int32_t, 2> *ids) {
-  if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::openEndpointSession(
-    int32_t sessionId, const EndpointId &destination,
-    const EndpointId &initiator,
-    const std::optional<std::string> &serviceDescriptor) {
-  if (mV4Impl) {
-    return mV4Impl->openEndpointSession(sessionId, destination, initiator,
-                                        serviceDescriptor);
-  }
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::sendMessageToEndpoint(
-    int32_t sessionId, const Message &msg) {
-  if (mV4Impl) return mV4Impl->sendMessageToEndpoint(sessionId, msg);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToEndpoint(
-    int32_t sessionId, const MessageDeliveryStatus &msgStatus) {
+ScopedAStatus MultiClientContextHubBase::registerEndpointHub(
+    const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
+    std::shared_ptr<IEndpointCommunication> *hubInterface) {
   if (mV4Impl)
-    return mV4Impl->sendMessageDeliveryStatusToEndpoint(sessionId, msgStatus);
+    return mV4Impl->registerEndpointHub(callback, hubInfo, hubInterface);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus MultiClientContextHubBase::closeEndpointSession(int32_t sessionId,
-                                                              Reason reason) {
-  if (mV4Impl) return mV4Impl->closeEndpointSession(sessionId, reason);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus MultiClientContextHubBase::endpointSessionOpenComplete(
-    int32_t sessionId) {
-  if (mV4Impl) return mV4Impl->endpointSessionOpenComplete(sessionId);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-bool MultiClientContextHubBase::enableTestMode() {
-  std::unique_lock<std::mutex> lock(mTestModeMutex);
-  if (mIsTestModeEnabled) {
-    return true;
-  }
-
+bool MultiClientContextHubBase::enableTestModeLocked(
+    std::unique_lock<std::mutex> &lock) {
   // Pulling out a list of loaded nanoapps.
   mTestModeNanoapps.reset();
-  if (!queryNanoapps(kDefaultHubId).isOk()) {
+  mTestModeSystemNanoapps.reset();
+  if (!queryNanoappsWithClientId(kDefaultHubId, kHalId).isOk()) {
     LOGE("Failed to get a list of loaded nanoapps to enable test mode");
-    mTestModeNanoapps.emplace();
     return false;
   }
   if (!mEnableTestModeCv.wait_for(lock, ktestModeTimeOut, [&]() {
@@ -671,7 +605,6 @@ bool MultiClientContextHubBase::enableTestMode() {
     LOGE("Failed to get a list of loaded nanoapps within %" PRIu64
          " seconds to enable test mode",
          ktestModeTimeOut.count());
-    mTestModeNanoapps.emplace();
     return false;
   }
 
@@ -711,9 +644,20 @@ bool MultiClientContextHubBase::enableTestMode() {
 
   LOGD("%" PRIu64 " nanoapps are unloaded to enable test mode",
        mTestModeNanoapps->size());
-  mIsTestModeEnabled = true;
-  mTestModeNanoapps.emplace();
   return true;
+}
+
+bool MultiClientContextHubBase::enableTestMode() {
+  std::unique_lock<std::mutex> lock(mTestModeMutex);
+  if (mIsTestModeEnabled) {
+    return true;
+  }
+  // Needed to ensure multiple calls to enableTestMode to not race as we unlock
+  // the lock to query the nanoapps.
+  mIsTestModeEnabled = true;
+
+  mIsTestModeEnabled = enableTestModeLocked(lock);
+  return mIsTestModeEnabled;
 }
 
 void MultiClientContextHubBase::disableTestMode() {
@@ -721,11 +665,47 @@ void MultiClientContextHubBase::disableTestMode() {
   if (!mIsTestModeEnabled) {
     return;
   }
+
+  mIsTestModeEnabled = false;
   int numOfNanoappsLoaded =
       mPreloadedNanoappLoader->loadPreloadedNanoapps(mTestModeSystemNanoapps);
   LOGD("%d nanoapps are reloaded to recover from test mode",
        numOfNanoappsLoaded);
-  mIsTestModeEnabled = false;
+}
+
+ScopedAStatus MultiClientContextHubBase::queryNanoappsWithClientId(
+    int32_t contextHubId, HalClientId clientId) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
+  if (!isValidContextHubId(contextHubId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+  flatbuffers::FlatBufferBuilder builder(64);
+  HostProtocolHost::encodeNanoappListRequest(builder);
+  HostProtocolHost::mutateHostClientId(builder.GetBufferPointer(),
+                                       builder.GetSize(), clientId);
+  return fromResult(mConnection->sendMessage(builder));
+}
+
+void MultiClientContextHubBase::handleTestModeNanoappQueryResponse(
+    const ::chre::fbs::NanoappListResponseT &response) {
+  {
+    std::unique_lock<std::mutex> lock(mTestModeMutex);
+    mTestModeNanoapps.emplace();
+    mTestModeSystemNanoapps.emplace();
+
+    for (const auto &nanoapp : response.nanoapps) {
+      if (nanoapp->is_system) {
+        mTestModeSystemNanoapps->push_back(nanoapp->app_id);
+      } else {
+        mTestModeNanoapps->push_back(nanoapp->app_id);
+      }
+    }
+  }
+
+  mEnableTestModeCv.notify_all();
 }
 
 void MultiClientContextHubBase::handleMessageFromChre(
@@ -851,20 +831,11 @@ void MultiClientContextHubBase::onDebugDumpComplete(
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
   LOGD("Received a nanoapp list response for client %" PRIu16, clientId);
-  {
-    std::unique_lock<std::mutex> lock(mTestModeMutex);
-    if (!mTestModeNanoapps.has_value()) {
-      mTestModeNanoapps.emplace();
-      mTestModeSystemNanoapps.emplace();
-      for (const auto &nanoapp : response.nanoapps) {
-        if (nanoapp->is_system) {
-          mTestModeSystemNanoapps->push_back(nanoapp->app_id);
-        } else {
-          mTestModeNanoapps->push_back(nanoapp->app_id);
-        }
-      }
-      mEnableTestModeCv.notify_all();
-    }
+
+  if (clientId == kHalId) {
+    LOGD("Received a nanoapp list response to enable test mode");
+    handleTestModeNanoappQueryResponse(response);
+    return;  // this query was for test mode -> do not call callback
   }
 
   std::shared_ptr<IContextHubCallback> callback =

@@ -53,6 +53,29 @@ class ChreMessageHubManager
                        message::EndpointId endpointId,
                        chreMsgEndpointInfo &info);
 
+  //! Gets session information for the given session ID.
+  //! @return whether the session information was successfully populated.
+  bool getSessionInfo(message::EndpointId fromEndpointId,
+                      message::SessionId sessionId, chreMsgSessionInfo &info);
+
+  //! Opens a session from the given endpoint to the other endpoint in an
+  //! asynchronous manner.
+  //! @return The session ID or SESSION_ID_INVALID if the session could
+  //! not be opened
+  bool openSessionAsync(uint16_t nanoappInstanceId,
+                        message::EndpointId fromEndpointId,
+                        message::MessageHubId toHubId,
+                        message::EndpointId toEndpointId);
+
+  //! Opens a session from the given endpoint to the other endpoint. This
+  //! method searches for the other endpoint by endpoint ID and opens a
+  //! session with the first endpoint that matches.
+  //! @return The session ID or SESSION_ID_INVALID if the session could
+  //! not be opened
+  bool openDefaultSessionAsync(uint16_t nanoappInstanceId,
+                               message::EndpointId fromEndpointId,
+                               message::EndpointId toEndpointId);
+
   //! Converts a message::EndpointType to a CHRE endpoint type
   //! @return the CHRE endpoint type
   chreMsgEndpointType toChreEndpointType(message::EndpointType type);
@@ -66,21 +89,21 @@ class ChreMessageHubManager
   };
 
   //! Data to be passed to the session closed callback
-  struct SessionClosedCallbackData {
-    chreMsgSessionInfo sessionClosedData;
+  struct SessionCallbackData {
+    chreMsgSessionInfo sessionData;
     uint64_t nanoappId;
   };
 
   //! Callback to process message sent to a nanoapp - used by the event loop
   static void onMessageToNanoappCallback(
-      SystemCallbackType /* type */,
+      SystemCallbackType type,
       UniquePtr<ChreMessageHubManager::MessageCallbackData> &&data);
 
   //! Callback to process session closed event for a nanoapp - used by the event
   //! loop
   static void onSessionClosedCallback(
-      SystemCallbackType /* type */,
-      UniquePtr<ChreMessageHubManager::SessionClosedCallbackData> &&data);
+      SystemCallbackType type,
+      UniquePtr<ChreMessageHubManager::SessionCallbackData> &&data);
 
   //! Definitions for MessageHubCallback
   //! @see MessageRouter::MessageHubCallback

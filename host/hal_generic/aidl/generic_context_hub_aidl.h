@@ -106,24 +106,10 @@ class ContextHub : public BnContextHub,
   ::ndk::ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
   ::ndk::ScopedAStatus getEndpoints(
       std::vector<EndpointInfo> *endpoints) override;
-  ::ndk::ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
-  ::ndk::ScopedAStatus unregisterEndpoint(
-      const EndpointInfo &endpoint) override;
-  ::ndk::ScopedAStatus registerEndpointCallback(
-      const std::shared_ptr<IEndpointCallback> &callback) override;
-  ::ndk::ScopedAStatus requestSessionIdRange(
-      int32_t size, std::array<int32_t, 2> *ids) override;
-  ::ndk::ScopedAStatus openEndpointSession(
-      int32_t sessionId, const EndpointId &destination,
-      const EndpointId &initiator,
-      const std::optional<std::string> &serviceDescriptor) override;
-  ::ndk::ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
-                                             const Message &msg) override;
-  ::ndk::ScopedAStatus sendMessageDeliveryStatusToEndpoint(
-      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
-  ::ndk::ScopedAStatus closeEndpointSession(int32_t sessionId,
-                                            Reason reason) override;
-  ::ndk::ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
+  ::ndk::ScopedAStatus registerEndpointHub(
+      const std::shared_ptr<IEndpointCallback> &callback,
+      const HubInfo &hubInfo,
+      std::shared_ptr<IEndpointCommunication> *hubInterface) override;
 
   void onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) override;
 
@@ -303,7 +289,7 @@ class ContextHub : public BnContextHub,
   // A mutex and condition variable to synchronize queryNanoappsInternal.
   std::mutex mQueryNanoappsInternalMutex;
   std::condition_variable mQueryNanoappsInternalCondVar;
-  std::optional<std::vector<NanoappInfo>> mQueryNanoappsInternalList;
+  std::optional<std::vector<NanoappInfo>> mQueryNanoappsInternalList{{}};
 
   // State for synchronous loads and unloads. Primarily used for test mode.
   std::mutex mSynchronousLoadUnloadMutex;

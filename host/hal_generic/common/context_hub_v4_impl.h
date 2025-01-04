@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <assert.h>
+
 #include <array>
 #include <functional>
 #include <optional>
@@ -23,21 +25,28 @@
 #include <vector>
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <aidl/android/hardware/contexthub/BnEndpointCommunication.h>
 #include <chre_host/generated/host_messages_generated.h>
 
 #include "message_hub_manager.h"
 
 namespace android::hardware::contexthub::common::implementation {
 
+using ::aidl::android::hardware::contexthub::BnEndpointCommunication;
 using ::aidl::android::hardware::contexthub::EndpointId;
 using ::aidl::android::hardware::contexthub::EndpointInfo;
 using ::aidl::android::hardware::contexthub::HubInfo;
 using ::aidl::android::hardware::contexthub::IEndpointCallback;
+using ::aidl::android::hardware::contexthub::IEndpointCommunication;
 using ::aidl::android::hardware::contexthub::Message;
 using ::aidl::android::hardware::contexthub::MessageDeliveryStatus;
 using ::aidl::android::hardware::contexthub::Reason;
 using ::ndk::ScopedAStatus;
 
+/**
+ * Common parts of the IContextHub V4+ interface which can be shared by
+ * various HAL implementations.
+ */
 class ContextHubV4Impl {
  public:
   using SendMessageFn = std::function<bool(uint8_t *data, size_t size)>;
@@ -55,24 +64,15 @@ class ContextHubV4Impl {
    */
   void init();
 
-  // ContextHub V4 API implementation.
+  // IContextHub (V4+) API implementation.
   ScopedAStatus getHubs(std::vector<HubInfo> *hubs);
   ScopedAStatus getEndpoints(std::vector<EndpointInfo> *endpoints);
-  ScopedAStatus registerEndpoint(const EndpointInfo &endpoint);
-  ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint);
-  ScopedAStatus registerEndpointCallback(
-      const std::shared_ptr<IEndpointCallback> &callback);
-  ScopedAStatus requestSessionIdRange(int32_t size,
-                                      std::array<int32_t, 2> *ids);
-  ScopedAStatus openEndpointSession(
-      int32_t sessionId, const EndpointId &destination,
-      const EndpointId &initiator,
-      const std::optional<std::string> &serviceDescriptor);
-  ScopedAStatus sendMessageToEndpoint(int32_t sessionId, const Message &msg);
-  ScopedAStatus sendMessageDeliveryStatusToEndpoint(
-      int32_t sessionId, const MessageDeliveryStatus &msgStatus);
-  ScopedAStatus closeEndpointSession(int32_t sessionId, Reason reason);
-  ScopedAStatus endpointSessionOpenComplete(int32_t sessionId);
+  ScopedAStatus registerEndpointHub(
+      const std::shared_ptr<IEndpointCallback> &callback,
+      const HubInfo &hubInfo,
+      std::shared_ptr<IEndpointCommunication> *hubInterface);
+
+  // TODO(b/385474431): Add dump().
 
   /**
    * Handles a CHRE message that is part of the V4 implementation.
@@ -104,6 +104,40 @@ class ContextHubV4Impl {
 
   MessageHubManager mManager;
   SendMessageFn mSendMessageFn;
+};
+
+/**
+ * Wrapper for a MessageHubManager::HostHub instance implementing
+ * IEndpointCommunication so that a client can directly make calls on its
+ * associated HostHub.
+ */
+class HostHubInterface : public BnEndpointCommunication {
+ public:
+  explicit HostHubInterface(std::shared_ptr<MessageHubManager::HostHub> hub)
+      : mHub(std::move(hub)) {
+    assert(mHub != nullptr);
+  }
+  ~HostHubInterface() = default;
+
+  // Implementation of IEndpointCommunication.
+  ScopedAStatus registerEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus unregisterEndpoint(const EndpointInfo &endpoint) override;
+  ScopedAStatus requestSessionIdRange(int32_t size,
+                                      std::array<int32_t, 2> *ids);
+  ScopedAStatus openEndpointSession(
+      int32_t sessionId, const EndpointId &destination,
+      const EndpointId &initiator,
+      const std::optional<std::string> &serviceDescriptor) override;
+  ScopedAStatus sendMessageToEndpoint(int32_t sessionId,
+                                      const Message &msg) override;
+  ScopedAStatus sendMessageDeliveryStatusToEndpoint(
+      int32_t sessionId, const MessageDeliveryStatus &msgStatus) override;
+  ScopedAStatus closeEndpointSession(int32_t sessionId, Reason reason) override;
+  ScopedAStatus endpointSessionOpenComplete(int32_t sessionId) override;
+  ScopedAStatus unregister() override;
+
+ private:
+  std::shared_ptr<MessageHubManager::HostHub> mHub;
 };
 
 }  // namespace android::hardware::contexthub::common::implementation

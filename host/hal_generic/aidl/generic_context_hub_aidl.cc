@@ -361,60 +361,11 @@ ScopedAStatus ContextHub::getEndpoints(std::vector<EndpointInfo> *endpoints) {
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
-ScopedAStatus ContextHub::registerEndpoint(const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->registerEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::unregisterEndpoint(const EndpointInfo &endpoint) {
-  if (mV4Impl) return mV4Impl->unregisterEndpoint(endpoint);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::registerEndpointCallback(
-    const std::shared_ptr<IEndpointCallback> &callback) {
-  if (mV4Impl) return mV4Impl->registerEndpointCallback(callback);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::requestSessionIdRange(int32_t size,
-                                                std::array<int32_t, 2> *ids) {
-  if (mV4Impl) return mV4Impl->requestSessionIdRange(size, ids);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::openEndpointSession(
-    int32_t sessionId, const EndpointId &destination,
-    const EndpointId &initiator,
-    const std::optional<std::string> &serviceDescriptor) {
-  if (mV4Impl) {
-    return mV4Impl->openEndpointSession(sessionId, destination, initiator,
-                                        serviceDescriptor);
-  }
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::sendMessageToEndpoint(int32_t sessionId,
-                                                const Message &msg) {
-  if (mV4Impl) return mV4Impl->sendMessageToEndpoint(sessionId, msg);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::sendMessageDeliveryStatusToEndpoint(
-    int32_t sessionId, const MessageDeliveryStatus &msgStatus) {
+ScopedAStatus ContextHub::registerEndpointHub(
+    const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
+    std::shared_ptr<IEndpointCommunication> *hubInterface) {
   if (mV4Impl)
-    return mV4Impl->sendMessageDeliveryStatusToEndpoint(sessionId, msgStatus);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::closeEndpointSession(int32_t sessionId,
-                                               Reason reason) {
-  if (mV4Impl) return mV4Impl->closeEndpointSession(sessionId, reason);
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
-
-ScopedAStatus ContextHub::endpointSessionOpenComplete(int32_t sessionId) {
-  if (mV4Impl) return mV4Impl->endpointSessionOpenComplete(sessionId);
+    return mV4Impl->registerEndpointHub(callback, hubInfo, hubInterface);
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
@@ -481,6 +432,8 @@ void ContextHub::onNanoappListResponse(
     if (!mQueryNanoappsInternalList) {
       mQueryNanoappsInternalList = appInfoList;
       mQueryNanoappsInternalCondVar.notify_all();
+      // This was an internal HAL request - do not call callback
+      return;
     }
   }
 

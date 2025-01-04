@@ -297,6 +297,41 @@ TEST_F(FakeLinkSyncTests, MultipleNotifications) {
   EXPECT_FALSE(mFakeLink->waitForTxPacket());
 }
 
+// This test validates that the CHPP transport maintains 1 un-ACKed packet when
+// multiple packets are pending in the queue
+TEST_F(FakeLinkSyncTests, OutboundThrottling) {
+  txPacket();
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+
+  // Enqueuing more packets should not trigger sending again
+  txPacket();
+  txPacket();
+  EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+
+  // Delivering an ACK should unblock the second packet
+  ChppEmptyPacket ack = generateAck(mFakeLink->popTxPacket());
+  deliverRxPacket(ack);
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+  std::vector<uint8_t> pkt2 = mFakeLink->popTxPacket();
+  EXPECT_EQ(asChpp(pkt2).header.seq, 2);
+
+  // Receiving a duplicate ACK should not result in sending again
+  deliverRxPacket(ack);
+  EXPECT_EQ(mFakeLink->getTxPacketCount(), 0);
+
+  // Now send the final ACKs
+  deliverRxPacket(generateAck(pkt2));
+  ASSERT_TRUE(mFakeLink->waitForTxPacket());
+  EXPECT_EQ(mFakeLink->getTxPacketCount(), 1);
+  std::vector<uint8_t> pkt3 = mFakeLink->popTxPacket();
+  deliverRxPacket(generateAck(pkt3));
+
+  EXPECT_EQ(asChpp(pkt3).header.seq, 3);
+  EXPECT_FALSE(mFakeLink->waitForTxPacket());
+}
+
 // This test is essentially CheckRetryOnTimeout but with a twist: we send a
 // packet, then don't send an ACK in the expected time so it gets retried, then
 // after the retry, we send two equivalent ACKs back-to-back
