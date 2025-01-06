@@ -37,11 +37,15 @@
 
 #else  // CHRE_IS_NANOAPP_BUILD
 // Static nanoapps
+#ifdef CHRE_PLATFORM_TAGGED_LOGGING_ENABLED
+#include "chre/platform/tagged_log.h"
+#else
 #define TLOGV(format, ...) LOGV("%s " format, LOG_TAG, ##__VA_ARGS__)
 #define TLOGD(format, ...) LOGD("%s " format, LOG_TAG, ##__VA_ARGS__)
 #define TLOGI(format, ...) LOGI("%s " format, LOG_TAG, ##__VA_ARGS__)
 #define TLOGW(format, ...) LOGW("%s " format, LOG_TAG, ##__VA_ARGS__)
 #define TLOGE(format, ...) LOGE("%s " format, LOG_TAG, ##__VA_ARGS__)
+#endif
 
 #endif  // CHRE_IS_NANOAPP_BUILD
 

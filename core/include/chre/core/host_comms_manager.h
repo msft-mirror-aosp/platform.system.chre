@@ -27,7 +27,7 @@
 #include "chre/util/buffer.h"
 #include "chre/util/duplicate_message_detector.h"
 #include "chre/util/non_copyable.h"
-#include "chre/util/synchronized_memory_pool.h"
+#include "chre/util/system/synchronized_memory_pool.h"
 #include "chre/util/system/transaction_manager.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/event.h"

@@ -37,16 +37,9 @@ extern "C" {
  * Data structures used by the Configure Scan Monitor request.
  */
 CHPP_PACKED_START
-struct ChppWifiConfigureScanMonitorAsyncRequestParameters {
-  bool enable;
-  const void *cookie;
-} CHPP_PACKED_ATTR;
-CHPP_PACKED_END
-
-CHPP_PACKED_START
 struct ChppWifiConfigureScanMonitorAsyncRequest {
   struct ChppAppHeader header;
-  struct ChppWifiConfigureScanMonitorAsyncRequestParameters params;
+  bool enable;
 } CHPP_PACKED_ATTR;
 CHPP_PACKED_END
 

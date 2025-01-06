@@ -340,10 +340,6 @@ struct ChppTxStatus {
   //! ACKed or not)
   uint8_t sentSeq;
 
-  //! Does the transport layer have any packets (with or without payload) it
-  //! needs to send out?
-  bool hasPacketsToSend;
-
   //! Error code, if any, of the next packet the transport layer will send out.
   uint8_t packetCodeToSend;
 

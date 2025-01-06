@@ -34,17 +34,35 @@ using EndpointId = uint64_t;
 //! The ID of a session
 using SessionId = uint16_t;
 
-//! An invalid session ID
-constexpr static SessionId SESSION_ID_INVALID = UINT16_MAX;
-
 //! An invalid MessageHub ID
-constexpr static MessageHubId MESSAGE_HUB_ID_INVALID = UINT64_MAX;
+constexpr MessageHubId MESSAGE_HUB_ID_INVALID = 0;
+
+//! An invalid endpoint ID
+constexpr EndpointId ENDPOINT_ID_INVALID = 0;
+
+//! An invalid session ID
+constexpr SessionId SESSION_ID_INVALID = UINT16_MAX;
 
 //! Endpoint types
 enum class EndpointType : uint8_t {
-  NANOAPP = 0,
-  GENERIC = 1,
-  HOST_ENDPOINT = 2,
+  HOST_FRAMEWORK = 1,
+  HOST_APP = 2,
+  HOST_NATIVE = 3,
+  NANOAPP = 4,
+  GENERIC = 5,
+};
+
+//! Endpoint permissions
+//! This should match CHRE permissions.
+// TODO(b/373417024): Update permissions to this typed name in all MessageRouter
+// code
+enum class EndpointPermission : uint32_t {
+  NONE = 0,
+  AUDIO = 1,
+  GNSS = 1 << 1,
+  WIFI = 1 << 2,
+  WWAN = 1 << 3,
+  BLE = 1 << 4,
 };
 
 //! Represents a single endpoint connected to a MessageHub
@@ -88,24 +106,21 @@ struct Message {
   Endpoint recipient;
   SessionId sessionId;
   pw::UniquePtr<std::byte[]> data;
-  size_t length;
   uint32_t messageType;
   uint32_t messagePermissions;
 
   Message()
       : sessionId(SESSION_ID_INVALID),
         data(nullptr),
-        length(0),
         messageType(0),
         messagePermissions(0) {}
-  Message(pw::UniquePtr<std::byte[]> &&data, size_t length,
+  Message(pw::UniquePtr<std::byte[]> &&data,
           uint32_t messageType, uint32_t messagePermissions, Session session,
           bool sentBySessionInitiator)
       : sender(sentBySessionInitiator ? session.initiator : session.peer),
         recipient(sentBySessionInitiator ? session.peer : session.initiator),
         sessionId(session.sessionId),
         data(std::move(data)),
-        length(length),
         messageType(messageType),
         messagePermissions(messagePermissions) {}
   Message(Message &&other)
@@ -113,7 +128,6 @@ struct Message {
         recipient(other.recipient),
         sessionId(other.sessionId),
         data(std::move(other.data)),
-        length(other.length),
         messageType(other.messageType),
         messagePermissions(other.messagePermissions) {}
 
@@ -125,7 +139,6 @@ struct Message {
     recipient = other.recipient;
     sessionId = other.sessionId;
     data = std::move(other.data);
-    length = other.length;
     messageType = other.messageType;
     messagePermissions = other.messagePermissions;
     return *this;
@@ -135,7 +148,7 @@ struct Message {
 //! Represents information about an endpoint
 //! Service information is stored in ServiceManager
 struct EndpointInfo {
-  static constexpr size_t kMaxNameLength = 20;
+  static constexpr size_t kMaxNameLength = 50;
 
   EndpointInfo(EndpointId id, const char *name, uint32_t version,
                EndpointType type, uint32_t requiredPermissions)

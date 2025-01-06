@@ -37,7 +37,7 @@ namespace chre {
 
 namespace {
 
-constexpr size_t kMaxMessageHubs = 2;
+constexpr size_t kMaxMessageHubs = 3;
 constexpr size_t kMaxSessions = 25;
 pw::Vector<MessageRouter::MessageHubRecord, kMaxMessageHubs> gMessageHubs;
 pw::Vector<Session, kMaxSessions> gSessions;

@@ -96,6 +96,7 @@ SLPI_SRCS += platform/shared/assert.cc
 SLPI_SRCS += platform/shared/chre_api_audio.cc
 SLPI_SRCS += platform/shared/chre_api_core.cc
 SLPI_SRCS += platform/shared/chre_api_gnss.cc
+SLPI_SRCS += platform/shared/chre_api_msg.cc
 SLPI_SRCS += platform/shared/chre_api_re.cc
 SLPI_SRCS += platform/shared/chre_api_user_settings.cc
 SLPI_SRCS += platform/shared/chre_api_version.cc
@@ -193,6 +194,11 @@ endif
 # Simulator-specific Compiler Flags ############################################
 
 SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_ble_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_debug_dump_manager
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_gnss_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wifi_pal
+SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wwan_pal
 SIM_CFLAGS += -Iplatform/linux/sim/include
 
 # Simulator-specific Source Files ##############################################
@@ -216,6 +222,7 @@ SIM_SRCS += platform/shared/chre_api_audio.cc
 SIM_SRCS += platform/shared/chre_api_ble.cc
 SIM_SRCS += platform/shared/chre_api_core.cc
 SIM_SRCS += platform/shared/chre_api_gnss.cc
+SIM_SRCS += platform/shared/chre_api_msg.cc
 SIM_SRCS += platform/shared/chre_api_re.cc
 SIM_SRCS += platform/shared/chre_api_sensor.cc
 SIM_SRCS += platform/shared/chre_api_user_settings.cc
@@ -342,6 +349,11 @@ GOOGLETEST_CFLAGS += $(FLATBUFFERS_CFLAGS)
 # The order here is important so that the googletest target prefers shared,
 # linux and then SLPI.
 GOOGLETEST_CFLAGS += -Iplatform/shared/include
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_ble_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_debug_dump_manager
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_gnss_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_wifi_pal
+GOOGLETEST_CFLAGS += -Iplatform/shared/public_platform_wwan_pal
 GOOGLETEST_CFLAGS += -Iplatform/linux/include
 GOOGLETEST_CFLAGS += -Iplatform/slpi/include
 GOOGLETEST_CFLAGS += -Iplatform/shared/pw_trace/include
@@ -383,6 +395,7 @@ EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_audio.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_ble.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_core.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_gnss.cc
+EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_msg.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_re.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_user_settings.cc
 EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_version.cc
@@ -470,6 +483,7 @@ TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_audio.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_ble.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_core.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_gnss.cc
+TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_msg.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_re.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_user_settings.cc
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/chre_api_version.cc
@@ -513,6 +527,14 @@ ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
 TINYSYS_SRCS += $(CHRE_PREFIX)/platform/shared/platform_gnss.cc
 endif
 
+ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
+TINYSYS_SRCS += platform/shared/platform_wifi.cc
+endif
+
+ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
+TINYSYS_SRCS += platform/shared/platform_wwan.cc
+endif
+
 # Compiler flags
 
 # Variables
@@ -523,6 +545,11 @@ TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_ble_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_debug_dump_manager
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_gnss_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wifi_pal
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_wwan_pal
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/tinysys/include
 

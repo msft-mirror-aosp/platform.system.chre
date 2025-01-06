@@ -32,6 +32,7 @@
  ***********************************************/
 
 void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
+  notifier->signal = 0;
   chppMutexInit(&notifier->mutex);
   pthread_cond_init(&notifier->cond, NULL);
 }

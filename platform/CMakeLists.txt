@@ -1,6 +1,8 @@
 include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
 include(backend.cmake)
 
+add_subdirectory(arm)
+add_subdirectory(freertos)
 add_subdirectory(shared)
 
 pw_add_facade(chre.platform.assert INTERFACE
@@ -299,6 +301,18 @@ pw_add_facade(chre.platform.system_timer INTERFACE
     chre.platform.system_timer_BACKEND
   HEADERS
     include/chre/platform/system_timer.h
+  PUBLIC_INCLUDES
+    include
+  PUBLIC_DEPS
+    chre.util
+    chre.variant.config
+)
+
+pw_add_facade(chre.platform.tagged_log INTERFACE
+  BACKEND
+    chre.platform.tagged_log_BACKEND
+  HEADERS
+    include/chre/platform/tagged_log.h
   PUBLIC_INCLUDES
     include
   PUBLIC_DEPS

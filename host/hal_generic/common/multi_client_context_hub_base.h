@@ -26,16 +26,20 @@
 #include "chre_host/napp_header.h"
 #include "chre_host/preloaded_nanoapp_loader.h"
 #include "chre_host/time_syncer.h"
+#include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"
 #include "event_logger.h"
 #include "hal_client_id.h"
 #include "hal_client_manager.h"
 
+#include <array>
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 namespace android::hardware::contexthub::common::implementation {
 
@@ -89,11 +93,20 @@ class MultiClientContextHubBase
   ScopedAStatus sendMessageDeliveryStatusToHub(
       int32_t contextHubId,
       const MessageDeliveryStatus &messageDeliveryStatus) override;
+  ScopedAStatus getHubs(std::vector<HubInfo> *hubs) override;
+  ScopedAStatus getEndpoints(std::vector<EndpointInfo> *endpoints) override;
+  ScopedAStatus registerEndpointHub(
+      const std::shared_ptr<IEndpointCallback> &callback,
+      const HubInfo &hubInfo,
+      std::shared_ptr<IEndpointCommunication> *hubInterface) override;
 
   // Functions implementing ChreConnectionCallback.
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
+  void onChreDisconnected() override {
+    mIsChreReady = false;
+  }
 
   // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -162,6 +175,15 @@ class MultiClientContextHubBase
 
   /**
    * Enables test mode by unloading all the nanoapps except the system nanoapps.
+   * Requires the caller to hold the mTestModeMutex. This function does not
+   * set mIsTestModeEnabled.
+   *
+   * @return true as long as we have a list of nanoapps to unload.
+   */
+  bool enableTestModeLocked(std::unique_lock<std::mutex> &lock);
+
+  /**
+   * Enables test mode by unloading all the nanoapps except the system nanoapps.
    *
    * @return true as long as we have a list of nanoapps to unload.
    */
@@ -176,6 +198,25 @@ class MultiClientContextHubBase
    * location of their binaries.
    */
   void disableTestMode();
+
+  /**
+   * Queries nanoapps from the context hub with the given client ID.
+   *
+   * @param contextHubId The context hub ID.
+   * @param clientId The client ID.
+   * @return A ScopedAStatus indicating the success or failure of the query.
+   */
+  ScopedAStatus queryNanoappsWithClientId(int32_t contextHubId,
+                                          HalClientId clientId);
+
+  /**
+   * Handles a nanoapp list response from the context hub for test mode
+   * enablement.
+   *
+   * @param response The nanoapp list response from the context hub.
+   */
+  void handleTestModeNanoappQueryResponse(
+      const ::chre::fbs::NanoappListResponseT &response);
 
   inline bool isSettingEnabled(Setting setting) {
     return mSettingEnabled.find(setting) != mSettingEnabled.end() &&
@@ -196,6 +237,10 @@ class MultiClientContextHubBase
   // HalClientManager maintains states of hal clients. Each HAL should only have
   // one instance of a HalClientManager.
   std::unique_ptr<HalClientManager> mHalClientManager{};
+
+  // Implementation of the V4+ API. Should be instantiated by the target HAL
+  // implementation.
+  std::optional<ContextHubV4Impl> mV4Impl{};
 
   std::unique_ptr<PreloadedNanoappLoader> mPreloadedNanoappLoader{};
 
@@ -222,10 +267,10 @@ class MultiClientContextHubBase
   std::condition_variable mEnableTestModeCv;
   bool mIsTestModeEnabled = false;
   std::optional<bool> mTestModeSyncUnloadResult = std::nullopt;
+
   // mTestModeNanoapps records the nanoapps that will be unloaded in
-  // enableTestMode(). it is initialized to an empty vector to prevent it from
-  // unintended population in onNanoappListResponse().
-  std::optional<std::vector<uint64_t>> mTestModeNanoapps{{}};
+  // enableTestMode().
+  std::optional<std::vector<uint64_t>> mTestModeNanoapps;
   // mTestModeSystemNanoapps records system nanoapps that won't be reloaded in
   // disableTestMode().
   std::optional<std::vector<uint64_t>> mTestModeSystemNanoapps;
@@ -241,6 +286,12 @@ class MultiClientContextHubBase
   // Used to map message sequence number to host endpoint ID
   std::mutex mReliableMessageMutex;
   std::deque<ReliableMessageRecord> mReliableMessageQueue;
+
+  // A thread safe flag indicating if CHRE is ready for operations.
+  // Outside of the constructor, this boolean flag should only be written by
+  // onChreDisconnected and onChreRestarted, the order of which should be
+  // guaranteed by the CHRE's disconnection handler.
+  std::atomic_bool mIsChreReady = true;
 
   // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;

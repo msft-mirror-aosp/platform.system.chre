@@ -24,6 +24,7 @@
 #include "chre/core/nanoapp.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/context.h"
+#include "chre/platform/event_loop_hooks.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/conditional_lock_guard.h"
@@ -34,6 +35,9 @@
 #include "chre/util/throttle.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
+
+using ::chre::message::EndpointInfo;
+using ::chre::message::EndpointType;
 
 namespace chre {
 
@@ -323,6 +327,9 @@ void EventLoop::postEventOrDie(uint16_t eventType, void *eventData,
         !allocateAndPostEvent(eventType, eventData, freeCallback,
                               /* isLowPriority= */ false, kSystemInstanceId,
                               targetInstanceId, targetGroupMask)) {
+      CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+          this, eventType, eventData, freeCallback, kSystemInstanceId,
+          targetInstanceId, targetGroupMask);
       FATAL_ERROR("Failed to post critical system event 0x%" PRIx16, eventType);
     }
   } else if (freeCallback != nullptr) {
@@ -338,6 +345,8 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
   }
 
   if (hasNoSpaceForHighPriorityEvent()) {
+    CHRE_HANDLE_EVENT_QUEUE_FULL_DURING_SYSTEM_POST(this, eventType, eventData,
+                                                    callback, extraData);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": Full of high priority "
                 "events",
@@ -346,6 +355,9 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
 
   Event *event = mEventPool.allocate(eventType, eventData, callback, extraData);
   if (event == nullptr || !mEvents.push(event)) {
+    CHRE_HANDLE_FAILED_SYSTEM_EVENT_ENQUEUE(
+        this, eventType, eventData, callback, kSystemInstanceId,
+        kBroadcastInstanceId, kDefaultTargetGroupMask);
     FATAL_ERROR("Failed to post critical system event 0x%" PRIx16
                 ": out of memory",
                 eventType);
@@ -368,6 +380,9 @@ bool EventLoop::postLowPriorityEventOrFree(
     if (!eventPosted) {
       LOGE("Failed to allocate event 0x%" PRIx16 " to instanceId %" PRIu16,
            eventType, targetInstanceId);
+      CHRE_HANDLE_LOW_PRIORITY_ENQUEUE_FAILURE(
+          this, eventType, eventData, freeCallback, senderInstanceId,
+          targetInstanceId, targetGroupMask);
       ++mNumDroppedLowPriEvents;
     }
   }
@@ -458,15 +473,23 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   }
 }
 
-void EventLoop::findFirstMatchingNanoapp(
-    const pw::Function<bool(const Nanoapp &)> &function) {
+void EventLoop::onMatchingNanoappEndpoint(
+    const pw::Function<bool(const EndpointInfo &)> &function) {
   ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
 
   for (const UniquePtr<Nanoapp> &app : mNanoapps) {
-    if (function(*app.get())) {
+    if (function(getEndpointInfoFromNanoappLocked(*app.get()))) {
       break;
     }
   }
+}
+
+std::optional<EndpointInfo> EventLoop::getEndpointInfo(uint64_t appId) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+  Nanoapp *app = lookupAppByAppId(appId);
+  return app == nullptr
+             ? std::nullopt
+             : std::make_optional(getEndpointInfoFromNanoappLocked(*app));
 }
 
 bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
@@ -699,6 +722,16 @@ void EventLoop::logDanglingResources(const char *name, uint32_t count) {
     LOGE("App 0x%016" PRIx64 " had %" PRIu32 " remaining %s at unload",
          mCurrentApp->getAppId(), count, name);
   }
+}
+
+EndpointInfo EventLoop::getEndpointInfoFromNanoappLocked(
+    const Nanoapp &nanoapp) {
+  return EndpointInfo(
+      /* id= */ nanoapp.getAppId(),
+      /* name= */ nanoapp.getAppName(),
+      /* version= */ nanoapp.getAppVersion(),
+      /* type= */ EndpointType::NANOAPP,
+      /* requiredPermissions= */ nanoapp.getAppPermissions());
 }
 
 }  // namespace chre

@@ -17,8 +17,6 @@ pw_add_library(chre.util STATIC
     include/chre/util/dynamic_vector_base.h
     include/chre/util/dynamic_vector_impl.h
     include/chre/util/enum.h
-    include/chre/util/fixed_size_blocking_queue.h
-    include/chre/util/fixed_size_blocking_queue_impl.h
     include/chre/util/fixed_size_vector.h
     include/chre/util/fixed_size_vector_impl.h
     include/chre/util/fragmentation_manager.h
@@ -51,10 +49,6 @@ pw_add_library(chre.util STATIC
     include/chre/util/segmented_queue_impl.h
     include/chre/util/singleton.h
     include/chre/util/singleton_impl.h
-    include/chre/util/synchronized_expandable_memory_pool.h
-    include/chre/util/synchronized_expandable_memory_pool_impl.h
-    include/chre/util/synchronized_memory_pool.h
-    include/chre/util/synchronized_memory_pool_impl.h
     include/chre/util/throttle.h
     include/chre/util/time.h
     include/chre/util/time_impl.h
@@ -121,6 +115,7 @@ pw_add_library(chre.util.nanoapp STATIC
     chre.chre_api
     chre.platform.assert
     chre.platform.log
+    chre.platform.tagged_log
     chre.util
     chre.variant.config
     pw_tokenizer
@@ -167,6 +162,8 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/ble_util.h
     include/chre/util/system/debug_dump.h
     include/chre/util/system/event_callbacks.h
+    include/chre/util/system/fixed_size_blocking_queue.h
+    include/chre/util/system/fixed_size_blocking_queue_impl.h
     include/chre/util/system/message_common.h
     include/chre/util/system/message_router.h
     include/chre/util/system/napp_header_utils.h
@@ -174,6 +171,10 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/ref_base.h
     include/chre/util/system/shared_ptr.h
     include/chre/util/system/shared_ptr_impl.h
+    include/chre/util/system/synchronized_expandable_memory_pool.h
+    include/chre/util/system/synchronized_expandable_memory_pool_impl.h
+    include/chre/util/system/synchronized_memory_pool.h
+    include/chre/util/system/synchronized_memory_pool_impl.h
     include/chre/util/system/stats_container.h
     include/chre/util/system/transaction_manager.h
     include/chre/util/system/transaction_manager_impl.h

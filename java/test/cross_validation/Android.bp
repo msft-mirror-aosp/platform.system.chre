@@ -33,6 +33,7 @@ java_library {
         "chre_test_common_java_proto",
         "chrecrossvalidation_sensor_java_proto",
         "chrecrossvalidation_wifi_java_proto",
+        "chrecrossvalidation_wwan_java_proto",
         "guava",
     ],
 

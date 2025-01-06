@@ -26,9 +26,11 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <chre/common.h>
 #include <chre/toolchain.h>
 
 #ifdef __cplusplus
@@ -262,6 +264,13 @@ extern "C" {
 #define CHRE_EVENT_BLE_LAST_EVENT  UINT16_C(0x035F)
 
 /**
+ * First event in the block reserved for session-based messaging. These events
+ * are defined in chre/msg.h.
+ */
+#define CHRE_EVENT_MSG_FIRST_EVENT UINT16_C(0x0360)
+#define CHRE_EVENT_MSG_LAST_EVENT UINT16_C(0x036F)
+
+/**
  * First in the extended range of values dedicated for internal CHRE
  * implementation usage.
  *
@@ -471,7 +480,7 @@ struct chreNanoappInfo {
      */
     uint8_t rpcServiceCount;
 
-    /*
+    /**
      * Array of RPC services published by this nanoapp.
      * Services are published via chrePublishRpcServices.
      * The array contains rpcServiceCount entries.
@@ -1009,6 +1018,17 @@ bool chreConfigureHostEndpointNotifications(uint16_t hostEndpointId,
  * @return true if the publishing is successful.
  *
  * @since v1.6
+ *
+ * @deprecated Use chreMsgPublishServices() instead. If this function is
+ * called with CHRE API version v1.11 or above, it will convert each
+ * struct chreNanoappRpcService to a struct chreMsgEndpointServiceInfo and
+ * call chreMsgPublishServices() instead. The conversion will be mapped as
+ * follows:
+ *   - majorVersion = chreNanoappRpcService.majorVersion
+ *   - minorVersion = 0
+ *   - serviceDescriptor = FORMAT_STRING(
+ *     "chre.nanoapp_0x%016x.service_0x%016x", nanoapp_id, service_id)
+ *   - serviceFormat = CHRE_ENDPOINT_SERVICE_FORMAT_PW_RPC_PROTOBUF
  */
 bool chrePublishRpcServices(struct chreNanoappRpcService *services,
                             size_t numServices);

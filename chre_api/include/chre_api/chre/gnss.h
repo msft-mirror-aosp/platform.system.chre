@@ -71,6 +71,12 @@ extern "C" {
 #define CHRE_GNSS_CAPABILITIES_GNSS_ENGINE_BASED_PASSIVE_LISTENER \
                                              (UINT32_C(1) << 2)
 
+//! GNSS data from remote sources is supported via
+//! chreGnssLocationSessionStartAsyncV1_11() and
+//! chreGnssMeasurementSessionStartAsyncV1_11()
+//! @since v1.11
+#define CHRE_GNSS_CAPABILITIES_REMOTE_SOURCE (UINT32_C(1) << 3)
+
 /** @} */
 
 /**
@@ -216,6 +222,25 @@ enum chreGnssMultipathIndicator {
 };
 
 /**
+ * Enumeration of available values for the GNSS source type associated with
+ * a location fix, measurement data, a location session or a measurement
+ * session
+ */
+enum chreGnssSource {
+  //! In the request context, indicates that there is no preference for a
+  //! particular GNSS engine, so if there are multiple, allow the system to
+  //! decide which one is used (the selected engine may change over the course
+  //! of a session).
+  //! In the result context, indicates that the GNSS engine used was not
+  //! explicitly reported.
+  CHRE_GNSS_SOURCE_UNSPECIFIED = 0,
+  //! References the GNSS system local to this device
+  CHRE_GNSS_SOURCE_LOCAL = 1,
+  //! References a GNSS system on a remote device
+  CHRE_GNSS_SOURCE_REMOTE = 2,
+};
+
+/**
  * Represents an estimate of the GNSS clock time (see the Android GPS HAL for
  * more detailed information)
  */
@@ -331,8 +356,13 @@ struct chreGnssDataEvent {
     //! the range [0, CHRE_GNSS_MAX_MEASUREMENT]
     uint8_t measurement_count;
 
+    //! The source of the GNSS data
+    //! @see #chreGnssSource
+    //! @since v1.11
+    uint8_t gnss_source;
+
     //! Reserved for future use; set to 0
-    uint8_t reserved[6];
+    uint8_t reserved[5];
 
     struct chreGnssClock clock;
 
@@ -377,9 +407,14 @@ struct chreGnssLocationEvent {
     //! @see #GpsLocationFlags
     uint16_t flags;
 
+    //! The source of the GNSS data
+    //! @see #chreGnssSource
+    //! @since v1.11
+    uint8_t gnss_source;
+
     //! Reserved for future use; set to 0
     //! @since v1.3
-    uint8_t reserved[2];
+    uint8_t reserved[1];
 
     //! Expected vertical accuracy in meters such that a range of
     //! 2 * altitude_accuracy centered around altitude has a 68% probability of
@@ -428,6 +463,18 @@ uint32_t chreGnssGetCapabilities(void);
 
 /**
  * Initiates a GNSS positioning session, or changes the requested interval of an
+ * existing session.
+ *
+ * @see chreGnssLocationSessionStartAsyncV1_11 for further details. This
+ * function behaves the same as calling that function with
+ * CHRE_GNSS_SOURCE_UNSPECIFIED.
+ */
+bool chreGnssLocationSessionStartAsync(uint32_t minIntervalMs,
+                                       uint32_t minTimeToNextFixMs,
+                                       const void *cookie);
+
+/**
+ * Initiates a GNSS positioning session, or changes the requested interval of an
  * existing session. If starting or modifying the session was successful, then
  * the GNSS engine will work on determining the device's position.
  *
@@ -437,8 +484,12 @@ uint32_t chreGnssGetCapabilities(void);
  * the CHRE implementation is expected to return a result with
  * CHRE_ERROR_FUNCTION_DISABLED.
  *
- * If chreGnssGetCapabilities() returns a value that does not have the
- * CHRE_GNSS_CAPABILITIES_LOCATION flag set, then this method will return false.
+ * If chreGnssGetCapabilities() does not include
+ * CHRE_GNSS_CAPABILITIES_REMOTE_SOURCE, calling this function with
+ * CHRE_GNSS_SOURCE_REMOTE will return false. Calling this function with
+ * CHRE_GNSS_SOURCE_LOCAL or CHRE_GNSS_SOURCE_UNSPECIFIED will elicit the same
+ * behavior as chreGnssLocationSessionStartAsync(), including when run on CHRE
+ * versions prior to v1.11.
  *
  * @param minIntervalMs The desired minimum interval between location fixes
  *        delivered to the client via CHRE_EVENT_GNSS_LOCATION, in milliseconds.
@@ -452,15 +503,17 @@ uint32_t chreGnssGetCapabilities(void);
  *        has elapsed.
  * @param cookie An opaque value that will be included in the chreAsyncResult
  *        sent in relation to this request.
+ * @param source The source of the GNSS data to request.
  *
  * @return true if the request was accepted for processing, false otherwise
  *
- * @since v1.1
+ * @since v1.11
  * @note Requires GNSS permission
  */
-bool chreGnssLocationSessionStartAsync(uint32_t minIntervalMs,
-                                       uint32_t minTimeToNextFixMs,
-                                       const void *cookie);
+bool chreGnssLocationSessionStartAsyncV1_11(uint32_t minIntervalMs,
+                                            uint32_t minTimeToNextFixMs,
+                                            const void *cookie,
+                                            enum chreGnssSource source);
 
 /**
  * Terminates an existing GNSS positioning session. If no positioning session
@@ -489,6 +542,16 @@ bool chreGnssLocationSessionStartAsync(uint32_t minIntervalMs,
 bool chreGnssLocationSessionStopAsync(const void *cookie);
 
 /**
+ * Initiates a request to receive raw GNSS measurements.
+ *
+ * @see chreGnssMeasurementSessionStartAsyncV1_11 for further details. This
+ * function behaves the same as calling that function with
+ * CHRE_GNSS_SOURCE_UNSPECIFIED.
+ */
+bool chreGnssMeasurementSessionStartAsync(uint32_t minIntervalMs,
+                                          const void *cookie);
+
+/**
  * Initiates a request to receive raw GNSS measurements. A GNSS measurement
  * session can exist independently of location sessions. In other words, a
  * Nanoapp is able to receive measurements at its requested interval both with
@@ -500,9 +563,12 @@ bool chreGnssLocationSessionStopAsync(const void *cookie);
  * the CHRE implementation is expected to return a result with
  * CHRE_ERROR_FUNCTION_DISABLED.
  *
- * If chreGnssGetCapabilities() returns a value that does not have the
- * CHRE_GNSS_CAPABILITIES_MEASUREMENTS flag set, then this method will return
- * false.
+ * If chreGnssGetCapabilities() does not include
+ * CHRE_GNSS_CAPABILITIES_REMOTE_SOURCE, calling this function with
+ * CHRE_GNSS_SOURCE_REMOTE will return false. Calling this function with
+ * CHRE_GNSS_SOURCE_LOCAL or CHRE_GNSS_SOURCE_UNSPECIFIED will elicit the same
+ * behavior as chreGnssMeasurementSessionStartAsync(), including when run on
+ * CHRE versions prior to v1.11.
  *
  * @param minIntervalMs The desired minimum interval between measurement reports
  *        delivered via CHRE_EVENT_GNSS_DATA. When requested at 1000ms or
@@ -511,14 +577,16 @@ bool chreGnssLocationSessionStopAsync(const void *cookie);
  *        once every 1000ms, on average.
  * @param cookie An opaque value that will be included in the chreAsyncResult
  *        sent in relation to this request.
+ * @param source The source of the GNSS data to request.
  *
  * @return true if the request was accepted for processing, false otherwise
  *
- * @since v1.1
+ * @since v1.11
  * @note Requires GNSS permission
  */
-bool chreGnssMeasurementSessionStartAsync(uint32_t minIntervalMs,
-                                          const void *cookie);
+bool chreGnssMeasurementSessionStartAsyncV1_11(uint32_t minIntervalMs,
+                                               const void *cookie,
+                                               enum chreGnssSource source);
 
 /**
  * Terminates an existing raw GNSS measurement session. If no measurement

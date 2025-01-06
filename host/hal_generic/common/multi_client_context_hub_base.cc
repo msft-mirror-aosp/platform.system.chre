@@ -25,6 +25,7 @@
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/hal_error.h"
 #include "chre_host/host_protocol_host.h"
+#include "hal_client_id.h"
 #include "permissions_util.h"
 
 #include <android_chre_flags.h>
@@ -171,6 +172,12 @@ MultiClientContextHubBase::MultiClientContextHubBase() {
 
 ScopedAStatus MultiClientContextHubBase::getContextHubs(
     std::vector<ContextHubInfo> *contextHubInfos) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    // Return ok() here to not crash system server
+    return ScopedAStatus::ok();
+  }
+
   std::unique_lock<std::mutex> lock(mHubInfoMutex);
   if (mContextHubInfo == nullptr) {
     fbs::HubInfoResponseT response;
@@ -199,6 +206,10 @@ ScopedAStatus MultiClientContextHubBase::getContextHubs(
 ScopedAStatus MultiClientContextHubBase::loadNanoapp(
     int32_t contextHubId, const NanoappBinary &appBinary,
     int32_t transactionId) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -254,6 +265,10 @@ bool MultiClientContextHubBase::sendFragmentedLoadRequest(
 ScopedAStatus MultiClientContextHubBase::unloadNanoapp(int32_t contextHubId,
                                                        int64_t appId,
                                                        int32_t transactionId) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -296,6 +311,10 @@ ScopedAStatus MultiClientContextHubBase::enableNanoapp(
 
 ScopedAStatus MultiClientContextHubBase::onSettingChanged(Setting setting,
                                                           bool enabled) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   mSettingEnabled[setting] = enabled;
   fbs::Setting fbsSetting;
   bool isWifiOrBtSetting =
@@ -346,15 +365,8 @@ ScopedAStatus MultiClientContextHubBase::onSettingChanged(Setting setting,
 }
 
 ScopedAStatus MultiClientContextHubBase::queryNanoapps(int32_t contextHubId) {
-  if (!isValidContextHubId(contextHubId)) {
-    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-  }
-  flatbuffers::FlatBufferBuilder builder(64);
-  HostProtocolHost::encodeNanoappListRequest(builder);
-  HostProtocolHost::mutateHostClientId(
-      builder.GetBufferPointer(), builder.GetSize(),
-      mHalClientManager->getClientId(AIBinder_getCallingPid()));
-  return fromResult(mConnection->sendMessage(builder));
+  return queryNanoappsWithClientId(
+      contextHubId, mHalClientManager->getClientId(AIBinder_getCallingPid()));
 }
 
 ScopedAStatus MultiClientContextHubBase::getPreloadedNanoappIds(
@@ -380,6 +392,8 @@ ScopedAStatus MultiClientContextHubBase::getPreloadedNanoappIds(
 ScopedAStatus MultiClientContextHubBase::registerCallback(
     int32_t contextHubId,
     const std::shared_ptr<IContextHubCallback> &callback) {
+  // Even CHRE is not ready we should open this API to clients because it allows
+  // us to have a channel to report events back to them.
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -406,6 +420,10 @@ ScopedAStatus MultiClientContextHubBase::registerCallback(
 
 ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
     int32_t contextHubId, const ContextHubMessage &message) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -453,6 +471,10 @@ ScopedAStatus MultiClientContextHubBase::sendMessageToHub(
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
     const HostEndpointInfo &info) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   uint8_t type;
   switch (info.type) {
     case HostEndpointInfo::Type::APP:
@@ -484,6 +506,10 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointConnected(
 
 ScopedAStatus MultiClientContextHubBase::onHostEndpointDisconnected(
     char16_t in_hostEndpointId) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   HostEndpointId hostEndpointId = in_hostEndpointId;
   pid_t pid = AIBinder_getCallingPid();
   bool isSuccessful = false;
@@ -502,11 +528,19 @@ ScopedAStatus MultiClientContextHubBase::onHostEndpointDisconnected(
 
 ScopedAStatus MultiClientContextHubBase::onNanSessionStateChanged(
     const NanSessionStateUpdate & /*in_update*/) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   // TODO(271471342): Add support for NAN session management.
   return ndk::ScopedAStatus::ok();
 }
 
 ScopedAStatus MultiClientContextHubBase::setTestMode(bool enable) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   if (enable) {
     return fromResult(enableTestMode());
   }
@@ -516,6 +550,10 @@ ScopedAStatus MultiClientContextHubBase::setTestMode(bool enable) {
 
 ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
     int32_t contextHubId, const MessageDeliveryStatus &messageDeliveryStatus) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
   if (!isValidContextHubId(contextHubId)) {
     return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
   }
@@ -532,17 +570,32 @@ ScopedAStatus MultiClientContextHubBase::sendMessageDeliveryStatusToHub(
   return fromResult(success);
 }
 
-bool MultiClientContextHubBase::enableTestMode() {
-  std::unique_lock<std::mutex> lock(mTestModeMutex);
-  if (mIsTestModeEnabled) {
-    return true;
-  }
+ScopedAStatus MultiClientContextHubBase::getHubs(std::vector<HubInfo> *hubs) {
+  if (mV4Impl) return mV4Impl->getHubs(hubs);
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
 
+ScopedAStatus MultiClientContextHubBase::getEndpoints(
+    std::vector<EndpointInfo> *endpoints) {
+  if (mV4Impl) return mV4Impl->getEndpoints(endpoints);
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ScopedAStatus MultiClientContextHubBase::registerEndpointHub(
+    const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
+    std::shared_ptr<IEndpointCommunication> *hubInterface) {
+  if (mV4Impl)
+    return mV4Impl->registerEndpointHub(callback, hubInfo, hubInterface);
+  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+bool MultiClientContextHubBase::enableTestModeLocked(
+    std::unique_lock<std::mutex> &lock) {
   // Pulling out a list of loaded nanoapps.
   mTestModeNanoapps.reset();
-  if (!queryNanoapps(kDefaultHubId).isOk()) {
+  mTestModeSystemNanoapps.reset();
+  if (!queryNanoappsWithClientId(kDefaultHubId, kHalId).isOk()) {
     LOGE("Failed to get a list of loaded nanoapps to enable test mode");
-    mTestModeNanoapps.emplace();
     return false;
   }
   if (!mEnableTestModeCv.wait_for(lock, ktestModeTimeOut, [&]() {
@@ -552,7 +605,6 @@ bool MultiClientContextHubBase::enableTestMode() {
     LOGE("Failed to get a list of loaded nanoapps within %" PRIu64
          " seconds to enable test mode",
          ktestModeTimeOut.count());
-    mTestModeNanoapps.emplace();
     return false;
   }
 
@@ -592,9 +644,20 @@ bool MultiClientContextHubBase::enableTestMode() {
 
   LOGD("%" PRIu64 " nanoapps are unloaded to enable test mode",
        mTestModeNanoapps->size());
-  mIsTestModeEnabled = true;
-  mTestModeNanoapps.emplace();
   return true;
+}
+
+bool MultiClientContextHubBase::enableTestMode() {
+  std::unique_lock<std::mutex> lock(mTestModeMutex);
+  if (mIsTestModeEnabled) {
+    return true;
+  }
+  // Needed to ensure multiple calls to enableTestMode to not race as we unlock
+  // the lock to query the nanoapps.
+  mIsTestModeEnabled = true;
+
+  mIsTestModeEnabled = enableTestModeLocked(lock);
+  return mIsTestModeEnabled;
 }
 
 void MultiClientContextHubBase::disableTestMode() {
@@ -602,11 +665,47 @@ void MultiClientContextHubBase::disableTestMode() {
   if (!mIsTestModeEnabled) {
     return;
   }
+
+  mIsTestModeEnabled = false;
   int numOfNanoappsLoaded =
       mPreloadedNanoappLoader->loadPreloadedNanoapps(mTestModeSystemNanoapps);
   LOGD("%d nanoapps are reloaded to recover from test mode",
        numOfNanoappsLoaded);
-  mIsTestModeEnabled = false;
+}
+
+ScopedAStatus MultiClientContextHubBase::queryNanoappsWithClientId(
+    int32_t contextHubId, HalClientId clientId) {
+  if (!mIsChreReady) {
+    LOGE("%s() can't be processed as CHRE is not ready", __func__);
+    return fromServiceError(HalError::CHRE_NOT_READY);
+  }
+  if (!isValidContextHubId(contextHubId)) {
+    return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+  }
+  flatbuffers::FlatBufferBuilder builder(64);
+  HostProtocolHost::encodeNanoappListRequest(builder);
+  HostProtocolHost::mutateHostClientId(builder.GetBufferPointer(),
+                                       builder.GetSize(), clientId);
+  return fromResult(mConnection->sendMessage(builder));
+}
+
+void MultiClientContextHubBase::handleTestModeNanoappQueryResponse(
+    const ::chre::fbs::NanoappListResponseT &response) {
+  {
+    std::unique_lock<std::mutex> lock(mTestModeMutex);
+    mTestModeNanoapps.emplace();
+    mTestModeSystemNanoapps.emplace();
+
+    for (const auto &nanoapp : response.nanoapps) {
+      if (nanoapp->is_system) {
+        mTestModeSystemNanoapps->push_back(nanoapp->app_id);
+      } else {
+        mTestModeNanoapps->push_back(nanoapp->app_id);
+      }
+    }
+  }
+
+  mEnableTestModeCv.notify_all();
 }
 
 void MultiClientContextHubBase::handleMessageFromChre(
@@ -677,8 +776,12 @@ void MultiClientContextHubBase::handleMessageFromChre(
       break;
     }
     default:
-      LOGW("Got unexpected message type %" PRIu8,
-           static_cast<uint8_t>(message.type));
+      if (mV4Impl) {
+        mV4Impl->handleMessageFromChre(message);
+      } else {
+        LOGW("Got unexpected message type %" PRIu8,
+             static_cast<uint8_t>(message.type));
+      }
   }
 }
 
@@ -728,20 +831,11 @@ void MultiClientContextHubBase::onDebugDumpComplete(
 void MultiClientContextHubBase::onNanoappListResponse(
     const fbs::NanoappListResponseT &response, HalClientId clientId) {
   LOGD("Received a nanoapp list response for client %" PRIu16, clientId);
-  {
-    std::unique_lock<std::mutex> lock(mTestModeMutex);
-    if (!mTestModeNanoapps.has_value()) {
-      mTestModeNanoapps.emplace();
-      mTestModeSystemNanoapps.emplace();
-      for (const auto &nanoapp : response.nanoapps) {
-        if (nanoapp->is_system) {
-          mTestModeSystemNanoapps->push_back(nanoapp->app_id);
-        } else {
-          mTestModeNanoapps->push_back(nanoapp->app_id);
-        }
-      }
-      mEnableTestModeCv.notify_all();
-    }
+
+  if (clientId == kHalId) {
+    LOGD("Received a nanoapp list response to enable test mode");
+    handleTestModeNanoappQueryResponse(response);
+    return;  // this query was for test mode -> do not call callback
   }
 
   std::shared_ptr<IContextHubCallback> callback =
@@ -986,6 +1080,15 @@ void MultiClientContextHubBase::onChreRestarted() {
   mIsWifiAvailable.reset();
   mEventLogger.logContextHubRestart();
   mHalClientManager->handleChreRestart();
+
+  // Unblock APIs BEFORE informing the clients that CHRE has restarted so that
+  // any API call triggered by handleContextHubAsyncEvent() can come through.
+  mIsChreReady = true;
+  std::vector<std::shared_ptr<IContextHubCallback>> callbacks =
+      mHalClientManager->getCallbacks();
+  for (auto callback : callbacks) {
+    callback->handleContextHubAsyncEvent(AsyncEventType::RESTARTED);
+  }
 }
 
 binder_status_t MultiClientContextHubBase::dump(int fd,
