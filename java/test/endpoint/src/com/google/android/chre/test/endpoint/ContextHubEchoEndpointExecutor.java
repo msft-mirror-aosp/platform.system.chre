@@ -177,7 +177,9 @@ public class ContextHubEchoEndpointExecutor {
      * @return The list of hub discovery info which contains the echo service.
      */
     public List<HubDiscoveryInfo> getEchoServiceList() {
-        List<HubDiscoveryInfo> infoList = mContextHubManager.findEndpoints(ECHO_SERVICE_DESCRIPTOR);
+        List<HubDiscoveryInfo> infoList = new ArrayList<>();
+        checkApiSupport(
+                (manager) -> infoList.addAll(manager.findEndpoints(ECHO_SERVICE_DESCRIPTOR)));
         for (HubDiscoveryInfo info : infoList) {
             printHubDiscoveryInfo(info);
             HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
@@ -191,8 +193,11 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(serviceInfo);
             Assert.assertEquals(ECHO_SERVICE_DESCRIPTOR, serviceInfo.getServiceDescriptor());
 
-            List<HubDiscoveryInfo> identifierDiscoveryList =
-                    mContextHubManager.findEndpoints(identifier.getEndpoint());
+            List<HubDiscoveryInfo> identifierDiscoveryList = new ArrayList<>();
+            checkApiSupport(
+                    (manager) ->
+                            identifierDiscoveryList.addAll(
+                                    manager.findEndpoints(ECHO_SERVICE_DESCRIPTOR)));
             Assert.assertNotEquals(identifierDiscoveryList.size(), 0);
         }
         return infoList;
