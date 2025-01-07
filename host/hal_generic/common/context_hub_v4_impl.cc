@@ -106,11 +106,12 @@ ScopedAStatus HostHubInterface::registerEndpoint(const EndpointInfo &endpoint) {
 
 ScopedAStatus HostHubInterface::unregisterEndpoint(
     const EndpointInfo &endpoint) {
-  if (auto status = mHub->removeEndpoint(endpoint.id); !status.ok()) {
+  auto statusOrSessions = mHub->removeEndpoint(endpoint.id);
+  if (!statusOrSessions.ok()) {
     LOGE("Failed to unregister endpoint %" PRId32 " on hub %" PRId32
          " with %" PRId32,
-         endpoint.id.id, mHub->id(), status.code());
-    return fromPwStatus(status);
+         endpoint.id.id, mHub->id(), statusOrSessions.status().code());
+    return fromPwStatus(statusOrSessions.status());
   }
   // TODO(b/378545373): Send the endpoint info to CHRE.
   return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -151,14 +152,9 @@ ScopedAStatus HostHubInterface::openEndpointSession(
 ScopedAStatus HostHubInterface::sendMessageToEndpoint(int32_t sessionId,
                                                       const Message & /*msg*/) {
   if (auto status = mHub->checkSessionOpen(sessionId); !status.ok()) {
-    if (status.IsUnavailable()) {
-      mHub->callback()->onCloseEndpointSession(sessionId,
-                                               Reason::ENDPOINT_GONE);
-    } else {
-      LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
-           " with %" PRId32,
-           sessionId, mHub->id(), status.code());
-    }
+    LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
+         " with %" PRId32,
+         sessionId, mHub->id(), status.code());
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Handle reliable messages.
@@ -169,14 +165,9 @@ ScopedAStatus HostHubInterface::sendMessageToEndpoint(int32_t sessionId,
 ScopedAStatus HostHubInterface::sendMessageDeliveryStatusToEndpoint(
     int32_t sessionId, const MessageDeliveryStatus & /*msgStatus*/) {
   if (auto status = mHub->checkSessionOpen(sessionId); !status.ok()) {
-    if (status.IsUnavailable()) {
-      mHub->callback()->onCloseEndpointSession(sessionId,
-                                               Reason::ENDPOINT_GONE);
-    } else {
-      LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
-           " with %" PRId32,
-           sessionId, mHub->id(), status.code());
-    }
+    LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
+         " with %" PRId32,
+         sessionId, mHub->id(), status.code());
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Send the message to CHRE.
@@ -197,14 +188,9 @@ ScopedAStatus HostHubInterface::closeEndpointSession(int32_t sessionId,
 
 ScopedAStatus HostHubInterface::endpointSessionOpenComplete(int32_t sessionId) {
   if (auto status = mHub->ackSession(sessionId); !status.ok()) {
-    if (status.IsUnavailable()) {
-      mHub->callback()->onCloseEndpointSession(sessionId,
-                                               Reason::ENDPOINT_GONE);
-    } else {
-      LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
-           " with %" PRId32,
-           sessionId, mHub->id(), status.code());
-    }
+    LOGE("Failed to verify session %" PRId32 " on hub %" PRId64
+         " with %" PRId32,
+         sessionId, mHub->id(), status.code());
     return fromPwStatus(status);
   }
   // TODO(b/378545373): Send the session id to CHRE.
@@ -277,12 +263,7 @@ void ContextHubV4Impl::onUnregisterMessageHub(
   // TODO(b/378545373): Parse flatbuffer message
   int64_t id = 0;
   LOGI("Embedded message hub %" PRId64 " unregistered", id);
-  std::vector<EndpointId> endpoints = mManager.removeEmbeddedHub(id);
-  if (!endpoints.empty()) {
-    mManager.forEachHostHub([&endpoints](HostHub &hub) {
-      hub.callback()->onEndpointStopped(endpoints, Reason::HUB_RESET);
-    });
-  }
+  mManager.removeEmbeddedHub(id);
 }
 
 void ContextHubV4Impl::onRegisterEndpoint(
@@ -292,9 +273,6 @@ void ContextHubV4Impl::onRegisterEndpoint(
   LOGI("Adding embedded endpoint (%" PRId64 ", %" PRId64 ")", endpoint.id.hubId,
        endpoint.id.id);
   mManager.addEmbeddedEndpoint(endpoint);
-  mManager.forEachHostHub([&endpoint](HostHub &hub) {
-    hub.callback()->onEndpointStarted({endpoint});
-  });
 }
 
 void ContextHubV4Impl::onUnregisterEndpoint(
@@ -304,9 +282,6 @@ void ContextHubV4Impl::onUnregisterEndpoint(
   LOGI("Removing embedded endpoint (%" PRId64 ", %" PRId64 ")", endpoint.hubId,
        endpoint.id);
   mManager.removeEmbeddedEndpoint(endpoint);
-  mManager.forEachHostHub([&endpoint](HostHub &hub) {
-    hub.callback()->onEndpointStopped({endpoint}, Reason::ENDPOINT_GONE);
-  });
 }
 
 void ContextHubV4Impl::onOpenEndpointSessionRequest(
@@ -348,12 +323,8 @@ void ContextHubV4Impl::onOpenEndpointSessionRequest(
 namespace {
 
 void logSessionFailure(pw::Status status, uint16_t sessionId) {
-  if (status.IsUnavailable()) {
-    LOGD("Session %" PRIu16 " was pruned.", sessionId);
-  } else {
-    LOGE("Failed to operate on session %" PRIu16 " with %" PRId32, sessionId,
-         status.code());
-  }
+  LOGE("Failed to operate on session %" PRIu16 " with %" PRId32, sessionId,
+       status.code());
 }
 
 }  // namespace

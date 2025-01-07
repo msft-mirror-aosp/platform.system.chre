@@ -30,6 +30,7 @@
 #include <vector>
 
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
+#include <android-base/thread_annotations.h>
 
 #include "chre_host/log.h"
 #include "pw_result/result.h"
@@ -37,6 +38,8 @@
 #include "pw_status/try.h"
 
 namespace android::hardware::contexthub::common::implementation {
+
+using ::aidl::android::hardware::contexthub::Reason;
 
 using HostHub = MessageHubManager::HostHub;
 
@@ -71,16 +74,22 @@ pw::Status HostHub::addEndpoint(const EndpointInfo &info) {
          kInfo.hubId);
     return pw::Status::AlreadyExists();
   }
-  mIdToEndpoint.insert({id, std::make_unique<EndpointInfo>(info)});
+  mIdToEndpoint.insert({id, info});
   return pw::OkStatus();
 }
 
-pw::Status HostHub::removeEndpoint(const EndpointId &id) {
+pw::Result<std::vector<uint16_t>> HostHub::removeEndpoint(
+    const EndpointId &id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
   if (auto it = mIdToEndpoint.find(id.id); it != mIdToEndpoint.end()) {
+    std::vector<uint16_t> sessions;
+    for (const auto &[sessionId, session] : mIdToSession) {
+      if (session.mHostEndpoint == id) sessions.push_back(sessionId);
+    }
+    for (auto sessionId : sessions) mIdToSession.erase(sessionId);
     mIdToEndpoint.erase(it);
-    return pw::OkStatus();
+    return sessions;
   }
   LOGE("Hub %" PRId64 " tried to remove unknown endpoint %" PRId64, kInfo.hubId,
        id.id);
@@ -106,17 +115,15 @@ pw::Result<std::pair<uint16_t, uint16_t>> HostHub::reserveSessionIdRange(
   return mSessionIdRanges.back();
 }
 
-pw::Result<bool> HostHub::openSession(const EndpointId &localId,
-                                      const EndpointId &remoteId,
+pw::Result<bool> HostHub::openSession(const EndpointId &hostEndpoint,
+                                      const EndpointId &embeddedEndpoint,
                                       uint16_t sessionId) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
 
   // Lookup the endpoints.
-  PW_TRY_ASSIGN(std::shared_ptr<EndpointInfo> local,
-                getEndpointLocked(localId));
-  PW_TRY_ASSIGN(std::shared_ptr<EndpointInfo> remote,
-                mManager.getEmbeddedEndpointLocked(remoteId));
+  PW_TRY(endpointExistsLocked(hostEndpoint));
+  PW_TRY(mManager.embeddedEndpointExistsLocked(embeddedEndpoint));
 
   // Validate the session id.
   bool hostInitiated = AIBinder_isHandlingTransaction();
@@ -130,38 +137,36 @@ pw::Result<bool> HostHub::openSession(const EndpointId &localId,
     LOGE("Remote endpoint (%" PRId64 ", %" PRId64
          ") attempting to start "
          "session with invalid id %" PRIu16,
-         remoteId.hubId, remoteId.id, sessionId);
+         embeddedEndpoint.hubId, embeddedEndpoint.id, sessionId);
     return pw::Status::InvalidArgument();
   }
 
   // Prune a stale session with this id if present.
   bool sendClose = false;
   if (auto it = mIdToSession.find(sessionId); it != mIdToSession.end()) {
-    SessionStrongRef session(it->second);
-    if (session) {
-      // If the session is in a valid state, prune it if it was not host
-      // initiated and is pending a final ack from message router.
-      if (!hostInitiated && !session.pendingDestination &&
-          session.pendingMessageRouter) {
-        sendClose = true;
-      } else if (hostInitiated && session.local->id == localId) {
-        LOGE("Hub %" PRId64 " trying to override its own session %" PRIu16,
-             kInfo.hubId, sessionId);
-        return pw::Status::InvalidArgument();
-      } else {
-        LOGE("(host? %" PRId32 ") trying to override session id %" PRIu16
-             ", hub %" PRId64,
-             hostInitiated, sessionId, kInfo.hubId);
-        return pw::Status::AlreadyExists();
-      }
+    Session &session = it->second;
+    // If the session is in a valid state, prune it if it was not host
+    // initiated and is pending a final ack from message router.
+    if (!hostInitiated && !session.mPendingDestination &&
+        session.mPendingMessageRouter) {
+      sendClose = true;
+    } else if (hostInitiated && session.mHostEndpoint == hostEndpoint) {
+      LOGE("Hub %" PRId64 " trying to override its own session %" PRIu16,
+           kInfo.hubId, sessionId);
+      return pw::Status::InvalidArgument();
+    } else {
+      LOGE("(host? %" PRId32 ") trying to override session id %" PRIu16
+           ", hub %" PRId64,
+           hostInitiated, sessionId, kInfo.hubId);
+      return pw::Status::AlreadyExists();
     }
     mIdToSession.erase(it);
   }
 
   // Create and map the new session.
-  mIdToSession.emplace(std::piecewise_construct,
-                       std::forward_as_tuple(sessionId),
-                       std::forward_as_tuple(local, remote, hostInitiated));
+  mIdToSession.emplace(
+      std::piecewise_construct, std::forward_as_tuple(sessionId),
+      std::forward_as_tuple(hostEndpoint, embeddedEndpoint, hostInitiated));
   return sendClose;
 }
 
@@ -180,8 +185,8 @@ pw::Status HostHub::closeSession(uint16_t id) {
 pw::Status HostHub::checkSessionOpen(uint16_t id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
-  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
-  if (!session.pendingDestination && !session.pendingMessageRouter)
+  PW_TRY_ASSIGN(Session * session, getSessionLocked(id));
+  if (!session->mPendingDestination && !session->mPendingMessageRouter)
     return pw::OkStatus();
   LOGE("Session %" PRIu16 " is pending", id);
   return pw::Status::FailedPrecondition();
@@ -190,23 +195,23 @@ pw::Status HostHub::checkSessionOpen(uint16_t id) {
 pw::Status HostHub::ackSession(uint16_t id) {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());
-  PW_TRY_ASSIGN(SessionStrongRef session, checkSessionLocked(id));
+  PW_TRY_ASSIGN(Session * session, getSessionLocked(id));
   bool isBinderCall = AIBinder_isHandlingTransaction();
   bool isHostSession = id >= kHostSessionIdBase;
-  if (session.pendingDestination) {
+  if (session->mPendingDestination) {
     if (isHostSession == isBinderCall) {
       LOGE("Session %" PRIu16 " must be acked by other side (host? %" PRId32
            ")",
            id, !isBinderCall);
       return pw::Status::PermissionDenied();
     }
-    session.pendingDestination = false;
-  } else if (session.pendingMessageRouter) {
+    session->mPendingDestination = false;
+  } else if (session->mPendingMessageRouter) {
     if (isBinderCall) {
       LOGE("Message router must ack session %" PRIu16, id);
       return pw::Status::PermissionDenied();
     }
-    session.pendingMessageRouter = false;
+    session->mPendingMessageRouter = false;
   } else {
     LOGE("Received unexpected ack on session %" PRIu16 ", host: %" PRId32, id,
          isBinderCall);
@@ -252,8 +257,7 @@ pw::Status HostHub::checkValidLocked() {
   return pw::OkStatus();
 }
 
-pw::Result<std::shared_ptr<EndpointInfo>> HostHub::getEndpointLocked(
-    const EndpointId &id) {
+pw::Status HostHub::endpointExistsLocked(const EndpointId &id) {
   if (id.hubId != kInfo.hubId) {
     LOGE("Rejecting lookup on unowned endpoint (%" PRId64 ", %" PRId64
          ") from hub %" PRId64,
@@ -261,7 +265,7 @@ pw::Result<std::shared_ptr<EndpointInfo>> HostHub::getEndpointLocked(
     return pw::Status::InvalidArgument();
   }
   if (auto it = mIdToEndpoint.find(id.id); it != mIdToEndpoint.end())
-    return it->second;
+    return pw::OkStatus();
   return pw::Status::NotFound();
 }
 
@@ -272,23 +276,14 @@ bool HostHub::sessionIdInRangeLocked(uint16_t id) {
   return false;
 }
 
-pw::Result<HostHub::SessionStrongRef> HostHub::checkSessionLocked(uint16_t id) {
+pw::Result<HostHub::Session *> HostHub::getSessionLocked(uint16_t id) {
   auto sessionIt = mIdToSession.find(id);
   if (sessionIt == mIdToSession.end()) {
     LOGE("Did not find expected session %" PRIu16 " in hub %" PRId64, id,
          kInfo.hubId);
     return pw::Status::NotFound();
   }
-  SessionStrongRef session(sessionIt->second);
-  if (!session) {
-    LOGD("Pruning session %" PRIu16
-         " due to one or more of host hub, host "
-         "endpoint, or embedded endpoint going down.",
-         id);
-    mIdToSession.erase(sessionIt);
-    return pw::Status::Unavailable();
-  }
-  return std::move(session);
+  return &sessionIt->second;
 }
 
 MessageHubManager::MessageHubManager(HostHubDownCb cb)
@@ -351,16 +346,31 @@ void MessageHubManager::addEmbeddedHub(const HubInfo &hub) {
   mIdToEmbeddedHub[hub.hubId].info = hub;
 }
 
-std::vector<EndpointId> MessageHubManager::removeEmbeddedHub(int64_t id) {
+void MessageHubManager::removeEmbeddedHub(int64_t id) {
   std::lock_guard lock(mLock);
+
+  // Get the list of endpoints being removed and remove the hub.
   std::vector<EndpointId> endpoints;
   auto it = mIdToEmbeddedHub.find(id);
-  if (it != mIdToEmbeddedHub.end()) {
-    for (const auto &[endpointId, info] : it->second.idToEndpoint)
-      endpoints.push_back({.id = endpointId, .hubId = id});
-    mIdToEmbeddedHub.erase(it);
+  if (it == mIdToEmbeddedHub.end()) return;
+  for (const auto &[endpointId, info] : it->second.idToEndpoint)
+    endpoints.push_back(info.id);
+  mIdToEmbeddedHub.erase(it);
+
+  // For each host hub, determine which sessions if any are now closed and send
+  // notifications as appropriate. Also send the list of removed endpoints.
+  for (auto &[hostHubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    std::vector<uint16_t> closedSessions;
+    for (const auto &[sessionId, session] : hub->mIdToSession) {
+      if (session.mEmbeddedEndpoint.hubId == id) {
+        hub->mCallback->onCloseEndpointSession(sessionId, Reason::HUB_RESET);
+        closedSessions.push_back(sessionId);
+      }
+    }
+    for (auto session : closedSessions) hub->mIdToSession.erase(session);
+    hub->mCallback->onEndpointStopped(endpoints, Reason::HUB_RESET);
   }
-  return endpoints;
 }
 
 std::vector<HubInfo> MessageHubManager::getEmbeddedHubs() const {
@@ -373,6 +383,10 @@ std::vector<HubInfo> MessageHubManager::getEmbeddedHubs() const {
 void MessageHubManager::addEmbeddedEndpoint(const EndpointInfo &endpoint) {
   std::lock_guard lock(mLock);
   addEmbeddedEndpointLocked(endpoint);
+  for (auto &[hostHubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    hub->mCallback->onEndpointStarted({endpoint});
+  }
 }
 
 std::vector<EndpointInfo> MessageHubManager::getEmbeddedEndpoints() const {
@@ -380,9 +394,32 @@ std::vector<EndpointInfo> MessageHubManager::getEmbeddedEndpoints() const {
   std::vector<EndpointInfo> endpoints;
   for (const auto &[id, hub] : mIdToEmbeddedHub) {
     for (const auto &[endptId, endptInfo] : hub.idToEndpoint)
-      endpoints.push_back(*endptInfo);
+      endpoints.push_back(endptInfo);
   }
   return endpoints;
+}
+
+void MessageHubManager::removeEmbeddedEndpoint(const EndpointId &id) {
+  std::lock_guard lock(mLock);
+  auto hubIt = mIdToEmbeddedHub.find(id.hubId);
+  if (hubIt == mIdToEmbeddedHub.end()) return;
+  if (!hubIt->second.idToEndpoint.erase(id.id)) return;
+
+  // For each host hub, determine which sessions if any are now closed and send
+  // notifications as appropriate. Also send the removed endpoint notification.
+  for (auto &[hostHubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    std::vector<uint16_t> closedSessions;
+    for (const auto &[sessionId, session] : hub->mIdToSession) {
+      if (session.mEmbeddedEndpoint == id) {
+        hub->mCallback->onCloseEndpointSession(sessionId,
+                                               Reason::ENDPOINT_GONE);
+        closedSessions.push_back(sessionId);
+      }
+    }
+    for (auto session : closedSessions) hub->mIdToSession.erase(session);
+    hub->mCallback->onEndpointStopped({id}, Reason::ENDPOINT_GONE);
+  }
 }
 
 void MessageHubManager::onClientDeath(void *cookie) {
@@ -403,16 +440,15 @@ void MessageHubManager::addEmbeddedEndpointLocked(
          endpoint.id.hubId, endpoint.id.id);
     return;
   }
-  it->second.idToEndpoint.insert(
-      {endpoint.id.id, std::make_shared<EndpointInfo>(endpoint)});
+  it->second.idToEndpoint.insert({endpoint.id.id, endpoint});
 }
 
-pw::Result<std::shared_ptr<EndpointInfo>>
-MessageHubManager::getEmbeddedEndpointLocked(const EndpointId &id) {
+pw::Status MessageHubManager::embeddedEndpointExistsLocked(
+    const EndpointId &id) {
   auto hubIt = mIdToEmbeddedHub.find(id.hubId);
   if (hubIt != mIdToEmbeddedHub.end()) {
     auto it = hubIt->second.idToEndpoint.find(id.id);
-    if (it != hubIt->second.idToEndpoint.end()) return it->second;
+    if (it != hubIt->second.idToEndpoint.end()) return pw::OkStatus();
   }
   LOGW("Could not find remote endpoint (%" PRId64 ", %" PRId64 ")", id.hubId,
        id.id);
