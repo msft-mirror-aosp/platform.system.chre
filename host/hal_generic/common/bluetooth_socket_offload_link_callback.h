@@ -19,7 +19,7 @@
 #include <cstddef>
 #include "chre_host/generated/host_messages_generated.h"
 
-namespace android::hardware::bluetooth::socket::common::implementation {
+namespace aidl::android::hardware::bluetooth::socket::impl {
 
 /**
  * The callback interface for handling BT Socket messages from a ChreConnection.
@@ -27,9 +27,9 @@ namespace android::hardware::bluetooth::socket::common::implementation {
  * A BT Socket HAL should implement this interface so that the ChreConnection
  * has an API to pass messages to.
  */
-class BluetoothSocketConnectionCallback {
+class BluetoothSocketOffloadLinkCallback {
  public:
-  virtual ~BluetoothSocketConnectionCallback() = default;
+  virtual ~BluetoothSocketOffloadLinkCallback() = default;
 
   virtual void handleBtSocketOpenResponse(
       const ::chre::fbs::BtSocketOpenResponseT &response) = 0;
@@ -38,4 +38,4 @@ class BluetoothSocketConnectionCallback {
       const ::chre::fbs::BtSocketCloseT &message) = 0;
 };
 
-}  // namespace android::hardware::bluetooth::socket::common::implementation
+}  // namespace aidl::android::hardware::bluetooth::socket::impl

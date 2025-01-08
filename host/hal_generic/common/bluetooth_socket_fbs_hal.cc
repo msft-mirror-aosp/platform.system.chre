@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "bluetooth_socket_base.h"
+#include "bluetooth_socket_fbs_hal.h"
 #include <cstdint>
 
 #include "chre/platform/shared/host_protocol_common.h"
@@ -29,13 +29,13 @@ namespace aidl::android::hardware::bluetooth::socket::impl {
 using ::android::chre::getStringFromByteVector;
 using ndk::ScopedAStatus;
 
-ScopedAStatus BluetoothSocketBase::registerCallback(
+ScopedAStatus BluetoothSocketFbsHal::registerCallback(
     const std::shared_ptr<IBluetoothSocketCallback> &callback) {
   mCallback = callback;
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus BluetoothSocketBase::getSocketCapabilities(
+ScopedAStatus BluetoothSocketFbsHal::getSocketCapabilities(
     SocketCapabilities *result) {
   // TODO(b/379135403): Query the low power processor for these values
   result->leCocCapabilities.numberOfSupportedSockets = 3;
@@ -45,7 +45,7 @@ ScopedAStatus BluetoothSocketBase::getSocketCapabilities(
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus BluetoothSocketBase::opened(const SocketContext &context) {
+ScopedAStatus BluetoothSocketFbsHal::opened(const SocketContext &context) {
   LOGD("Host opened BT offload socket ID=%" PRIu64, context.socketId);
   flatbuffers::FlatBufferBuilder builder(1028);
   if (context.channelInfo.getTag() != ChannelInfo::Tag::leCocChannelInfo) {
@@ -82,7 +82,7 @@ ScopedAStatus BluetoothSocketBase::opened(const SocketContext &context) {
   return ScopedAStatus::ok();
 }
 
-ScopedAStatus BluetoothSocketBase::closed(int64_t socketId) {
+ScopedAStatus BluetoothSocketFbsHal::closed(int64_t socketId) {
   LOGD("Host closed BT offload socket ID=%" PRIu64, socketId);
   flatbuffers::FlatBufferBuilder builder(64);
   auto socketCloseResponse =
@@ -98,7 +98,7 @@ ScopedAStatus BluetoothSocketBase::closed(int64_t socketId) {
   return ScopedAStatus::ok();
 }
 
-void BluetoothSocketBase::handleBtSocketOpenResponse(
+void BluetoothSocketFbsHal::handleBtSocketOpenResponse(
     const ::chre::fbs::BtSocketOpenResponseT &response) {
   std::string reason = std::string(getStringFromByteVector(response.reason));
   LOGD("Got BT Socket open response, socket ID=%" PRIu64
@@ -112,7 +112,7 @@ void BluetoothSocketBase::handleBtSocketOpenResponse(
       reason);
 }
 
-void BluetoothSocketBase::handleBtSocketClose(
+void BluetoothSocketFbsHal::handleBtSocketClose(
     const ::chre::fbs::BtSocketCloseT &message) {
   std::string reason = std::string(getStringFromByteVector(message.reason));
   LOGD("Got BT Socket close, socket ID=%" PRIu64 ", reason=%s",
@@ -124,9 +124,9 @@ void BluetoothSocketBase::handleBtSocketClose(
   mCallback->close(message.socketId, reason);
 }
 
-void BluetoothSocketBase::sendOpenedCompleteMessage(int64_t socketId,
-                                                    Status status,
-                                                    std::string reason) {
+void BluetoothSocketFbsHal::sendOpenedCompleteMessage(int64_t socketId,
+                                                      Status status,
+                                                      std::string reason) {
   if (mCallback == nullptr) {
     LOGE("Sending socket opened complete with no registered callback");
     return;

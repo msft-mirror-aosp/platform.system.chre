@@ -19,7 +19,7 @@
 #include <cstdint>
 
 #include "aidl/android/hardware/bluetooth/socket/BnBluetoothSocket.h"
-#include "bluetooth_socket_connection_callback.h"
+#include "bluetooth_socket_offload_link_callback.h"
 #include "chre_host/generated/host_messages_generated.h"
 #include "hal_chre_socket_connection.h"
 
@@ -30,10 +30,8 @@ namespace aidl::android::hardware::bluetooth::socket::impl {
  *
  * A subclass should initiate mConnection.
  */
-class BluetoothSocketBase
-    : public BnBluetoothSocket,
-      public ::android::hardware::bluetooth::socket::common::implementation::
-          BluetoothSocketConnectionCallback {
+class BluetoothSocketFbsHal : public BnBluetoothSocket,
+                              public BluetoothSocketOffloadLinkCallback {
  public:
   // Functions implementing IBluetoothSocket.
   ndk::ScopedAStatus registerCallback(
@@ -42,7 +40,7 @@ class BluetoothSocketBase
   ndk::ScopedAStatus opened(const SocketContext &context) override;
   ndk::ScopedAStatus closed(int64_t socketId) override;
 
-  // Functions implementing BluetoothSocketConnectionCallback.
+  // Functions implementing BluetoothSocketOffloadLinkCallback.
   void handleBtSocketOpenResponse(
       const ::chre::fbs::BtSocketOpenResponseT &response) override;
   void handleBtSocketClose(const ::chre::fbs::BtSocketCloseT &message) override;

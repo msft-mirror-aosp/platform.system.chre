@@ -21,7 +21,7 @@
 #include <condition_variable>
 #include <mutex>
 
-#include "bluetooth_socket_connection_callback.h"
+#include "bluetooth_socket_offload_link_callback.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
 #include "chre_host/socket_client.h"
@@ -106,6 +106,10 @@ class IChreSocketCallback {
  * A helper class that can be used to connect to the CHRE socket.
  */
 class HalChreSocketConnection {
+ private:
+  using BluetoothSocketOffloadLinkCallback = ::aidl::android::hardware::
+      bluetooth::socket::impl::BluetoothSocketOffloadLinkCallback;
+
  public:
   HalChreSocketConnection(IChreSocketCallback *callback);
 
@@ -146,8 +150,7 @@ class HalChreSocketConnection {
   bool isLoadTransactionPending();
 
   void setBtSocketCallback(
-      ::android::hardware::bluetooth::socket::common::implementation::
-          BluetoothSocketConnectionCallback *btSocketCallback);
+      BluetoothSocketOffloadLinkCallback *btSocketCallback);
 
  private:
   class SocketCallbacks : public ::android::chre::SocketClient::ICallbacks,
@@ -179,14 +182,12 @@ class HalChreSocketConnection {
     void handleBtSocketClose(
         const ::chre::fbs::BtSocketCloseT &message) override;
     void setBtSocketCallback(
-        ::android::hardware::bluetooth::socket::common::implementation::
-            BluetoothSocketConnectionCallback *btSocketCallback);
+        BluetoothSocketOffloadLinkCallback *btSocketCallback);
 
    private:
     HalChreSocketConnection &mParent;
     IChreSocketCallback *mCallback = nullptr;
-    ::android::hardware::bluetooth::socket::common::implementation::
-        BluetoothSocketConnectionCallback *mBtSocketCallback = nullptr;
+    BluetoothSocketOffloadLinkCallback *mBtSocketCallback = nullptr;
     bool mHaveConnected = false;
   };
 

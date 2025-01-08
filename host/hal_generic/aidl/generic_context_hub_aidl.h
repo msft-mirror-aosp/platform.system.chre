@@ -29,7 +29,6 @@
 #include <optional>
 #include <unordered_set>
 
-#include "bluetooth_socket_connection_callback.h"
 #include "chre_host/napp_header.h"
 #include "context_hub_v4_impl.h"
 #include "debug_dump_helper.h"

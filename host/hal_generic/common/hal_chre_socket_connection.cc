@@ -181,8 +181,7 @@ bool HalChreSocketConnection::isLoadTransactionPending() {
 }
 
 void HalChreSocketConnection::setBtSocketCallback(
-    ::android::hardware::bluetooth::socket::common::implementation::
-        BluetoothSocketConnectionCallback *btSocketCallback) {
+    BluetoothSocketOffloadLinkCallback *btSocketCallback) {
   mSocketCallbacks->setBtSocketCallback(btSocketCallback);
 }
 
@@ -347,8 +346,7 @@ void HalChreSocketConnection::SocketCallbacks::handleBtSocketClose(
 }
 
 void HalChreSocketConnection::SocketCallbacks::setBtSocketCallback(
-    ::android::hardware::bluetooth::socket::common::implementation::
-        BluetoothSocketConnectionCallback *btSocketCallback) {
+    BluetoothSocketOffloadLinkCallback *btSocketCallback) {
   mBtSocketCallback = btSocketCallback;
 }
 
