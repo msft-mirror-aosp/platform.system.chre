@@ -41,9 +41,8 @@ class BluetoothSocketFbsHal : public BnBluetoothSocket,
   ndk::ScopedAStatus closed(int64_t socketId) override;
 
   // Functions implementing BluetoothSocketOffloadLinkCallback.
-  void handleBtSocketOpenResponse(
-      const ::chre::fbs::BtSocketOpenResponseT &response) override;
-  void handleBtSocketClose(const ::chre::fbs::BtSocketCloseT &message) override;
+  void handleMessageFromOffloadStack(const void *message,
+                                     size_t length) override;
 
  protected:
   std::shared_ptr<::android::hardware::contexthub::common::implementation::
@@ -54,6 +53,11 @@ class BluetoothSocketFbsHal : public BnBluetoothSocket,
  private:
   void sendOpenedCompleteMessage(int64_t socketId, Status status,
                                  std::string reason);
+
+  void handleBtSocketOpenResponse(
+      const ::chre::fbs::BtSocketOpenResponseT &response);
+
+  void handleBtSocketClose(const ::chre::fbs::BtSocketCloseT &message);
 };
 
 }  // namespace aidl::android::hardware::bluetooth::socket::impl

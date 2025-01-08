@@ -177,10 +177,7 @@ class HalChreSocketConnection {
         const ::chre::fbs::DebugDumpResponseT &response) override;
     bool handleContextHubV4Message(
         const ::chre::fbs::ChreMessageUnion &message) override;
-    void handleBtSocketOpenResponse(
-        const ::chre::fbs::BtSocketOpenResponseT &response) override;
-    void handleBtSocketClose(
-        const ::chre::fbs::BtSocketCloseT &message) override;
+    void handleBluetoothSocketMessage(const void *message, size_t messageLen);
     void setBtSocketCallback(
         BluetoothSocketOffloadLinkCallback *btSocketCallback);
 

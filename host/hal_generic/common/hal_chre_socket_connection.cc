@@ -327,22 +327,9 @@ bool HalChreSocketConnection::SocketCallbacks::handleContextHubV4Message(
   return mCallback->onContextHubV4Message(message);
 }
 
-void HalChreSocketConnection::SocketCallbacks::handleBtSocketOpenResponse(
-    const ::chre::fbs::BtSocketOpenResponseT &response) {
-  if (mBtSocketCallback == nullptr) {
-    ALOGE("Received BT socket message but callback not set");
-  } else {
-    mBtSocketCallback->handleBtSocketOpenResponse(response);
-  }
-}
-
-void HalChreSocketConnection::SocketCallbacks::handleBtSocketClose(
-    const ::chre::fbs::BtSocketCloseT &message) {
-  if (mBtSocketCallback == nullptr) {
-    ALOGE("Received BT socket message but callback not set");
-  } else {
-    mBtSocketCallback->handleBtSocketClose(message);
-  }
+void HalChreSocketConnection::SocketCallbacks::handleBluetoothSocketMessage(
+    const void *message, size_t length) {
+  mBtSocketCallback->handleMessageFromOffloadStack(message, length);
 }
 
 void HalChreSocketConnection::SocketCallbacks::setBtSocketCallback(

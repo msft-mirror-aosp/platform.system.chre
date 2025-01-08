@@ -31,11 +31,12 @@ class BluetoothSocketOffloadLinkCallback {
  public:
   virtual ~BluetoothSocketOffloadLinkCallback() = default;
 
-  virtual void handleBtSocketOpenResponse(
-      const ::chre::fbs::BtSocketOpenResponseT &response) = 0;
-
-  virtual void handleBtSocketClose(
-      const ::chre::fbs::BtSocketCloseT &message) = 0;
+  /**
+   * Handles an encoded message related to an offloaded Bluetooth Socket from
+   * the offload stack.
+   */
+  virtual void handleMessageFromOffloadStack(const void *message,
+                                             size_t length) = 0;
 };
 
 }  // namespace aidl::android::hardware::bluetooth::socket::impl

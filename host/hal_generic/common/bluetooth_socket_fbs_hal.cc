@@ -98,6 +98,31 @@ ScopedAStatus BluetoothSocketFbsHal::closed(int64_t socketId) {
   return ScopedAStatus::ok();
 }
 
+void BluetoothSocketFbsHal::handleMessageFromOffloadStack(const void *message,
+                                                          size_t length) {
+  if (!chre::HostProtocolCommon::verifyMessage(message, length)) {
+    LOGE("Could not decode Bluetooth Socket message");
+  } else {
+    std::unique_ptr<chre::fbs::MessageContainerT> container =
+        chre::fbs::UnPackMessageContainer(message);
+    chre::fbs::ChreMessageUnion &msg = container->message;
+    switch (container->message.type) {
+      case chre::fbs::ChreMessage::BtSocketOpenResponse:
+        handleBtSocketOpenResponse(*msg.AsBtSocketOpenResponse());
+        break;
+
+      case chre::fbs::ChreMessage::BtSocketClose:
+        handleBtSocketClose(*msg.AsBtSocketClose());
+        break;
+
+      default:
+        LOGW("Got unexpected Bluetooth Socket message type %" PRIu8,
+             static_cast<uint8_t>(msg.type));
+        break;
+    }
+  }
+}
+
 void BluetoothSocketFbsHal::handleBtSocketOpenResponse(
     const ::chre::fbs::BtSocketOpenResponseT &response) {
   std::string reason = std::string(getStringFromByteVector(response.reason));
