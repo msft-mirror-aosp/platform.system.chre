@@ -26,13 +26,19 @@ import android.hardware.contexthub.HubEndpointSession;
 import android.hardware.contexthub.HubEndpointSessionResult;
 import android.hardware.contexthub.HubMessage;
 import android.hardware.contexthub.HubServiceInfo;
+import android.hardware.location.ContextHubInfo;
 import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
+import android.hardware.location.NanoAppBinary;
+import android.hardware.location.NanoAppState;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
+
+import com.google.android.utils.chre.ChreTestUtil;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -64,13 +70,19 @@ public class ContextHubEchoEndpointExecutor {
     private static final int ECHO_SERVICE_MAJOR_VERSION = 1;
     private static final int ECHO_SERVICE_MINOR_VERSION = 0;
 
-    private static final long ECHO_NANOAPP_ID = 0x476f6f6754fffffbL;
-
     private static final int TIMEOUT_MESSAGE_SECONDS = 5;
 
     private static final int TIMEOUT_SESSION_OPEN_SECONDS = 5;
+    private static final int TIMEOUT_DISCOVERY_SECONDS = 5;
 
-    private final ContextHubManager mContextHubManager;
+    @NonNull private final ContextHubManager mContextHubManager;
+    @Nullable private final ContextHubInfo mContextHubInfo;
+
+    /** The nanoapp binary which publishes a test echo service */
+    @Nullable private final NanoAppBinary mEchoServiceNanoappBinary;
+
+    /** The ID of the above nanoapp */
+    private static final long ECHO_NANOAPP_ID = 0x476f6f6754fffffbL;
 
     /** A local hub endpoint currently registered with the service. */
     private HubEndpoint mRegisteredEndpoint = null;
@@ -145,6 +157,7 @@ public class ContextHubEchoEndpointExecutor {
         @Override
         public void onEndpointsStarted(@NonNull List<HubDiscoveryInfo> discoveryInfoList) {
             Log.d(TAG, "onEndpointsStarted: discovery size=" + discoveryInfoList.size());
+            mEndpointStartedQueue.add(discoveryInfoList);
         }
 
         @Override
@@ -156,17 +169,53 @@ public class ContextHubEchoEndpointExecutor {
                             + discoveryInfoList.size()
                             + ", reason="
                             + reason);
+            mEndpointStoppedQueue.add(Pair.create(discoveryInfoList, reason));
         }
+
+        public List<HubDiscoveryInfo> waitForStarted() throws InterruptedException {
+            return mEndpointStartedQueue.poll(TIMEOUT_DISCOVERY_SECONDS, TimeUnit.SECONDS);
+        }
+
+        public Pair<List<HubDiscoveryInfo>, Integer> waitForStopped() throws InterruptedException {
+            return mEndpointStoppedQueue.poll(TIMEOUT_DISCOVERY_SECONDS, TimeUnit.SECONDS);
+        }
+
+        private BlockingQueue<List<HubDiscoveryInfo>> mEndpointStartedQueue =
+                new ArrayBlockingQueue<>(1);
+        private BlockingQueue<Pair<List<HubDiscoveryInfo>, Integer>> mEndpointStoppedQueue =
+                new ArrayBlockingQueue<>(1);
     }
 
     public ContextHubEchoEndpointExecutor(ContextHubManager manager) {
+        this(manager, /* info= */ null, /* echoServiceNanoappBinary= */ null);
+    }
+
+    public ContextHubEchoEndpointExecutor(
+            ContextHubManager manager,
+            ContextHubInfo info,
+            NanoAppBinary echoServiceNanoappBinary) {
+        if (echoServiceNanoappBinary != null) {
+            Assert.assertEquals(echoServiceNanoappBinary.getNanoAppId(), ECHO_NANOAPP_ID);
+        }
         mContextHubManager = manager;
+        mContextHubInfo = info;
+        mEchoServiceNanoappBinary = echoServiceNanoappBinary;
     }
 
     /** Deinitialization code that should be called in e.g. @After. */
     public void deinit() {
         if (mRegisteredEndpoint != null) {
             unregisterRegisteredEndpointNoThrow();
+        }
+        if (mContextHubInfo != null && mEchoServiceNanoappBinary != null) {
+            List<NanoAppState> stateList =
+                    ChreTestUtil.queryNanoAppsAssertSuccess(mContextHubManager, mContextHubInfo);
+            for (NanoAppState state : stateList) {
+                if (state.getNanoAppId() == ECHO_NANOAPP_ID) {
+                    ChreTestUtil.unloadNanoAppAssertSuccess(
+                            mContextHubManager, mContextHubInfo, state.getNanoAppId());
+                }
+            }
         }
     }
 
@@ -300,11 +349,11 @@ public class ContextHubEchoEndpointExecutor {
         }
     }
 
-    public void testEndpointDiscovery() {
+    public void testEndpointDiscovery() throws Exception {
         doTestEndpointDiscovery(/* executor= */ null);
     }
 
-    public void testThreadedEndpointDiscovery() {
+    public void testThreadedEndpointDiscovery() throws Exception {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
         doTestEndpointDiscovery(executor);
@@ -315,7 +364,7 @@ public class ContextHubEchoEndpointExecutor {
      *
      * @param executor An optional executor to invoke callbacks on.
      */
-    private void doTestEndpointDiscovery(@Nullable Executor executor) {
+    private void doTestEndpointDiscovery(@Nullable Executor executor) throws Exception {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
             checkApiSupport(
@@ -329,16 +378,15 @@ public class ContextHubEchoEndpointExecutor {
                                     callback, ECHO_SERVICE_DESCRIPTOR));
         }
 
-        // TODO(b/385765805): Add CHRE/dynamic discovery
-
+        checkDynamicEndpointDiscovery(callback);
         checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
-    public void testEndpointIdDiscovery() {
+    public void testEndpointIdDiscovery() throws Exception {
         doTestEndpointIdDiscovery(/* executor= */ null);
     }
 
-    public void testThreadedEndpointIdDiscovery() {
+    public void testThreadedEndpointIdDiscovery() throws Exception {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
         doTestEndpointIdDiscovery(executor);
@@ -349,7 +397,7 @@ public class ContextHubEchoEndpointExecutor {
      *
      * @param executor An optional executor to invoke callbacks on.
      */
-    private void doTestEndpointIdDiscovery(@Nullable Executor executor) {
+    private void doTestEndpointIdDiscovery(@Nullable Executor executor) throws Exception {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
             checkApiSupport(
@@ -363,8 +411,7 @@ public class ContextHubEchoEndpointExecutor {
                                     callback, ECHO_NANOAPP_ID));
         }
 
-        // TODO(b/385765805): Add CHRE/dynamic discovery
-
+        checkDynamicEndpointDiscovery(callback);
         checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
@@ -490,5 +537,47 @@ public class ContextHubEchoEndpointExecutor {
             // Forced assumption
             Assume.assumeTrue("Skipping endpoint test on unsupported device", false);
         }
+    }
+
+    private void checkDynamicEndpointDiscovery(TestDiscoveryCallback callback) throws Exception {
+        // TODO(b/385765805): Enable when ready
+        boolean isDynamicLoadingSupported = false;
+        if (isDynamicLoadingSupported
+                && mContextHubInfo != null
+                && mEchoServiceNanoappBinary != null) {
+            ChreTestUtil.loadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoServiceNanoappBinary);
+            List<HubDiscoveryInfo> discoveryList = callback.waitForStarted();
+            Assert.assertNotNull(discoveryList);
+            Assert.assertNotEquals(discoveryList.size(), 0);
+            Assert.assertTrue(checkNanoappInDiscoveryList(discoveryList));
+
+            ChreTestUtil.unloadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoServiceNanoappBinary.getNanoAppId());
+            Pair<List<HubDiscoveryInfo>, Integer> discoveryListAndReason =
+                    callback.waitForStopped();
+            Assert.assertNotNull(discoveryListAndReason);
+            discoveryList = discoveryListAndReason.first;
+            Assert.assertNotNull(discoveryList);
+            Assert.assertNotEquals(discoveryList.size(), 0);
+            Assert.assertTrue(checkNanoappInDiscoveryList(discoveryList));
+            Integer reason = discoveryListAndReason.second;
+            Assert.assertNotNull(reason);
+            Assert.assertEquals(reason.intValue(), HubEndpoint.REASON_ENDPOINT_STOPPED);
+        }
+    }
+
+    private boolean checkNanoappInDiscoveryList(List<HubDiscoveryInfo> discoveryList) {
+        for (HubDiscoveryInfo info : discoveryList) {
+            Assert.assertNotNull(info);
+            HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
+            Assert.assertNotNull(endpointInfo);
+            HubEndpointInfo.HubEndpointIdentifier id = endpointInfo.getIdentifier();
+            Assert.assertNotNull(id);
+            if (id.getEndpoint() == ECHO_NANOAPP_ID) {
+                return true;
+            }
+        }
+        return false;
     }
 }
