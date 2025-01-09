@@ -53,7 +53,8 @@ class MessageRouterCallbackAllocator : public pw::Allocator {
 
   MessageRouterCallbackAllocator(
       MessageFreeCallback &&callback,
-      pw::Vector<FreeCallbackRecord> &freeCallbackRecords);
+      pw::Vector<FreeCallbackRecord> &freeCallbackRecords,
+      bool doEraseRecord = true);
 
   //! @see pw::Allocator::DoAllocate
   virtual void *DoAllocate(Layout /* layout */) override;
@@ -67,6 +68,13 @@ class MessageRouterCallbackAllocator : public pw::Allocator {
   [[nodiscard]] pw::UniquePtr<std::byte[]> MakeUniqueArrayWithCallback(
       std::byte *ptr, size_t size, Metadata &&metadata);
 
+  //! Gets the free callback record for a message. Also removes the record from
+  //! the vector.
+  //! @param ptr The message pointer
+  //! @return The free callback record for the message, or std::nullopt if not
+  //! found
+  std::optional<FreeCallbackRecord> GetAndRemoveFreeCallbackRecord(void *ptr);
+
  private:
   //! The callback used to free a message
   MessageFreeCallback mCallback;
@@ -76,6 +84,9 @@ class MessageRouterCallbackAllocator : public pw::Allocator {
 
   //! The map of message pointers to free callbacks
   pw::Vector<FreeCallbackRecord> &mFreeCallbackRecords;
+
+  //! Whether to erase the record from the vector after the message is freed
+  const bool mDoEraseRecord;
 };
 
 }  // namespace chre::message

@@ -406,8 +406,8 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
         AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setLegacyMode(true)
                 .setConnectable(false)
-                .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
-                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()
@@ -434,8 +434,8 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
         AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setLegacyMode(true)
                 .setConnectable(false)
-                .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
-                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()
