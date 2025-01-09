@@ -1076,10 +1076,16 @@ void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
   mHalClientManager->handleClientDeath(clientPid);
 }
 
+void MultiClientContextHubBase::onChreDisconnected() {
+  mIsChreReady = false;
+  if (mV4Impl) mV4Impl->onChreDisconnected();
+}
+
 void MultiClientContextHubBase::onChreRestarted() {
   mIsWifiAvailable.reset();
   mEventLogger.logContextHubRestart();
   mHalClientManager->handleChreRestart();
+  if (mV4Impl) mV4Impl->onChreRestarted();
 
   // Unblock APIs BEFORE informing the clients that CHRE has restarted so that
   // any API call triggered by handleContextHubAsyncEvent() can come through.

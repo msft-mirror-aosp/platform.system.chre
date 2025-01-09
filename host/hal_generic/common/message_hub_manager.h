@@ -221,7 +221,8 @@ class MessageHubManager {
   };
 
   // Callback registered to pass up the id of a host hub which disconnected.
-  using HostHubDownCb = std::function<void(int64_t hubId)>;
+  using HostHubDownCb =
+      std::function<void(std::function<pw::Result<int64_t>()> unlinkFn)>;
 
   // The base session id for sessions initiated from host endpoints.
   static constexpr uint16_t kHostSessionIdBase = 0x8000;
@@ -249,6 +250,15 @@ class MessageHubManager {
   std::shared_ptr<HostHub> getHostHub(int64_t id) EXCLUDES(mLock);
 
   /**
+   * Gets the current host hub state to initialize the CHRE proxies
+   *
+   * @param hubs The list of message hubs to populate
+   * @params endpoints The list of endpoints to populate
+   */
+  void getHostState(std::vector<HubInfo> *hubs,
+                    std::vector<EndpointInfo> *endpoints) EXCLUDES(mLock);
+
+  /**
    * Apply the given function to each host hub.
    *
    * @param fn The function to apply.
@@ -264,9 +274,17 @@ class MessageHubManager {
    * @param hubs The list of message hubs
    * @param endpoints The list of endpoints
    */
-  void initEmbeddedHubsAndEndpoints(const std::vector<HubInfo> &hubs,
-                                    const std::vector<EndpointInfo> &endpoints)
+  void initEmbeddedState(const std::vector<HubInfo> &hubs,
+                         const std::vector<EndpointInfo> &endpoints)
       EXCLUDES(mLock);
+
+  /**
+   * Clears cache of embedded state and closes all sessions.
+   *
+   * Called on CHRE disconnection. Invalidates the cache. initEmbeddedState()
+   * must be called again before sessions can be established.
+   */
+  void clearEmbeddedState() EXCLUDES(mLock);
 
   /**
    * Adds the given hub to the cache
@@ -359,6 +377,9 @@ class MessageHubManager {
 
   // Next session id from which to allocate ranges.
   uint16_t mNextSessionId GUARDED_BY(mLock) = kHostSessionIdBase;
+
+  // True if the embedded hub cache is initialized.
+  bool mIdToEmbeddedHubReady GUARDED_BY(mLock) = false;
 };
 
 }  // namespace android::hardware::contexthub::common::implementation

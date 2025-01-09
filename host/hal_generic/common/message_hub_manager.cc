@@ -233,14 +233,11 @@ pw::Status HostHub::unregister() {
 }
 
 pw::Status HostHub::unlinkFromManager() {
-  {
-    std::lock_guard lock(mManager.mLock);
-    PW_TRY(checkValidLocked());  // returns early if already unlinked
-    // TODO(b/378545373): Release the session id range.
-    mManager.mIdToHostHub.erase(kInfo.hubId);
-    mUnlinked = true;
-  }
-  mManager.mHostHubDownCb(kInfo.hubId);
+  std::lock_guard lock(mManager.mLock);
+  PW_TRY(checkValidLocked());  // returns early if already unlinked
+  // TODO(b/378545373): Release the session id range.
+  mManager.mIdToHostHub.erase(kInfo.hubId);
+  mUnlinked = true;
   return pw::OkStatus();
 }
 
@@ -322,6 +319,17 @@ std::shared_ptr<HostHub> MessageHubManager::getHostHub(int64_t id) {
   return {};
 }
 
+void MessageHubManager::getHostState(std::vector<HubInfo> *hubs,
+                                     std::vector<EndpointInfo> *endpoints) {
+  std::lock_guard lock(mLock);
+  for (const auto &[hubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    hubs->push_back(hub->kInfo);
+    for (const auto &[endpointId, endpoint] : hub->mIdToEndpoint)
+      endpoints->push_back(endpoint);
+  }
+}
+
 void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
   std::list<std::shared_ptr<HostHub>> hubs;
   {
@@ -331,17 +339,47 @@ void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
   for (auto &hub : hubs) fn(*hub);
 }
 
-void MessageHubManager::initEmbeddedHubsAndEndpoints(
+void MessageHubManager::initEmbeddedState(
     const std::vector<HubInfo> &hubs,
     const std::vector<EndpointInfo> &endpoints) {
   std::lock_guard lock(mLock);
   mIdToEmbeddedHub.clear();
   for (const auto &hub : hubs) mIdToEmbeddedHub[hub.hubId].info = hub;
   for (const auto &endpoint : endpoints) addEmbeddedEndpointLocked(endpoint);
+  for (auto &[hostHubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    hub->mCallback->onEndpointStarted(endpoints);
+  }
+  mIdToEmbeddedHubReady = true;
+}
+
+void MessageHubManager::clearEmbeddedState() {
+  std::lock_guard lock(mLock);
+  mIdToEmbeddedHubReady = false;
+
+  // Clear embedded hub state, caching the list of now removed endpoints.
+  std::vector<EndpointId> endpoints;
+  for (const auto &[hubId, hub] : mIdToEmbeddedHub) {
+    for (const auto &[endpointId, endpoint] : hub.idToEndpoint)
+      endpoints.push_back(endpoint.id);
+  }
+  mIdToEmbeddedHub.clear();
+
+  // For each host hub, close all sessions and send all removed endpoints.
+  for (const auto &[hubId, hub] : mIdToHostHub) {
+    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
+    for (const auto &[sessionId, session] : hub->mIdToSession)
+      hub->mCallback->onCloseEndpointSession(sessionId, Reason::HUB_RESET);
+    hub->mCallback->onEndpointStopped(endpoints, Reason::HUB_RESET);
+  }
 }
 
 void MessageHubManager::addEmbeddedHub(const HubInfo &hub) {
   std::lock_guard lock(mLock);
+  if (!mIdToEmbeddedHubReady) {
+    LOGW("Skipping embedded hub registration before initEmbeddedState()");
+    return;
+  }
   if (mIdToEmbeddedHub.count(hub.hubId)) return;
   mIdToEmbeddedHub[hub.hubId].info = hub;
 }
@@ -382,6 +420,10 @@ std::vector<HubInfo> MessageHubManager::getEmbeddedHubs() const {
 
 void MessageHubManager::addEmbeddedEndpoint(const EndpointInfo &endpoint) {
   std::lock_guard lock(mLock);
+  if (!mIdToEmbeddedHubReady) {
+    LOGW("Skipping embedded endpoint registration before initEmbeddedState()");
+    return;
+  }
   addEmbeddedEndpointLocked(endpoint);
   for (auto &[hostHubId, hub] : mIdToHostHub) {
     ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
@@ -429,7 +471,12 @@ void MessageHubManager::onClientDeath(void *cookie) {
   std::shared_ptr<HostHub> hub = manager->getHostHub(cookieData->hubId);
   // NOTE: if IEndpointCommunication.unregister() was called simultaneously, hub
   // may be null or unlinkFromManager() may fail.
-  if (hub) hub->unlinkFromManager().IgnoreError();
+  if (hub) {
+    manager->mHostHubDownCb([hubPtr = hub.get()]() -> pw::Result<int64_t> {
+      PW_TRY(hubPtr->unlinkFromManager());
+      return hubPtr->id();
+    });
+  }
 }
 
 void MessageHubManager::addEmbeddedEndpointLocked(

@@ -73,6 +73,7 @@ class ContextHub : public BnContextHub,
       mV4Impl.emplace([this](uint8_t *data, size_t size) {
         return mConnection->sendRawMessage(data, size);
       });
+      mV4Impl->init();
     }
   }
   ::ndk::ScopedAStatus getContextHubs(
