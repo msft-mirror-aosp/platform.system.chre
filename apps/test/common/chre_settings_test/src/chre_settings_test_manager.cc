@@ -58,7 +58,10 @@ uint32_t gAudioStatusTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kAudioStatusTimerCookie = 0xb01dcafe;
 uint32_t gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kRangingRequestRetryTimerCookie = 0x600dcafe;
+uint32_t gWwanRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+constexpr uint32_t kWwanRequestRetryTimerCookie = 0x01d3cafe;
 
+constexpr uint8_t kMaxWwanRequestRetries = 3;
 constexpr uint8_t kMaxWifiRequestRetries = 3;
 
 bool getFeature(const chre_settings_test_TestCommand &command,
@@ -354,6 +357,7 @@ bool Manager::startTestForFeature(Feature feature) {
       break;
 
     case Feature::WWAN_CELL_INFO:
+      mWwanRequestRetries = 0;
       success = chreWwanGetCellInfoAsync(&kWwanCellInfoCookie);
       break;
 
@@ -556,8 +560,27 @@ void Manager::handleWwanCellInfoResult(const chreWwanCellInfoResult *result) {
     LOGE("WWAN cell info result failed: error code %" PRIu8, result->errorCode);
   } else if (mTestSession->featureState == FeatureState::DISABLED &&
              result->cellInfoCount > 0) {
-    LOGE("WWAN cell info result should be empty when disabled: count %" PRIu8,
-         result->cellInfoCount);
+    // Allow some retries to wait for the modem to clear the cell info cache.
+    if (mWwanRequestRetries >= kMaxWwanRequestRetries) {
+      LOGE(
+          "WWAN cell info result should be empty when disabled. Hit retry "
+          "limit (%" PRIu8 "), cell_info_count= %" PRIu8,
+          kMaxWwanRequestRetries, result->cellInfoCount);
+    } else {
+      mWwanRequestRetries++;
+      uint64_t delay = kOneSecondInNanoseconds * 1;
+      gWwanRequestRetryTimerHandle =
+          chreTimerSet(delay, &kWwanRequestRetryTimerCookie, /*oneShot=*/true);
+      if (gWwanRequestRetryTimerHandle != CHRE_TIMER_INVALID) {
+        LOGW("WWAN cell info result should be empty when disabled: count %" PRIu8
+            " Retrying after delay=%" PRIu64 "ns, num_retries=%" PRIu8
+            "/%" PRIu8,
+            result->cellInfoCount, delay, mWwanRequestRetries,
+            kMaxWwanRequestRetries);
+        return;
+      }
+      LOGE("Failed to set WWAN cell info retry timer");
+    }
   } else {
     success = true;
   }
@@ -673,6 +696,14 @@ void Manager::handleTimerEvent(const void *eventData) {
     gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
     requestRangingForFeatureWifiRtt();
     return;
+  }
+
+  if (*cookie == kWwanRequestRetryTimerCookie) {
+    gWwanRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+    if (chreWwanGetCellInfoAsync(&kWwanCellInfoCookie)) {
+      return;
+    }
+    LOGE("Failed to re-request WWAN cell info, rejected for processing");
   }
 
   // Ignore the audio status timer if the suspended status was received.
