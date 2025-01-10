@@ -69,6 +69,7 @@ filegroup {
         "host/common/host_protocol_host.cc",
         "host/common/log.cc",
         "host/hal_generic/common/context_hub_v4_impl.cc",
+        "host/hal_generic/common/host_protocol_host_v4.cc",
         "host/hal_generic/common/message_hub_manager.cc",
         "platform/shared/host_protocol_common.cc",
     ],

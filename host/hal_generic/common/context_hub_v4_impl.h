@@ -51,7 +51,8 @@ using ::ndk::ScopedAStatus;
  */
 class ContextHubV4Impl {
  public:
-  using SendMessageFn = std::function<bool(uint8_t *data, size_t size)>;
+  using SendMessageFn =
+      std::function<bool(const flatbuffers::FlatBufferBuilder &builder)>;
 
   explicit ContextHubV4Impl(SendMessageFn sendMessageFn)
       : mManager(std::bind(&ContextHubV4Impl::unlinkDeadHostHub, this,
@@ -144,8 +145,11 @@ class ContextHubV4Impl {
 class HostHubInterface : public BnEndpointCommunication {
  public:
   explicit HostHubInterface(std::shared_ptr<MessageHubManager::HostHub> hub,
+                            ContextHubV4Impl::SendMessageFn &sendMessageFn,
                             std::mutex &hostHubOpLock)
-      : mHub(std::move(hub)), mHostHubOpLock(hostHubOpLock) {
+      : mHub(std::move(hub)),
+        mSendMessageFn(sendMessageFn),
+        mHostHubOpLock(hostHubOpLock) {
     assert(mHub != nullptr);
   }
   ~HostHubInterface() = default;
@@ -169,6 +173,8 @@ class HostHubInterface : public BnEndpointCommunication {
 
  private:
   std::shared_ptr<MessageHubManager::HostHub> mHub;
+  // see ContextHubV4Impl::mSendMessageFn.
+  ContextHubV4Impl::SendMessageFn &mSendMessageFn;
   std::mutex &mHostHubOpLock;  // see ContextHubV4Impl::mHostHubOpLock.
 };
 
