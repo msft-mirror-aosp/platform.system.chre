@@ -147,7 +147,7 @@ bool HalChreSocketConnection::requestDebugDump() {
   return mClient.sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
-bool HalChreSocketConnection::sendRawMessage(uint8_t *data, size_t size) {
+bool HalChreSocketConnection::sendRawMessage(void *data, size_t size) {
   return mClient.sendMessage(data, size);
 }
 
@@ -180,10 +180,9 @@ bool HalChreSocketConnection::isLoadTransactionPending() {
   return mPendingLoadTransaction.has_value();
 }
 
-void HalChreSocketConnection::setBtSocketCallback(
-    ::android::hardware::bluetooth::socket::common::implementation::
-        BluetoothSocketConnectionCallback *btSocketCallback) {
-  mSocketCallbacks->setBtSocketCallback(btSocketCallback);
+void HalChreSocketConnection::setBluetoothSocketCallback(
+    BluetoothSocketOffloadLinkCallback *btSocketCallback) {
+  mSocketCallbacks->setBluetoothSocketCallback(btSocketCallback);
 }
 
 HalChreSocketConnection::SocketCallbacks::SocketCallbacks(
@@ -328,27 +327,13 @@ bool HalChreSocketConnection::SocketCallbacks::handleContextHubV4Message(
   return mCallback->onContextHubV4Message(message);
 }
 
-void HalChreSocketConnection::SocketCallbacks::handleBtSocketOpenResponse(
-    const ::chre::fbs::BtSocketOpenResponseT &response) {
-  if (mBtSocketCallback == nullptr) {
-    ALOGE("Received BT socket message but callback not set");
-  } else {
-    mBtSocketCallback->handleBtSocketOpenResponse(response);
-  }
+void HalChreSocketConnection::SocketCallbacks::handleBluetoothSocketMessage(
+    const void *message, size_t length) {
+  mBtSocketCallback->handleMessageFromOffloadStack(message, length);
 }
 
-void HalChreSocketConnection::SocketCallbacks::handleBtSocketClose(
-    const ::chre::fbs::BtSocketCloseT &message) {
-  if (mBtSocketCallback == nullptr) {
-    ALOGE("Received BT socket message but callback not set");
-  } else {
-    mBtSocketCallback->handleBtSocketClose(message);
-  }
-}
-
-void HalChreSocketConnection::SocketCallbacks::setBtSocketCallback(
-    ::android::hardware::bluetooth::socket::common::implementation::
-        BluetoothSocketConnectionCallback *btSocketCallback) {
+void HalChreSocketConnection::SocketCallbacks::setBluetoothSocketCallback(
+    BluetoothSocketOffloadLinkCallback *btSocketCallback) {
   mBtSocketCallback = btSocketCallback;
 }
 

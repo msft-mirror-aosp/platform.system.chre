@@ -80,11 +80,8 @@ class IChreMessageHandlers {
     return false;
   }
 
-  virtual void handleBtSocketOpenResponse(
-      const ::chre::fbs::BtSocketOpenResponseT & /*response*/) {}
-
-  virtual void handleBtSocketClose(
-      const ::chre::fbs::BtSocketCloseT & /*message*/) {}
+  virtual void handleBluetoothSocketMessage(const void * /*message*/,
+                                            size_t /*messageLen*/) {}
 };
 
 /**

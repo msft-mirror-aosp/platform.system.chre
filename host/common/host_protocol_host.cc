@@ -88,11 +88,8 @@ bool HostProtocolHost::decodeMessageFromChre(const void *message,
         break;
 
       case fbs::ChreMessage::BtSocketOpenResponse:
-        handlers.handleBtSocketOpenResponse(*msg.AsBtSocketOpenResponse());
-        break;
-
       case fbs::ChreMessage::BtSocketClose:
-        handlers.handleBtSocketClose(*msg.AsBtSocketClose());
+        handlers.handleBluetoothSocketMessage(message, messageLen);
         break;
 
       default:

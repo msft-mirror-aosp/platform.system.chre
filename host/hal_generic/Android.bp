@@ -41,7 +41,7 @@ filegroup {
     name: "hal_aidl_generic_srcs",
     srcs: [
         "aidl/generic_context_hub_aidl.cc",
-        "common/bluetooth_socket_base.cc",
+        "common/bluetooth_socket_fbs_hal.cc",
         "common/hal_chre_socket_connection.cc",
         "common/permissions_util.cc",
     ],

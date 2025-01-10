@@ -231,8 +231,7 @@ class MultiClientContextHubBase
 
   HalClientManager::DeadClientUnlinker mDeadClientUnlinker;
 
-  // HAL is the unique owner of the communication channel to CHRE.
-  std::unique_ptr<ChreConnection> mConnection{};
+  std::shared_ptr<ChreConnection> mConnection{};
 
   // HalClientManager maintains states of hal clients. Each HAL should only have
   // one instance of a HalClientManager.
@@ -293,7 +292,8 @@ class MultiClientContextHubBase
   // guaranteed by the CHRE's disconnection handler.
   std::atomic_bool mIsChreReady = true;
 
-  // TODO(b/333567700): Remove when cleaning up the bug_fix_hal_reliable_message_record flag
+  // TODO(b/333567700): Remove when cleaning up the
+  // bug_fix_hal_reliable_message_record flag
   std::unordered_map<int32_t, HostEndpointId> mReliableMessageMap;
 };
 }  // namespace android::hardware::contexthub::common::implementation
