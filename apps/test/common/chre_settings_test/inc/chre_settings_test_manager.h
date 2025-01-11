@@ -198,6 +198,9 @@ class Manager {
 
   //! The number of retries available for requesting wifi scans before quitting
   uint8_t mWifiRequestRetries;
+
+  //! The number of retries available for requesting cell info before quitting
+  uint8_t mWwanRequestRetries;
 };
 
 // The settings test manager singleton.

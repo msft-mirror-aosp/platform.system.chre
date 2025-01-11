@@ -61,9 +61,10 @@ bool decodeSensorName(pb_istream_t *stream, const pb_field_s *field,
 
 bool encodeSensorName(pb_ostream_t *stream, const pb_field_t *field,
                       void *const *arg) {
-  const SensorNameCallbackData *sensorNameData =
-      static_cast<const SensorNameCallbackData *>(*arg);
-
+  auto *sensorNameData = static_cast<const SensorNameCallbackData *>(*arg);
+  // TODO: b/378499203 - Remove this log after verification
+  LOGD("%s: name addr: %p; size: %zu", __func__, sensorNameData->sensorName,
+       sensorNameData->size);
   if (sensorNameData->size > 0) {
     if (pb_encode_tag_for_field(stream, field) &&
         pb_encode_string(
@@ -456,42 +457,45 @@ void Manager::handleInfoMessage(uint16_t hostEndpoint,
                  chre_cross_validation_sensor_SensorInfoCommand_fields,
                  &infoCommand)) {
     LOGE("Could not decode info command");
-  } else {
-    uint32_t handle;
-    infoResponse.has_chreSensorType = true;
-    infoResponse.chreSensorType = infoCommand.chreSensorType;
-    infoResponse.has_isAvailable = true;
-    infoResponse.isAvailable = false;
-    infoResponse.has_sensorIndex = false;
+    sendInfoResponse(hostEndpoint, infoResponse);
+    return;
+  }
+  LOGI("Global sensor name: %s", mSensorNameArray);
 
-    bool supportsMultiSensors =
-        chreSensorFind(infoCommand.chreSensorType, 1, &handle);
-    for (uint8_t i = 0; chreSensorFind(infoCommand.chreSensorType, i, &handle);
-         i++) {
-      struct chreSensorInfo info;
-      if (!chreGetSensorInfo(handle, &info)) {
-        LOGE("Failed to get sensor info");
-      } else {
-        bool equal = true;
-        if (supportsMultiSensors) {
-          equal = (strcmp(info.sensorName, mSensorNameArray) == 0);
-          LOGI("Got sensor name %s in-name %s, equal %d", info.sensorName,
-               mSensorNameArray, equal);
-        }
-        if (equal) {
-          infoResponse.isAvailable = true;
-          infoResponse.has_sensorIndex = true;
-          infoResponse.sensorIndex = i;
-          SensorNameCallbackData nameData = {.sensorName = info.sensorName,
-                                             .size = strlen(info.sensorName)};
-          infoResponse.sensorName.funcs.encode = encodeSensorName;
-          infoResponse.sensorName.arg = &nameData;
-          break;
-        }
-      }
+  struct SensorNameCallbackData nameData{};
+  uint32_t handle;
+  infoResponse.has_chreSensorType = true;
+  infoResponse.chreSensorType = infoCommand.chreSensorType;
+  infoResponse.has_isAvailable = true;
+  infoResponse.isAvailable = false;
+  infoResponse.has_sensorIndex = false;
+
+  bool supportsMultiSensors =
+      chreSensorFind(infoCommand.chreSensorType, 1, &handle);
+  for (uint8_t i = 0; chreSensorFind(infoCommand.chreSensorType, i, &handle);
+       i++) {
+    struct chreSensorInfo info{};
+    if (!chreGetSensorInfo(handle, &info)) {
+      LOGE("Failed to get sensor info");
+      continue;
+    }
+    LOGI("Found sensor %" PRIu8 ". name: %s", i, info.sensorName);
+    bool hasValidSensor =
+        !supportsMultiSensors || strcmp(info.sensorName, mSensorNameArray) == 0;
+    if (hasValidSensor) {
+      infoResponse.isAvailable = true;
+      infoResponse.has_sensorIndex = true;
+      infoResponse.sensorIndex = i;
+      nameData.sensorName = info.sensorName;
+      nameData.size = strlen(info.sensorName);
+      // TODO: b/378499203 - Remove this log after verification
+      LOGD("%s: name addr: %p; size: %zu", __func__, nameData.sensorName,
+           nameData.size);
+      infoResponse.sensorName.funcs.encode = encodeSensorName;
+      infoResponse.sensorName.arg = &nameData;
+      break;
     }
   }
-
   sendInfoResponse(hostEndpoint, infoResponse);
 }
 
