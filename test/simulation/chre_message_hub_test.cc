@@ -82,6 +82,8 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     }
     return std::nullopt;
   }
+
+  void onSessionOpened(const Session & /* session */) override {}
 };
 
 //! MessageHubCallback that stores the data passed to onMessageReceived and
@@ -89,7 +91,7 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
 class MessageHubCallbackStoreData : public MessageHubCallbackBase {
  public:
   MessageHubCallbackStoreData(Message *message, Session *session)
-      : mMessage(message), mSession(session) {}
+      : mMessage(message), mSession(session), mMessageHub(nullptr) {}
 
   bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                          uint32_t messageType, uint32_t messagePermissions,
@@ -108,15 +110,26 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
     return true;
   }
 
-  void onSessionClosed(const Session &session) override {
+  void onSessionClosed(const Session &session, Reason /* reason */) override {
     if (mSession != nullptr) {
       *mSession = session;
     }
   }
 
+  void onSessionOpenRequest(const Session &session) override {
+    if (mMessageHub != nullptr) {
+      mMessageHub->onSessionOpenComplete(session.sessionId);
+    }
+  }
+
+  void setMessageHub(MessageRouter::MessageHub *messageHub) {
+    mMessageHub = messageHub;
+  }
+
  private:
   Message *mMessage;
   Session *mSession;
+  MessageRouter::MessageHub *mMessageHub;
 };
 
 // Creates a message with data from 1 to messageSize
@@ -228,6 +241,7 @@ TEST_F(ChreMessageHubTest, NanoappGetsEndpointInfo) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test getting endpoint info
   std::unique_lock<std::mutex> lock(mutex);
@@ -371,6 +385,7 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Open the session from the other hub:1 to the nanoapp
   SessionId sessionId = messageHub->openSession(kEndpointInfos[0].id,
@@ -432,6 +447,7 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Open the session from the other hub:1 to the nanoapp
   SessionId sessionId = messageHub->openSession(kEndpointInfos[0].id,
@@ -513,9 +529,6 @@ class SessionAndMessageTestApp : public TestNanoapp {
           EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
           EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
           EXPECT_EQ(sessionInfo->sessionId, mSessionId);
-          EXPECT_EQ(
-              sessionInfo->reason,
-              chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
         }
         mCondVar.notify_one();
         break;
@@ -654,6 +667,7 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);
@@ -697,6 +711,7 @@ TEST_F(ChreMessageHubTest, NanoappOpensDefaultSessionWithGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening the default session
   std::unique_lock<std::mutex> lock(mutex);
@@ -741,6 +756,7 @@ TEST_F(ChreMessageHubTest, NanoappClosesSessionWithGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);
@@ -782,6 +798,7 @@ TEST_F(ChreMessageHubTest, OtherHubClosesNanoappSessionWithGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);
@@ -823,11 +840,14 @@ TEST_F(ChreMessageHubTest, NanoappGetSessionInfoForNonPartySession) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr, &session);
   std::optional<MessageRouter::MessageHub> messageHub2 =
       MessageRouterSingleton::get()->registerMessageHub(
-          "OTHER_TEST_HUB2", kOtherMessageHubId + 1, callback);
+          "OTHER_TEST_HUB2", kOtherMessageHubId + 1, callback2);
   ASSERT_TRUE(messageHub2.has_value());
+  callback2.setMessageHub(&(*messageHub2));
 
   // Open a session not involving the nanoapps
   sessionId = messageHub->openSession(kEndpointInfos[0].id,
@@ -861,6 +881,7 @@ TEST_F(ChreMessageHubTest, NanoappSendsMessageToGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);
@@ -905,6 +926,7 @@ TEST_F(ChreMessageHubTest,
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);
@@ -948,6 +970,7 @@ TEST_F(ChreMessageHubTest, NanoappGetsMessageFromGenericEndpoint) {
       MessageRouterSingleton::get()->registerMessageHub(
           "OTHER_TEST_HUB", kOtherMessageHubId, callback);
   ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
 
   // Test opening session
   std::unique_lock<std::mutex> lock(mutex);

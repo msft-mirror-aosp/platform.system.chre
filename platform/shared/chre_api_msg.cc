@@ -104,13 +104,11 @@ DLL_EXPORT bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
 
     return EventLoopManagerSingleton::get()
         ->getChreMessageHubManager()
-        .openDefaultSessionAsync(nanoapp->getInstanceId(), nanoapp->getAppId(),
-                                 endpointId);
+        .openDefaultSessionAsync(nanoapp->getAppId(), endpointId);
   }
   return EventLoopManagerSingleton::get()
       ->getChreMessageHubManager()
-      .openSessionAsync(nanoapp->getInstanceId(), nanoapp->getAppId(), hubId,
-                        endpointId);
+      .openSessionAsync(nanoapp->getAppId(), hubId, endpointId);
 #else
   UNUSED_VAR(hubId);
   UNUSED_VAR(endpointId);

@@ -67,8 +67,7 @@ class ChreMessageHubManager
   //! asynchronous manner.
   //! @return The session ID or SESSION_ID_INVALID if the session could
   //! not be opened
-  bool openSessionAsync(uint16_t nanoappInstanceId,
-                        message::EndpointId fromEndpointId,
+  bool openSessionAsync(message::EndpointId fromEndpointId,
                         message::MessageHubId toHubId,
                         message::EndpointId toEndpointId);
 
@@ -77,8 +76,7 @@ class ChreMessageHubManager
   //! session with the first endpoint that matches.
   //! @return The session ID or SESSION_ID_INVALID if the session could
   //! not be opened
-  bool openDefaultSessionAsync(uint16_t nanoappInstanceId,
-                               message::EndpointId fromEndpointId,
+  bool openDefaultSessionAsync(message::EndpointId fromEndpointId,
                                message::EndpointId toEndpointId);
 
   //! Sends a reliable message on the given session. If this function fails,
@@ -92,6 +90,10 @@ class ChreMessageHubManager
   //! Converts a message::EndpointType to a CHRE endpoint type
   //! @return the CHRE endpoint type
   chreMsgEndpointType toChreEndpointType(message::EndpointType type);
+
+  //! Converts a message::Reason to a CHRE endpoint reason
+  //! @return the CHRE endpoint reason
+  chreMsgEndpointReason toChreEndpointReason(message::Reason reason);
 
  private:
   //! Data to be passed to the message callback
@@ -110,6 +112,7 @@ class ChreMessageHubManager
   //! Data to be passed to the session closed callback
   struct SessionCallbackData {
     chreMsgSessionInfo sessionData;
+    bool isClosed;
     uint64_t nanoappId;
   };
 
@@ -120,9 +123,9 @@ class ChreMessageHubManager
       SystemCallbackType type,
       UniquePtr<ChreMessageHubManager::MessageCallbackData> &&data);
 
-  //! Callback to process session closed event for a nanoapp - used by the event
-  //! loop
-  static void onSessionClosedCallback(
+  //! Callback to process session closed or opened event for a nanoapp - used
+  //! by the event loop
+  static void onSessionStateChangedCallback(
       SystemCallbackType type,
       UniquePtr<ChreMessageHubManager::SessionCallbackData> &&data);
 
@@ -133,6 +136,11 @@ class ChreMessageHubManager
   //! Callback passed to deferCallback when handling a message free callback
   static void handleMessageFreeCallback(uint16_t type, void *data,
                                         void *extraData);
+
+  //! Called on a state change for a session - open or close. If reason is
+  //! not provided, the state change is open, else it is closed.
+  void onSessionStateChanged(const message::Session &session,
+                             std::optional<message::Reason> reason);
 
   //! @return The free callback record from the callback allocator.
   std::optional<message::MessageRouterCallbackAllocator<
@@ -147,7 +155,10 @@ class ChreMessageHubManager
                          uint32_t messageType, uint32_t messagePermissions,
                          const message::Session &session,
                          bool sentBySessionInitiator) override;
-  void onSessionClosed(const message::Session &session) override;
+  void onSessionOpenRequest(const message::Session &session) override;
+  void onSessionOpened(const message::Session &session) override;
+  void onSessionClosed(const message::Session &session,
+                       message::Reason reason) override;
   void forEachEndpoint(const pw::Function<bool(const message::EndpointInfo &)>
                            &function) override;
   std::optional<message::EndpointInfo> getEndpointInfo(
