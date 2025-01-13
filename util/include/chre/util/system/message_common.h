@@ -65,6 +65,20 @@ enum class EndpointPermission : uint32_t {
   BLE = 1 << 4,
 };
 
+//! The reason for closing a session
+enum class Reason : uint8_t {
+  UNSPECIFIED = 0,
+  OUT_OF_MEMORY,
+  TIMEOUT,
+  OPEN_ENDPOINT_SESSION_REQUEST_REJECTED,
+  CLOSE_ENDPOINT_SESSION_REQUESTED,
+  ENDPOINT_INVALID,
+  ENDPOINT_GONE,
+  ENDPOINT_CRASHED,
+  HUB_RESET,
+  PERMISSION_DENIED,
+};
+
 //! Represents a single endpoint connected to a MessageHub
 struct Endpoint {
   MessageHubId messageHubId;
@@ -82,12 +96,13 @@ struct Endpoint {
 //! Represents a session between two endpoints
 struct Session {
   SessionId sessionId;
+  bool isActive;
   Endpoint initiator;
   Endpoint peer;
 
   bool operator==(const Session &other) const {
     return sessionId == other.sessionId && initiator == other.initiator &&
-           peer == other.peer;
+           peer == other.peer && isActive == other.isActive;
   }
 
   bool operator!=(const Session &other) const {
