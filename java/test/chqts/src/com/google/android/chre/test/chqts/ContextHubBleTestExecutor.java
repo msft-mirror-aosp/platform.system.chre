@@ -346,10 +346,10 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     }
 
     /**
-     * Returns true if the required BLE capabilities and filter capabilities exist,
-     * otherwise returns false.
+     * Returns true if the required BLE capabilities and filter capabilities exist, otherwise
+     * returns false.
      */
-    public boolean doesNecessaryBleCapabilitiesExist() throws Exception {
+    public boolean doNecessaryBleCapabilitiesExist() throws Exception {
         if (mBluetoothLeScanner == null) {
             return false;
         }
@@ -369,10 +369,10 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     }
 
     /**
-     * Returns true if the required BLE capabilities and filter capabilities exist
-     * on the AP, otherwise returns false.
+     * Returns true if the required BLE capabilities and filter capabilities exist on the AP,
+     * otherwise returns false.
      */
-    public boolean doesNecessaryBleCapabilitiesExistOnTheAP() throws Exception {
+    public boolean doNecessaryBleCapabilitiesExistOnTheAP() throws Exception {
         return mBluetoothLeAdvertiser != null;
     }
 
