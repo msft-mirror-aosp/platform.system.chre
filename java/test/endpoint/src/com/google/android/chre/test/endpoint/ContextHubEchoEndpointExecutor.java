@@ -438,9 +438,12 @@ public class ContextHubEchoEndpointExecutor {
     }
 
     /**
-     * A test to see if a echo test service can be registered by the application. For CHRE-capable
-     * devices, we will also confirm that a connection can be started from the embedded client and
-     * echo works as intended.
+     * A test to see if a echo test service can be registered by the application.
+     *
+     * <p>For CHRE-capable devices, we will also confirm that a connection can be started from the
+     * embedded client and echo works as intended. The echo client nanoapp is expected to open a
+     * session with the host-side service when the nanoapp is loaded, and sends a message to echo
+     * back to the nanoapp once the session is opened.
      */
     public void testApplicationEchoService() throws Exception {
         Collection<HubServiceInfo> serviceList = new ArrayList<>();
@@ -455,9 +458,10 @@ public class ContextHubEchoEndpointExecutor {
         serviceList.add(info);
 
         TestLifecycleCallback callback = new TestLifecycleCallback(/* acceptSession= */ true);
+        TestMessageCallback messageCallback = new TestMessageCallback();
         mRegisteredEndpoint =
                 registerDefaultEndpoint(
-                        callback, /* messageCallback= */ null, /* executor= */ null, serviceList);
+                        callback, messageCallback, /* executor= */ null, serviceList);
 
         // TODO(b/385765805): Enable when ready
         boolean isDynamicLoadingSupported = false;
@@ -473,7 +477,18 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(session);
             Log.d(TAG, "Session open: " + session);
 
-            // TODO(b/385765805): Test message can be echoed
+            HubMessage message = messageCallback.waitForMessage();
+            Assert.assertNotNull(message);
+            HubMessage outMessage =
+                    new HubMessage.Builder(message.getMessageType(), message.getMessageBody())
+                            .setResponseRequired(true)
+                            .build();
+            ContextHubTransaction<Void> txn = session.sendMessage(outMessage);
+            Assert.assertNotNull(txn);
+            ContextHubTransaction.Response<Void> txnResponse =
+                    txn.waitForResponse(TIMEOUT_MESSAGE_SECONDS, TimeUnit.SECONDS);
+            Assert.assertNotNull(txnResponse);
+            Assert.assertEquals(txnResponse.getResult(), ContextHubTransaction.RESULT_SUCCESS);
 
             ChreTestUtil.unloadNanoAppAssertSuccess(
                     mContextHubManager, mContextHubInfo, mEchoClientNanoappBinary.getNanoAppId());
