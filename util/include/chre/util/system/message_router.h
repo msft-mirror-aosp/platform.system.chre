@@ -68,8 +68,19 @@ class MessageRouter {
                                    const Session &session,
                                    bool sentBySessionInitiator) = 0;
 
+    //! Callback called when a session has been requested to be opened. The
+    //! message hub should call onSessionOpenComplete or closeSession to
+    //! accept or reject the session, respectively.
+    //! This function is called before returning from openSession in the
+    //! requestor hub.
+    virtual void onSessionOpenRequest(const Session &session) = 0;
+
+    //! Callback called when the peer message hub has accepted the session
+    //! and the session is now open for messages
+    virtual void onSessionOpened(const Session &session) = 0;
+
     //! Callback called when the session is closed
-    virtual void onSessionClosed(const Session &session) = 0;
+    virtual void onSessionClosed(const Session &session, Reason reason) = 0;
 
     //! Callback called to iterate over all endpoints connected to the
     //! MessageHub. Underlying endpoint storage must not change during this
@@ -105,17 +116,26 @@ class MessageRouter {
     MessageHub(MessageHub &&other);
     MessageHub &operator=(MessageHub &&other);
 
+    //! Accepts the session open request from the peer message hub.
+    //! onSessionOpened will be called on both hubs.
+    void onSessionOpenComplete(SessionId sessionId);
+
     //! Opens a session from an endpoint connected to the current MessageHub
-    //! to the listed MessageHub ID and endpoint ID
+    //! to the listed MessageHub ID and endpoint ID.
+    //! onSessionOpenRequest will be called to request the session to be
+    //! opened. Once the peer message hub calls onSessionOpenComplete or
+    //! closeSession, onSessionOpened or onSessionClosed will be called,
+    //! depending on the result.
     //! @return The session ID or SESSION_ID_INVALID if the session could
     //! not be opened
     SessionId openSession(EndpointId fromEndpointId,
                           MessageHubId toMessageHubId, EndpointId toEndpointId);
 
-    //! Closes the session with sessionId
+    //! Closes the session with sessionId and reason
     //! @return true if the session was closed, false if the session was not
     //! found
-    bool closeSession(SessionId sessionId);
+    bool closeSession(SessionId sessionId,
+                      Reason reason = Reason::CLOSE_ENDPOINT_SESSION_REQUESTED);
 
     //! Returns a session if it exists
     //! @return The session or std::nullopt if the session was not found
@@ -210,18 +230,36 @@ class MessageRouter {
   //! was not found.
   bool unregisterMessageHub(MessageHubId fromMessageHubId);
 
+  //! Accepts the session open request from the peer message hub.
+  //! onSessionOpened will be called on both hubs.
+  void onSessionOpenComplete(MessageHubId fromMessageHubId,
+                             SessionId sessionId);
+
   //! Opens a session from an endpoint connected to the current MessageHub
-  //! to the listed MessageHub ID and endpoint ID
+  //! to the listed MessageHub ID and endpoint ID.
+  //! onSessionOpenRequest will be called to request the session to be
+  //! opened. Once the peer message hub calls onSessionOpenComplete or
+  //! closeSession, onSessionOpened or onSessionClosed will be called,
+  //! depending on the result.
   //! @return The session ID or SESSION_ID_INVALID if the session could not be
   //! opened
   SessionId openSession(MessageHubId fromMessageHubId,
                         EndpointId fromEndpointId, MessageHubId toMessageHubId,
                         EndpointId toEndpointId);
 
-  //! Closes the session with sessionId
+  //! Closes the session with sessionId and reason
   //! @return true if the session was closed, false if the session was not
   //! found
-  bool closeSession(MessageHubId fromMessageHubId, SessionId sessionId);
+  bool closeSession(MessageHubId fromMessageHubId, SessionId sessionId,
+                    Reason reason = Reason::CLOSE_ENDPOINT_SESSION_REQUESTED);
+
+  //! Finalizes the session with sessionId and reason. If reason is provided,
+  //! the session will be closed, else the session will be fully opened.
+  //! @return true if the session was finalized, false if the session was not
+  //! found or one of the message hubs were not found or not linked to the
+  //! session.
+  bool finalizeSession(MessageHubId fromMessageHubId, SessionId sessionId,
+                       std::optional<Reason> reason);
 
   //! Returns a session if it exists
   //! @return The session or std::nullopt if the session was not found

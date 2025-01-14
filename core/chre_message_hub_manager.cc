@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "chre/target_platform/log.h"
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 #include "chre/core/chre_message_hub_manager.h"
@@ -23,7 +24,6 @@
 #include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
-#include "chre/util/macros.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
 #include "pw_allocator/unique_ptr.h"
@@ -42,6 +42,7 @@ using ::chre::message::MessageHubId;
 using ::chre::message::MessageHubInfo;
 using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
+using ::chre::message::Reason;
 using ::chre::message::Session;
 using ::chre::message::SESSION_ID_INVALID;
 using ::chre::message::SessionId;
@@ -113,8 +114,7 @@ bool ChreMessageHubManager::getSessionInfo(EndpointId fromEndpointId,
   return true;
 }
 
-bool ChreMessageHubManager::openSessionAsync(uint16_t nanoappInstanceId,
-                                             EndpointId fromEndpointId,
+bool ChreMessageHubManager::openSessionAsync(EndpointId fromEndpointId,
                                              MessageHubId toHubId,
                                              EndpointId toEndpointId) {
   SessionId sessionId =
@@ -123,34 +123,10 @@ bool ChreMessageHubManager::openSessionAsync(uint16_t nanoappInstanceId,
           .getMessageHub()
           .openSession(fromEndpointId, toHubId,
                        toEndpointId);
-  if (sessionId == SESSION_ID_INVALID) {
-    return false;
-  }
-
-  auto sessionEvent = MakeUnique<chreMsgSessionInfo>();
-  if (sessionEvent.isNull()) {
-    LOG_OOM();
-    return false;
-  }
-
-  sessionEvent->hubId = toHubId;
-  sessionEvent->endpointId = toEndpointId;
-  // TODO(b/373417024): Add service descriptor after MessageRouter changes
-  sessionEvent->serviceDescriptor[0] = '\0';
-  sessionEvent->sessionId = sessionId;
-  // TODO(b/373417024): Add reason after MessageRouter changes
-  sessionEvent->reason =
-      chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
-
-  EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-      sessionId == SESSION_ID_INVALID ? CHRE_EVENT_MSG_SESSION_CLOSED
-                                      : CHRE_EVENT_MSG_SESSION_OPENED,
-      sessionEvent.release(), freeEventDataCallback, nanoappInstanceId);
-  return true;
+  return sessionId != SESSION_ID_INVALID;
 }
 
-bool ChreMessageHubManager::openDefaultSessionAsync(uint16_t nanoappInstanceId,
-                                                    EndpointId fromEndpointId,
+bool ChreMessageHubManager::openDefaultSessionAsync(EndpointId fromEndpointId,
                                                     EndpointId toEndpointId) {
   struct SearchContext {
     MessageHubId toMessageHubId = MESSAGE_HUB_ID_INVALID;
@@ -170,8 +146,7 @@ bool ChreMessageHubManager::openDefaultSessionAsync(uint16_t nanoappInstanceId,
       });
 
   return context.toMessageHubId != MESSAGE_HUB_ID_INVALID &&
-         openSessionAsync(nanoappInstanceId, fromEndpointId,
-                          context.toMessageHubId, toEndpointId);
+         openSessionAsync(fromEndpointId, context.toMessageHubId, toEndpointId);
 }
 
 bool ChreMessageHubManager::sendMessage(
@@ -217,6 +192,37 @@ chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
   }
 }
 
+chreMsgEndpointReason ChreMessageHubManager::toChreEndpointReason(
+    message::Reason reason) {
+  switch (reason) {
+    case message::Reason::UNSPECIFIED:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
+    case message::Reason::OUT_OF_MEMORY:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_OUT_OF_MEMORY;
+    case message::Reason::TIMEOUT:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_TIMEOUT;
+    case message::Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED:
+      return chreMsgEndpointReason::
+          CHRE_MSG_ENDPOINT_REASON_OPEN_ENDPOINT_SESSION_REQUEST_REJECTED;
+    case message::Reason::CLOSE_ENDPOINT_SESSION_REQUESTED:
+      return chreMsgEndpointReason::
+          CHRE_MSG_ENDPOINT_REASON_CLOSE_ENDPOINT_SESSION_REQUESTED;
+    case message::Reason::ENDPOINT_INVALID:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_INVALID;
+    case message::Reason::ENDPOINT_GONE:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_GONE;
+    case message::Reason::ENDPOINT_CRASHED:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_CRASHED;
+    case message::Reason::HUB_RESET:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_HUB_RESET;
+    case message::Reason::PERMISSION_DENIED:
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_PERMISSION_DENIED;
+    default:
+      LOGE("Unknown endpoint reason: %" PRIu8, reason);
+      return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
+  }
+}
+
 void ChreMessageHubManager::onMessageToNanoappCallback(
     SystemCallbackType /* type */, UniquePtr<MessageCallbackData> &&data) {
   bool success = false;
@@ -257,7 +263,7 @@ void ChreMessageHubManager::onMessageToNanoappCallback(
   }
 }
 
-void ChreMessageHubManager::onSessionClosedCallback(
+void ChreMessageHubManager::onSessionStateChangedCallback(
     SystemCallbackType /* type */, UniquePtr<SessionCallbackData> &&data) {
   Nanoapp *nanoapp =
       EventLoopManagerSingleton::get()->getEventLoop().findNanoappByAppId(
@@ -271,8 +277,9 @@ void ChreMessageHubManager::onSessionClosedCallback(
 
   bool success =
       EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
-          CHRE_EVENT_MSG_SESSION_CLOSED, &data->sessionData,
-          nanoapp->getInstanceId());
+          data->isClosed ? CHRE_EVENT_MSG_SESSION_CLOSED
+                         : CHRE_EVENT_MSG_SESSION_OPENED,
+          &data->sessionData, nanoapp->getInstanceId());
   if (!success) {
     LOGE("Unable to process session closed event to nanoapp with ID 0x%" PRIx64,
          nanoapp->getAppId());
@@ -280,13 +287,8 @@ void ChreMessageHubManager::onSessionClosedCallback(
 }
 
 void ChreMessageHubManager::onMessageFreeCallback(
-    std::byte *message, size_t length,
-    MessageFreeCallbackData&& callbackData) {
-  UNUSED_VAR(length);
-  if (callbackData.freeCallback == nullptr) {
-    return;
-  }
-
+    std::byte *message, size_t /* length */,
+    MessageFreeCallbackData && /* callbackData */) {
   EventLoopManagerSingleton::get()->deferCallback(
       SystemCallbackType::EndpointMessageFreeEvent,
       message,
@@ -302,12 +304,56 @@ void ChreMessageHubManager::handleMessageFreeCallback(uint16_t /* type */,
                     ->getChreMessageHubManager()
                     .getAndRemoveFreeCallbackRecord(data);
   if (!record.has_value()) {
+    LOGE("Unable to find free callback record for message with message: %p",
+         data);
+    return;
+  }
+
+  if (record->metadata.freeCallback == nullptr) {
     return;
   }
 
   EventLoopManagerSingleton::get()->getEventLoop().invokeMessageFreeFunction(
       record->metadata.nanoappId, record->metadata.freeCallback,
       record->message, record->messageSize);
+}
+
+void ChreMessageHubManager::onSessionStateChanged(
+    const message::Session &session, std::optional<message::Reason> reason) {
+  auto sessionCallbackData = MakeUnique<SessionCallbackData>();
+  if (sessionCallbackData.isNull()) {
+    FATAL_ERROR_OOM();
+    return;
+  }
+
+  Endpoint otherParty;
+  uint64_t nanoappId;
+  if (session.initiator.messageHubId == kChreMessageHubId) {
+    otherParty = session.peer;
+    nanoappId = session.initiator.endpointId;
+  } else {
+    otherParty = session.initiator;
+    nanoappId = session.peer.endpointId;
+  }
+
+  sessionCallbackData->nanoappId = nanoappId;
+  sessionCallbackData->isClosed = reason.has_value();
+  sessionCallbackData->sessionData = {
+      .hubId = otherParty.messageHubId,
+      .endpointId = otherParty.endpointId,
+      .sessionId = session.sessionId,
+  };
+  sessionCallbackData->sessionData.reason =
+      reason.has_value()
+          ? toChreEndpointReason(*reason)
+          : chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
+  // TODO(b/373417024): Add service descriptor after MessageRouter changes
+  sessionCallbackData->sessionData.serviceDescriptor[0] = '\0';
+
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::EndpointSessionStateChangedEvent,
+      std::move(sessionCallbackData),
+      ChreMessageHubManager::onSessionStateChangedCallback);
 }
 
 bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
@@ -338,38 +384,17 @@ bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
       ChreMessageHubManager::onMessageToNanoappCallback);
 }
 
-void ChreMessageHubManager::onSessionClosed(const Session &session) {
-  auto sessionClosedCallbackData = MakeUnique<SessionCallbackData>();
-  if (sessionClosedCallbackData.isNull()) {
-    LOG_OOM();
-    return;
-  }
+void ChreMessageHubManager::onSessionOpenRequest(const Session &session) {
+  mChreMessageHub.onSessionOpenComplete(session.sessionId);
+}
 
-  Endpoint otherParty;
-  uint64_t nanoappId;
-  if (session.initiator.messageHubId == kChreMessageHubId) {
-    otherParty = session.peer;
-    nanoappId = session.initiator.endpointId;
-  } else {
-    otherParty = session.initiator;
-    nanoappId = session.peer.endpointId;
-  }
+void ChreMessageHubManager::onSessionOpened(const Session &session) {
+  onSessionStateChanged(session, /* reason= */ std::nullopt);
+}
 
-  sessionClosedCallbackData->nanoappId = nanoappId;
-  // TODO(b/373417024): When available, add reason code here.
-  sessionClosedCallbackData->sessionData = {
-      .hubId = otherParty.messageHubId,
-      .endpointId = otherParty.endpointId,
-      .sessionId = session.sessionId,
-      .reason = chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED,
-  };
-  // TODO(b/373417024): Add service descriptor after MessageRouter changes
-  sessionClosedCallbackData->sessionData.serviceDescriptor[0] = '\0';
-
-  EventLoopManagerSingleton::get()->deferCallback(
-      SystemCallbackType::EndpointSessionClosedEvent,
-      std::move(sessionClosedCallbackData),
-      ChreMessageHubManager::onSessionClosedCallback);
+void ChreMessageHubManager::onSessionClosed(const Session &session,
+                                            Reason reason) {
+  onSessionStateChanged(session, reason);
 }
 
 void ChreMessageHubManager::forEachEndpoint(

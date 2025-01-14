@@ -166,7 +166,7 @@ public class ContextHubEchoEndpointExecutor {
     /** Deinitialization code that should be called in e.g. @After. */
     public void deinit() {
         if (mRegisteredEndpoint != null) {
-            unregisterEndpointNoThrow(mRegisteredEndpoint);
+            unregisterRegisteredEndpointNoThrow();
         }
     }
 
@@ -206,7 +206,7 @@ public class ContextHubEchoEndpointExecutor {
     /** Validates that a local endpoint can be registered/unregistered. */
     public void testDefaultEndpointRegistration() throws Exception {
         mRegisteredEndpoint = registerDefaultEndpoint();
-        unregisterEndpoint(mRegisteredEndpoint);
+        unregisterRegisteredEndpoint();
     }
 
     /**
@@ -220,7 +220,7 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(targetEndpointInfo);
             mRegisteredEndpoint = registerDefaultEndpoint();
             openSessionOrFailNoDescriptor(mRegisteredEndpoint, targetEndpointInfo);
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
@@ -241,7 +241,7 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(session);
             session.close();
 
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
@@ -296,7 +296,7 @@ public class ContextHubEchoEndpointExecutor {
                     Arrays.equals(message.getMessageBody(), response.getMessageBody()));
             session.close();
 
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
@@ -392,7 +392,7 @@ public class ContextHubEchoEndpointExecutor {
 
         // TODO(b/385765805): Add CHRE client and test echo
 
-        unregisterEndpoint(mRegisteredEndpoint);
+        unregisterRegisteredEndpoint();
     }
 
     private void printHubDiscoveryInfo(HubDiscoveryInfo info) {
@@ -470,16 +470,17 @@ public class ContextHubEchoEndpointExecutor {
         checkApiSupport((manager) -> manager.openSession(endpoint, target));
     }
 
-    private void unregisterEndpointNoThrow(HubEndpoint endpoint) {
+    private void unregisterRegisteredEndpointNoThrow() {
         try {
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         } catch (Exception e) {
             Log.e(TAG, "Exception when unregistering endpoint", e);
         }
     }
 
-    private void unregisterEndpoint(HubEndpoint endpoint) throws AssertionError {
-        checkApiSupport((manager) -> manager.unregisterEndpoint(endpoint));
+    private void unregisterRegisteredEndpoint() throws AssertionError {
+        checkApiSupport((manager) -> manager.unregisterEndpoint(mRegisteredEndpoint));
+        mRegisteredEndpoint = null;
     }
 
     private void checkApiSupport(Consumer<ContextHubManager> consumer) {

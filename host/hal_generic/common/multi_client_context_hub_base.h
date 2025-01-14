@@ -104,9 +104,7 @@ class MultiClientContextHubBase
   void handleMessageFromChre(const unsigned char *messageBuffer,
                              size_t messageLen) override;
   void onChreRestarted() override;
-  void onChreDisconnected() override {
-    mIsChreReady = false;
-  }
+  void onChreDisconnected() override;
 
   // Functions for dumping debug information.
   binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
