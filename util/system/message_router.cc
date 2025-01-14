@@ -290,7 +290,7 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     }
 
     if (!foundSession) {
-      mSessions.push_back(std::move(insertSession));
+      mSessions.push_back(insertSession);
       ++mNextSessionId;
     }
   }
