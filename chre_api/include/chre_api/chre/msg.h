@@ -56,6 +56,7 @@
 #include <stdlib.h>
 
 #include <chre/common.h>
+#include <chre/event.h>
 #include <chre/toolchain.h>
 
 #ifdef __cplusplus
