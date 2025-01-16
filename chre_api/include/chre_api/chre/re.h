@@ -73,11 +73,15 @@ extern "C" {
  */
 
 //! None of the optional capabilities are supported
-#define CHRE_CAPABILITIES_NONE                 (UINT32_C(0))
+#define CHRE_CAPABILITIES_NONE                          (UINT32_C(0))
 
 //! Support for reliable messages.
-//! @see chreSendReliableMessageAsync()
-#define CHRE_CAPABILITIES_RELIABLE_MESSAGES    (UINT32_C(1) << 0)
+//! @see chreSendReliableMessageAsync
+#define CHRE_CAPABILITIES_RELIABLE_MESSAGES             (UINT32_C(1) << 0)
+
+//! Support for generic endpoint messaging.
+//! @see chreMsgSend
+#define CHRE_CAPABILITIES_GENERIC_ENDPOINT_MESSAGES     (UINT32_C(1) << 1)
 
 /** @} */
 
