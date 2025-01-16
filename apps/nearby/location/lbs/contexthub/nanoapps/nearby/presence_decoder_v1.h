@@ -33,7 +33,7 @@ struct DataElementHeaderV1 {
   // Decodes data and returns the first Data Element header.
   // Returns no value if decoding fails.
   static chre::Optional<DataElementHeaderV1> Decode(const uint8_t data[],
-                                                    const size_t data_size);
+                                                    size_t data_size);
 
   static constexpr uint64_t kSaltType = 0;
   static constexpr uint64_t kPrivateIdentityType = 1;

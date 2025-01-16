@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include "location/lbs/contexthub/nanoapps/nearby/crypto/sha2.h"
+
 static void sha2InitHmacKeyUpdate(struct HmacContext *ctx) {
   // initialize sha2 context and update hmac keys to the sha2 context
   sha2init(&ctx->sha2ctx);
