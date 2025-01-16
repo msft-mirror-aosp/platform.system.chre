@@ -81,7 +81,9 @@ bool extractNanoappIdAndServiceId(const char *serviceDescriptor,
   const char *separatorIndex =
       strstr(serviceDescriptor + kPrefixLength, kSeparator);
   if (separatorIndex == nullptr ||
-      (separatorIndex - serviceDescriptor) * sizeof(char) !=
+      (reinterpret_cast<uintptr_t>(separatorIndex) -
+       reinterpret_cast<uintptr_t>(serviceDescriptor)) *
+              sizeof(char) !=
           kPrefixLength + kEncodingLength) {
     return false;
   }

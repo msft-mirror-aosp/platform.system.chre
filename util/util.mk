@@ -18,6 +18,7 @@ COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_log_nanoapp/public_overrides
 COMMON_CFLAGS += -I$(PIGWEED_CHRE_DIR)/pw_assert_nanoapp/public_overrides
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_allocator/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_assert/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_bytes/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_containers/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_function/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_log/public
@@ -31,6 +32,7 @@ COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/inc
 
 COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/allocator.cc
 COMMON_SRCS += $(PIGWEED_DIR)/pw_allocator/unique_ptr.cc
+COMMON_SRCS += $(PIGWEED_DIR)/pw_containers/intrusive_item.cc
 
 # Common Source Files ##########################################################
 
