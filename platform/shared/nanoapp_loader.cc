@@ -56,12 +56,12 @@ NanoappLoader *gCurrentlyLoadingNanoapp = nullptr;
 //! Indicates whether a failure occurred during static initialization.
 bool gStaticInitFailure = false;
 
-void deleteOpOverride(void* /* ptr */, unsigned int size) {
+void deleteOpOverride(void * /* ptr */, unsigned int size) {
   FATAL_ERROR("Nanoapp: delete(void *, unsigned int) override : sz = %u", size);
 }
 
 #ifdef __clang__
-void deleteOp2Override(void*) {
+void deleteOp2Override(void *) {
   FATAL_ERROR("Nanoapp: delete(void *)");
 }
 #endif
@@ -218,12 +218,14 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreBleGetCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreBleGetFilterCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreBleFlushAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleGetScanStatus),
+    ADD_EXPORTED_C_SYMBOL(chreBleReadRssiAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleSocketAccept),
+    ADD_EXPORTED_C_SYMBOL(chreBleSocketSend),
     ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsyncV1_9),
     ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsyncV1_9),
-    ADD_EXPORTED_C_SYMBOL(chreBleReadRssiAsync),
-    ADD_EXPORTED_C_SYMBOL(chreBleGetScanStatus),
     ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
     ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
     ADD_EXPORTED_C_SYMBOL(chreConfigureNanoappInfoEvents),

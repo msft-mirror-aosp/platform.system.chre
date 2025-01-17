@@ -79,6 +79,7 @@ enum class SystemCallbackType : uint16_t {
   EndpointMessageToNanoappEvent,
   EndpointSessionStateChangedEvent,
   EndpointMessageFreeEvent,
+  BleSocketConnected,
 };
 
 //! Deferred/delayed callbacks use the event subsystem but are invariably sent
