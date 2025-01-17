@@ -19,6 +19,8 @@
 
 #include <chre.h>
 
+#include <utility>
+
 #include "third_party/contexthub/chre/util/include/chre/util/dynamic_vector.h"
 #include "third_party/contexthub/chre/util/include/chre/util/time.h"
 

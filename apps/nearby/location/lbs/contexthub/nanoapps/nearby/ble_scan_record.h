@@ -45,7 +45,7 @@ struct BleScanRecord {
   // Returns a BLE scan record by parsing the data.
   // Note, the returned BleScanRecord has dependence on the lifetime of data,
   // and the return will be invalid if data is altered/destructed after parsing.
-  static BleScanRecord Parse(const uint8_t data[], const uint16_t size);
+  static BleScanRecord Parse(const uint8_t data[], uint16_t size);
   chre::DynamicVector<BleServiceData> service_data;
 
   static constexpr int8_t kDataTypeServiceData = 0x16;

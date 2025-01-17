@@ -115,9 +115,10 @@ int32_t FilterExtension::FindOrCreateHostIndex(
  */
 size_t AddToFilterResults(
     const HostEndpointInfo &host,
-    chre::DynamicVector<FilterExtensionResult> *filter_results) {
+    chre::DynamicVector<FilterExtensionResult> *filter_results,
+    bool set_timeout = true) {
   FilterExtensionResult result(host.host_info.hostEndpointId,
-                               host.cache_expire_ms);
+                               host.cache_expire_ms, set_timeout);
   size_t idx = filter_results->find(result);
   if (filter_results->size() == idx) {
     filter_results->push_back(std::move(result));
@@ -130,7 +131,12 @@ void FilterExtension::Match(
     chre::DynamicVector<FilterExtensionResult> *filter_results,
     chre::DynamicVector<FilterExtensionResult> *screen_on_filter_results) {
   for (const HostEndpointInfo &host : host_list_) {
-    size_t idx = AddToFilterResults(host, filter_results);
+    // Get the index of the FilterExtensionResult to deliver immediately.
+    // The FilterExtensionResult is initialized without timeout so that it
+    // won't be expired.
+    size_t immediate_idx =
+        AddToFilterResults(host, filter_results, /*set_timeout=*/false);
+    // Get the index of the FilterExtensionResult to deliver on wake.
     size_t screen_on_idx = AddToFilterResults(host, screen_on_filter_results);
     for (const auto &ble_adv_report : ble_adv_list) {
       switch (
@@ -144,7 +150,7 @@ void FilterExtension::Match(
           continue;
         case CHREX_NEARBY_FILTER_ACTION_DELIVER_IMMEDIATELY:
           LOGD("Include BLE report to immediate delivery list.");
-          (*filter_results)[idx].reports.Push(ble_adv_report);
+          (*filter_results)[immediate_idx].reports.Push(ble_adv_report);
           continue;
       }
     }
@@ -165,60 +171,6 @@ bool FilterExtension::EncodeConfigResponse(
   if (!pb_encode(&ostream, nearby_extension_ExtConfigResponse_fields,
                  &config_response)) {
     LOGE("Unable to encode protobuf for ExtConfigResponse, error %s",
-         PB_GET_ERROR(&ostream));
-    return false;
-  }
-  return true;
-}
-
-bool FilterExtension::Encode(
-    const chre::DynamicVector<chreBleAdvertisingReport> &reports,
-    ByteArray data_buf, size_t *encoded_size) {
-  nearby_extension_FilterResult filter_result = kEmptyFilterResult;
-  size_t idx = 0;
-  for (const auto &report : reports) {
-    nearby_extension_ChreBleAdvertisingReport &report_proto =
-        filter_result.report[idx];
-    report_proto.has_timestamp = true;
-    report_proto.timestamp = report.timestamp;
-    report_proto.has_event_type_and_data_status = true;
-    report_proto.event_type_and_data_status = report.eventTypeAndDataStatus;
-    report_proto.has_address_type = true;
-    report_proto.address_type =
-        static_cast<nearby_extension_ChreBleAdvertisingReport_AddressType>(
-            report.addressType);
-    report_proto.has_address = true;
-    for (size_t i = 0; i < 6; i++) {
-      report_proto.address[i] = report.address[i];
-    }
-    report_proto.has_tx_power = true;
-    report_proto.tx_power = report.txPower;
-    report_proto.has_rssi = true;
-    report_proto.rssi = report.rssi;
-    report_proto.has_data_length = true;
-    report_proto.data_length = report.dataLength;
-    if (report.dataLength > 0) {
-      report_proto.has_data = true;
-    }
-    for (size_t i = 0; i < report.dataLength; i++) {
-      report_proto.data[i] = report.data[i];
-    }
-    idx++;
-  }
-  filter_result.report_count = static_cast<pb_size_t>(idx);
-  filter_result.has_error_code = true;
-  filter_result.error_code = nearby_extension_FilterResult_ErrorCode_SUCCESS;
-
-  if (!pb_get_encoded_size(encoded_size, nearby_extension_FilterResult_fields,
-                           &filter_result)) {
-    LOGE("Failed to get filter extension result size.");
-    return false;
-  }
-  pb_ostream_t ostream = pb_ostream_from_buffer(data_buf.data, data_buf.length);
-
-  if (!pb_encode(&ostream, nearby_extension_FilterResult_fields,
-                 &filter_result)) {
-    LOGE("Unable to encode protobuf for FilterExtensionResults, error %s",
          PB_GET_ERROR(&ostream));
     return false;
   }

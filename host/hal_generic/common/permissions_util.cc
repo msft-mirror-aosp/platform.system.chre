@@ -16,14 +16,12 @@
 
 #include "permissions_util.h"
 
+#include <chre_host/log.h>
+
 #include "chre/util/macros.h"
 #include "chre/util/system/napp_permissions.h"
 
-namespace android {
-namespace hardware {
-namespace contexthub {
-namespace common {
-namespace implementation {
+namespace android::hardware::contexthub::common::implementation {
 
 std::vector<std::string> chreToAndroidPermissions(uint32_t chrePermissions) {
   std::vector<std::string> androidPermissions;
@@ -50,8 +48,24 @@ std::vector<std::string> chreToAndroidPermissions(uint32_t chrePermissions) {
   return androidPermissions;
 }
 
-}  // namespace implementation
-}  // namespace common
-}  // namespace contexthub
-}  // namespace hardware
-}  // namespace android
+uint32_t androidToChrePermissions(
+    const std::vector<std::string> &androidPermissions) {
+  uint32_t chrePermissions = 0;
+  for (const auto &permission : androidPermissions) {
+    if (permission == kRecordAudioPerm) {
+      chrePermissions |= ::chre::NanoappPermissions::CHRE_PERMS_AUDIO;
+    } else if (permission == kFineLocationPerm ||
+               permission == kBackgroundLocationPerm) {
+      chrePermissions |= ::chre::NanoappPermissions::CHRE_PERMS_GNSS |
+                         ::chre::NanoappPermissions::CHRE_PERMS_WIFI |
+                         ::chre::NanoappPermissions::CHRE_PERMS_WWAN;
+    } else if (permission == kBluetoothScanPerm) {
+      chrePermissions |= ::chre::NanoappPermissions::CHRE_PERMS_BLE;
+    } else {
+      LOGW("Unknown Android permission %s", permission.c_str());
+    }
+  }
+  return chrePermissions;
+}
+
+}  // namespace android::hardware::contexthub::common::implementation
