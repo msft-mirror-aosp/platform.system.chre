@@ -56,6 +56,7 @@
 #include <stdlib.h>
 
 #include <chre/common.h>
+#include <chre/event.h>
 #include <chre/toolchain.h>
 
 #ifdef __cplusplus
@@ -150,7 +151,7 @@ enum chreMsgEndpointReason {
 #define CHRE_MSG_EVENT_ID(offset) (CHRE_EVENT_MSG_FIRST_EVENT + (offset))
 
 /**
- * nanoappHandleEvent argument: struct chreMessageFromEndpointData
+ * nanoappHandleEvent argument: struct chreMsgMessageFromEndpointData
  *
  * The format of the 'message' part of this structure is left undefined,
  * and it's up to the nanoapp and endpoint to have an established protocol
