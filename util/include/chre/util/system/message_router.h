@@ -17,16 +17,16 @@
 #ifndef CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
 #define CHRE_UTIL_SYSTEM_MESSAGE_ROUTER_H_
 
+#include "chre/platform/mutex.h"
+#include "chre/util/singleton.h"
+#include "chre/util/system/message_common.h"
+
 #include <pw_allocator/unique_ptr.h>
 #include <pw_containers/vector.h>
 #include <pw_function/function.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-
-#include "chre/platform/mutex.h"
-#include "chre/util/singleton.h"
-#include "chre/util/system/message_common.h"
 
 namespace chre::message {
 
@@ -94,6 +94,19 @@ class MessageRouter {
     //! not call any MessageRouter or MessageHub functions.
     virtual std::optional<EndpointInfo> getEndpointInfo(
         EndpointId endpointId) = 0;
+
+    //! @return The first endpoint that has the given service descriptor, a
+    //! null-terminated ASCII string. If no endpoint has the service descriptor,
+    //! std::nullopt is returned. This function should not call any
+    //! MessageRouter or MessageHub functions.
+    virtual std::optional<EndpointId> getEndpointForService(
+        const char *serviceDescriptor) = 0;
+
+    //! @return true if the endpoint has the given service descriptor, a
+    //! null-terminated ASCII string, false otherwise. This function should not
+    //! call any MessageRouter or MessageHub functions.
+    virtual bool doesEndpointHaveService(EndpointId endpointId,
+                                         const char *serviceDescriptor) = 0;
   };
 
   //! The API returned when registering a MessageHub with the MessageRouter.
@@ -121,7 +134,8 @@ class MessageRouter {
     void onSessionOpenComplete(SessionId sessionId);
 
     //! Opens a session from an endpoint connected to the current MessageHub
-    //! to the listed MessageHub ID and endpoint ID.
+    //! to the listed MessageHub ID and endpoint ID, with the given service
+    //! descriptor, a null-terminated ASCII string.
     //! onSessionOpenRequest will be called to request the session to be
     //! opened. Once the peer message hub calls onSessionOpenComplete or
     //! closeSession, onSessionOpened or onSessionClosed will be called,
@@ -129,7 +143,8 @@ class MessageRouter {
     //! @return The session ID or SESSION_ID_INVALID if the session could
     //! not be opened
     SessionId openSession(EndpointId fromEndpointId,
-                          MessageHubId toMessageHubId, EndpointId toEndpointId);
+                          MessageHubId toMessageHubId, EndpointId toEndpointId,
+                          const char *serviceDescriptor = nullptr);
 
     //! Closes the session with sessionId and reason
     //! @return true if the session was closed, false if the session was not
@@ -214,6 +229,13 @@ class MessageRouter {
   std::optional<EndpointInfo> getEndpointInfo(MessageHubId messageHubId,
                                               EndpointId endpointId);
 
+  //! @return The Endpoint for the given service descriptor. If multiple
+  //! endpoints have the same service descriptor, the first one is returned.
+  //! If the message hub ID is MESSAGE_HUB_ID_ANY, all message hubs are
+  //! searched.
+  std::optional<Endpoint> getEndpointForService(MessageHubId messageHubId,
+                                                const char *serviceDescriptor);
+
   //! Executes the function for each MessageHub connected to the MessageRouter.
   //! If function returns true, the iteration will stop.
   //! The lock is held when calling the callback.
@@ -236,6 +258,8 @@ class MessageRouter {
                              SessionId sessionId);
 
   //! Opens a session from an endpoint connected to the current MessageHub
+  //! to the listed MessageHub ID and endpoint ID with the given service
+  //! descriptor, a null-terminated ASCII string.
   //! to the listed MessageHub ID and endpoint ID.
   //! onSessionOpenRequest will be called to request the session to be
   //! opened. Once the peer message hub calls onSessionOpenComplete or
@@ -245,7 +269,8 @@ class MessageRouter {
   //! opened
   SessionId openSession(MessageHubId fromMessageHubId,
                         EndpointId fromEndpointId, MessageHubId toMessageHubId,
-                        EndpointId toEndpointId);
+                        EndpointId toEndpointId,
+                        const char *serviceDescriptor = nullptr);
 
   //! Closes the session with sessionId and reason
   //! @return true if the session was closed, false if the session was not

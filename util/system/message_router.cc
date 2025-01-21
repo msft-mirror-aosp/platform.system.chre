@@ -19,7 +19,6 @@
 #include <optional>
 #include <utility>
 
-#include "chre/platform/log.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/message_common.h"
@@ -54,13 +53,13 @@ void MessageRouter::MessageHub::onSessionOpenComplete(SessionId sessionId) {
   }
 }
 
-SessionId MessageRouter::MessageHub::openSession(EndpointId fromEndpointId,
-                                                 MessageHubId toMessageHubId,
-                                                 EndpointId toEndpointId) {
+SessionId MessageRouter::MessageHub::openSession(
+    EndpointId fromEndpointId, MessageHubId toMessageHubId,
+    EndpointId toEndpointId, const char *serviceDescriptor) {
   return mRouter == nullptr
              ? SESSION_ID_INVALID
              : mRouter->openSession(mHubId, fromEndpointId, toMessageHubId,
-                                    toEndpointId);
+                                    toEndpointId, serviceDescriptor);
 }
 
 bool MessageRouter::MessageHub::closeSession(SessionId sessionId,
@@ -172,6 +171,33 @@ std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
   return callback->getEndpointInfo(endpointId);
 }
 
+std::optional<Endpoint> MessageRouter::getEndpointForService(
+    MessageHubId messageHubId, const char *serviceDescriptor) {
+  if (serviceDescriptor == nullptr) {
+    LOGE("Failed to get endpoint for service: service descriptor is null");
+    return std::nullopt;
+  }
+
+  LockGuard<Mutex> lock(mMutex);
+  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+    if ((messageHubId == MESSAGE_HUB_ID_ANY ||
+         messageHubId == messageHubRecord.info.id) &&
+        messageHubRecord.callback != nullptr) {
+      std::optional<EndpointId> endpointId =
+          messageHubRecord.callback->getEndpointForService(serviceDescriptor);
+      if (endpointId.has_value()) {
+        return Endpoint(messageHubRecord.info.id, *endpointId);
+      }
+
+      // Only searching this message hub, so return early if not found
+      if (messageHubId != MESSAGE_HUB_ID_ANY) {
+        return std::nullopt;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
 void MessageRouter::forEachMessageHub(
     const pw::Function<bool(const MessageHubInfo &)> &function) {
   LockGuard<Mutex> lock(mMutex);
@@ -218,7 +244,7 @@ bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
 
   for (auto [callback, session] : sessionsToDestroy) {
     if (callback != nullptr) {
-      callback->onSessionClosed(session, Reason::HUB_RESET);
+      callback->onSessionClosed(session, Reason::UNSPECIFIED);
     }
   }
   return true;
@@ -232,7 +258,8 @@ void MessageRouter::onSessionOpenComplete(MessageHubId fromMessageHubId,
 SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
                                      EndpointId fromEndpointId,
                                      MessageHubId toMessageHubId,
-                                     EndpointId toEndpointId) {
+                                     EndpointId toEndpointId,
+                                     const char *serviceDescriptor) {
   if (fromMessageHubId == toMessageHubId) {
     LOGE(
         "Failed to open session: initiator and peer message hubs are the "
@@ -264,7 +291,15 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     return SESSION_ID_INVALID;
   }
 
-  Session insertSession;
+  if (serviceDescriptor != nullptr &&
+      !peerCallback->doesEndpointHaveService(toEndpointId, serviceDescriptor)) {
+    LOGE("Failed to open session: endpoint with ID %" PRIu64
+         " does not have service descriptor '%s'",
+         toEndpointId, serviceDescriptor);
+    return SESSION_ID_INVALID;
+  }
+
+  Session finalSession;
   {
     LockGuard<Mutex> lock(mMutex);
     if (mSessions.full()) {
@@ -272,31 +307,29 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
       return SESSION_ID_INVALID;
     }
 
-    insertSession.sessionId = mNextSessionId;
-    insertSession.isActive = false;
-    insertSession.initiator.messageHubId = fromMessageHubId;
-    insertSession.initiator.endpointId = fromEndpointId;
-    insertSession.peer.messageHubId = toMessageHubId;
-    insertSession.peer.endpointId = toEndpointId;
+    Session querySession(
+        mNextSessionId, Endpoint(fromMessageHubId, fromEndpointId),
+        Endpoint(toMessageHubId, toEndpointId), serviceDescriptor);
 
     bool foundSession = false;
     for (Session &session : mSessions) {
-      if (session.isEquivalent(insertSession)) {
+      if (session.isEquivalent(querySession)) {
         LOGD("Session with ID %" PRIu16 " already exists", session.sessionId);
-        insertSession = session;
+        finalSession = session;
         foundSession = true;
         break;
       }
     }
 
     if (!foundSession) {
-      mSessions.push_back(insertSession);
+      mSessions.push_back(querySession);
+      finalSession = querySession;
       ++mNextSessionId;
     }
   }
 
-  peerCallback->onSessionOpenRequest(insertSession);
-  return insertSession.sessionId;
+  peerCallback->onSessionOpenRequest(finalSession);
+  return finalSession.sessionId;
 }
 
 bool MessageRouter::closeSession(MessageHubId fromMessageHubId,
@@ -325,17 +358,25 @@ bool MessageRouter::finalizeSession(MessageHubId fromMessageHubId,
       mSessions.erase(&mSessions[*index]);
     } else {
       mSessions[*index].isActive = true;
+      session.isActive = true;
     }
 
     initiatorCallback =
         getCallbackFromMessageHubIdLocked(session.initiator.messageHubId);
     peerCallback = getCallbackFromMessageHubIdLocked(session.peer.messageHubId);
-  }
 
-  if (initiatorCallback == nullptr || peerCallback == nullptr) {
-    LOGE("Failed to complete open session: %s message hub not found",
-         initiatorCallback == nullptr ? "initiator" : "peer");
-    return false;
+    if (initiatorCallback == nullptr || peerCallback == nullptr) {
+      LOGE("Failed to finalize session: %s message hub with ID %" PRIu64
+           " not found",
+           initiatorCallback == nullptr ? "initiator" : "peer",
+           initiatorCallback == nullptr ? session.initiator.messageHubId
+                                        : session.peer.messageHubId);
+      if (!reason.has_value()) {
+        // Only erase if it was not erased above
+        mSessions.erase(&mSessions[*index]);
+      }
+      return false;
+    }
   }
 
   if (reason.has_value()) {
