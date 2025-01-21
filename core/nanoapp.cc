@@ -417,6 +417,15 @@ bool Nanoapp::publishRpcServices(struct chreNanoappRpcService *services,
   return success;
 }
 
+bool Nanoapp::hasRpcService(uint64_t serviceId) const {
+  for (const chreNanoappRpcService &service : mRpcServices) {
+    if (service.id == serviceId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void Nanoapp::linkHeapBlock(HeapBlockHeader *header) {
   header->data.next = mFirstHeader;
   mFirstHeader = header;

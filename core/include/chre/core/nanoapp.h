@@ -280,6 +280,11 @@ class Nanoapp : public PlatformNanoapp {
   }
 
   /**
+   * @return true if the nanoapp has the provided RPC service.
+   */
+  bool hasRpcService(uint64_t serviceId) const;
+
+  /**
    * Adds a block of memory to the linked list of headers.
    *
    * @see getFirstHeapBlock
