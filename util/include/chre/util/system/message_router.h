@@ -139,12 +139,17 @@ class MessageRouter {
     //! onSessionOpenRequest will be called to request the session to be
     //! opened. Once the peer message hub calls onSessionOpenComplete or
     //! closeSession, onSessionOpened or onSessionClosed will be called,
-    //! depending on the result.
+    //! depending on the result. If the session ID is provided (not
+    //! SESSION_ID_INVALID), it must be unique and from the reserved session ID
+    //! range. MessageRouter does not guarantee anything about the session ID if
+    //! it is provided in this API. If the session ID is not provided,
+    //! MessageRouter will assign a session ID normally.
     //! @return The session ID or SESSION_ID_INVALID if the session could
     //! not be opened
     SessionId openSession(EndpointId fromEndpointId,
                           MessageHubId toMessageHubId, EndpointId toEndpointId,
-                          const char *serviceDescriptor = nullptr);
+                          const char *serviceDescriptor = nullptr,
+                          SessionId sessionId = SESSION_ID_INVALID);
 
     //! Closes the session with sessionId and reason
     //! @return true if the session was closed, false if the session was not
@@ -205,7 +210,7 @@ class MessageRouter {
   MessageRouter(pw::Vector<MessageHubRecord> &messageHubs,
                 pw::Vector<Session> &sessions,
                 SessionId reservedSessionId = kDefaultReservedSessionId)
-      : mReservedSessionId(reservedSessionId),
+      : kReservedSessionId(reservedSessionId),
         mMessageHubs(messageHubs),
         mSessions(sessions) {}
 
@@ -270,19 +275,23 @@ class MessageRouter {
                              SessionId sessionId);
 
   //! Opens a session from an endpoint connected to the current MessageHub
-  //! to the listed MessageHub ID and endpoint ID with the given service
+  //! to the listed MessageHub ID and endpoint ID, with the given service
   //! descriptor, a null-terminated ASCII string.
-  //! to the listed MessageHub ID and endpoint ID.
   //! onSessionOpenRequest will be called to request the session to be
   //! opened. Once the peer message hub calls onSessionOpenComplete or
   //! closeSession, onSessionOpened or onSessionClosed will be called,
-  //! depending on the result.
+  //! depending on the result. If the session ID is provided (not
+  //! SESSION_ID_INVALID), it must be unique and from the reserved session ID
+  //! range. MessageRouter does not guarantee anything about the session ID if
+  //! it is provided in this API. If the session ID is not provided,
+  //! MessageRouter will assign a session ID normally.
   //! @return The session ID or SESSION_ID_INVALID if the session could not be
   //! opened
   SessionId openSession(MessageHubId fromMessageHubId,
                         EndpointId fromEndpointId, MessageHubId toMessageHubId,
                         EndpointId toEndpointId,
-                        const char *serviceDescriptor = nullptr);
+                        const char *serviceDescriptor = nullptr,
+                        SessionId sessionId = SESSION_ID_INVALID);
 
   //! Closes the session with sessionId and reason
   //! @return true if the session was closed, false if the session was not
@@ -347,7 +356,7 @@ class MessageRouter {
   SessionId mNextSessionId = 0;
 
   //! The start of the reserved session ID range
-  const SessionId mReservedSessionId;
+  const SessionId kReservedSessionId;
 
   //! The list of MessageHubs connected to the MessageRouter
   pw::Vector<MessageHubRecord> &mMessageHubs;
@@ -360,13 +369,12 @@ class MessageRouter {
 typedef Singleton<MessageRouter> MessageRouterSingleton;
 
 //! Routes messages between MessageHubs
-template <size_t kMaxMessageHubs, size_t kMaxSessions,
-          SessionId kReservedSessionId =
-              MessageRouter::kDefaultReservedSessionId>
+template <size_t kMaxMessageHubs, size_t kMaxSessions>
 class MessageRouterWithStorage : public MessageRouter {
  public:
-  MessageRouterWithStorage()
-      : MessageRouter(mMessageHubs, mSessions, kReservedSessionId) {}
+  MessageRouterWithStorage(
+      SessionId reservedSessionId = MessageRouter::kDefaultReservedSessionId)
+      : MessageRouter(mMessageHubs, mSessions, reservedSessionId) {}
 
  private:
   //! The list of MessageHubs connected to the MessageRouter
