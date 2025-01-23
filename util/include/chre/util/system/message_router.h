@@ -192,10 +192,22 @@ class MessageRouter {
     MessageHubCallback *callback;
   };
 
+  //! The default reserved session ID value
+  static constexpr SessionId kDefaultReservedSessionId = 0x8000;
+
   MessageRouter() = delete;
+
+  //! Constructor for the MessageRouter.
+  //! @param messageHubs The list of MessageHubs connected to the MessageRouter
+  //! @param sessions The list of sessions connected to the MessageRouter
+  //! @param reservedSessionId The first reserved session ID - MessageRouter
+  //! will not assign session IDs greater than or equal to this value
   MessageRouter(pw::Vector<MessageHubRecord> &messageHubs,
-                pw::Vector<Session> &sessions)
-      : mMessageHubs(messageHubs), mSessions(sessions) {}
+                pw::Vector<Session> &sessions,
+                SessionId reservedSessionId = kDefaultReservedSessionId)
+      : mReservedSessionId(reservedSessionId),
+        mMessageHubs(messageHubs),
+        mSessions(sessions) {}
 
   //! Registers a MessageHub with the MessageRouter.
   //! The provided name must be unique and not registered before and be a valid
@@ -323,11 +335,19 @@ class MessageRouter {
   //! callback
   bool checkIfEndpointExists(MessageHubCallback *callback, EndpointId endpointId);
 
+  //! @return The next available Session ID. Will wrap around if needed and
+  //! ensures the returned ID is not in the reserved range nor is it already in
+  //! use. Requires the caller to hold the mutex.
+  SessionId getNextSessionIdLocked();
+
   //! The mutex to protect MessageRouter state
   Mutex mMutex;
 
   //! The next available Session ID
   SessionId mNextSessionId = 0;
+
+  //! The start of the reserved session ID range
+  const SessionId mReservedSessionId;
 
   //! The list of MessageHubs connected to the MessageRouter
   pw::Vector<MessageHubRecord> &mMessageHubs;
@@ -340,11 +360,13 @@ class MessageRouter {
 typedef Singleton<MessageRouter> MessageRouterSingleton;
 
 //! Routes messages between MessageHubs
-template <size_t kMaxMessageHubs, size_t kMaxSessions>
+template <size_t kMaxMessageHubs, size_t kMaxSessions,
+          SessionId kReservedSessionId =
+              MessageRouter::kDefaultReservedSessionId>
 class MessageRouterWithStorage : public MessageRouter {
  public:
-  MessageRouterWithStorage():
-      MessageRouter(mMessageHubs, mSessions) {}
+  MessageRouterWithStorage()
+      : MessageRouter(mMessageHubs, mSessions, kReservedSessionId) {}
 
  private:
   //! The list of MessageHubs connected to the MessageRouter

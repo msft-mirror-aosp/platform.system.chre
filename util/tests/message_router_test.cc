@@ -878,6 +878,32 @@ TEST_F(MessageRouterTest, RegisterSessionSameMessageHubInvalid) {
   EXPECT_EQ(sessionId, SESSION_ID_INVALID);
 }
 
+TEST_F(MessageRouterTest, RegisterSessionReservedSessionIdAreRespected) {
+  constexpr SessionId kReservedSessionId = 25;
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions, kReservedSessionId> router;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub:2 more than the max number of
+  // sessions - should wrap around
+  for (size_t i = 0; i < kReservedSessionId * 2; ++i) {
+    SessionId sessionId = messageHub->openSession(
+        kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+    EXPECT_NE(sessionId, SESSION_ID_INVALID);
+    messageHub2->onSessionOpenComplete(sessionId);
+    EXPECT_TRUE(messageHub->closeSession(sessionId));
+  }
+}
+
 TEST_F(MessageRouterTest, RegisterSessionDifferentMessageHubsSameEndpoints) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   Session sessionFromCallback1;

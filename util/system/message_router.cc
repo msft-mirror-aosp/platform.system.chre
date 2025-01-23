@@ -308,7 +308,7 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     }
 
     Session querySession(
-        mNextSessionId, Endpoint(fromMessageHubId, fromEndpointId),
+        SESSION_ID_INVALID, Endpoint(fromMessageHubId, fromEndpointId),
         Endpoint(toMessageHubId, toEndpointId), serviceDescriptor);
 
     bool foundSession = false;
@@ -322,9 +322,15 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     }
 
     if (!foundSession) {
+      SessionId sessionId = getNextSessionIdLocked();
+      if (sessionId == SESSION_ID_INVALID) {
+        LOGE("Failed to open session: no available session ID");
+        return SESSION_ID_INVALID;
+      }
+      querySession.sessionId = sessionId;
+
       mSessions.push_back(querySession);
       finalSession = querySession;
-      ++mNextSessionId;
     }
   }
 
@@ -504,6 +510,33 @@ bool MessageRouter::checkIfEndpointExists(
     return false;
   });
   return context.foundEndpoint;
+}
+
+SessionId MessageRouter::getNextSessionIdLocked() {
+  constexpr size_t kMaxIterations = 10;
+
+  if (mNextSessionId >= mReservedSessionId) {
+    mNextSessionId = 0;
+  }
+
+  bool foundSessionIdConflict;
+  size_t iterations = 0;
+  do {
+    foundSessionIdConflict = false;
+    for (const Session &session : mSessions) {
+      if (session.sessionId == mNextSessionId) {
+        ++mNextSessionId;
+        if (mNextSessionId >= mReservedSessionId) {
+          mNextSessionId = 0;
+        }
+        foundSessionIdConflict = true;
+        break;
+      }
+    }
+    ++iterations;
+  } while (foundSessionIdConflict && iterations < kMaxIterations);
+
+  return foundSessionIdConflict ? SESSION_ID_INVALID : mNextSessionId++;
 }
 
 }  // namespace chre::message
