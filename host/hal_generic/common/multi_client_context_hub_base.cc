@@ -1078,6 +1078,7 @@ void MultiClientContextHubBase::handleClientDeath(pid_t clientPid) {
 
 void MultiClientContextHubBase::onChreDisconnected() {
   mIsChreReady = false;
+  LOGW("HAL APIs will be failed because CHRE is disconnected");
   if (mV4Impl) mV4Impl->onChreDisconnected();
 }
 
@@ -1090,6 +1091,7 @@ void MultiClientContextHubBase::onChreRestarted() {
   // Unblock APIs BEFORE informing the clients that CHRE has restarted so that
   // any API call triggered by handleContextHubAsyncEvent() can come through.
   mIsChreReady = true;
+  LOGI("HAL APIs are re-enabled");
   std::vector<std::shared_ptr<IContextHubCallback>> callbacks =
       mHalClientManager->getCallbacks();
   for (auto callback : callbacks) {
