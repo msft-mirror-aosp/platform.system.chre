@@ -58,7 +58,7 @@ extern "C" {
  * attempted. Setting this to zero disables retransmissions.
  */
 #ifndef CHPP_TRANSPORT_MAX_RETX
-#define CHPP_TRANSPORT_MAX_RETX UINT16_C(4)
+#define CHPP_TRANSPORT_MAX_RETX UINT16_C(6)
 #endif
 
 /**

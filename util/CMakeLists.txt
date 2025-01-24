@@ -169,6 +169,7 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/napp_header_utils.h
     include/chre/util/system/napp_permissions.h
     include/chre/util/system/ref_base.h
+    include/chre/util/system/service_helpers.h
     include/chre/util/system/shared_ptr.h
     include/chre/util/system/shared_ptr_impl.h
     include/chre/util/system/synchronized_expandable_memory_pool.h
@@ -197,6 +198,7 @@ pw_add_library(chre.util.system STATIC
     system/event_callbacks.cc
     system/debug_dump.cc
     system/message_router.cc
+    system/service_helpers.cc
   PRIVATE_DEPS
     chre.platform.log
 )

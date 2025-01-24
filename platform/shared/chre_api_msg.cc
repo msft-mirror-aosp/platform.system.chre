@@ -80,35 +80,26 @@ DLL_EXPORT bool chreMsgSessionGetInfo(uint16_t sessionId,
 
 DLL_EXPORT bool chreMsgPublishServices(
     const struct chreMsgServiceInfo *services, size_t numServices) {
-  // TODO(b/371009029): Implement this - requires MessageRouter changes (service
-  // integration).
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  return EventLoopManagerSingleton::get()
+      ->getChreMessageHubManager()
+      .publishServices(nanoapp->getAppId(), services, numServices);
+#else
   UNUSED_VAR(services);
   UNUSED_VAR(numServices);
   return false;
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 }
 
 DLL_EXPORT bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
                                         const char *serviceDescriptor) {
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
   Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
-  if (serviceDescriptor != nullptr) {
-    // TODO(b/371009029): Implement service descriptor sessions - requires
-    // MessageRouter changes (service integration).
-    return false;
-  }
-
-  if (hubId == CHRE_MSG_HUB_ID_INVALID) {
-    if (endpointId == CHRE_MSG_ENDPOINT_ID_INVALID) {
-      return false;
-    }
-
-    return EventLoopManagerSingleton::get()
-        ->getChreMessageHubManager()
-        .openDefaultSessionAsync(nanoapp->getAppId(), endpointId);
-  }
   return EventLoopManagerSingleton::get()
       ->getChreMessageHubManager()
-      .openSessionAsync(nanoapp->getAppId(), hubId, endpointId);
+      .openDefaultSessionAsync(nanoapp->getAppId(), hubId, endpointId,
+                               serviceDescriptor);
 #else
   UNUSED_VAR(hubId);
   UNUSED_VAR(endpointId);
