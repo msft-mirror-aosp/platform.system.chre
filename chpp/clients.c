@@ -387,7 +387,7 @@ bool chppClientSendOpenRequest(struct ChppEndpointState *clientState,
     CHPP_LOGD("Opening service - non-blocking");
     result = chppClientSendTimestampedRequestOrFail(
         clientState, openReqState, request, sizeof(*request),
-        CHPP_REQUEST_TIMEOUT_INFINITE);
+        CHPP_REQUEST_TIMEOUT_DEFAULT);
   }
 
   if (!result) {
