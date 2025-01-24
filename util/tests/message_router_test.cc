@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <pw_allocator/allocator.h>
-#include <pw_allocator/capability.h>
-#include <pw_allocator/unique_ptr.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -27,6 +24,12 @@
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/message_router_callback_allocator.h"
 #include "chre_api/chre.h"
+
+#include "pw_allocator/allocator.h"
+#include "pw_allocator/capability.h"
+#include "pw_allocator/libc_allocator.h"
+#include "pw_allocator/unique_ptr.h"
+
 #include "gtest/gtest.h"
 
 namespace chre::message {
@@ -46,34 +49,7 @@ const EndpointInfo kEndpointInfos[kNumEndpoints] = {
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
 const char kServiceDescriptorForEndpoint2[] = "TEST_SERVICE.TEST";
 
-class TestAllocator : public pw::Allocator {
- public:
-  static constexpr Capabilities kCapabilities = 0;
-
-  TestAllocator() : pw::Allocator(kCapabilities) {}
-
-  virtual void *DoAllocate(Layout layout) override {
-    if (layout.alignment() > alignof(std::max_align_t)) {
-      void *ptr;
-      return posix_memalign(&ptr, layout.alignment(), layout.size()) == 0
-                 ? ptr
-                 : nullptr;
-    } else {
-      return malloc(layout.size());
-    }
-  }
-
-  virtual void DoDeallocate(void *ptr) override {
-    free(ptr);
-  }
-};
-
-class MessageRouterTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-
-  TestAllocator mAllocator;
-};
+class MessageRouterTest : public ::testing::Test {};
 
 //! Base class for MessageHubCallbacks used in tests
 class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
@@ -1100,8 +1076,9 @@ TEST_F(MessageRouterTest, ThreeMessageHubsAndThreeSessions) {
 TEST_F(MessageRouterTest, SendMessageToSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1163,7 +1140,7 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
     EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
   }
 
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1188,8 +1165,9 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
 TEST_F(MessageRouterTest, SendMessageOnHalfOpenSessionIsRejected) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1224,7 +1202,7 @@ TEST_F(MessageRouterTest, SendMessageOnHalfOpenSessionIsRejected) {
   messageHub2->onSessionOpenComplete(sessionId);
 
   // Send message from messageHub:1 to messageHub2:2
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1244,7 +1222,7 @@ TEST_F(MessageRouterTest, SendMessageOnHalfOpenSessionIsRejected) {
     EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
   }
 
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1400,8 +1378,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
 TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1465,8 +1444,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {
 TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1535,7 +1515,7 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   wasMessageReceivedCalled1 = false;
   wasMessageReceivedCalled2 = false;
   wasMessageReceivedCalled3 = false;
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1543,7 +1523,7 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
                                         /* messageType= */ 1,
                                         /* messagePermissions= */ 0,
                                         sessionId2));
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1559,8 +1539,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
 TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1606,7 +1587,7 @@ TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
                                       /* messagePermissions= */ 0, sessionId));
 
   // Send message from messageHub2:2 to messageHub:1
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
