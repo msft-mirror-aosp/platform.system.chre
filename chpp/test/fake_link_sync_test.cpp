@@ -56,8 +56,15 @@ static void deinit(void *linkContext) {
 static enum ChppLinkErrorCode send(void *linkContext, size_t len) {
   auto context = static_cast<struct ChppTestLinkState *>(linkContext);
   auto *fake = reinterpret_cast<FakeLink *>(context->fake);
+  // At the test layer, we expect things to be serialized such that
+  // packets are fetched before the next one can be sent.
+  if (!fake->waitForEmpty()) {
+    CHPP_LOGW("Timed out waiting for TX queue to become empty");
+  }
   fake->appendTxPacket(&context->txBuffer[0], len);
-  return CHPP_LINK_ERROR_NONE_SENT;
+
+  return fake->isEnabled() ? CHPP_LINK_ERROR_NONE_SENT
+                           : CHPP_LINK_ERROR_UNSPECIFIED;
 }
 
 static void doWork(void * /*linkContext*/, uint32_t /*signal*/) {}
@@ -165,6 +172,14 @@ class FakeLinkSyncTests : public testing::Test {
     return mFakeLink->popTxPacket();
   }
 
+  bool compareNextPacket(const ChppEmptyPacket &expected) {
+    return comparePacket(getNextPacket(), expected);
+  }
+
+  bool compareNextPacket(const ChppResetPacket &expected) {
+    return comparePacket(getNextPacket(), expected);
+  }
+
   template <typename PacketType>
   bool deliverRxPacket(const PacketType &packet) {
     CHPP_LOGW("Debug dump of RX packet:");
@@ -181,10 +196,6 @@ class FakeLinkSyncTests : public testing::Test {
     chppWorkThreadStop(&mTransportContext);
     mWorkThread.join();
     EXPECT_EQ(mFakeLink->getTxPacketCount(), 0);
-    std::cout << "Unexpected extra packet(s):" << std::endl;
-    while (mFakeLink->getTxPacketCount() > 0) {
-      mFakeLink->popTxPacket();
-    }
   }
 
   void txPacket() {
@@ -242,6 +253,55 @@ class FakeLinkWithClientSyncTests : public FakeLinkSyncTests {
         openReq.transportHeader.seq + 1, openReq.transportHeader.ackSeq,
         &payload);
     deliverRxPacket(rsp);
+  }
+
+  void openWifiPal(const struct chrePalWifiApi *api,
+                   const struct chrePalWifiCallbacks *callbacks = nullptr) {
+    ASSERT_NE(api, nullptr);
+
+    // Calling open() blocks until the open response is received, so spin off
+    // another thread to wait on the open request and post the response.
+    // This puts us in the opened state - we are mainly interested in testing
+    auto result = std::async(std::launch::async, [this] {
+      if (mFakeLink->waitForTxPacket()) {
+        std::vector<uint8_t> rawPkt = mFakeLink->popTxPacket();
+        const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
+        ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
+        sendOpenResp(pkt);
+      }
+    });
+    ASSERT_TRUE(api->open(&chre::gChrePalSystemApi, callbacks));
+
+    // Confirm our open response was ACKed
+    ASSERT_TRUE(comparePacket(getNextPacket(), generateEmptyPacket(2)));
+  }
+
+  void waitForReopenRequest() {
+    // Confirm we get OPEN request, send OPEN response
+    ASSERT_TRUE(mFakeLink->waitForTxPacket());
+    auto rawPkt = getNextPacket();
+    const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
+    ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
+    sendOpenResp(pkt);
+
+    // Confirm we got an ACK to our OPEN_RESP
+    ASSERT_TRUE(mFakeLink->waitForTxPacket());
+    rawPkt = getNextPacket();
+    EXPECT_TRUE(comparePacket(rawPkt, generateEmptyPacket(2)))
+        << "Full packet: " << asChpp(rawPkt);
+  }
+
+  void waitForWifiClientOpenState(uint8_t openState) {
+    ChppEndpointState *wifiClientState = mAppContext.registeredClientStates[0];
+    ASSERT_NE(wifiClientState, nullptr);
+    chppMutexLock(&wifiClientState->syncResponse.mutex);
+    while (!wifiClientState->syncResponse.ready) {
+      chppConditionVariableTimedWait(&wifiClientState->syncResponse.condVar,
+                                     &wifiClientState->syncResponse.mutex,
+                                     CHPP_REQUEST_TIMEOUT_DEFAULT);
+    }
+    chppMutexUnlock(&wifiClientState->syncResponse.mutex);
+    ASSERT_EQ(wifiClientState->openState, openState);
   }
 };
 
@@ -410,23 +470,7 @@ TEST_F(FakeLinkWithClientSyncTests, RecoverFromAbortedOpen) {
   const struct chrePalWifiCallbacks kCallbacks = {};
   const struct chrePalWifiApi *api =
       chppPalWifiGetApi(CHPP_PAL_WIFI_API_VERSION);
-  ASSERT_NE(api, nullptr);
-
-  // Calling open() blocks until the open response is received, so spin off
-  // another thread to wait on the open request and post the response.
-  // This puts us in the opened state - we are mainly interested in testing
-  auto result = std::async(std::launch::async, [this] {
-    if (mFakeLink->waitForTxPacket()) {
-      std::vector<uint8_t> rawPkt = mFakeLink->popTxPacket();
-      const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
-      ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
-      sendOpenResp(pkt);
-    }
-  });
-  ASSERT_TRUE(api->open(&chre::gChrePalSystemApi, &kCallbacks));
-
-  // Confirm our open response was ACKed
-  ASSERT_TRUE(comparePacket(getNextPacket(), generateEmptyPacket(2)));
+  ASSERT_NO_FATAL_FAILURE(openWifiPal(api, &kCallbacks));
 
   // Now we're in the opened state and can trigger the test condition: feed in a
   // RESET, discard the RESET_ACK, confirm we got OPEN_REQ, but instead of
@@ -447,18 +491,59 @@ TEST_F(FakeLinkWithClientSyncTests, RecoverFromAbortedOpen) {
   auto ackForResetAck = generateEmptyPacket();
   deliverRxPacket(ackForResetAck);
 
-  // Confirm we get OPEN request, send OPEN response
-  ASSERT_TRUE(mFakeLink->waitForTxPacket());
-  rawPkt = getNextPacket();
-  const ChppPacketWithAppHeader &pkt = asApp(rawPkt);
-  ASSERT_EQ(pkt.appHeader.command, CHPP_WIFI_OPEN);
-  sendOpenResp(pkt);
+  ASSERT_NO_FATAL_FAILURE(waitForReopenRequest());
+}
 
-  // Confirm we got an ACK to our OPEN_RESP
-  ASSERT_TRUE(mFakeLink->waitForTxPacket());
-  rawPkt = getNextPacket();
-  EXPECT_TRUE(comparePacket(rawPkt, generateEmptyPacket(2)))
-      << "Full packet: " << asChpp(rawPkt);
+// This test is similar to RecoverFromAbortedOpen, but the link is disabled
+// while a RESET is triggered from the remote endpoint.
+TEST_F(FakeLinkWithClientSyncTests, ReopenFromBrokenLink) {
+  // Setting all callbacks as null here since none should be invoked
+  const struct chrePalWifiCallbacks kCallbacks = {};
+  const struct chrePalWifiApi *api =
+      chppPalWifiGetApi(CHPP_PAL_WIFI_API_VERSION);
+  ASSERT_NO_FATAL_FAILURE(openWifiPal(api, &kCallbacks));
+  ASSERT_NO_FATAL_FAILURE(waitForWifiClientOpenState(CHPP_OPEN_STATE_OPENED));
+
+  // Disable the link and trigger a RESET from the remote endpoint. This will
+  // cause the local client to attempt a re-open of the WiFi API. But since the
+  // local link is disabled, the transport will enter a "PERMANENT_FAILURE"
+  // state, and the re-open will time out.
+  mFakeLink->disable();
+
+  CHPP_LOGI("Triggering RESET after successful open");
+  auto resetPkt = generateResetPacket();
+  deliverRxPacket(resetPkt);
+  for (uint32_t i = 0; i < CHPP_TRANSPORT_MAX_RETX + 1; i++) {
+    ASSERT_TRUE(compareNextPacket(generateResetAckPacket()));
+  }
+
+  CHPP_LOGI("Expecting RESET from local transport");
+  for (uint32_t i = 0; i < CHPP_TRANSPORT_MAX_RESET; i++) {
+    uint8_t error = (i == 0) ? CHPP_TRANSPORT_ERROR_MAX_RETRIES
+                             : CHPP_TRANSPORT_ERROR_TIMEOUT;
+    ASSERT_TRUE(compareNextPacket(generateResetPacket(1, 0, error)));
+
+    // TODO(b/392728565): Fix inconsistent counting of retx in transport code
+    for (uint32_t j = 0; j < CHPP_TRANSPORT_MAX_RETX + 1; j++) {
+      ASSERT_TRUE(compareNextPacket(
+          generateResetPacket(1, 0, CHPP_TRANSPORT_ERROR_NONE)));
+    }
+  }
+
+  ASSERT_NO_FATAL_FAILURE(waitForWifiClientOpenState(CHPP_OPEN_STATE_CLOSED));
+
+  // We then re-enable the link and attempt a new request from the Wifi API.
+  // This request will fail, but triggers a re-open that now should succeed.
+  mFakeLink->enable();
+
+  CHPP_LOGI("Triggering a new request after re-open failure");
+  ASSERT_FALSE(api->configureScanMonitor(true));
+  ASSERT_TRUE(compareNextPacket(
+      generateResetPacket(1, 0, CHPP_TRANSPORT_SIGNAL_FORCE_RESET)));
+  auto ackForReset = generateResetAckPacket();
+  deliverRxPacket(ackForReset);
+
+  ASSERT_NO_FATAL_FAILURE(waitForReopenRequest());
 }
 
 }  // namespace chpp::test

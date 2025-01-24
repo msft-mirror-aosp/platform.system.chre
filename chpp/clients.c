@@ -323,6 +323,11 @@ bool chppClientSendTimestampedRequestOrFail(
   CHPP_DEBUG_NOT_NULL(buf);
 
   if (!chppIsClientApiReady(clientState)) {
+    if (clientState->initialized &&
+        clientState->openState == CHPP_OPEN_STATE_CLOSED) {
+      CHPP_LOGW("Trying to send request when closed - link broken?");
+      chppTransportForceReset(clientState->appContext->transportContext);
+    }
     CHPP_FREE_AND_NULLIFY(buf);
     return false;
   }

@@ -79,7 +79,8 @@ uint32_t computeCrc(const PktType &pkt) {
                    sizeof(pkt) - sizeof(pkt.preamble) - sizeof(pkt.footer));
 }
 
-ChppResetPacket generateResetPacket(uint8_t ackSeq = 0, uint8_t seq = 0);
+ChppResetPacket generateResetPacket(uint8_t ackSeq = 0, uint8_t seq = 0,
+                                    uint8_t error = CHPP_TRANSPORT_ERROR_NONE);
 ChppResetPacket generateResetAckPacket(uint8_t ackSeq = 1, uint8_t seq = 0);
 ChppEmptyPacket generateEmptyPacket(uint8_t ackSeq = 1, uint8_t seq = 0,
                                     uint8_t error = CHPP_TRANSPORT_ERROR_NONE);
