@@ -423,7 +423,7 @@ bool chreMsgConfigureEndpointReadyEvents(uint64_t hubId, uint64_t endpointId,
  *
  * If this API succeeds, the nanoapp will receive endpoint
  * notifications, via the CHRE_EVENT_MSG_SERVICE_READY event
- * with aneventData of type chreMsgServiceReadyEvent.
+ * with an eventData of type chreMsgServiceReadyEvent.
  *
  * If one or more endpoints matching the filter are already ready when this
  * function is called, CHRE_EVENT_MSG_SERVICE_READY will be
