@@ -995,6 +995,7 @@ cc_library_static {
         "core/gnss_manager.cc",
         "core/host_comms_manager.cc",
         "core/host_endpoint_manager.cc",
+        "core/host_message_hub_manager.cc",
         "core/init.cc",
         "core/nanoapp.cc",
         "core/sensor.cc",

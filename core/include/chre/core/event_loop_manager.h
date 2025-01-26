@@ -26,6 +26,7 @@
 #include "chre/core/gnss_manager.h"
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/host_endpoint_manager.h"
+#include "chre/core/host_message_hub_manager.h"
 #include "chre/core/sensor_request_manager.h"
 #include "chre/core/settings.h"
 #include "chre/core/system_health_monitor.h"
@@ -326,6 +327,10 @@ class EventLoopManager : public NonCopyable {
   ChreMessageHubManager &getChreMessageHubManager() {
     return mChreMessageHubManager;
   }
+
+  HostMessageHubManager &getHostMessageHubManager() {
+    return mHostMessageHubManager;
+  }
 #endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
   /**
@@ -403,6 +408,9 @@ class EventLoopManager : public NonCopyable {
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
   //! The ChreMessageHubManager that manages the CHRE Message Hub.
   ChreMessageHubManager mChreMessageHubManager;
+
+  //! The HostMessageHubManager handling communication with host message hubs.
+  HostMessageHubManager mHostMessageHubManager;
 #endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 };
 
