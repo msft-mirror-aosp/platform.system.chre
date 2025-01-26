@@ -1782,6 +1782,7 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
       context->txStatus.txAttempts = 0;
       context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
       chppClearTxDatagramQueue(context);
+      context->txStatus.packetCodeToSend = 0;
     }
   }
 }
