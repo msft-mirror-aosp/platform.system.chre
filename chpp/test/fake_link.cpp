@@ -59,8 +59,8 @@ bool FakeLink::waitForEmpty(std::chrono::milliseconds timeout) {
 std::vector<uint8_t> FakeLink::popTxPacket() {
   std::lock_guard<std::mutex> lock(mMutex);
   assert(!mTxPackets.empty());
-  std::vector<uint8_t> vec = std::move(mTxPackets.back());
-  mTxPackets.pop_back();
+  std::vector<uint8_t> vec = std::move(mTxPackets.front());
+  mTxPackets.pop_front();
   mRxCondVar.notify_all();
   return vec;
 }
