@@ -255,7 +255,7 @@ struct chreMsgServiceInfo {
   uint32_t minorVersion;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This must
+   * The descriptor of the service, an ASCII null-terminated string. This must
    * be valid for the lifetime of the nanoapp.
    */
   const char *serviceDescriptor;
@@ -278,7 +278,7 @@ struct chreMsgSessionInfo {
   uint64_t endpointId;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This
+   * The descriptor of the service, an ASCII null-terminated string. This
    * will be an empty string if the session was not opened with a service.
    */
   char serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN];
@@ -364,8 +364,7 @@ struct chreMsgServiceReadyEvent {
   uint64_t endpointId;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This
-   * will be an empty string if the session was not opened with a service.
+   * The descriptor of the service, an ASCII null-terminated string.
    */
   char serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN];
 };
