@@ -964,6 +964,8 @@ cc_test_host {
     static_libs: [
         "chre_linux",
         "chre_pal_linux",
+        "libgmock",
+        "libgtest",
         "libprotobuf-c-nano",
         "pw_allocator",
         "pw_containers",
@@ -1102,6 +1104,8 @@ cc_defaults {
         "-DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_1",
         "-DCHRE_GNSS_SUPPORT_ENABLED",
         "-DCHRE_LARGE_PAYLOAD_MAX_SIZE=32000",
+        "-DCHRE_MESSAGE_ROUTER_MAX_HOST_ENDPOINTS=8",
+        "-DCHRE_MESSAGE_ROUTER_MAX_HOST_HUBS=1",
         "-DCHRE_MESSAGE_ROUTER_SUPPORT_ENABLED",
         "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
         "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",
