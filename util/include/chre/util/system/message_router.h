@@ -253,9 +253,14 @@ class MessageRouter {
   std::optional<Endpoint> getEndpointForService(MessageHubId messageHubId,
                                                 const char *serviceDescriptor);
 
-  //! Executes the function for each MessageHub connected to the MessageRouter.
-  //! If function returns true, the iteration will stop.
-  //! The lock is held when calling the callback.
+  //! @return true if the endpoint has the given service descriptor, a
+  //! null-terminated ASCII string, false otherwise.
+  bool doesEndpointHaveService(MessageHubId messageHubId, EndpointId endpointId,
+                               const char *serviceDescriptor);
+
+  //! Executes the function for each MessageHub connected to the
+  //! MessageRouter. If function returns true, the iteration will stop. The
+  //! lock is held when calling the callback.
   void forEachMessageHub(
       const pw::Function<bool(const MessageHubInfo &)> &function);
 
