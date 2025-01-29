@@ -330,7 +330,6 @@ pw_add_library(chre.platform.shared.host_protocol_chre STATIC
   PRIVATE_DEPS
     chre.core
     chre.platform.log
-    chre.platform.shared.host_protocol_chre
     chre.platform.shared.nanoapp_load_manager
 )
 
