@@ -36,13 +36,177 @@ message WwanCapabilities {
   optional uint32 wwanCapabilities = 1;
 }
 
+// From chreWwanCellTimeStampType in /chre_api/chre/wwan.h
+enum CellTimestampType {
+  CELL_TIMESTAMP_TYPE_UNKNOWN = 0;
+  CELL_TIMESTAMP_TYPE_ANTENNA = 1;
+  CELL_TIMESTAMP_TYPE_MODEM = 2;
+  CELL_TIMESTAMP_TYPE_OEM_RIL = 3;
+  CELL_TIMESTAMP_TYPE_JAVA_RIL = 4;
+}
+
+// From chreWwanCellInfoType in /chre_api/chre/wwan.h
+enum WwanCellInfoType {
+  WWAN_CELL_INFO_TYPE_UNKNOWN = 0;
+  WWAN_CELL_INFO_TYPE_GSM = 1;
+  WWAN_CELL_INFO_TYPE_CDMA = 2;
+  WWAN_CELL_INFO_TYPE_LTE = 3;
+  WWAN_CELL_INFO_TYPE_WCDMA = 4;
+  WWAN_CELL_INFO_TYPE_TD_SCDMA = 5;
+  WWAN_CELL_INFO_TYPE_NR = 6;
+}
+
 /*
  * Derived from the chreWwanCellInfoResult in the wwan CHRE API @
  * //system/chre/chre_api/include/chre_api/chre/wwan.h
  */
 message WwanCellInfoResult {
+  // Version of the struct, for compatibility purposes.
+  optional uint32 version = 1;
   // The error code taken from the chreWwanCellInfoResult
-  optional uint32 errorCode = 1;
-  // The total number of results that will be sent to the AP.
-  optional uint32 cellInfoCount = 2;
+  optional uint32 errorCode = 2;
+  // The list of cell info results.
+  repeated WwanCellInfo cell_info = 3;
+}
+
+message WwanCellInfo {
+  optional uint64 timestamp_ns = 1;
+  optional WwanCellInfoType cell_info_type = 2;
+  optional CellTimestampType timestamp_type = 3;
+  optional bool is_registered = 4;
+  oneof cell_info {
+    CellInfoGsm gsm = 5;
+    CellInfoWcdma wcdma = 6;
+    CellInfoCdma cdma = 7;
+    CellInfoLte lte = 8;
+    CellInfoTdscdma tdscdma = 9;
+    CellInfoNr nr = 10;
+  }
+}
+
+message CellInfoGsm {
+  optional CellIdentityGsm cell_identity = 1;
+  optional SignalStrengthGsm signal_strength = 2;
+}
+
+message CellInfoWcdma {
+  optional CellIdentityWcdma cell_identity = 1;
+  optional SignalStrengthWcdma signal_strength = 2;
+}
+
+message CellInfoCdma {
+  optional CellIdentityCdma cell_identity = 1;
+  optional SignalStrengthCdma signal_strength_cdma = 2;
+  optional SignalStrengthEvdo signal_strength_evdo = 3;
+}
+
+message CellInfoLte {
+  optional CellIdentityLte cell_identity = 1;
+  optional SignalStrengthLte signal_strength = 2;
+}
+
+message CellInfoTdscdma {
+  optional CellIdentityTdscdma cell_identity = 1;
+  optional SignalStrengthTdscdma signal_strength = 2;
+}
+
+message CellInfoNr {
+  optional CellIdentityNr cell_identity = 1;
+  optional SignalStrengthNr signal_strength = 2;
+}
+
+message CellIdentityGsm {
+  optional int32 mcc = 1;
+  optional int32 mnc = 2;
+  optional int32 lac = 3;
+  optional int32 cid = 4;
+  optional int32 arfcn = 5;
+  optional int32 bsic = 6;
+}
+
+message CellIdentityWcdma {
+  optional int32 mcc = 1;
+  optional int32 mnc = 2;
+  optional int32 lac = 3;
+  optional int32 cid = 4;
+  optional int32 psc = 5;
+  optional int32 uarfcn = 6;
+}
+
+message CellIdentityCdma {
+  optional int32 network_id = 1;
+  optional int32 system_id = 2;
+  optional int32 basestation_id = 3;
+  optional int32 longitude = 4;
+  optional int32 latitude = 5;
+}
+
+message CellIdentityLte {
+  optional int32 mcc = 1;
+  optional int32 mnc = 2;
+  optional int32 ci = 3;
+  optional int32 pci = 4;
+  optional int32 tac = 5;
+  optional int32 earfcn = 6;
+}
+
+message CellIdentityTdscdma {
+  optional int32 mcc = 1;
+  optional int32 mnc = 2;
+  optional int32 lac = 3;
+  optional int32 cid = 4;
+  optional int32 cpid = 5;
+}
+
+message CellIdentityNr {
+  optional int32 mcc = 1;
+  optional int32 mnc = 2;
+  optional int64 nci = 3;
+  optional int32 pci = 4;
+  optional int32 tac = 5;
+  optional int32 nrarfcn = 6;
+}
+
+message SignalStrengthGsm {
+  optional int32 signal_strength = 1;
+  optional int32 bit_error_rate = 2;
+  optional int32 timing_advance = 3;
+}
+
+message SignalStrengthWcdma {
+  optional int32 signal_strength = 1;
+  optional int32 bit_error_rate = 2;
+}
+
+message SignalStrengthCdma {
+  optional int32 dbm = 1;
+  optional int32 ecio = 2;
+}
+
+message SignalStrengthEvdo {
+  optional int32 dbm = 1;
+  optional int32 ecio = 2;
+  optional int32 signal_noise_ratio = 3;
+}
+
+message SignalStrengthLte {
+  optional int32 signal_strength = 1;
+  optional int32 rsrp = 2;
+  optional int32 rsrq = 3;
+  optional int32 rssnr = 4;
+  optional int32 cqi = 5;
+  optional int32 timing_advance = 6;
+}
+
+message SignalStrengthTdscdma {
+  optional int32 rscp = 1;
+}
+
+message SignalStrengthNr {
+  optional int32 ss_rsrp = 1;
+  optional int32 ss_rsrq = 2;
+  optional int32 ss_sinr = 3;
+  optional int32 csi_rsrp = 4;
+  optional int32 csi_rsrq = 5;
+  optional int32 csi_sinr = 6;
 }
