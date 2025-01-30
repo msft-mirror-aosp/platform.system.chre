@@ -610,6 +610,71 @@ bool chreSendReliableMessageAsync(void *message, size_t messageSize,
 }
 #endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_10 */
 
+// Begin endpoint messaging APIs
+
+#if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11
+WEAK_SYMBOL
+bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
+                            struct chreMsgEndpointInfo *info) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgGetEndpointInfo);
+  return fptr != nullptr ? fptr(hubId, endpointId, info) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgConfigureEndpointReadyEvents(uint64_t hubId, uint64_t endpointId,
+                                         bool enable) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgConfigureEndpointReadyEvents);
+  return fptr != nullptr ? fptr(hubId, endpointId, enable) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgConfigureServiceReadyEvents(uint64_t hubId,
+                                        const char *serviceDescriptor,
+                                        bool enable) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgConfigureServiceReadyEvents);
+  return fptr != nullptr ? fptr(hubId, serviceDescriptor, enable) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgSessionGetInfo(uint16_t sessionId,
+                           struct chreMsgSessionInfo *info) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgSessionGetInfo);
+  return fptr != nullptr ? fptr(sessionId, info) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgPublishServices(const struct chreMsgServiceInfo *services,
+                            size_t numServices) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgPublishServices);
+  return fptr != nullptr ? fptr(services, numServices) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
+                             const char *serviceDescriptor) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgSessionOpenAsync);
+  return fptr != nullptr ? fptr(hubId, endpointId, serviceDescriptor) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgSessionCloseAsync(uint16_t sessionId) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgSessionCloseAsync);
+  return fptr != nullptr ? fptr(sessionId) : false;
+}
+
+WEAK_SYMBOL
+bool chreMsgSend(void *message, size_t messageSize, uint32_t messageType,
+                 uint16_t sessionId, uint32_t messagePermissions,
+                 chreMessageFreeFunction *freeCallback) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreMsgSend);
+  return fptr != nullptr ? fptr(message, messageSize, messageType, sessionId,
+                                messagePermissions, freeCallback)
+                         : false;
+}
+#endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11 */
+
+// End endpoint messaging APIs
+
 #if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_5
 WEAK_SYMBOL
 int8_t chreUserSettingGetState(uint8_t setting) {
