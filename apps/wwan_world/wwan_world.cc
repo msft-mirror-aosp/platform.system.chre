@@ -158,8 +158,14 @@ bool nanoappStart() {
   const char *wwanCapabilitiesStr;
   uint32_t wwanCapabilities = chreWwanGetCapabilities();
   switch (wwanCapabilities) {
+    case (CHRE_WWAN_GET_CELL_NEIGHBOR_INFO | CHRE_WWAN_GET_CELL_INFO):
+      wwanCapabilitiesStr = "GET_CELL_INFO & CHRE_WWAN_GET_CELL_NEIGHBOR_INFO";
+      break;
+    case CHRE_WWAN_GET_CELL_NEIGHBOR_INFO:
+      wwanCapabilitiesStr = "CHRE_WWAN_GET_CELL_NEIGHBOR_INFO";
+      break;
     case CHRE_WWAN_GET_CELL_INFO:
-      wwanCapabilitiesStr = "GET_CELL_INFO";
+      wwanCapabilitiesStr = "GET_CELL_INFO (NO CELL_NEIGHBOR GUARANTEE)";
       break;
     case CHRE_WWAN_CAPABILITIES_NONE:
       wwanCapabilitiesStr = "NONE";
