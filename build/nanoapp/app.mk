@@ -103,6 +103,11 @@ ifneq ($(NANOAPP_NO_UTILS_INCLUDE),true)
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 endif
 
+# As one nanaopp should only run in one thread, we don't want the compiler to
+# generate __cxa_guard_acquire/__cxa_guard_release which could be not supported
+# by platforms.
+COMMON_CFLAGS += -fno-threadsafe-statics
+
 # Allows a nanoapp to know that is compiled separately from the CHRE system.
 COMMON_CFLAGS += -DCHRE_IS_NANOAPP_BUILD
 
