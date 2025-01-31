@@ -200,6 +200,26 @@ std::optional<Endpoint> MessageRouter::getEndpointForService(
   return std::nullopt;
 }
 
+bool MessageRouter::doesEndpointHaveService(MessageHubId messageHubId,
+                                            EndpointId endpointId,
+                                            const char *serviceDescriptor) {
+  if (serviceDescriptor == nullptr) {
+    LOGE("Failed to check if endpoint has service: service descriptor is null");
+    return false;
+  }
+
+  MessageRouter::MessageHubCallback *callback =
+      getCallbackFromMessageHubId(messageHubId);
+  if (callback == nullptr) {
+    LOGE(
+        "Failed to check if endpoint has service for message hub with ID "
+        "%" PRIu64 " and endpoint ID %" PRIu64 ": hub not found",
+        messageHubId, endpointId);
+    return false;
+  }
+  return callback->doesEndpointHaveService(endpointId, serviceDescriptor);
+}
+
 void MessageRouter::forEachMessageHub(
     const pw::Function<bool(const MessageHubInfo &)> &function) {
   LockGuard<Mutex> lock(mMutex);
