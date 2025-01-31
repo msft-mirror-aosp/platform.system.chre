@@ -30,7 +30,7 @@ using ::chre::Nanoapp;
 
 DLL_EXPORT bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
                                        struct chreMsgEndpointInfo *info) {
-#if CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
   return info != nullptr && EventLoopManagerSingleton::get()
                                 ->getChreMessageHubManager()
                                 .getEndpointInfo(hubId, endpointId, *info);
@@ -110,7 +110,8 @@ DLL_EXPORT bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
 
 DLL_EXPORT bool chreMsgSessionCloseAsync(uint16_t sessionId) {
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
-  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  [[maybe_unused]] Nanoapp *nanoapp =
+      EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getChreMessageHubManager()
       .getMessageHub()
