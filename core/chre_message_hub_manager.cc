@@ -165,6 +165,25 @@ bool ChreMessageHubManager::openDefaultSessionAsync(
                           serviceDescriptor);
 }
 
+bool ChreMessageHubManager::closeSession(EndpointId fromEndpointId,
+                                         SessionId sessionId) {
+  std::optional<Session> session = mChreMessageHub.getSessionWithId(sessionId);
+  if (!session.has_value()) {
+    LOGE("Failed to close session with ID %" PRIu16 ": session not found",
+         sessionId);
+    return false;
+  }
+
+  Endpoint nanoapp(kChreMessageHubId, fromEndpointId);
+  if (session->initiator != nanoapp && session->peer != nanoapp) {
+    LOGE("Nanoapp with ID 0x%" PRIx64
+         " is not the initiator or peer of session with ID %" PRIu16,
+         fromEndpointId, sessionId);
+    return false;
+  }
+  return mChreMessageHub.closeSession(sessionId);
+}
+
 bool ChreMessageHubManager::sendMessage(void *message, size_t messageSize,
                                         uint32_t messageType,
                                         uint16_t sessionId,

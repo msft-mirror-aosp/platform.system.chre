@@ -110,12 +110,10 @@ DLL_EXPORT bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
 
 DLL_EXPORT bool chreMsgSessionCloseAsync(uint16_t sessionId) {
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
-  [[maybe_unused]] Nanoapp *nanoapp =
-      EventLoopManager::validateChreApiCall(__func__);
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
   return EventLoopManagerSingleton::get()
       ->getChreMessageHubManager()
-      .getMessageHub()
-      .closeSession(sessionId);
+      .closeSession(nanoapp->getAppId(), sessionId);
 #else
   UNUSED_VAR(sessionId);
   return false;

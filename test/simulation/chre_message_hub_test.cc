@@ -46,12 +46,13 @@ CREATE_CHRE_TEST_EVENT(TEST_GET_EVENT_INFO, 1);
 CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION, 2);
 CREATE_CHRE_TEST_EVENT(TEST_OPEN_DEFAULT_SESSION, 3);
 CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION, 4);
-CREATE_CHRE_TEST_EVENT(TEST_GET_SESSION_INFO_INVALID_SESSION, 5);
-CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE, 6);
-CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NO_FREE_CALLBACK, 7);
-CREATE_CHRE_TEST_EVENT(TEST_PUBLISH_SERVICE, 8);
-CREATE_CHRE_TEST_EVENT(TEST_BAD_LEGACY_SERVICE_NAME, 9);
-CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_WITH_SERVICE, 10);
+CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION_NON_PARTY, 5);
+CREATE_CHRE_TEST_EVENT(TEST_GET_SESSION_INFO_INVALID_SESSION, 6);
+CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE, 7);
+CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NO_FREE_CALLBACK, 8);
+CREATE_CHRE_TEST_EVENT(TEST_PUBLISH_SERVICE, 9);
+CREATE_CHRE_TEST_EVENT(TEST_BAD_LEGACY_SERVICE_NAME, 10);
+CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_WITH_SERVICE, 11);
 
 constexpr size_t kNumEndpoints = 3;
 constexpr size_t kMessageSize = 5;
@@ -619,6 +620,19 @@ class SessionAndMessageTestApp : public TestNanoapp {
             }
             break;
           }
+          case TEST_CLOSE_SESSION_NON_PARTY: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+
+              ASSERT_NE(event->data, nullptr);
+              SessionId sessionId = *static_cast<SessionId *>(event->data);
+
+              // Close the session that was opened by the other nanoapp
+              EXPECT_FALSE(chreMsgSessionCloseAsync(sessionId));
+            }
+            mCondVar.notify_one();
+            break;
+          }
           case TEST_GET_SESSION_INFO_INVALID_SESSION: {
             {
               std::unique_lock<std::mutex> lock(mMutex);
@@ -712,6 +726,48 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithGenericEndpoint) {
   EXPECT_EQ(session->initiator.endpointId, nanoapp->getAppId());
   EXPECT_EQ(session->peer.messageHubId, kOtherMessageHubId);
   EXPECT_EQ(session->peer.endpointId, kEndpointInfos[0].id);
+
+  // Explicitly clear the message hub and wait for the session to be closed
+  messageHub.reset();
+  condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappTriesToCloseNonPartySession) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+  SessionId sessionId = SESSION_ID_INVALID;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
+      mutex, condVar, sessionId,
+      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Load the nanoapp
+  uint64_t appId2 = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
+      mutex, condVar, sessionId,
+      TestNanoappInfo{.name = "TEST_OPEN_SESSION_NON_PARTY", .id = 0x1235}));
+  Nanoapp *nanoapp2 = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp2, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Test opening session
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
+  condVar.wait(lock);
+
+  // Now close the session and expect failure
+  sendEventToNanoapp(appId, TEST_CLOSE_SESSION_NON_PARTY, &sessionId);
+  condVar.wait(lock);
 
   // Explicitly clear the message hub and wait for the session to be closed
   messageHub.reset();
