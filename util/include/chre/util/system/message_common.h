@@ -59,9 +59,7 @@ enum class EndpointType : uint8_t {
 };
 
 //! Endpoint permissions
-//! This should match CHRE permissions.
-// TODO(b/373417024): Update permissions to this typed name in all MessageRouter
-// code
+//! This should match the CHRE_MESSAGE_PERMISSION_* constants.
 enum class EndpointPermission : uint32_t {
   NONE = 0,
   AUDIO = 1,
