@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "chre/target_platform/log.h"
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 #include "chre/core/chre_message_hub_manager.h"
@@ -22,6 +21,7 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/context.h"
+#include "chre/target_platform/log.h"
 #include "chre/util/conditional_lock_guard.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/message_common.h"
@@ -214,17 +214,17 @@ bool ChreMessageHubManager::publishServices(
 }
 
 chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
-    message::EndpointType type) {
+    EndpointType type) {
   switch (type) {
-    case message::EndpointType::HOST_FRAMEWORK:
+    case EndpointType::HOST_FRAMEWORK:
       return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_FRAMEWORK;
-    case message::EndpointType::HOST_APP:
+    case EndpointType::HOST_APP:
       return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_APP;
-    case message::EndpointType::HOST_NATIVE:
+    case EndpointType::HOST_NATIVE:
       return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_HOST_NATIVE;
-    case message::EndpointType::NANOAPP:
+    case EndpointType::NANOAPP:
       return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_NANOAPP;
-    case message::EndpointType::GENERIC:
+    case EndpointType::GENERIC:
       return chreMsgEndpointType::CHRE_MSG_ENDPOINT_TYPE_GENERIC;
     default:
       LOGE("Unknown endpoint type: %" PRIu8, type);
@@ -233,29 +233,29 @@ chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
 }
 
 chreMsgEndpointReason ChreMessageHubManager::toChreEndpointReason(
-    message::Reason reason) {
+    Reason reason) {
   switch (reason) {
-    case message::Reason::UNSPECIFIED:
+    case Reason::UNSPECIFIED:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
-    case message::Reason::OUT_OF_MEMORY:
+    case Reason::OUT_OF_MEMORY:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_OUT_OF_MEMORY;
-    case message::Reason::TIMEOUT:
+    case Reason::TIMEOUT:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_TIMEOUT;
-    case message::Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED:
+    case Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED:
       return chreMsgEndpointReason::
           CHRE_MSG_ENDPOINT_REASON_OPEN_ENDPOINT_SESSION_REQUEST_REJECTED;
-    case message::Reason::CLOSE_ENDPOINT_SESSION_REQUESTED:
+    case Reason::CLOSE_ENDPOINT_SESSION_REQUESTED:
       return chreMsgEndpointReason::
           CHRE_MSG_ENDPOINT_REASON_CLOSE_ENDPOINT_SESSION_REQUESTED;
-    case message::Reason::ENDPOINT_INVALID:
+    case Reason::ENDPOINT_INVALID:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_INVALID;
-    case message::Reason::ENDPOINT_GONE:
+    case Reason::ENDPOINT_GONE:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_GONE;
-    case message::Reason::ENDPOINT_CRASHED:
+    case Reason::ENDPOINT_CRASHED:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_ENDPOINT_CRASHED;
-    case message::Reason::HUB_RESET:
+    case Reason::HUB_RESET:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_HUB_RESET;
-    case message::Reason::PERMISSION_DENIED:
+    case Reason::PERMISSION_DENIED:
       return chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_PERMISSION_DENIED;
     default:
       LOGE("Unknown endpoint reason: %" PRIu8, reason);
@@ -359,7 +359,7 @@ void ChreMessageHubManager::handleMessageFreeCallback(uint16_t /* type */,
 }
 
 void ChreMessageHubManager::onSessionStateChanged(
-    const message::Session &session, std::optional<message::Reason> reason) {
+    const Session &session, std::optional<Reason> reason) {
   auto sessionCallbackData = MakeUnique<SessionCallbackData>();
   if (sessionCallbackData.isNull()) {
     FATAL_ERROR_OOM();
