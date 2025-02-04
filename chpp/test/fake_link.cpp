@@ -31,7 +31,7 @@ void FakeLink::appendTxPacket(uint8_t *data, size_t len) {
   {
     std::lock_guard<std::mutex> lock(mMutex);
     mTxPackets.emplace_back(std::move(pkt));
-    mCondVar.notify_all();
+    mTxCondVar.notify_all();
   }
 }
 
@@ -43,21 +43,25 @@ int FakeLink::getTxPacketCount() {
 bool FakeLink::waitForTxPacket(std::chrono::milliseconds timeout) {
   std::unique_lock<std::mutex> lock(mMutex);
   auto now = std::chrono::system_clock::now();
-  CHPP_LOGD("FakeLink::WaitForTxPacket waiting...");
-  while (mTxPackets.empty()) {
-    std::cv_status status = mCondVar.wait_until(lock, now + timeout);
-    if (status == std::cv_status::timeout) {
-      return false;
-    }
-  }
-  return true;
+  CHPP_LOGD("FakeLink::waitForTxPacket waiting...");
+  return mTxCondVar.wait_until(lock, now + timeout,
+                               [this] { return !mTxPackets.empty(); });
+}
+
+bool FakeLink::waitForEmpty(std::chrono::milliseconds timeout) {
+  std::unique_lock<std::mutex> lock(mMutex);
+  auto now = std::chrono::system_clock::now();
+  CHPP_LOGD("FakeLink::waitForEmpty waiting...");
+  return mRxCondVar.wait_until(lock, now + timeout,
+                               [this] { return mTxPackets.empty(); });
 }
 
 std::vector<uint8_t> FakeLink::popTxPacket() {
   std::lock_guard<std::mutex> lock(mMutex);
   assert(!mTxPackets.empty());
-  std::vector<uint8_t> vec = std::move(mTxPackets.back());
-  mTxPackets.pop_back();
+  std::vector<uint8_t> vec = std::move(mTxPackets.front());
+  mTxPackets.pop_front();
+  mRxCondVar.notify_all();
   return vec;
 }
 

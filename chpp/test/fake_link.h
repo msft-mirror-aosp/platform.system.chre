@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -23,6 +24,7 @@
 
 #include <android-base/thread_annotations.h>
 
+#include "chpp/log.h"
 #include "chpp/transport.h"
 
 using ::std::literals::chrono_literals::operator""ms;
@@ -62,6 +64,12 @@ class FakeLink {
    */
   bool waitForTxPacket(std::chrono::milliseconds timeout = kDefaultTimeout);
 
+  /**
+   * Similar to waitForTxPacket, but the inverse (waits until the queue is
+   * empty).
+   */
+  bool waitForEmpty(std::chrono::milliseconds timeout = kDefaultTimeout);
+
   //! Pop and return the oldest packet on the TX queue, or assert if queue is
   //! empty
   std::vector<uint8_t> popTxPacket();
@@ -69,10 +77,27 @@ class FakeLink {
   //! Empties the TX packet queue
   void reset();
 
+  bool isEnabled() const {
+    return mEnabled.load();
+  }
+
+  void disable() {
+    CHPP_LOGI("Link disabled");
+    mEnabled.store(false);
+  }
+
+  void enable() {
+    CHPP_LOGI("Link enabled");
+    mEnabled.store(true);
+  }
+
  private:
   std::mutex mMutex;
-  std::condition_variable mCondVar;
+  std::condition_variable mTxCondVar;
+  std::condition_variable mRxCondVar;
   std::deque<std::vector<uint8_t>> mTxPackets GUARDED_BY(mMutex);
+
+  std::atomic_bool mEnabled{true};
 };
 
 }  // namespace chpp::test

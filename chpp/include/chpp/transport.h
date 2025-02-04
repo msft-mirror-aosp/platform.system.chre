@@ -169,6 +169,8 @@ enum ChppTransportErrorCode {
   CHPP_TRANSPORT_ERROR_TIMEOUT = 6,
   //! Too many retries
   CHPP_TRANSPORT_ERROR_MAX_RETRIES = 7,
+  //! Forced reset at the transport
+  CHPP_TRANSPORT_ERROR_FORCED_RESET = 8,
   //! Message incomprehensible at App Layer
   CHPP_TRANSPORT_ERROR_APPLAYER = 0xF,
 };
@@ -531,6 +533,14 @@ bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
  */
 void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
                                 enum ChppTransportErrorCode errorCode);
+
+/**
+ * Forces a tranport layer reset. This function can be called from the app
+ * layer.
+ *
+ * @param context Maintains state for each transport layer instance.
+ */
+void chppTransportForceReset(struct ChppTransportState *context);
 
 /**
  * Provides systems that do not use chppWorkThreadStart() and its associated

@@ -34,6 +34,9 @@ extern "C" {
 //! the next timeout can be recalculated
 #define CHPP_TRANSPORT_SIGNAL_RECALC_TIMEOUT UINT32_C(1 << 2)
 
+//! Triggers a forced RESET at the transport layer
+#define CHPP_TRANSPORT_SIGNAL_FORCE_RESET UINT32_C(1 << 3)
+
 //! These bits are reserved for platform use (e.g. in the platform-specific
 //! link layer implementation).
 #define CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK UINT32_C(0xFFFF0000)

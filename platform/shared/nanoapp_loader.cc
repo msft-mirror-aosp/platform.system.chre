@@ -251,6 +251,16 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreHeapFree),
     ADD_EXPORTED_C_SYMBOL(chreIsHostAwake),
     ADD_EXPORTED_C_SYMBOL(chreLog),
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+    ADD_EXPORTED_C_SYMBOL(chreMsgConfigureEndpointReadyEvents),
+    ADD_EXPORTED_C_SYMBOL(chreMsgConfigureServiceReadyEvents),
+    ADD_EXPORTED_C_SYMBOL(chreMsgGetEndpointInfo),
+    ADD_EXPORTED_C_SYMBOL(chreMsgPublishServices),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSend),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionCloseAsync),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionGetInfo),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionOpenAsync),
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
     ADD_EXPORTED_C_SYMBOL(chreSendEvent),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHost),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
