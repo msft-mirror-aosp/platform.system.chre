@@ -214,19 +214,34 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
                   btSocketOpen->channelInfo());
           const char *name = getStringFromByteVector(btSocketOpen->name());
           HostMessageHandlers::handleBtSocketOpen(
-              hostClientId, static_cast<uint64_t>(btSocketOpen->socketId()),
-              name, static_cast<uint64_t>(btSocketOpen->endpointId()),
               static_cast<uint64_t>(btSocketOpen->hubId()),
-              static_cast<uint32_t>(btSocketOpen->aclConnectionHandle()),
-              static_cast<uint32_t>(leCocChannelInfo->localCid()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteCid()),
-              static_cast<uint32_t>(leCocChannelInfo->psm()),
-              static_cast<uint32_t>(leCocChannelInfo->localMtu()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteMtu()),
-              static_cast<uint32_t>(leCocChannelInfo->localMps()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteMps()),
-              static_cast<uint32_t>(leCocChannelInfo->initialRxCredits()),
-              static_cast<uint32_t>(leCocChannelInfo->initialTxCredits()));
+              BleL2capCocSocketData{
+                  .socketId = static_cast<uint64_t>(btSocketOpen->socketId()),
+                  .endpointId =
+                      static_cast<uint64_t>(btSocketOpen->endpointId()),
+                  .connectionHandle = static_cast<uint16_t>(
+                      btSocketOpen->aclConnectionHandle()),
+                  .hostClientId = hostClientId,
+                  .rxConfig =
+                      L2capCocConfig{.cid = static_cast<uint16_t>(
+                                         leCocChannelInfo->localCid()),
+                                     .mtu = static_cast<uint16_t>(
+                                         leCocChannelInfo->localMtu()),
+                                     .mps = static_cast<uint16_t>(
+                                         leCocChannelInfo->localMps()),
+                                     .credits = static_cast<uint16_t>(
+                                         leCocChannelInfo->initialRxCredits())},
+                  .txConfig =
+                      L2capCocConfig{.cid = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteCid()),
+                                     .mtu = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteMtu()),
+                                     .mps = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteMps()),
+                                     .credits = static_cast<uint16_t>(
+                                         leCocChannelInfo->initialTxCredits())},
+              },
+              name, static_cast<uint32_t>(leCocChannelInfo->psm()));
           success = true;
         }
         break;

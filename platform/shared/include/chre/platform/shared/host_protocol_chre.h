@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <cstdint>
 
+#include "chre/core/ble_l2cap_coc_socket_data.h"
 #include "chre/core/event_loop_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
@@ -104,14 +105,9 @@ class HostMessageHandlers {
 
   static void handleNanConfigurationUpdate(bool enabled);
 
-  static void handleBtSocketOpen(uint16_t hostClientId, uint64_t socketId,
-                                 const char *name, uint64_t endpointId,
-                                 uint64_t hubId, uint32_t aclConnectionHandle,
-                                 uint32_t localCid, uint32_t remoteCid,
-                                 uint32_t psm, uint32_t localMtu,
-                                 uint32_t remoteMtu, uint32_t localMps,
-                                 uint32_t remoteMps, uint32_t initialRxCredits,
-                                 uint32_t initialTxCredits);
+  static void handleBtSocketOpen(uint64_t hubId,
+                                 const BleL2capCocSocketData &socketData,
+                                 const char *name, uint32_t psm);
 
  private:
   static void sendFragmentResponse(uint16_t hostClientId,
