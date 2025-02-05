@@ -38,21 +38,35 @@ using HostHub = MessageHubManager::HostHub;
 
 void ContextHubV4Impl::init() {
   std::lock_guard lock(mHostHubOpLock);  // See header documentation.
-  std::vector<HubInfo> hubs;
-  std::vector<EndpointInfo> endpoints;
-  mManager.getHostState(&hubs, &endpoints);
   flatbuffers::FlatBufferBuilder builder;
   // NOTE: This message should be renamed as on initialization/CHRE restart it
   // is used both to initialize the CHRE-side host hub proxies and to request
   // embedded hub state.
-  HostProtocolHostV4::encodeGetMessageHubsAndEndpointsResponse(builder, hubs,
-                                                               endpoints);
-  // TODO(b/389991052): Uncomment the following code.
+  HostProtocolHostV4::encodeGetMessageHubsAndEndpointsRequest(builder);
+  // TODO(b/389991052): Uncomment the mSendMessageFn() lines below.
   // if (!mSendMessageFn(builder))
   //   LOGE("Failed to initialize CHRE host hub proxies");
+  mManager.forEachHostHub([](HostHub &hub) {
+    flatbuffers::FlatBufferBuilder builder;
+    HostProtocolHostV4::encodeRegisterMessageHub(builder, hub.info());
+    // if (!mSendMessageFn(builder)) {
+    //   LOGE("Failed to initialize proxy for host hub %" PRIu64, hub.id);
+    //   return;
+    // }
+    for (const auto &endpoint : hub.getEndpoints()) {
+      flatbuffers::FlatBufferBuilder builder;
+      HostProtocolHostV4::encodeRegisterEndpoint(builder, endpoint);
+      // if (!mSendMessageFn(builder)) {
+      //   LOGE("Failed to initialize proxy for host endpoint (%" PRIu64 ", %"
+      //        PRIu64 ")", endpoint.hubId, endpoint.id);
+      //   return;
+      // }
+    }
+  });
 }
 
 void ContextHubV4Impl::onChreDisconnected() {
+  LOGI("Clearing embedded message hub state.");
   mManager.clearEmbeddedState();
 }
 
@@ -341,13 +355,9 @@ bool ContextHubV4Impl::handleMessageFromChre(
 }
 
 void ContextHubV4Impl::onGetMessageHubsAndEndpointsResponse(
-    const ::chre::fbs::GetMessageHubsAndEndpointsResponseT &msg) {
-  std::vector<HubInfo> hubs;
-  std::vector<EndpointInfo> endpoints;
-  HostProtocolHostV4::decodeGetMessageHubsAndEndpointsResponse(msg, hubs,
-                                                               endpoints);
+    const ::chre::fbs::GetMessageHubsAndEndpointsResponseT & /*msg*/) {
   LOGI("Initializing embedded message hub cache");
-  mManager.initEmbeddedState(hubs, endpoints);
+  mManager.initEmbeddedState();
 }
 
 void ContextHubV4Impl::onRegisterMessageHub(

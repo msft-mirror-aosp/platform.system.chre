@@ -128,9 +128,21 @@ class MessageHubManager {
      */
     pw::Status unregister() EXCLUDES(mManager.mLock);
 
+    /**
+     * Returns the list of endpoints registered on this hub.
+     */
+    std::vector<EndpointInfo> getEndpoints() const;
+
     /** Returns the callback for the associated client */
     std::shared_ptr<IEndpointCallback> callback() const {
       return mCallback;
+    }
+
+    /**
+     * Returns the Message Hub info
+     */
+    const HubInfo &info() const {
+      return kInfo;
     }
 
     /**
@@ -250,33 +262,19 @@ class MessageHubManager {
   std::shared_ptr<HostHub> getHostHub(int64_t id) EXCLUDES(mLock);
 
   /**
-   * Gets the current host hub state to initialize the CHRE proxies
-   *
-   * @param hubs The list of message hubs to populate
-   * @params endpoints The list of endpoints to populate
-   */
-  void getHostState(std::vector<HubInfo> *hubs,
-                    std::vector<EndpointInfo> *endpoints) EXCLUDES(mLock);
-
-  /**
    * Apply the given function to each host hub.
    *
    * @param fn The function to apply.
    */
-  void forEachHostHub(std::function<void(HostHub &hub)> fn);
+  void forEachHostHub(std::function<void(HostHub &hub)> fn) EXCLUDES(mLock);
 
   /**
-   * Wipes and initializes the cache of embedded hubs and endpoints
+   * Wipes and marks the embedded state cache ready.
    *
    * This should only be called once during startup as it invalidates session
    * state (i.e. existing sessions will be pruned).
-   *
-   * @param hubs The list of message hubs
-   * @param endpoints The list of endpoints
    */
-  void initEmbeddedState(const std::vector<HubInfo> &hubs,
-                         const std::vector<EndpointInfo> &endpoints)
-      EXCLUDES(mLock);
+  void initEmbeddedState() EXCLUDES(mLock);
 
   /**
    * Clears cache of embedded state and closes all sessions.

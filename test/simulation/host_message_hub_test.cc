@@ -49,10 +49,8 @@ using ::chre::message::Session;
 using ::chre::message::SessionId;
 using ::testing::_;
 using ::testing::NiceMock;
+using ::testing::Sequence;
 using ::testing::UnorderedElementsAreArray;
-
-using ProcessEndpointFn =
-    HostMessageHubManager::HostCallback::ProcessEndpointFn;
 
 class MockMessageHubCallback : public MessageRouter::MessageHubCallback {
  public:
@@ -79,10 +77,10 @@ class MockMessageHubCallback : public MessageRouter::MessageHubCallback {
 
 class MockHostCallback : public HostMessageHubManager::HostCallback {
  public:
-  MOCK_METHOD(
-      void, onReset,
-      (const pw::Function<void(const ProcessEndpointFn &)> &forEachEndpoint),
-      (override));
+  MOCK_METHOD(void, onReset, (), (override));
+  MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &hub), (override));
+  MOCK_METHOD(void, onEndpointRegistered,
+              (MessageHubId hub, const EndpointInfo &endpoint), (override));
   MOCK_METHOD(bool, onMessageReceived,
               (MessageHubId hub, SessionId session,
                pw::UniquePtr<std::byte[]> &&data, uint32_t type,
@@ -155,50 +153,45 @@ class HostMessageHubTest : public TestBase {
   MockHostCallback mHostCallback;
 };
 
+MATCHER_P(HubIdMatcher, id, "Matches a MessageHubInfo by id") {
+  return arg.id == id;
+}
+
 TEST_F(HostMessageHubTest, Reset) {
-  // onReset() should be called exactly 3 times and only report embedded hub
-  // state.
-  EXPECT_CALL(mHostCallback, onReset(_))
-      .Times(3)
-      .WillRepeatedly(
-          [](const pw::Function<void(const ProcessEndpointFn &)> &cb) {
-            std::unordered_set<EndpointId> endpoints;
-            cb([&endpoints](const MessageHubInfo &hub,
-                            const EndpointInfo &endpoint) {
-              EXPECT_EQ(hub.id, kEmbeddedHub.id);
-              endpoints.insert(endpoint.id);
-            });
-            EXPECT_THAT(endpoints, UnorderedElementsAreArray(kEndpointIds));
-          });
+  // On each reset(), expect onReset() followed by onHubRegistered() and
+  // onEndpointRegistered() for each endpoint.
+  auto resetExpectations = [this] {
+    Sequence defaultHub, testHub;
+    EXPECT_CALL(mHostCallback, onReset())
+        .InSequence(defaultHub, testHub)
+        .RetiresOnSaturation();
+    EXPECT_CALL(mHostCallback, onHubRegistered(HubIdMatcher(CHRE_PLATFORM_ID)))
+        .InSequence(defaultHub)
+        .RetiresOnSaturation();
+    EXPECT_CALL(mHostCallback, onHubRegistered(kEmbeddedHub))
+        .InSequence(defaultHub)
+        .RetiresOnSaturation();
+    for (const auto &info : kEndpoints) {
+      EXPECT_CALL(mHostCallback, onEndpointRegistered(kEmbeddedHub.id, info))
+          .InSequence(defaultHub)
+          .RetiresOnSaturation();
+    }
+  };
 
-  // reset() with empty host state.
-  getManager().reset(/*hubs=*/{}, /*endpoints=*/{});
-
-  // Expect only embedded endpoints.
+  // reset() with no host endpoints.
+  resetExpectations();
+  getManager().reset();
   getRouter().forEachEndpoint(
       [](const MessageHubInfo &hub, const EndpointInfo &) {
         EXPECT_EQ(hub.id, kEmbeddedHub.id);
       });
 
-  // reset() with a single host hub with two endpoints.
-  std::vector<std::pair<MessageHubId, const EndpointInfo>> endpoints;
-  for (const auto &info : kEndpoints) endpoints.push_back({kHostHub.id, info});
-  getManager().reset({&kHostHub, 1}, {endpoints.data(), endpoints.size()});
-
-  // Expect all embedded and host endpoints.
-  for (const auto &info : kEndpoints)
-    endpoints.push_back({kEmbeddedHub.id, info});
-  decltype(endpoints) testEndpoints;
-  getRouter().forEachEndpoint([&testEndpoints](const MessageHubInfo &hub,
-                                               const EndpointInfo &endpoint) {
-    testEndpoints.push_back({hub.id, endpoint});
-  });
-  EXPECT_THAT(testEndpoints, UnorderedElementsAreArray(endpoints));
-
-  // reset() again with empty host state.
-  getManager().reset(/*hubs=*/{}, /*endpoints=*/{});
-
-  // Expect only embedded endpoints.
+  // Add a host hub and endpoint. MessageRouter should see none of them after a
+  // second reset().
+  getManager().registerHub(kHostHub);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  resetExpectations();
+  getManager().reset();
   getRouter().forEachEndpoint(
       [](const MessageHubInfo &hub, const EndpointInfo &) {
         EXPECT_EQ(hub.id, kEmbeddedHub.id);
