@@ -27,8 +27,11 @@
 #include "chre/platform/shared/host_protocol_common.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/flatbuffers/helpers.h"
+#include "chre/util/system/message_common.h"
 #include "chre_api/chre/event.h"
 #include "flatbuffers/flatbuffers.h"
+
+#include "pw_allocator/unique_ptr.h"
 
 namespace chre {
 
@@ -361,6 +364,83 @@ class HostProtocolChre : public HostProtocolCommon {
   static void encodeBtSocketClose(ChreFlatBufferBuilder &builder,
                                   uint16_t hostClientId, uint64_t socketId,
                                   const char *reason);
+
+  /**
+   * Encodes the response acking a GetMessageHubsAndEndpointsRequest.
+   *
+   * @param builder Builder which assembles and stores the message.
+   */
+  static void encodeGetMessageHubsAndEndpointsResponse(
+      ChreFlatBufferBuilder &builder);
+
+  /**
+   * Encodes a new embedded hub notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Details of the new hub.
+   */
+  static void encodeRegisterMessageHub(ChreFlatBufferBuilder &builder,
+                                       const message::MessageHubInfo &hub);
+
+  /**
+   * Encodes a new embedded endpoint notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the new endpoint.
+   * @param endpoint Details of the new endpoint.
+   */
+  static void encodeRegisterEndpoint(ChreFlatBufferBuilder &builder,
+                                     message::MessageHubId hub,
+                                     const message::EndpointInfo &endpoint);
+
+  /**
+   * Encodes a request to open a new session with host endpoint.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param session Details of the new session.
+   */
+  static void encodeOpenEndpointSessionRequest(ChreFlatBufferBuilder &builder,
+                                               const message::Session &session);
+
+  /**
+   * Encodes a notification that a session has been opened.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the destination host hub.
+   * @param session Id of the session that was opened.
+   */
+  static void encodeEndpointSessionOpened(ChreFlatBufferBuilder &builder,
+                                          message::MessageHubId hub,
+                                          message::SessionId session);
+
+  /**
+   * Encodes a notification that a session has been closed.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the destination host hub.
+   * @param session Id of the session that was closed.
+   * @param reason Reason the session was closed (or rejected).
+   */
+  static void encodeEndpointSessionClosed(ChreFlatBufferBuilder &builder,
+                                          message::MessageHubId hub,
+                                          message::SessionId session,
+                                          message::Reason reason);
+
+  /**
+   * Encodes a message sent within an endpoint session.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the destination host hub.
+   * @param session Id of the session.
+   * @param data The message data.
+   * @param type The type of the message.
+   * @param permissions The permissions required to receive the message.
+   */
+  static void encodeEndpointSessionMessage(ChreFlatBufferBuilder &builder,
+                                           message::MessageHubId hub,
+                                           message::SessionId session,
+                                           pw::UniquePtr<std::byte[]> &&data,
+                                           uint32_t type, uint32_t permissions);
 };
 
 }  // namespace chre
