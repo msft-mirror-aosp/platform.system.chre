@@ -1094,7 +1094,7 @@ static void chppTransportDoWork(struct ChppTransportState *context,
         chppAddPayload(context);
         context->txStatus.txAttempts++;
       }
-    } else {
+    } else if (chppHavePendingTxPayload(context)) {
       // We have pending payload but aren't sending it, for example if we're
       // just sending a NAK for a bad incoming payload-bearing packet
       CHPP_LOGI("Skipping attaching pending payload");
