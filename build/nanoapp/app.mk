@@ -106,6 +106,9 @@ endif
 # As one nanaopp should only run in one thread, we don't want the compiler to
 # generate __cxa_guard_acquire/__cxa_guard_release which could be not supported
 # by platforms.
+# Note: this flag is clang/GCC-specific, so ideally it would go in a
+# compiler-specific area, but today there is no good place and we do not build
+# with other toolchains using this build system.
 COMMON_CFLAGS += -fno-threadsafe-statics
 
 # Allows a nanoapp to know that is compiled separately from the CHRE system.

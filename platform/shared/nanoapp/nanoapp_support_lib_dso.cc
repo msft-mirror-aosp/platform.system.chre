@@ -388,6 +388,22 @@ bool chreBleGetScanStatus(struct chreBleScanStatus *status) {
 }
 #endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_8 */
 
+#if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11
+WEAK_SYMBOL
+bool chreBleSocketAccept(uint64_t socketId) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreBleSocketAccept);
+  return (fptr != nullptr) ? fptr(socketId) : false;
+}
+
+WEAK_SYMBOL
+int32_t chreBleSocketSend(uint64_t socketId, const void *data, uint16_t length,
+                          chreBleSocketPacketFreeFunction *freeCallback) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreBleSocketSend);
+  return (fptr != nullptr) ? fptr(socketId, data, length, freeCallback)
+                           : CHRE_ERROR_NOT_SUPPORTED;
+}
+#endif /* CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_11 */
+
 #endif /* CHRE_NANOAPP_USES_BLE */
 
 #if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_2
