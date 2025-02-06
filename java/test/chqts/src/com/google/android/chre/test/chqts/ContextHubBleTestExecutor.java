@@ -346,10 +346,10 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     }
 
     /**
-     * Returns true if the required BLE capabilities and filter capabilities exist,
-     * otherwise returns false.
+     * Returns true if the required BLE capabilities and filter capabilities exist, otherwise
+     * returns false.
      */
-    public boolean doesNecessaryBleCapabilitiesExist() throws Exception {
+    public boolean doNecessaryBleCapabilitiesExist() throws Exception {
         if (mBluetoothLeScanner == null) {
             return false;
         }
@@ -369,10 +369,10 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
     }
 
     /**
-     * Returns true if the required BLE capabilities and filter capabilities exist
-     * on the AP, otherwise returns false.
+     * Returns true if the required BLE capabilities and filter capabilities exist on the AP,
+     * otherwise returns false.
      */
-    public boolean doesNecessaryBleCapabilitiesExistOnTheAP() throws Exception {
+    public boolean doNecessaryBleCapabilitiesExistOnTheAP() throws Exception {
         return mBluetoothLeAdvertiser != null;
     }
 
@@ -406,8 +406,8 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
         AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setLegacyMode(true)
                 .setConnectable(false)
-                .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
-                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()
@@ -434,8 +434,8 @@ public class ContextHubBleTestExecutor extends ContextHubChreApiTestExecutor {
         AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setLegacyMode(true)
                 .setConnectable(false)
-                .setInterval(AdvertisingSetParameters.INTERVAL_HIGH)
-                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()

@@ -20,6 +20,7 @@
 
 #include <array>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,6 +28,7 @@
 #include <aidl/android/hardware/contexthub/BnContextHub.h>
 #include <aidl/android/hardware/contexthub/BnEndpointCommunication.h>
 #include <chre_host/generated/host_messages_generated.h>
+#include <flatbuffers/flatbuffers.h>
 
 #include "message_hub_manager.h"
 
@@ -49,10 +51,12 @@ using ::ndk::ScopedAStatus;
  */
 class ContextHubV4Impl {
  public:
-  using SendMessageFn = std::function<bool(uint8_t *data, size_t size)>;
+  using SendMessageFn =
+      std::function<bool(const flatbuffers::FlatBufferBuilder &builder)>;
 
   explicit ContextHubV4Impl(SendMessageFn sendMessageFn)
-      : mManager([this](int64_t id) { onHostHubDown(id); }),
+      : mManager(std::bind(&ContextHubV4Impl::unlinkDeadHostHub, this,
+                           std::placeholders::_1)),
         mSendMessageFn(std::move(sendMessageFn)) {}
   ~ContextHubV4Impl() = default;
 
@@ -60,9 +64,22 @@ class ContextHubV4Impl {
    * Initializes the implementation.
    *
    * This should be called once a connection with CHRE has been established.
-   * Requests a dump of embedded hubs and endpoints from CHRE.
+   * Requests a dump of embedded hubs and endpoints from CHRE. Initializes the
+   * CHRE-side host hub proxies.
    */
   void init();
+
+  /**
+   * Closes all existing sessions and embedded endpoints.
+   */
+  void onChreDisconnected();
+
+  /**
+   * Sends host state to CHRE.
+   *
+   * This should be called once the connection with CHRE has been restored.
+   */
+  void onChreRestarted();
 
   // IContextHub (V4+) API implementation.
   ScopedAStatus getHubs(std::vector<HubInfo> *hubs);
@@ -100,10 +117,24 @@ class ContextHubV4Impl {
       const ::chre::fbs::EndpointSessionMessageDeliveryStatusT &msg);
 
   // Callback invoked when a HAL client associated with a host hub goes down.
-  void onHostHubDown(int64_t id);
+  void unlinkDeadHostHub(std::function<pw::Result<int64_t>()> unlinkFn);
+
+  // Log error and close a session.
+  void handleSessionFailure(
+      const std::shared_ptr<MessageHubManager::HostHub> &hub, uint16_t session,
+      pw::Status status);
 
   MessageHubManager mManager;
   SendMessageFn mSendMessageFn;
+
+  // This lock is required to be held around any operation which modifies the
+  // sets of host hubs or endpoints known by mManager and then sends an update
+  // message to CHRE. This ensures that init()/onChreRestarted() are atomic
+  // w.r.t. registerEndpointHub(), unregister(), registerEndpoint() and
+  // unregisterEndpoint(). As init() resets CHRE-side host hub state,
+  // interleaving these operations could e.g. leave an existing host hub
+  // inaccessible from CHRE.
+  std::mutex mHostHubOpLock;
 };
 
 /**
@@ -113,8 +144,12 @@ class ContextHubV4Impl {
  */
 class HostHubInterface : public BnEndpointCommunication {
  public:
-  explicit HostHubInterface(std::shared_ptr<MessageHubManager::HostHub> hub)
-      : mHub(std::move(hub)) {
+  explicit HostHubInterface(std::shared_ptr<MessageHubManager::HostHub> hub,
+                            ContextHubV4Impl::SendMessageFn &sendMessageFn,
+                            std::mutex &hostHubOpLock)
+      : mHub(std::move(hub)),
+        mSendMessageFn(sendMessageFn),
+        mHostHubOpLock(hostHubOpLock) {
     assert(mHub != nullptr);
   }
   ~HostHubInterface() = default;
@@ -138,6 +173,9 @@ class HostHubInterface : public BnEndpointCommunication {
 
  private:
   std::shared_ptr<MessageHubManager::HostHub> mHub;
+  // see ContextHubV4Impl::mSendMessageFn.
+  ContextHubV4Impl::SendMessageFn &mSendMessageFn;
+  std::mutex &mHostHubOpLock;  // see ContextHubV4Impl::mHostHubOpLock.
 };
 
 }  // namespace android::hardware::contexthub::common::implementation

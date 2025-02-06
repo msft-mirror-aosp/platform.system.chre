@@ -40,7 +40,7 @@ struct PresenceServiceData {
   // following the spec (go/nearby-presence-spec).
   // Returns no value if parse fails. Callee keeps the ownership of data.
   static chre::Optional<PresenceServiceData> Parse(const uint8_t data[],
-                                                   const uint16_t size);
+                                                   uint16_t size);
   chre::Optional<uint8_t> first_intent;
   chre::Optional<uint8_t> second_intent;
   bool has_fp_model_id = false;

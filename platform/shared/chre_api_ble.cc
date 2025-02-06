@@ -131,3 +131,37 @@ DLL_EXPORT bool chreBleGetScanStatus(struct chreBleScanStatus *status) {
   return false;
 #endif  // CHRE_BLE_SUPPORT_ENABLED
 }
+
+DLL_EXPORT bool chreBleSocketAccept(uint64_t socketId) {
+#ifdef CHRE_BLE_SOCKET_SUPPORT_ENABLED
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  return nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE) &&
+         EventLoopManagerSingleton::get()
+             ->getBleSocketManager()
+             .acceptBleSocket(socketId);
+#else
+  UNUSED_VAR(socketId);
+  return false;
+#endif  // CHRE_BLE_SOCKET_SUPPORT_ENABLED
+}
+
+DLL_EXPORT int32_t
+chreBleSocketSend(uint64_t socketId, const void *data, uint16_t length,
+                  chreBleSocketPacketFreeFunction *freeCallback) {
+#ifdef CHRE_BLE_SOCKET_SUPPORT_ENABLED
+  Nanoapp *nanoapp = EventLoopManager::validateChreApiCall(__func__);
+  if (!nanoapp->permitPermissionUse(NanoappPermissions::CHRE_PERMS_BLE)) {
+    return chreError::CHRE_ERROR_PERMISSION_DENIED;
+  }
+  return EventLoopManagerSingleton::get()
+      ->getBleSocketManager()
+      .sendBleSocketPacket(socketId, data, length, freeCallback);
+#else
+  UNUSED_VAR(socketId);
+  UNUSED_VAR(data);
+  UNUSED_VAR(length);
+  UNUSED_VAR(freeCallback);
+
+  return chreError::CHRE_ERROR_NOT_SUPPORTED;
+#endif  // CHRE_BLE_SOCKET_SUPPORT_ENABLED
+}

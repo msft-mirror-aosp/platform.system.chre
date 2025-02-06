@@ -52,7 +52,7 @@ class DynamicVector : private DynamicVectorBase {
   DynamicVector(DynamicVector<ElementType> &&other);
 
   /**
-   * Move-constructs a dynamic vector from another. The other dynamic vector is
+   * Move assigns a dynamic vector from another. The other dynamic vector is
    * left in an empty state.
    */
   DynamicVector &operator=(DynamicVector<ElementType> &&other);
@@ -369,6 +369,6 @@ class DynamicVector : private DynamicVectorBase {
 
 }  // namespace chre
 
-#include "chre/util/dynamic_vector_impl.h"
+#include "chre/util/dynamic_vector_impl.h"  // IWYU pragma: export
 
 #endif  // CHRE_UTIL_DYNAMIC_VECTOR_H_

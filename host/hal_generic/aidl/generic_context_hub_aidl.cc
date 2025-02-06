@@ -458,6 +458,11 @@ void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
 }
 
 void ContextHub::onContextHubRestarted() {
+  if (mV4Impl) {
+    mV4Impl->onChreDisconnected();
+    mV4Impl->onChreRestarted();
+  }
+
   std::lock_guard<std::mutex> lock(mCallbackMutex);
   mIsWifiAvailable.reset();
   {

@@ -44,7 +44,8 @@ ChppEmptyPacket generateEmptyPacket(uint8_t ackSeq, uint8_t seq,
   return pkt;
 }
 
-ChppResetPacket generateResetPacket(uint8_t ackSeq, uint8_t seq) {
+ChppResetPacket generateResetPacket(uint8_t ackSeq, uint8_t seq,
+                                    uint8_t error) {
   // clang-format off
   ChppResetPacket pkt = {
     .preamble = kPreamble,
@@ -52,7 +53,7 @@ ChppResetPacket generateResetPacket(uint8_t ackSeq, uint8_t seq) {
       .flags = CHPP_TRANSPORT_FLAG_FINISHED_DATAGRAM,
       .packetCode = static_cast<uint8_t>(CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
           CHPP_TRANSPORT_ATTR_RESET,
-          CHPP_TRANSPORT_ERROR_NONE
+          error
       )),
       .ackSeq = ackSeq,
       .seq = seq,
@@ -373,7 +374,7 @@ void checkPacketValidity(std::vector<uint8_t> &received) {
   EXPECT_EQ(pkt.header.reserved, 0);
 
   uint8_t error = CHPP_TRANSPORT_GET_ERROR(pkt.header.packetCode);
-  EXPECT_TRUE(error <= CHPP_TRANSPORT_ERROR_MAX_RETRIES ||
+  EXPECT_TRUE(error <= CHPP_TRANSPORT_SIGNAL_FORCE_RESET ||
               error == CHPP_TRANSPORT_ERROR_APPLAYER);
   uint8_t attrs = CHPP_TRANSPORT_GET_ATTR(pkt.header.packetCode);
   EXPECT_TRUE(attrs <= CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE);

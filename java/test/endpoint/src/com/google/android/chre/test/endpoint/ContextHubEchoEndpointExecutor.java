@@ -26,13 +26,19 @@ import android.hardware.contexthub.HubEndpointSession;
 import android.hardware.contexthub.HubEndpointSessionResult;
 import android.hardware.contexthub.HubMessage;
 import android.hardware.contexthub.HubServiceInfo;
+import android.hardware.location.ContextHubInfo;
 import android.hardware.location.ContextHubManager;
 import android.hardware.location.ContextHubTransaction;
+import android.hardware.location.NanoAppBinary;
+import android.hardware.location.NanoAppState;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.InstrumentationRegistry;
+
+import com.google.android.utils.chre.ChreTestUtil;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -64,13 +70,25 @@ public class ContextHubEchoEndpointExecutor {
     private static final int ECHO_SERVICE_MAJOR_VERSION = 1;
     private static final int ECHO_SERVICE_MINOR_VERSION = 0;
 
-    private static final long ECHO_NANOAPP_ID = 0x476f6f6754fffffbL;
-
     private static final int TIMEOUT_MESSAGE_SECONDS = 5;
 
     private static final int TIMEOUT_SESSION_OPEN_SECONDS = 5;
+    private static final int TIMEOUT_DISCOVERY_SECONDS = 5;
 
-    private final ContextHubManager mContextHubManager;
+    @NonNull private final ContextHubManager mContextHubManager;
+    @Nullable private final ContextHubInfo mContextHubInfo;
+
+    /** The nanoapp binary which publishes a test echo service */
+    @Nullable private final NanoAppBinary mEchoServiceNanoappBinary;
+
+    /** The ID of the above nanoapp */
+    private static final long ECHO_SERVICE_NANOAPP_ID = 0x476f6f6754fffffbL;
+
+    /** The nanoapp binary which connects to a host-side test echo service */
+    @Nullable private final NanoAppBinary mEchoClientNanoappBinary;
+
+    /** The ID of the above nanoapp */
+    private static final long ECHO_CLIENT_NANOAPP_ID = 0x476f6f6754000012L;
 
     /** A local hub endpoint currently registered with the service. */
     private HubEndpoint mRegisteredEndpoint = null;
@@ -87,22 +105,12 @@ public class ContextHubEchoEndpointExecutor {
         @Override
         public HubEndpointSessionResult onSessionOpenRequest(
                 HubEndpointInfo requester, String serviceDescriptor) {
-            Log.e(TAG, "onSessionOpenRequest");
+            Log.d(TAG, "onSessionOpenRequest");
             HubEndpointSessionResult result =
                     mAcceptSession
                             ? HubEndpointSessionResult.accept()
                             : HubEndpointSessionResult.reject("Unexpected request");
-            // TODO(b/385765805): Change to assert once callback path is explicitly validated
-            if (result.isAccepted() != mAcceptSession) {
-                Log.w(
-                        TAG,
-                        "Unexpected session result status: expected "
-                                + mAcceptSession
-                                + " got "
-                                + result.isAccepted()
-                                + " reason="
-                                + result.getReason());
-            }
+            mSessionRequestQueue.add(result);
             return result;
         }
 
@@ -114,17 +122,30 @@ public class ContextHubEchoEndpointExecutor {
 
         @Override
         public void onSessionClosed(HubEndpointSession session, int reason) {
-            Log.e(TAG, "onSessionClosed: session=" + session);
+            Log.d(TAG, "onSessionClosed: session=" + session);
+            mSessionCloseQueue.add(Pair.create(session, reason));
         }
 
         public HubEndpointSession waitForEndpointSession() throws InterruptedException {
             return mSessionQueue.poll(TIMEOUT_SESSION_OPEN_SECONDS, TimeUnit.SECONDS);
         }
 
+        public HubEndpointSessionResult waitForOpenSessionRequest() throws InterruptedException {
+            return mSessionRequestQueue.poll(TIMEOUT_SESSION_OPEN_SECONDS, TimeUnit.SECONDS);
+        }
+
+        public Pair<HubEndpointSession, Integer> waitForCloseSession() throws InterruptedException {
+            return mSessionCloseQueue.poll(TIMEOUT_SESSION_OPEN_SECONDS, TimeUnit.SECONDS);
+        }
+
         /** If true, accepts incoming sessions */
         private final boolean mAcceptSession;
 
         private final BlockingQueue<HubEndpointSession> mSessionQueue = new ArrayBlockingQueue<>(1);
+        private final BlockingQueue<HubEndpointSessionResult> mSessionRequestQueue =
+                new ArrayBlockingQueue<>(1);
+        private final BlockingQueue<Pair<HubEndpointSession, Integer>> mSessionCloseQueue =
+                new ArrayBlockingQueue<>(1);
     }
 
     static class TestMessageCallback implements HubEndpointMessageCallback {
@@ -145,6 +166,7 @@ public class ContextHubEchoEndpointExecutor {
         @Override
         public void onEndpointsStarted(@NonNull List<HubDiscoveryInfo> discoveryInfoList) {
             Log.d(TAG, "onEndpointsStarted: discovery size=" + discoveryInfoList.size());
+            mEndpointStartedQueue.add(discoveryInfoList);
         }
 
         @Override
@@ -156,17 +178,62 @@ public class ContextHubEchoEndpointExecutor {
                             + discoveryInfoList.size()
                             + ", reason="
                             + reason);
+            mEndpointStoppedQueue.add(Pair.create(discoveryInfoList, reason));
         }
+
+        public List<HubDiscoveryInfo> waitForStarted() throws InterruptedException {
+            return mEndpointStartedQueue.poll(TIMEOUT_DISCOVERY_SECONDS, TimeUnit.SECONDS);
+        }
+
+        public Pair<List<HubDiscoveryInfo>, Integer> waitForStopped() throws InterruptedException {
+            return mEndpointStoppedQueue.poll(TIMEOUT_DISCOVERY_SECONDS, TimeUnit.SECONDS);
+        }
+
+        private BlockingQueue<List<HubDiscoveryInfo>> mEndpointStartedQueue =
+                new ArrayBlockingQueue<>(1);
+        private BlockingQueue<Pair<List<HubDiscoveryInfo>, Integer>> mEndpointStoppedQueue =
+                new ArrayBlockingQueue<>(1);
     }
 
     public ContextHubEchoEndpointExecutor(ContextHubManager manager) {
+        this(
+                manager,
+                /* info= */ null,
+                /* echoServiceNanoappBinary= */ null,
+                /* echoClientNanoappBinary= */ null);
+    }
+
+    public ContextHubEchoEndpointExecutor(
+            ContextHubManager manager,
+            ContextHubInfo info,
+            NanoAppBinary echoServiceNanoappBinary,
+            NanoAppBinary echoClientNanoappBinary) {
+        if (echoServiceNanoappBinary != null) {
+            Assert.assertEquals(echoServiceNanoappBinary.getNanoAppId(), ECHO_SERVICE_NANOAPP_ID);
+        }
+        if (echoClientNanoappBinary != null) {
+            Assert.assertEquals(echoServiceNanoappBinary.getNanoAppId(), ECHO_CLIENT_NANOAPP_ID);
+        }
         mContextHubManager = manager;
+        mContextHubInfo = info;
+        mEchoServiceNanoappBinary = echoServiceNanoappBinary;
+        mEchoClientNanoappBinary = echoClientNanoappBinary;
     }
 
     /** Deinitialization code that should be called in e.g. @After. */
     public void deinit() {
         if (mRegisteredEndpoint != null) {
-            unregisterEndpointNoThrow(mRegisteredEndpoint);
+            unregisterRegisteredEndpointNoThrow();
+        }
+        if (mContextHubInfo != null && mEchoServiceNanoappBinary != null) {
+            List<NanoAppState> stateList =
+                    ChreTestUtil.queryNanoAppsAssertSuccess(mContextHubManager, mContextHubInfo);
+            for (NanoAppState state : stateList) {
+                if (state.getNanoAppId() == ECHO_SERVICE_NANOAPP_ID) {
+                    ChreTestUtil.unloadNanoAppAssertSuccess(
+                            mContextHubManager, mContextHubInfo, state.getNanoAppId());
+                }
+            }
         }
     }
 
@@ -177,7 +244,9 @@ public class ContextHubEchoEndpointExecutor {
      * @return The list of hub discovery info which contains the echo service.
      */
     public List<HubDiscoveryInfo> getEchoServiceList() {
-        List<HubDiscoveryInfo> infoList = mContextHubManager.findEndpoints(ECHO_SERVICE_DESCRIPTOR);
+        List<HubDiscoveryInfo> infoList = new ArrayList<>();
+        checkApiSupport(
+                (manager) -> infoList.addAll(manager.findEndpoints(ECHO_SERVICE_DESCRIPTOR)));
         for (HubDiscoveryInfo info : infoList) {
             printHubDiscoveryInfo(info);
             HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
@@ -191,8 +260,11 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(serviceInfo);
             Assert.assertEquals(ECHO_SERVICE_DESCRIPTOR, serviceInfo.getServiceDescriptor());
 
-            List<HubDiscoveryInfo> identifierDiscoveryList =
-                    mContextHubManager.findEndpoints(identifier.getEndpoint());
+            List<HubDiscoveryInfo> identifierDiscoveryList = new ArrayList<>();
+            checkApiSupport(
+                    (manager) ->
+                            identifierDiscoveryList.addAll(
+                                    manager.findEndpoints(ECHO_SERVICE_DESCRIPTOR)));
             Assert.assertNotEquals(identifierDiscoveryList.size(), 0);
         }
         return infoList;
@@ -201,7 +273,7 @@ public class ContextHubEchoEndpointExecutor {
     /** Validates that a local endpoint can be registered/unregistered. */
     public void testDefaultEndpointRegistration() throws Exception {
         mRegisteredEndpoint = registerDefaultEndpoint();
-        unregisterEndpoint(mRegisteredEndpoint);
+        unregisterRegisteredEndpoint();
     }
 
     /**
@@ -215,7 +287,7 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(targetEndpointInfo);
             mRegisteredEndpoint = registerDefaultEndpoint();
             openSessionOrFailNoDescriptor(mRegisteredEndpoint, targetEndpointInfo);
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
@@ -236,7 +308,7 @@ public class ContextHubEchoEndpointExecutor {
             Assert.assertNotNull(session);
             session.close();
 
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
@@ -279,7 +351,11 @@ public class ContextHubEchoEndpointExecutor {
                             messageType,
                             new byte[] {1, 2, 3, 4, 5}).setResponseRequired(true).build();
             ContextHubTransaction<Void> txn = session.sendMessage(message);
-            txn.waitForResponse(TIMEOUT_MESSAGE_SECONDS, TimeUnit.SECONDS);
+            Assert.assertNotNull(txn);
+            ContextHubTransaction.Response<Void> txnResponse =
+                    txn.waitForResponse(TIMEOUT_MESSAGE_SECONDS, TimeUnit.SECONDS);
+            Assert.assertNotNull(txnResponse);
+            Assert.assertEquals(txnResponse.getResult(), ContextHubTransaction.RESULT_SUCCESS);
             HubMessage response = messageCallback.waitForMessage();
             Assert.assertNotNull(response);
             Assert.assertEquals(message.getMessageType(), response.getMessageType());
@@ -291,15 +367,15 @@ public class ContextHubEchoEndpointExecutor {
                     Arrays.equals(message.getMessageBody(), response.getMessageBody()));
             session.close();
 
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         }
     }
 
-    public void testEndpointDiscovery() {
+    public void testEndpointDiscovery() throws Exception {
         doTestEndpointDiscovery(/* executor= */ null);
     }
 
-    public void testThreadedEndpointDiscovery() {
+    public void testThreadedEndpointDiscovery() throws Exception {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
         doTestEndpointDiscovery(executor);
@@ -310,7 +386,7 @@ public class ContextHubEchoEndpointExecutor {
      *
      * @param executor An optional executor to invoke callbacks on.
      */
-    private void doTestEndpointDiscovery(@Nullable Executor executor) {
+    private void doTestEndpointDiscovery(@Nullable Executor executor) throws Exception {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
             checkApiSupport(
@@ -324,16 +400,15 @@ public class ContextHubEchoEndpointExecutor {
                                     callback, ECHO_SERVICE_DESCRIPTOR));
         }
 
-        // TODO(b/385765805): Add CHRE/dynamic discovery
-
+        checkDynamicEndpointDiscovery(callback);
         checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
-    public void testEndpointIdDiscovery() {
+    public void testEndpointIdDiscovery() throws Exception {
         doTestEndpointIdDiscovery(/* executor= */ null);
     }
 
-    public void testThreadedEndpointIdDiscovery() {
+    public void testThreadedEndpointIdDiscovery() throws Exception {
         ScheduledThreadPoolExecutor executor =
                 new ScheduledThreadPoolExecutor(/* corePoolSize= */ 1);
         doTestEndpointIdDiscovery(executor);
@@ -344,29 +419,31 @@ public class ContextHubEchoEndpointExecutor {
      *
      * @param executor An optional executor to invoke callbacks on.
      */
-    private void doTestEndpointIdDiscovery(@Nullable Executor executor) {
+    private void doTestEndpointIdDiscovery(@Nullable Executor executor) throws Exception {
         TestDiscoveryCallback callback = new TestDiscoveryCallback();
         if (executor != null) {
             checkApiSupport(
                     (manager) ->
                             manager.registerEndpointDiscoveryCallback(
-                                    executor, callback, ECHO_NANOAPP_ID));
+                                    executor, callback, ECHO_SERVICE_NANOAPP_ID));
         } else {
             checkApiSupport(
                     (manager) ->
                             manager.registerEndpointDiscoveryCallback(
-                                    callback, ECHO_NANOAPP_ID));
+                                    callback, ECHO_SERVICE_NANOAPP_ID));
         }
 
-        // TODO(b/385765805): Add CHRE/dynamic discovery
-
+        checkDynamicEndpointDiscovery(callback);
         checkApiSupport((manager) -> manager.unregisterEndpointDiscoveryCallback(callback));
     }
 
     /**
-     * A test to see if a echo test service can be registered by the application. For CHRE-capable
-     * devices, we will also confirm that a connection can be started from the embedded client and
-     * echo works as intended.
+     * A test to see if a echo test service can be registered by the application.
+     *
+     * <p>For CHRE-capable devices, we will also confirm that a connection can be started from the
+     * embedded client and echo works as intended. The echo client nanoapp is expected to open a
+     * session with the host-side service when the nanoapp is loaded, and sends a message to echo
+     * back to the nanoapp once the session is opened.
      */
     public void testApplicationEchoService() throws Exception {
         Collection<HubServiceInfo> serviceList = new ArrayList<>();
@@ -381,13 +458,50 @@ public class ContextHubEchoEndpointExecutor {
         serviceList.add(info);
 
         TestLifecycleCallback callback = new TestLifecycleCallback(/* acceptSession= */ true);
+        TestMessageCallback messageCallback = new TestMessageCallback();
         mRegisteredEndpoint =
                 registerDefaultEndpoint(
-                        callback, /* messageCallback= */ null, /* executor= */ null, serviceList);
+                        callback, messageCallback, /* executor= */ null, serviceList);
 
-        // TODO(b/385765805): Add CHRE client and test echo
+        // TODO(b/385765805): Enable when ready
+        boolean isDynamicLoadingSupported = false;
+        if (isDynamicLoadingSupported
+                && mContextHubInfo != null
+                && mEchoClientNanoappBinary != null) {
+            ChreTestUtil.loadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoClientNanoappBinary);
+            HubEndpointSessionResult result = callback.waitForOpenSessionRequest();
+            Assert.assertNotNull(result);
+            Assert.assertTrue(result.isAccepted());
+            HubEndpointSession session = callback.waitForEndpointSession();
+            Assert.assertNotNull(session);
+            Log.d(TAG, "Session open: " + session);
 
-        unregisterEndpoint(mRegisteredEndpoint);
+            HubMessage message = messageCallback.waitForMessage();
+            Assert.assertNotNull(message);
+            HubMessage outMessage =
+                    new HubMessage.Builder(message.getMessageType(), message.getMessageBody())
+                            .setResponseRequired(true)
+                            .build();
+            ContextHubTransaction<Void> txn = session.sendMessage(outMessage);
+            Assert.assertNotNull(txn);
+            ContextHubTransaction.Response<Void> txnResponse =
+                    txn.waitForResponse(TIMEOUT_MESSAGE_SECONDS, TimeUnit.SECONDS);
+            Assert.assertNotNull(txnResponse);
+            Assert.assertEquals(txnResponse.getResult(), ContextHubTransaction.RESULT_SUCCESS);
+
+            ChreTestUtil.unloadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoClientNanoappBinary.getNanoAppId());
+            Pair<HubEndpointSession, Integer> closeResult = callback.waitForCloseSession();
+            Assert.assertNotNull(closeResult);
+            Assert.assertNotNull(closeResult.first);
+            // TODO(b/385765805): Check for equality
+            Log.d(TAG, "Session closed: " + closeResult.first);
+            Assert.assertNotNull(closeResult.second);
+            Assert.assertEquals(closeResult.second.intValue(), HubEndpoint.REASON_ENDPOINT_STOPPED);
+        }
+
+        unregisterRegisteredEndpoint();
     }
 
     private void printHubDiscoveryInfo(HubDiscoveryInfo info) {
@@ -465,16 +579,17 @@ public class ContextHubEchoEndpointExecutor {
         checkApiSupport((manager) -> manager.openSession(endpoint, target));
     }
 
-    private void unregisterEndpointNoThrow(HubEndpoint endpoint) {
+    private void unregisterRegisteredEndpointNoThrow() {
         try {
-            unregisterEndpoint(mRegisteredEndpoint);
+            unregisterRegisteredEndpoint();
         } catch (Exception e) {
             Log.e(TAG, "Exception when unregistering endpoint", e);
         }
     }
 
-    private void unregisterEndpoint(HubEndpoint endpoint) throws AssertionError {
-        checkApiSupport((manager) -> manager.unregisterEndpoint(endpoint));
+    private void unregisterRegisteredEndpoint() throws AssertionError {
+        checkApiSupport((manager) -> manager.unregisterEndpoint(mRegisteredEndpoint));
+        mRegisteredEndpoint = null;
     }
 
     private void checkApiSupport(Consumer<ContextHubManager> consumer) {
@@ -484,5 +599,47 @@ public class ContextHubEchoEndpointExecutor {
             // Forced assumption
             Assume.assumeTrue("Skipping endpoint test on unsupported device", false);
         }
+    }
+
+    private void checkDynamicEndpointDiscovery(TestDiscoveryCallback callback) throws Exception {
+        // TODO(b/385765805): Enable when ready
+        boolean isDynamicLoadingSupported = false;
+        if (isDynamicLoadingSupported
+                && mContextHubInfo != null
+                && mEchoServiceNanoappBinary != null) {
+            ChreTestUtil.loadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoServiceNanoappBinary);
+            List<HubDiscoveryInfo> discoveryList = callback.waitForStarted();
+            Assert.assertNotNull(discoveryList);
+            Assert.assertNotEquals(discoveryList.size(), 0);
+            Assert.assertTrue(checkNanoappInDiscoveryList(discoveryList));
+
+            ChreTestUtil.unloadNanoAppAssertSuccess(
+                    mContextHubManager, mContextHubInfo, mEchoServiceNanoappBinary.getNanoAppId());
+            Pair<List<HubDiscoveryInfo>, Integer> discoveryListAndReason =
+                    callback.waitForStopped();
+            Assert.assertNotNull(discoveryListAndReason);
+            discoveryList = discoveryListAndReason.first;
+            Assert.assertNotNull(discoveryList);
+            Assert.assertNotEquals(discoveryList.size(), 0);
+            Assert.assertTrue(checkNanoappInDiscoveryList(discoveryList));
+            Integer reason = discoveryListAndReason.second;
+            Assert.assertNotNull(reason);
+            Assert.assertEquals(reason.intValue(), HubEndpoint.REASON_ENDPOINT_STOPPED);
+        }
+    }
+
+    private boolean checkNanoappInDiscoveryList(List<HubDiscoveryInfo> discoveryList) {
+        for (HubDiscoveryInfo info : discoveryList) {
+            Assert.assertNotNull(info);
+            HubEndpointInfo endpointInfo = info.getHubEndpointInfo();
+            Assert.assertNotNull(endpointInfo);
+            HubEndpointInfo.HubEndpointIdentifier id = endpointInfo.getIdentifier();
+            Assert.assertNotNull(id);
+            if (id.getEndpoint() == ECHO_SERVICE_NANOAPP_ID) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -56,12 +56,12 @@ NanoappLoader *gCurrentlyLoadingNanoapp = nullptr;
 //! Indicates whether a failure occurred during static initialization.
 bool gStaticInitFailure = false;
 
-void deleteOpOverride(void* /* ptr */, unsigned int size) {
+void deleteOpOverride(void * /* ptr */, unsigned int size) {
   FATAL_ERROR("Nanoapp: delete(void *, unsigned int) override : sz = %u", size);
 }
 
 #ifdef __clang__
-void deleteOp2Override(void*) {
+void deleteOp2Override(void *) {
   FATAL_ERROR("Nanoapp: delete(void *)");
 }
 #endif
@@ -218,12 +218,14 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreBleGetCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreBleGetFilterCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreBleFlushAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleGetScanStatus),
+    ADD_EXPORTED_C_SYMBOL(chreBleReadRssiAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleSocketAccept),
+    ADD_EXPORTED_C_SYMBOL(chreBleSocketSend),
     ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsyncV1_9),
     ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsyncV1_9),
-    ADD_EXPORTED_C_SYMBOL(chreBleReadRssiAsync),
-    ADD_EXPORTED_C_SYMBOL(chreBleGetScanStatus),
     ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
     ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
     ADD_EXPORTED_C_SYMBOL(chreConfigureNanoappInfoEvents),
@@ -251,6 +253,16 @@ const ExportedData kExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreHeapFree),
     ADD_EXPORTED_C_SYMBOL(chreIsHostAwake),
     ADD_EXPORTED_C_SYMBOL(chreLog),
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+    ADD_EXPORTED_C_SYMBOL(chreMsgConfigureEndpointReadyEvents),
+    ADD_EXPORTED_C_SYMBOL(chreMsgConfigureServiceReadyEvents),
+    ADD_EXPORTED_C_SYMBOL(chreMsgGetEndpointInfo),
+    ADD_EXPORTED_C_SYMBOL(chreMsgPublishServices),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSend),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionCloseAsync),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionGetInfo),
+    ADD_EXPORTED_C_SYMBOL(chreMsgSessionOpenAsync),
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
     ADD_EXPORTED_C_SYMBOL(chreSendEvent),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHost),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),

@@ -20,11 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace android {
-namespace hardware {
-namespace contexthub {
-namespace common {
-namespace implementation {
+namespace android::hardware::contexthub::common::implementation {
 
 // List of permissions supported by this HAL.
 const std::string kBackgroundLocationPerm =
@@ -39,10 +35,10 @@ const std::vector<std::string> kSupportedPermissions = {
 //! Converts the CHRE permissions bitmask to a list of CHRE permissions.
 std::vector<std::string> chreToAndroidPermissions(uint32_t chrePermissions);
 
-}  // namespace implementation
-}  // namespace common
-}  // namespace contexthub
-}  // namespace hardware
-}  // namespace android
+//! Converts list of Android permissions to CHRE permissions.
+uint32_t androidToChrePermissions(
+    const std::vector<std::string> &androidPermissions);
+
+}  // namespace android::hardware::contexthub::common::implementation
 
 #endif  // ANDROID_HARDWARE_CONTEXTHUB_COMMON_PERMISSIONS_UTIL_H

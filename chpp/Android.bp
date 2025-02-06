@@ -238,6 +238,10 @@ cc_test_host {
         // Note: the value shouldn't be too low to avoid timeouts on slow test servers.
         "-DCHPP_TRANSPORT_RX_TIMEOUT_NS=50000000",
         "-DCHPP_TRANSPORT_TX_TIMEOUT_NS=50000000",
+        // App layer timeout should be higher than transport; at least MAX_RESET * MAX_RETX * TX_TIMEOUT.
+        "-DCHPP_REQUEST_TIMEOUT_DEFAULT=1000000000",
+        "-DCHPP_TRANSPORT_MAX_RESET=2",
+        "-DCHPP_TRANSPORT_MAX_RETX=2",
     ],
     local_include_dirs: [
         "include",

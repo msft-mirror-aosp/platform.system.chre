@@ -25,9 +25,7 @@
 #include "chre/util/optional.h"
 #include "chre/util/singleton.h"
 
-namespace chre {
-
-namespace cross_validator_sensor {
+namespace chre::cross_validator_sensor {
 
 // TODO(b/154271551): Break up the Manager class into more fine-grained classes
 // to avoid it becoming to complex.
@@ -269,7 +267,7 @@ class Manager {
    * @return The Data proto message that is ready to be sent to host with three
    * axis data.
    */
-  chre_cross_validation_sensor_Data makeSensorThreeAxisData(
+  static chre_cross_validation_sensor_Data makeSensorThreeAxisData(
       const chreSensorThreeAxisData *threeAxisDataFromChre, uint8_t sensorType);
 
   /**
@@ -279,7 +277,7 @@ class Manager {
    * @return The Data proto message that is ready to be sent to host with float
    * data.
    */
-  chre_cross_validation_sensor_Data makeSensorFloatData(
+  static chre_cross_validation_sensor_Data makeSensorFloatData(
       const chreSensorFloatData *floatDataFromChre, uint8_t sensorType);
 
   /**
@@ -289,7 +287,7 @@ class Manager {
    * @return The Data proto message that is ready to be sent to host with float
    * data.
    */
-  chre_cross_validation_sensor_Data makeSensorProximityData(
+  static chre_cross_validation_sensor_Data makeSensorProximityData(
       const chreSensorByteData *proximityDataFromChre);
 
   /**
@@ -299,7 +297,7 @@ class Manager {
    * @return The Data proto message that is ready to be sent to host with float
    * data.
    */
-  chre_cross_validation_sensor_Data makeSensorStepCounterData(
+  static chre_cross_validation_sensor_Data makeSensorStepCounterData(
       const chreSensorUint64Data *stepCounterDataFromChre);
 
   /**
@@ -349,7 +347,7 @@ class Manager {
    * @param hostEndpoint The endpoint to send the response to.
    * @param infoResponse The info response to be encoded and sent.
    */
-  void sendInfoResponse(
+  static void sendInfoResponse(
       uint16_t hostEndpoint,
       const chre_cross_validation_sensor_SensorInfoResponse &infoResponse);
 
@@ -386,14 +384,13 @@ class Manager {
    *
    * @return true if the sensor corresponding to the input is available.
    */
-  bool getSensor(uint32_t sensorType, uint32_t sensorIndex, uint32_t *handle);
+  static bool getSensor(uint32_t sensorType, uint32_t sensorIndex,
+                        uint32_t *handle);
 };
 
 // The chre cross validator manager singleton.
 typedef chre::Singleton<Manager> ManagerSingleton;
 
-}  // namespace cross_validator_sensor
-
-}  // namespace chre
+}  // namespace chre::cross_validator_sensor
 
 #endif  // CHRE_CROSS_VALIDATOR_MANAGER_H_

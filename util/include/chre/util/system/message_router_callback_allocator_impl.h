@@ -34,10 +34,11 @@ namespace chre::message {
 template <typename Metadata>
 MessageRouterCallbackAllocator<Metadata>::MessageRouterCallbackAllocator(
     MessageFreeCallback &&callback,
-    pw::Vector<FreeCallbackRecord> &freeCallbackRecords)
-        : pw::Allocator(kCapabilities),
-          mCallback(std::move(callback)),
-          mFreeCallbackRecords(freeCallbackRecords) {}
+    pw::Vector<FreeCallbackRecord> &freeCallbackRecords, bool doEraseRecord)
+    : pw::Allocator(kCapabilities),
+      mCallback(std::move(callback)),
+      mFreeCallbackRecords(freeCallbackRecords),
+      mDoEraseRecord(doEraseRecord) {}
 
 template <typename Metadata>
 void *MessageRouterCallbackAllocator<Metadata>::DoAllocate(
@@ -52,8 +53,12 @@ void MessageRouterCallbackAllocator<Metadata>::DoDeallocate(void *ptr) {
     LockGuard<Mutex> lock(mMutex);
     for (FreeCallbackRecord &record : mFreeCallbackRecords) {
       if (record.message == ptr) {
-        freeCallbackRecord = std::move(record);
-        mFreeCallbackRecords.erase(&record);
+        if (mDoEraseRecord) {
+          freeCallbackRecord = std::move(record);
+          mFreeCallbackRecords.erase(&record);
+        } else {
+          freeCallbackRecord = record;
+        }
         break;
       }
     }
@@ -80,6 +85,23 @@ MessageRouterCallbackAllocator<Metadata>::MakeUniqueArrayWithCallback(
   }
 
   return WrapUniqueArray(ptr, size);
+}
+
+template <typename Metadata>
+std::optional<
+    typename MessageRouterCallbackAllocator<Metadata>::FreeCallbackRecord>
+MessageRouterCallbackAllocator<Metadata>::GetAndRemoveFreeCallbackRecord(
+    void *ptr) {
+  LockGuard<Mutex> lock(mMutex);
+  std::optional<FreeCallbackRecord> foundRecord;
+  for (FreeCallbackRecord &record : mFreeCallbackRecords) {
+    if (record.message == ptr) {
+      foundRecord = std::move(record);
+      mFreeCallbackRecords.erase(&record);
+      break;
+    }
+  }
+  return foundRecord;
 }
 
 }  // namespace chre::message

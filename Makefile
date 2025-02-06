@@ -40,6 +40,9 @@ endif
 # Optional BLE support
 ifeq ($(CHRE_BLE_SUPPORT_ENABLED), true)
 COMMON_CFLAGS += -DCHRE_BLE_SUPPORT_ENABLED
+ifeq ($(CHRE_BLE_SOCKET_SUPPORT_ENABLED), true)
+COMMON_CFLAGS += -DCHRE_BLE_SOCKET_SUPPORT_ENABLED
+endif
 endif
 
 # Optional GNSS support.

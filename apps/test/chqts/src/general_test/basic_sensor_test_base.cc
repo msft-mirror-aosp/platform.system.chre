@@ -460,10 +460,11 @@ void BasicSensorTestBase::handleSamplingChangeEvent(
   //     generated upon being DONE with a sensor, then we can perform
   //     a strict check here.  For now, we just let this go.
   if (mState != State::kFinished) {
-    // Passive sensor requests do not guarantee sensors will always be enabled.
-    // Bypass 'enabled' check for passive configurations.
+    // We received a sensor disabled status change event. While it's not
+    // expected, it's possible we received an event that was originated prior to
+    // the test run, so we just log a warning rather than failing the test.
     if (!eventData->status.enabled) {
-      sendFatalFailureToHost("SamplingChangeEvent disabled the sensor.");
+      LOGW("SamplingChangeEvent disabled the sensor.");
     }
 
     if ((mNewStatus.interval != eventData->status.interval) ||

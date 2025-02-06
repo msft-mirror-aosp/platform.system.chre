@@ -1648,6 +1648,11 @@ void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
   chppMutexUnlock(&context->mutex);
 }
 
+void chppTransportForceReset(struct ChppTransportState *context) {
+  CHPP_LOGW("Forcing transport reset");
+  chppNotifierSignal(&context->notifier, CHPP_TRANSPORT_SIGNAL_FORCE_RESET);
+}
+
 uint64_t chppTransportGetTimeUntilNextDoWorkNs(
     struct ChppTransportState *context) {
   uint64_t currentTime = chppGetCurrentTimeNs();
@@ -1718,6 +1723,10 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
       // Triggered by timeout.
       chppWorkHandleTimeout(context);
     } else {
+      if (signals & CHPP_TRANSPORT_SIGNAL_FORCE_RESET) {
+        chppReset(context, CHPP_TRANSPORT_ATTR_RESET,
+                  CHPP_TRANSPORT_ERROR_FORCED_RESET);
+      }
       if (signals & CHPP_TRANSPORT_SIGNAL_EVENT) {
         chppTransportDoWork(context, /*resendPayload=*/false);
       }
@@ -1782,6 +1791,7 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
       context->txStatus.txAttempts = 0;
       context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
       chppClearTxDatagramQueue(context);
+      context->txStatus.packetCodeToSend = 0;
     }
   }
 }

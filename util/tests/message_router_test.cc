@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <pw_allocator/allocator.h>
-#include <pw_allocator/capability.h>
-#include <pw_allocator/unique_ptr.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -27,6 +24,12 @@
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/message_router_callback_allocator.h"
 #include "chre_api/chre.h"
+
+#include "pw_allocator/allocator.h"
+#include "pw_allocator/capability.h"
+#include "pw_allocator/libc_allocator.h"
+#include "pw_allocator/unique_ptr.h"
+
 #include "gtest/gtest.h"
 
 namespace chre::message {
@@ -44,35 +47,9 @@ const EndpointInfo kEndpointInfos[kNumEndpoints] = {
                  EndpointType::HOST_NATIVE, CHRE_MESSAGE_PERMISSION_BLE),
     EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
+const char kServiceDescriptorForEndpoint2[] = "TEST_SERVICE.TEST";
 
-class TestAllocator : public pw::Allocator {
- public:
-  static constexpr Capabilities kCapabilities = 0;
-
-  TestAllocator() : pw::Allocator(kCapabilities) {}
-
-  virtual void *DoAllocate(Layout layout) override {
-    if (layout.alignment() > alignof(std::max_align_t)) {
-      void *ptr;
-      return posix_memalign(&ptr, layout.alignment(), layout.size()) == 0
-                 ? ptr
-                 : nullptr;
-    } else {
-      return malloc(layout.size());
-    }
-  }
-
-  virtual void DoDeallocate(void *ptr) override {
-    free(ptr);
-  }
-};
-
-class MessageRouterTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-
-  TestAllocator mAllocator;
-};
+class MessageRouterTest : public ::testing::Test {};
 
 //! Base class for MessageHubCallbacks used in tests
 class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
@@ -94,14 +71,36 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     }
     return std::nullopt;
   }
+
+  void onSessionOpenRequest(const Session & /* session */) override {}
+
+  std::optional<EndpointId> getEndpointForService(
+      const char *serviceDescriptor) override {
+    if (serviceDescriptor != nullptr &&
+        std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0) {
+      return kEndpointInfos[1].id;
+    }
+    return std::nullopt;
+  }
+
+  bool doesEndpointHaveService(EndpointId endpointId,
+                               const char *serviceDescriptor) override {
+    return serviceDescriptor != nullptr && endpointId == kEndpointInfos[1].id &&
+           std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0;
+  }
 };
 
 //! MessageHubCallback that stores the data passed to onMessageReceived and
 //! onSessionClosed
 class MessageHubCallbackStoreData : public MessageHubCallbackBase {
  public:
-  MessageHubCallbackStoreData(Message *message, Session *session)
-      : mMessage(message), mSession(session) {}
+  MessageHubCallbackStoreData(Message *message, Session *session,
+                              Reason *reason = nullptr,
+                              Session *openedSession = nullptr)
+      : mMessage(message),
+        mSession(session),
+        mReason(reason),
+        mOpenedSession(openedSession) {}
 
   bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                          uint32_t messageType, uint32_t messagePermissions,
@@ -120,15 +119,26 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
     return true;
   }
 
-  void onSessionClosed(const Session &session) override {
+  void onSessionClosed(const Session &session, Reason reason) override {
     if (mSession != nullptr) {
       *mSession = session;
+    }
+    if (mReason != nullptr) {
+      *mReason = reason;
+    }
+  }
+
+  void onSessionOpened(const Session &session) override {
+    if (mOpenedSession != nullptr) {
+      *mOpenedSession = session;
     }
   }
 
  private:
   Message *mMessage;
   Session *mSession;
+  Reason *mReason;
+  Session *mOpenedSession;
 };
 
 //! MessageHubCallback that always fails to process messages
@@ -150,15 +160,47 @@ class MessageHubCallbackAlwaysFails : public MessageHubCallbackBase {
     return false;
   }
 
-  void onSessionClosed(const Session & /* session */) override {
+  void onSessionClosed(const Session & /* session */,
+                       Reason /* reason */) override {
     if (mWasSessionClosedCalled != nullptr) {
       *mWasSessionClosedCalled = true;
     }
   }
 
+  void onSessionOpened(const Session & /* session */) override {}
+
  private:
   bool *mWasMessageReceivedCalled;
   bool *mWasSessionClosedCalled;
+};
+
+//! MessageHubCallback that tracks open session requests calls
+class MessageHubCallbackOpenSessionRequest : public MessageHubCallbackBase {
+ public:
+  MessageHubCallbackOpenSessionRequest(bool *wasSessionOpenRequestCalled)
+      : mWasSessionOpenRequestCalled(wasSessionOpenRequestCalled) {}
+
+  void onSessionOpenRequest(const Session & /* session */) override {
+    if (mWasSessionOpenRequestCalled != nullptr) {
+      *mWasSessionOpenRequestCalled = true;
+    }
+  }
+
+  bool onMessageReceived(pw::UniquePtr<std::byte[]> && /* data */,
+                         uint32_t /* messageType */,
+                         uint32_t /* messagePermissions */,
+                         const Session & /* session */,
+                         bool /* sentBySessionInitiator */) override {
+    return true;
+  }
+
+  void onSessionClosed(const Session & /* session */,
+                       Reason /* reason */) override {}
+
+  void onSessionOpened(const Session & /* session */) override {}
+
+ private:
+  bool *mWasSessionOpenRequestCalled;
 };
 
 //! MessageHubCallback that calls MessageHub APIs during callbacks
@@ -178,7 +220,16 @@ class MessageHubCallbackCallsMessageHubApisDuringCallback
     return true;
   }
 
-  void onSessionClosed(const Session & /* session */) override {
+  void onSessionClosed(const Session & /* session */,
+                       Reason /* reason */) override {
+    if (mMessageHub != nullptr) {
+      // Call a function that locks the MessageRouter mutex
+      mMessageHub->openSession(kEndpointInfos[0].id, mMessageHub->getId(),
+                               kEndpointInfos[1].id);
+    }
+  }
+
+  void onSessionOpened(const Session & /* session */) override {
     if (mMessageHub != nullptr) {
       // Call a function that locks the MessageRouter mutex
       mMessageHub->openSession(kEndpointInfos[0].id, mMessageHub->getId(),
@@ -360,6 +411,41 @@ TEST_F(MessageRouterTest, GetEndpointInfo) {
   }
 }
 
+TEST_F(MessageRouterTest, GetEndpointForService) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub1 =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub1.has_value());
+
+  std::optional<Endpoint> endpoint = router.getEndpointForService(
+      MESSAGE_HUB_ID_INVALID, kServiceDescriptorForEndpoint2);
+  EXPECT_TRUE(endpoint.has_value());
+
+  EXPECT_EQ(endpoint->messageHubId, messageHub1->getId());
+  EXPECT_EQ(endpoint->endpointId, kEndpointInfos[1].id);
+}
+
+TEST_F(MessageRouterTest, GetEndpointForServiceBadServiceDescriptor) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub1 =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub1.has_value());
+
+  std::optional<Endpoint> endpoint = router.getEndpointForService(
+      MESSAGE_HUB_ID_INVALID, "SERVICE_THAT_DOES_NOT_EXIST");
+  EXPECT_FALSE(endpoint.has_value());
+
+  std::optional<Endpoint> endpoint2 = router.getEndpointForService(
+      MESSAGE_HUB_ID_INVALID, /* serviceDescriptor= */ nullptr);
+  EXPECT_FALSE(endpoint2.has_value());
+}
+
 TEST_F(MessageRouterTest, RegisterSessionTwoDifferentMessageHubs) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   Session sessionFromCallback1;
@@ -380,6 +466,7 @@ TEST_F(MessageRouterTest, RegisterSessionTwoDifferentMessageHubs) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Get session from messageHub and compare it with messageHub2
   std::optional<Session> sessionAfterRegistering =
@@ -407,6 +494,294 @@ TEST_F(MessageRouterTest, RegisterSessionTwoDifferentMessageHubs) {
   EXPECT_FALSE(messageHub2->getSessionWithId(sessionId).has_value());
 }
 
+TEST_F(MessageRouterTest, RegisterSessionVerifyAllCallbacksAreCalled) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  Session sessionClosedFromCallback1;
+  Session sessionClosedFromCallback2;
+  Session sessionOpenedFromCallback1;
+  Session sessionOpenedFromCallback2;
+  Reason sessionCloseReason1;
+  Reason sessionCloseReason2;
+  MessageHubCallbackStoreData callback(
+      /* message= */ nullptr, &sessionClosedFromCallback1, &sessionCloseReason1,
+      &sessionOpenedFromCallback1);
+  MessageHubCallbackStoreData callback2(
+      /* message= */ nullptr, &sessionClosedFromCallback2, &sessionCloseReason2,
+      &sessionOpenedFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
+
+  // Verify that onSessionOpened is called on both message hubs
+  EXPECT_EQ(sessionOpenedFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(sessionOpenedFromCallback1.initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionOpenedFromCallback1.initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionOpenedFromCallback1.peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionOpenedFromCallback1.peer.endpointId, kEndpointInfos[1].id);
+
+  EXPECT_EQ(sessionOpenedFromCallback2.sessionId, sessionId);
+  EXPECT_EQ(sessionOpenedFromCallback2.initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionOpenedFromCallback2.initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionOpenedFromCallback2.peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionOpenedFromCallback2.peer.endpointId, kEndpointInfos[1].id);
+
+  // Close the session with a reason
+  Reason reason = Reason::TIMEOUT;
+  EXPECT_TRUE(messageHub->closeSession(sessionId, reason));
+
+  // Verify that onSessionClosed is called on both message hubs
+  EXPECT_EQ(sessionClosedFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(sessionClosedFromCallback1.initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionClosedFromCallback1.initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionClosedFromCallback1.peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionClosedFromCallback1.peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(sessionCloseReason1, reason);
+
+  EXPECT_EQ(sessionClosedFromCallback2.sessionId, sessionId);
+  EXPECT_EQ(sessionClosedFromCallback2.initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionClosedFromCallback2.initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionClosedFromCallback2.peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionClosedFromCallback2.peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(sessionCloseReason2, reason);
+}
+
+TEST_F(MessageRouterTest, RegisterSessionGetsRejectedAndClosed) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  Reason sessionCloseReason;
+  MessageHubCallbackStoreData callback(
+      /* message= */ nullptr, &sessionFromCallback1, &sessionCloseReason);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        &sessionFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  Reason reason = Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED;
+  messageHub2->closeSession(sessionId, reason);
+
+  // Get session from messageHub and ensure it is deleted
+  std::optional<Session> sessionAfterRegistering =
+      messageHub->getSessionWithId(sessionId);
+  EXPECT_FALSE(sessionAfterRegistering.has_value());
+  std::optional<Session> sessionAfterRegistering2 =
+      messageHub2->getSessionWithId(sessionId);
+  EXPECT_FALSE(sessionAfterRegistering2.has_value());
+
+  // Close the session and verify it is closed on both message hubs
+  EXPECT_EQ(sessionFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(sessionFromCallback1.initiator.messageHubId, messageHub->getId());
+  EXPECT_EQ(sessionFromCallback1.initiator.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(sessionFromCallback1.peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionFromCallback1.peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(sessionCloseReason, reason);
+}
+
+TEST_F(MessageRouterTest, RegisterSessionSecondHubDoesNotRespond) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  bool wasOpenSessionRequestCalled = false;
+  bool wasOpenSessionRequestCalled2 = false;
+  MessageHubCallbackOpenSessionRequest callback(&wasOpenSessionRequestCalled);
+  MessageHubCallbackOpenSessionRequest callback2(&wasOpenSessionRequestCalled2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Message Hub 2 does not respond - verify the callback was called once
+  EXPECT_FALSE(wasOpenSessionRequestCalled);
+  EXPECT_TRUE(wasOpenSessionRequestCalled2);
+
+  // Open session from messageHub:1 to messageHub2:2 - try again
+  wasOpenSessionRequestCalled = false;
+  SessionId sessionId2 = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  EXPECT_EQ(sessionId, sessionId2);
+  EXPECT_FALSE(wasOpenSessionRequestCalled);
+  EXPECT_TRUE(wasOpenSessionRequestCalled2);
+
+  // Respond then close the session
+  messageHub2->onSessionOpenComplete(sessionId2);
+  EXPECT_TRUE(messageHub->closeSession(sessionId));
+}
+
+TEST_F(MessageRouterTest, RegisterSessionWithServiceDescriptor) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        &sessionFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id,
+      kServiceDescriptorForEndpoint2);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Get session from messageHub and compare it with messageHub2
+  std::optional<Session> sessionAfterRegistering =
+      messageHub->getSessionWithId(sessionId);
+  EXPECT_TRUE(sessionAfterRegistering.has_value());
+  EXPECT_EQ(sessionAfterRegistering->sessionId, sessionId);
+  EXPECT_EQ(sessionAfterRegistering->initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionAfterRegistering->initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionAfterRegistering->peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionAfterRegistering->peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_TRUE(sessionAfterRegistering->hasServiceDescriptor);
+  EXPECT_STREQ(sessionAfterRegistering->serviceDescriptor,
+               kServiceDescriptorForEndpoint2);
+  std::optional<Session> sessionAfterRegistering2 =
+      messageHub2->getSessionWithId(sessionId);
+  EXPECT_TRUE(sessionAfterRegistering2.has_value());
+  EXPECT_EQ(*sessionAfterRegistering, *sessionAfterRegistering2);
+
+  // Close the session and verify it is closed on both message hubs
+  EXPECT_NE(*sessionAfterRegistering, sessionFromCallback1);
+  EXPECT_NE(*sessionAfterRegistering, sessionFromCallback2);
+  EXPECT_TRUE(messageHub->closeSession(sessionId));
+  EXPECT_EQ(*sessionAfterRegistering, sessionFromCallback1);
+  EXPECT_EQ(*sessionAfterRegistering, sessionFromCallback2);
+  EXPECT_FALSE(messageHub->getSessionWithId(sessionId).has_value());
+  EXPECT_FALSE(messageHub2->getSessionWithId(sessionId).has_value());
+}
+
+TEST_F(MessageRouterTest,
+       RegisterSessionWithAndWithoutServiceDescriptorSameEndpoints) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        &sessionFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2 with service descriptor
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id,
+      kServiceDescriptorForEndpoint2);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Open session from messageHub:1 to messageHub2:2 without service descriptor
+  SessionId sessionId2 = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId2, SESSION_ID_INVALID);
+  EXPECT_NE(sessionId2, sessionId);
+
+  // Get the first session from messageHub and compare it with messageHub2
+  std::optional<Session> sessionAfterRegistering =
+      messageHub->getSessionWithId(sessionId);
+  EXPECT_TRUE(sessionAfterRegistering.has_value());
+  EXPECT_EQ(sessionAfterRegistering->sessionId, sessionId);
+  EXPECT_EQ(sessionAfterRegistering->initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionAfterRegistering->initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionAfterRegistering->peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionAfterRegistering->peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_TRUE(sessionAfterRegistering->hasServiceDescriptor);
+  EXPECT_STREQ(sessionAfterRegistering->serviceDescriptor,
+               kServiceDescriptorForEndpoint2);
+  std::optional<Session> sessionAfterRegistering2 =
+      messageHub2->getSessionWithId(sessionId);
+  EXPECT_TRUE(sessionAfterRegistering2.has_value());
+  EXPECT_EQ(*sessionAfterRegistering, *sessionAfterRegistering2);
+
+  // Get the second session from messageHub and compare it with messageHub2
+  std::optional<Session> sessionAfterRegistering3 =
+      messageHub->getSessionWithId(sessionId2);
+  EXPECT_TRUE(sessionAfterRegistering3.has_value());
+  EXPECT_EQ(sessionAfterRegistering3->sessionId, sessionId2);
+  EXPECT_EQ(sessionAfterRegistering3->initiator.messageHubId,
+            messageHub->getId());
+  EXPECT_EQ(sessionAfterRegistering3->initiator.endpointId,
+            kEndpointInfos[0].id);
+  EXPECT_EQ(sessionAfterRegistering3->peer.messageHubId, messageHub2->getId());
+  EXPECT_EQ(sessionAfterRegistering3->peer.endpointId, kEndpointInfos[1].id);
+  EXPECT_FALSE(sessionAfterRegistering3->hasServiceDescriptor);
+  EXPECT_STREQ(sessionAfterRegistering3->serviceDescriptor, "");
+  std::optional<Session> sessionAfterRegistering4 =
+      messageHub2->getSessionWithId(sessionId2);
+  EXPECT_TRUE(sessionAfterRegistering4.has_value());
+  EXPECT_EQ(*sessionAfterRegistering3, *sessionAfterRegistering4);
+}
+
+TEST_F(MessageRouterTest, RegisterSessionWithBadServiceDescriptor) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        &sessionFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[2].id,
+      kServiceDescriptorForEndpoint2);
+  EXPECT_EQ(sessionId, SESSION_ID_INVALID);
+}
+
 TEST_F(MessageRouterTest, UnregisterMessageHubCausesSessionClosed) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   Session sessionFromCallback1;
@@ -427,6 +802,7 @@ TEST_F(MessageRouterTest, UnregisterMessageHubCausesSessionClosed) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Get session from messageHub and compare it with messageHub2
   std::optional<Session> sessionAfterRegistering =
@@ -478,6 +854,83 @@ TEST_F(MessageRouterTest, RegisterSessionSameMessageHubInvalid) {
   EXPECT_EQ(sessionId, SESSION_ID_INVALID);
 }
 
+TEST_F(MessageRouterTest, RegisterSessionReservedSessionIdAreRespected) {
+  constexpr SessionId kReservedSessionId = 25;
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router(
+      kReservedSessionId);
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub:2 more than the max number of
+  // sessions - should wrap around
+  for (size_t i = 0; i < kReservedSessionId * 2; ++i) {
+    SessionId sessionId = messageHub->openSession(
+        kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+    EXPECT_NE(sessionId, SESSION_ID_INVALID);
+    messageHub2->onSessionOpenComplete(sessionId);
+    EXPECT_TRUE(messageHub->closeSession(sessionId));
+  }
+}
+
+TEST_F(MessageRouterTest, RegisterSessionOpenSessionNotReservedRegionRejected) {
+  constexpr SessionId kReservedSessionId = 25;
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router(
+      kReservedSessionId);
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub:2 and provide an invalid
+  // session ID (not in the reserved range)
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id,
+      /* serviceDescriptor= */ nullptr, kReservedSessionId / 2);
+  EXPECT_EQ(sessionId, SESSION_ID_INVALID);
+}
+
+TEST_F(MessageRouterTest, RegisterSessionOpenSessionWithReservedSessionId) {
+  constexpr SessionId kReservedSessionId = 25;
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router(
+      kReservedSessionId);
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub:2 and provide a reserved
+  // session ID
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id,
+      /* serviceDescriptor= */ nullptr, kReservedSessionId);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
+  EXPECT_TRUE(messageHub->closeSession(sessionId));
+}
+
 TEST_F(MessageRouterTest, RegisterSessionDifferentMessageHubsSameEndpoints) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   Session sessionFromCallback1;
@@ -498,6 +951,7 @@ TEST_F(MessageRouterTest, RegisterSessionDifferentMessageHubsSameEndpoints) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 }
 
 TEST_F(MessageRouterTest,
@@ -618,16 +1072,19 @@ TEST_F(MessageRouterTest, ThreeMessageHubsAndThreeSessions) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Get sessions and compare
   // Find session: MessageHub1:1 -> MessageHub2:2
@@ -670,8 +1127,9 @@ TEST_F(MessageRouterTest, ThreeMessageHubsAndThreeSessions) {
 TEST_F(MessageRouterTest, SendMessageToSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -703,16 +1161,19 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Send message from messageHub:1 to messageHub2:2
   ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
@@ -730,7 +1191,89 @@ TEST_F(MessageRouterTest, SendMessageToSession) {
     EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
   }
 
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  // Send message from messageHub2:2 to messageHub:1
+  ASSERT_TRUE(messageHub2->sendMessage(std::move(messageData),
+                                       /* messageType= */ 2,
+                                       /* messagePermissions= */ 3, sessionId));
+  EXPECT_EQ(messageFromCallback1.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback1.sender.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback1.sender.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback1.recipient.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback1.recipient.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback1.messageType, 2);
+  EXPECT_EQ(messageFromCallback1.messagePermissions, 3);
+  EXPECT_EQ(messageFromCallback1.data.size(), kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback1.data[i], static_cast<std::byte>(i + 1));
+  }
+}
+
+TEST_F(MessageRouterTest, SendMessageOnHalfOpenSessionIsRejected) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
+  pw::UniquePtr<std::byte[]> messageData =
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  Message messageFromCallback1;
+  Message messageFromCallback2;
+  Session sessionFromCallback1;
+  Session sessionFromCallback2;
+  MessageHubCallbackStoreData callback(&messageFromCallback1,
+                                       &sessionFromCallback1);
+  MessageHubCallbackStoreData callback2(&messageFromCallback2,
+                                        &sessionFromCallback2);
+
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub2.has_value());
+
+  // Open session from messageHub:1 to messageHub2:2 but do not complete it
+  SessionId sessionId = messageHub->openSession(
+      kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
+
+  // Try to send a message from messageHub:1 to messageHub2:2 - should fail
+  EXPECT_FALSE(messageHub->sendMessage(std::move(messageData),
+                                       /* messageType= */ 1,
+                                       /* messagePermissions= */ 0, sessionId));
+
+  // Now complete the session
+  messageHub2->onSessionOpenComplete(sessionId);
+
+  // Send message from messageHub:1 to messageHub2:2
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
+  for (size_t i = 0; i < 5; ++i) {
+    messageData[i] = static_cast<std::byte>(i + 1);
+  }
+
+  ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
+                                      /* messageType= */ 1,
+                                      /* messagePermissions= */ 0, sessionId));
+  EXPECT_EQ(messageFromCallback2.sessionId, sessionId);
+  EXPECT_EQ(messageFromCallback2.sender.messageHubId, messageHub->getId());
+  EXPECT_EQ(messageFromCallback2.sender.endpointId, kEndpointInfos[0].id);
+  EXPECT_EQ(messageFromCallback2.recipient.messageHubId, messageHub2->getId());
+  EXPECT_EQ(messageFromCallback2.recipient.endpointId, kEndpointInfos[1].id);
+  EXPECT_EQ(messageFromCallback2.messageType, 1);
+  EXPECT_EQ(messageFromCallback2.messagePermissions, 0);
+  EXPECT_EQ(messageFromCallback2.data.size(), kMessageSize);
+  for (size_t i = 0; i < kMessageSize; ++i) {
+    EXPECT_EQ(messageFromCallback2.data[i], static_cast<std::byte>(i + 1));
+  }
+
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -804,16 +1347,19 @@ TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Send message from messageHub:1 to messageHub2:2
   bool freeCallbackCalled = false;
@@ -883,8 +1429,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
 TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -916,16 +1463,19 @@ TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Send message from messageHub:1 to messageHub2:2
   EXPECT_FALSE(messageHub->sendMessage(std::move(messageData),
@@ -945,8 +1495,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionInvalidHubAndSession) {
 TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -978,16 +1529,19 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Send message from messageHub2:2 to messageHub3:3
   EXPECT_FALSE(wasMessageReceivedCalled1);
@@ -1012,7 +1566,7 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
   wasMessageReceivedCalled1 = false;
   wasMessageReceivedCalled2 = false;
   wasMessageReceivedCalled3 = false;
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1020,7 +1574,7 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
                                         /* messageType= */ 1,
                                         /* messagePermissions= */ 0,
                                         sessionId2));
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1036,8 +1590,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionCallbackFailureClosesSession) {
 TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   constexpr size_t kMessageSize = 5;
+  pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
   pw::UniquePtr<std::byte[]> messageData =
-      mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+      allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }
@@ -1063,16 +1618,19 @@ TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[0].id, messageHub2->getId(), kEndpointInfos[1].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub2->onSessionOpenComplete(sessionId);
 
   // Open session from messageHub2:2 to messageHub3:3
   SessionId sessionId2 = messageHub2->openSession(
       kEndpointInfos[1].id, messageHub3->getId(), kEndpointInfos[2].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub3->onSessionOpenComplete(sessionId2);
 
   // Open session from messageHub3:3 to messageHub1:1
   SessionId sessionId3 = messageHub3->openSession(
       kEndpointInfos[2].id, messageHub->getId(), kEndpointInfos[0].id);
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
+  messageHub->onSessionOpenComplete(sessionId3);
 
   // Send message from messageHub:1 to messageHub2:2
   EXPECT_TRUE(messageHub->sendMessage(std::move(messageData),
@@ -1080,7 +1638,7 @@ TEST_F(MessageRouterTest, MessageHubCallbackCanCallOtherMessageHubAPIs) {
                                       /* messagePermissions= */ 0, sessionId));
 
   // Send message from messageHub2:2 to messageHub:1
-  messageData = mAllocator.MakeUniqueArray<std::byte>(kMessageSize);
+  messageData = allocator.MakeUniqueArray<std::byte>(kMessageSize);
   for (size_t i = 0; i < 5; ++i) {
     messageData[i] = static_cast<std::byte>(i + 1);
   }

@@ -57,6 +57,11 @@ filegroup {
 }
 
 filegroup {
+    name: "bluetooth_socket_hal_core",
+    srcs: ["host/hal_generic/common/bluetooth_socket_fbs_hal.cc"],
+}
+
+filegroup {
     name: "contexthub_hal_common_srcs",
     srcs: [
         "host/common/file_stream.cc",
@@ -64,6 +69,7 @@ filegroup {
         "host/common/host_protocol_host.cc",
         "host/common/log.cc",
         "host/hal_generic/common/context_hub_v4_impl.cc",
+        "host/hal_generic/common/host_protocol_host_v4.cc",
         "host/hal_generic/common/message_hub_manager.cc",
         "platform/shared/host_protocol_common.cc",
     ],
@@ -958,6 +964,8 @@ cc_test_host {
     static_libs: [
         "chre_linux",
         "chre_pal_linux",
+        "libgmock",
+        "libgtest",
         "libprotobuf-c-nano",
         "pw_allocator",
         "pw_containers",
@@ -989,6 +997,7 @@ cc_library_static {
         "core/gnss_manager.cc",
         "core/host_comms_manager.cc",
         "core/host_endpoint_manager.cc",
+        "core/host_message_hub_manager.cc",
         "core/init.cc",
         "core/nanoapp.cc",
         "core/sensor.cc",
@@ -1090,11 +1099,14 @@ cc_defaults {
     cflags: [
         "-DCHRE_ASSERTIONS_ENABLED=true",
         "-DCHRE_AUDIO_SUPPORT_ENABLED",
+        "-DCHRE_BLE_SOCKET_SUPPORT_ENABLED",
         "-DCHRE_BLE_SUPPORT_ENABLED",
         "-DCHRE_FILENAME=__FILE__",
         "-DCHRE_FIRST_SUPPORTED_API_VERSION=CHRE_API_VERSION_1_1",
         "-DCHRE_GNSS_SUPPORT_ENABLED",
         "-DCHRE_LARGE_PAYLOAD_MAX_SIZE=32000",
+        "-DCHRE_MESSAGE_ROUTER_MAX_HOST_ENDPOINTS=8",
+        "-DCHRE_MESSAGE_ROUTER_MAX_HOST_HUBS=1",
         "-DCHRE_MESSAGE_ROUTER_SUPPORT_ENABLED",
         "-DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4096",
         "-DCHRE_MINIMUM_LOG_LEVEL=CHRE_LOG_LEVEL_DEBUG",

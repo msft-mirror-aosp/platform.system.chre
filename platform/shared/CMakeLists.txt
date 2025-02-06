@@ -330,7 +330,6 @@ pw_add_library(chre.platform.shared.host_protocol_chre STATIC
   PRIVATE_DEPS
     chre.core
     chre.platform.log
-    chre.platform.shared.host_protocol_chre
     chre.platform.shared.nanoapp_load_manager
 )
 
@@ -461,6 +460,7 @@ pw_add_facade(chre.platform.shared.nanoapp_loader STATIC
     chre.platform.assert
     chre.platform.fatal_error
     chre.platform.shared.chre_api_re
+    chre.platform.shared.chre_api_msg
     chre.platform.shared.dlfcn
     chre.platform.shared.memory
     chre.platform.shared.nanoapp_tokenized_log

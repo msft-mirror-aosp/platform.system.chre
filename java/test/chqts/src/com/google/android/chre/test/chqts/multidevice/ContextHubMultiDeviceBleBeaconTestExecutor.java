@@ -28,11 +28,13 @@ import java.util.concurrent.Future;
 import dev.chre.rpc.proto.ChreApiTest;
 
 public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTestExecutor {
-    private static final int NUM_EVENTS_TO_GATHER = 10;
+    private static final int NUM_EVENTS_TO_GATHER_PER_CYCLE = 1000;
 
-    private static final long TIMEOUT_IN_S = 30;
+    private static final long TIMEOUT_IN_S = 1;
 
     private static final long TIMEOUT_IN_NS = TIMEOUT_IN_S * 1000000000L;
+
+    private static final int NUM_EVENT_CYCLES_TO_GATHER = 5;
 
     /**
      * The minimum offset in bytes of a BLE advertisement report which includes the length
@@ -45,33 +47,37 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
     }
 
     /**
-     * Gathers BLE advertisement events from the nanoapp for TIMEOUT_IN_NS or up to
-     * NUM_EVENTS_TO_GATHER events. This function returns true if all
+     * Gathers BLE advertisement events from the nanoapp for NUM_EVENT_CYCLES_TO_GATHER
+     * cycles, and for each cycle gathers for TIMEOUT_IN_NS or up to
+     * NUM_EVENTS_TO_GATHER_PER_CYCLE events. This function returns true if all
      * chreBleAdvertisingReport's contain advertisments for Google Eddystone and
      * there is at least one advertisement, otherwise it returns false.
      */
     public boolean gatherAndVerifyChreBleAdvertisementsForGoogleEddystone() throws Exception {
-        List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
-        if (events == null) {
-            return false;
-        }
-
-        for (ChreApiTest.GeneralEventsMessage event: events) {
-            if (!event.hasChreBleAdvertisementEvent()) {
+        for (int i = 0; i < NUM_EVENT_CYCLES_TO_GATHER; i++) {
+            List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
+            if (events == null) {
                 continue;
             }
 
-            ChreApiTest.ChreBleAdvertisementEvent bleAdvertisementEvent =
-                    event.getChreBleAdvertisementEvent();
-            for (int i = 0; i < bleAdvertisementEvent.getReportsCount(); ++i) {
-                ChreApiTest.ChreBleAdvertisingReport report = bleAdvertisementEvent.getReports(i);
-                byte[] data = report.getData().toByteArray();
-                if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
+            for (ChreApiTest.GeneralEventsMessage event: events) {
+                if (!event.hasChreBleAdvertisementEvent()) {
                     continue;
                 }
 
-                if (searchForGoogleEddystoneAdvertisement(data)) {
-                    return true;
+                ChreApiTest.ChreBleAdvertisementEvent bleAdvertisementEvent =
+                        event.getChreBleAdvertisementEvent();
+                for (int j = 0; j < bleAdvertisementEvent.getReportsCount(); ++j) {
+                    ChreApiTest.ChreBleAdvertisingReport report =
+                            bleAdvertisementEvent.getReports(j);
+                    byte[] data = report.getData().toByteArray();
+                    if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
+                        continue;
+                    }
+
+                    if (searchForGoogleEddystoneAdvertisement(data)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -79,33 +85,37 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
     }
 
     /**
-     * Gathers BLE advertisement events from the nanoapp for TIMEOUT_IN_NS or up to
-     * NUM_EVENTS_TO_GATHER events. This function returns true if all
+     * Gathers BLE advertisement events from the nanoapp for NUM_EVENT_CYCLES_TO_GATHER
+     * cycles, and for each cycle gathers for TIMEOUT_IN_NS or up to
+     * NUM_EVENTS_TO_GATHER_PER_CYCLE events. This function returns true if all
      * chreBleAdvertisingReport's contain advertisments with CHRE test manufacturer ID and
      * there is at least one advertisement, otherwise it returns false.
      */
     public boolean gatherAndVerifyChreBleAdvertisementsWithManufacturerData() throws Exception {
-        List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
-        if (events == null) {
-            return false;
-        }
-
-        for (ChreApiTest.GeneralEventsMessage event: events) {
-            if (!event.hasChreBleAdvertisementEvent()) {
+        for (int i = 0; i < NUM_EVENT_CYCLES_TO_GATHER; i++) {
+            List<ChreApiTest.GeneralEventsMessage> events = gatherChreBleEvents();
+            if (events == null) {
                 continue;
             }
 
-            ChreApiTest.ChreBleAdvertisementEvent bleAdvertisementEvent =
-                    event.getChreBleAdvertisementEvent();
-            for (int i = 0; i < bleAdvertisementEvent.getReportsCount(); ++i) {
-                ChreApiTest.ChreBleAdvertisingReport report = bleAdvertisementEvent.getReports(i);
-                byte[] data = report.getData().toByteArray();
-                if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
+            for (ChreApiTest.GeneralEventsMessage event: events) {
+                if (!event.hasChreBleAdvertisementEvent()) {
                     continue;
                 }
 
-                if (searchForManufacturerAdvertisement(data)) {
-                    return true;
+                ChreApiTest.ChreBleAdvertisementEvent bleAdvertisementEvent =
+                        event.getChreBleAdvertisementEvent();
+                for (int j = 0; j < bleAdvertisementEvent.getReportsCount(); ++j) {
+                    ChreApiTest.ChreBleAdvertisingReport report =
+                            bleAdvertisementEvent.getReports(j);
+                    byte[] data = report.getData().toByteArray();
+                    if (data == null || data.length < BLE_ADVERTISEMENT_DATA_HEADER_OFFSET) {
+                        continue;
+                    }
+
+                    if (searchForManufacturerAdvertisement(data)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -120,7 +130,7 @@ public class ContextHubMultiDeviceBleBeaconTestExecutor extends ContextHubBleTes
                 new ChreApiTestUtil().gatherEvents(
                         mRpcClients.get(0),
                         Arrays.asList(CHRE_EVENT_BLE_ADVERTISEMENT),
-                        NUM_EVENTS_TO_GATHER,
+                        NUM_EVENTS_TO_GATHER_PER_CYCLE,
                         TIMEOUT_IN_NS);
         List<ChreApiTest.GeneralEventsMessage> events = eventsFuture.get();
         return events;

@@ -77,6 +77,10 @@ class Manager {
    */
   void handleWwanCellInfoResult(const chreWwanCellInfoResult *event);
 
+  // Helper functions to convert CHRE results to proto
+  chre_cross_validation_wwan_WwanCellInfoResult toWwanCellInfoResultProto(
+      const chreWwanCellInfoResult &cell_info_result);
+
   // Host endpoint for sending responses. Updated on message receipt.
   uint16_t mHostEndpoint = 0;
 };

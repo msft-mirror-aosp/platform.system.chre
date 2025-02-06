@@ -22,9 +22,10 @@
 namespace chre {
 
 /**
- * Convenience wrapper that only calls chreHeapFree() on the given message. For
- * use with CHRE APIs that take a chreMessageFreeFunction, and when the message
- * was allocated through chreHeapAlloc().
+ * Implementation of a chreMessageFreeFunction that frees the given message
+ * using the appropriate free function depending on whether this is included by
+ * a nanoapp or the CHRE framework. This should be used when no other work needs
+ * to be done after a nanoapp sends a message to the host.
  *
  * @see chreMessageFreeFunction
  */

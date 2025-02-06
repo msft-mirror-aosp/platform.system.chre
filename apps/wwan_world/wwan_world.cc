@@ -67,13 +67,13 @@ void logNrCellInfo(const chreWwanCellInfoNr &nr) {
   LOGI("    ssRsrp %" PRId32 ", %" PRId32 " dBm", nr.signalStrengthNr.ssRsrp,
        -1 * nr.signalStrengthNr.ssRsrp);
   LOGI("    ssRsrq %" PRId32 ", %.1f dB", nr.signalStrengthNr.ssRsrq,
-       static_cast<float>(nr.signalStrengthNr.ssRsrp) / 2.0f);
+       static_cast<float>(nr.signalStrengthNr.ssRsrq) / 2.0f);
   LOGI("    ssSinr %" PRId32 ", %.1f dB", nr.signalStrengthNr.ssSinr,
        static_cast<float>(nr.signalStrengthNr.ssSinr) / 2.0f);
   LOGI("    csiRsrp %" PRId32 ", %" PRId32 " dBm", nr.signalStrengthNr.csiRsrp,
        -1 * nr.signalStrengthNr.csiRsrp);
   LOGI("    csiRsrq %" PRId32 ", %.1f dB", nr.signalStrengthNr.csiRsrq,
-       static_cast<float>(nr.signalStrengthNr.csiRsrp) / 2.0f);
+       static_cast<float>(nr.signalStrengthNr.csiRsrq) / 2.0f);
   LOGI("    csiSinr %" PRId32 ", %.1f dB", nr.signalStrengthNr.csiSinr,
        static_cast<float>(nr.signalStrengthNr.csiSinr) / 2.0f);
 }
@@ -158,8 +158,14 @@ bool nanoappStart() {
   const char *wwanCapabilitiesStr;
   uint32_t wwanCapabilities = chreWwanGetCapabilities();
   switch (wwanCapabilities) {
+    case (CHRE_WWAN_GET_CELL_NEIGHBOR_INFO | CHRE_WWAN_GET_CELL_INFO):
+      wwanCapabilitiesStr = "GET_CELL_INFO & CHRE_WWAN_GET_CELL_NEIGHBOR_INFO";
+      break;
+    case CHRE_WWAN_GET_CELL_NEIGHBOR_INFO:
+      wwanCapabilitiesStr = "CHRE_WWAN_GET_CELL_NEIGHBOR_INFO";
+      break;
     case CHRE_WWAN_GET_CELL_INFO:
-      wwanCapabilitiesStr = "GET_CELL_INFO";
+      wwanCapabilitiesStr = "GET_CELL_INFO (NO CELL_NEIGHBOR GUARANTEE)";
       break;
     case CHRE_WWAN_CAPABILITIES_NONE:
       wwanCapabilitiesStr = "NONE";

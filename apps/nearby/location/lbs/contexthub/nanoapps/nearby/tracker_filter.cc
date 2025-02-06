@@ -51,7 +51,8 @@ void TrackerFilter::Update(
     hardware_filters.push_back(generic_filter);
   }
   scan_filter_config_.hardware_filters = std::move(hardware_filters);
-  scan_filter_config_.rssi_threshold = filter_config.rssi_threshold;
+  scan_filter_config_.rssi_threshold =
+      static_cast<int8_t>(filter_config.rssi_threshold);
   scan_filter_config_.active_interval_ms = filter_config.active_interval_ms;
   scan_filter_config_.active_window_ms = filter_config.active_window_ms;
   ConfigureActiveState();

@@ -56,6 +56,7 @@
 #include <stdlib.h>
 
 #include <chre/common.h>
+#include <chre/event.h>
 #include <chre/toolchain.h>
 
 #ifdef __cplusplus
@@ -150,7 +151,7 @@ enum chreMsgEndpointReason {
 #define CHRE_MSG_EVENT_ID(offset) (CHRE_EVENT_MSG_FIRST_EVENT + (offset))
 
 /**
- * nanoappHandleEvent argument: struct chreMessageFromEndpointData
+ * nanoappHandleEvent argument: struct chreMsgMessageFromEndpointData
  *
  * The format of the 'message' part of this structure is left undefined,
  * and it's up to the nanoapp and endpoint to have an established protocol
@@ -254,7 +255,7 @@ struct chreMsgServiceInfo {
   uint32_t minorVersion;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This must
+   * The descriptor of the service, an ASCII null-terminated string. This must
    * be valid for the lifetime of the nanoapp.
    */
   const char *serviceDescriptor;
@@ -277,7 +278,7 @@ struct chreMsgSessionInfo {
   uint64_t endpointId;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This
+   * The descriptor of the service, an ASCII null-terminated string. This
    * will be an empty string if the session was not opened with a service.
    */
   char serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN];
@@ -363,8 +364,7 @@ struct chreMsgServiceReadyEvent {
   uint64_t endpointId;
 
   /**
-   * The descriptor of the service, and ASCII null-terminated string. This
-   * will be an empty string if the session was not opened with a service.
+   * The descriptor of the service, an ASCII null-terminated string.
    */
   char serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN];
 };
@@ -422,7 +422,7 @@ bool chreMsgConfigureEndpointReadyEvents(uint64_t hubId, uint64_t endpointId,
  *
  * If this API succeeds, the nanoapp will receive endpoint
  * notifications, via the CHRE_EVENT_MSG_SERVICE_READY event
- * with aneventData of type chreMsgServiceReadyEvent.
+ * with an eventData of type chreMsgServiceReadyEvent.
  *
  * If one or more endpoints matching the filter are already ready when this
  * function is called, CHRE_EVENT_MSG_SERVICE_READY will be

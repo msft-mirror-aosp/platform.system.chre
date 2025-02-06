@@ -37,8 +37,14 @@ using SessionId = uint16_t;
 //! An invalid MessageHub ID
 constexpr MessageHubId MESSAGE_HUB_ID_INVALID = 0;
 
+//! A MessageHub ID that matches any MessageHub
+constexpr MessageHubId MESSAGE_HUB_ID_ANY = MESSAGE_HUB_ID_INVALID;
+
 //! An invalid endpoint ID
 constexpr EndpointId ENDPOINT_ID_INVALID = 0;
+
+//! An endpoint ID that matches any endpoint
+constexpr EndpointId ENDPOINT_ID_ANY = ENDPOINT_ID_INVALID;
 
 //! An invalid session ID
 constexpr SessionId SESSION_ID_INVALID = UINT16_MAX;
@@ -65,10 +71,31 @@ enum class EndpointPermission : uint32_t {
   BLE = 1 << 4,
 };
 
+//! The reason for closing a session
+enum class Reason : uint8_t {
+  UNSPECIFIED = 0,
+  OUT_OF_MEMORY,
+  TIMEOUT,
+  OPEN_ENDPOINT_SESSION_REQUEST_REJECTED,
+  CLOSE_ENDPOINT_SESSION_REQUESTED,
+  ENDPOINT_INVALID,
+  ENDPOINT_GONE,
+  ENDPOINT_CRASHED,
+  HUB_RESET,
+  PERMISSION_DENIED,
+};
+
 //! Represents a single endpoint connected to a MessageHub
 struct Endpoint {
   MessageHubId messageHubId;
   EndpointId endpointId;
+
+  Endpoint()
+      : messageHubId(MESSAGE_HUB_ID_INVALID), endpointId(ENDPOINT_ID_INVALID) {}
+
+  Endpoint(MessageHubId messageHubId, EndpointId endpointId)
+      : messageHubId(messageHubId),
+        endpointId(endpointId) {}
 
   bool operator==(const Endpoint &other) const {
     return messageHubId == other.messageHubId && endpointId == other.endpointId;
@@ -81,22 +108,82 @@ struct Endpoint {
 
 //! Represents a session between two endpoints
 struct Session {
+  static constexpr size_t kMaxServiceDescriptorLength = 127;
+
+  Session()
+      : sessionId(SESSION_ID_INVALID),
+        isActive(false),
+        hasServiceDescriptor(false) {
+    serviceDescriptor[0] = '\0';
+  }
+
+  Session(SessionId sessionId, Endpoint initiator, Endpoint peer,
+          const char *serviceDescriptor)
+      : sessionId(sessionId),
+        isActive(false),
+        hasServiceDescriptor(serviceDescriptor != nullptr),
+        initiator(initiator),
+        peer(peer) {
+    if (serviceDescriptor != nullptr) {
+      std::strncpy(this->serviceDescriptor, serviceDescriptor,
+                   kMaxServiceDescriptorLength);
+    } else {
+      this->serviceDescriptor[0] = '\0';
+    }
+    this->serviceDescriptor[kMaxServiceDescriptorLength] = '\0';
+  }
+
+  Session(const Session &other)
+      : sessionId(other.sessionId),
+        isActive(other.isActive),
+        hasServiceDescriptor(other.hasServiceDescriptor),
+        initiator(other.initiator),
+        peer(other.peer) {
+    std::memcpy(serviceDescriptor, other.serviceDescriptor,
+                kMaxServiceDescriptorLength + 1);
+  }
+
+  Session &operator=(const Session &other) {
+    sessionId = other.sessionId;
+    isActive = other.isActive;
+    hasServiceDescriptor = other.hasServiceDescriptor;
+    initiator = other.initiator;
+    peer = other.peer;
+    std::memcpy(serviceDescriptor, other.serviceDescriptor,
+                kMaxServiceDescriptorLength + 1);
+    return *this;
+  }
+
   SessionId sessionId;
+  bool isActive;
+  bool hasServiceDescriptor;
   Endpoint initiator;
   Endpoint peer;
+  char serviceDescriptor[kMaxServiceDescriptorLength + 1];
 
   bool operator==(const Session &other) const {
     return sessionId == other.sessionId && initiator == other.initiator &&
-           peer == other.peer;
+           peer == other.peer && isActive == other.isActive &&
+           hasServiceDescriptor == other.hasServiceDescriptor &&
+           (!hasServiceDescriptor ||
+            std::strncmp(serviceDescriptor, other.serviceDescriptor,
+                         kMaxServiceDescriptorLength) == 0);
   }
 
   bool operator!=(const Session &other) const {
     return !(*this == other);
   }
 
+  //! @return true if the two sessions are equivalent, i.e. they have the same
+  //! endpoints and service descriptor (if present), false otherwise
   bool isEquivalent(const Session &other) const {
-    return (initiator == other.initiator && peer == other.peer) ||
-           (initiator == other.peer && peer == other.initiator);
+    bool sameEndpoints = (initiator == other.initiator && peer == other.peer) ||
+                         (initiator == other.peer && peer == other.initiator);
+    return hasServiceDescriptor == other.hasServiceDescriptor &&
+           sameEndpoints &&
+           (!hasServiceDescriptor ||
+            std::strncmp(serviceDescriptor, other.serviceDescriptor,
+                         kMaxServiceDescriptorLength) == 0);
   }
 };
 
@@ -114,6 +201,7 @@ struct Message {
         data(nullptr),
         messageType(0),
         messagePermissions(0) {}
+
   Message(pw::UniquePtr<std::byte[]> &&data,
           uint32_t messageType, uint32_t messagePermissions, Session session,
           bool sentBySessionInitiator)
@@ -123,6 +211,7 @@ struct Message {
         data(std::move(data)),
         messageType(messageType),
         messagePermissions(messagePermissions) {}
+
   Message(Message &&other)
       : sender(other.sender),
         recipient(other.recipient),
@@ -146,7 +235,6 @@ struct Message {
 };
 
 //! Represents information about an endpoint
-//! Service information is stored in ServiceManager
 struct EndpointInfo {
   static constexpr size_t kMaxNameLength = 50;
 
@@ -173,7 +261,7 @@ struct EndpointInfo {
   bool operator==(const EndpointInfo &other) const {
     return id == other.id && version == other.version && type == other.type &&
            requiredPermissions == other.requiredPermissions &&
-           std::strcmp(name, other.name) == 0;
+           std::strncmp(name, other.name, kMaxNameLength) == 0;
   }
 
   bool operator!=(const EndpointInfo &other) const {

@@ -31,11 +31,17 @@ struct FilterExtensionResult {
   const uint16_t end_point;
   AdvReportCache reports;
 
+  // Constructs FilterExtensionResult with host end point and cache expire time.
+  // If set_timeout is true, the cache will expire after expire_time_ms.
+  // Otherwise, the cache will not expire and be used for immediate delivery.
   explicit FilterExtensionResult(
       uint16_t end_point,
-      uint64_t expire_time_ms = kFilterExtensionReportExpireTimeMilliSec)
+      uint64_t expire_time_ms = kFilterExtensionReportExpireTimeMilliSec,
+      bool set_timeout = true)
       : end_point(end_point) {
-    reports.SetCacheTimeout(expire_time_ms);
+    if (set_timeout) {
+      reports.SetCacheTimeout(expire_time_ms);
+    }
   }
 
   FilterExtensionResult(FilterExtensionResult &&src)
@@ -51,11 +57,6 @@ struct FilterExtensionResult {
   // Releases all resources {cache element, heap memory}.
   void Clear() {
     reports.Clear();
-  }
-
-  // Removes advertising reports older than the cache timeout.
-  void Refresh() {
-    reports.Refresh();
   }
 
   // Removes advertising reports older than the cache timeout if the cache size
@@ -112,12 +113,6 @@ class FilterExtension {
   // filled in encoded_size. Returns true for successful encoding.
   static bool EncodeConfigResponse(
       const nearby_extension_ExtConfigResponse &config_response,
-      ByteArray data_buf, size_t *encoded_size);
-
-  // Encodes reports into data_buf. The reports are converted to
-  // nearby_extension_FilterResult before the serialization.
-  static bool Encode(
-      const chre::DynamicVector<chreBleAdvertisingReport> &reports,
       ByteArray data_buf, size_t *encoded_size);
 
   // Encodes a single report into data_buf. The report are converted to

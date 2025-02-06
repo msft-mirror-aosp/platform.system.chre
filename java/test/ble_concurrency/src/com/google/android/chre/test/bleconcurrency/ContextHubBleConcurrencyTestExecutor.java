@@ -34,7 +34,7 @@ public class ContextHubBleConcurrencyTestExecutor extends ContextHubBleTestExecu
      * Runs the test.
      */
     public void run() throws Exception {
-        if (doesNecessaryBleCapabilitiesExist()) {
+        if (doNecessaryBleCapabilitiesExist()) {
             testHostScanFirst();
             Thread.sleep(1000);
             testChreScanFirst();

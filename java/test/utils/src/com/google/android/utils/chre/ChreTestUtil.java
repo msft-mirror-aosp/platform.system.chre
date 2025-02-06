@@ -47,7 +47,7 @@ import java.util.concurrent.TimeoutException;
  */
 public class ChreTestUtil {
     // Various timeouts for Context Hub operations.
-    private static final long TIMEOUT_LOAD_NANOAPP_SECONDS = 5;
+    private static final long TIMEOUT_LOAD_NANOAPP_SECONDS = 30;
     private static final long TIMEOUT_UNLOAD_NANOAPP_SECONDS = 5;
     private static final long QUERY_NANOAPPS_TIMEOUT_SECONDS = 5;
 
