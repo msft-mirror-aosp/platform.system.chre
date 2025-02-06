@@ -10,6 +10,7 @@ PIGWEED_CHRE_DIR = $(ANDROID_BUILD_TOP)/system/chre/external/pigweed
 # Common Compiler Flags ########################################################
 
 # Include paths.
+COMMON_CFLAGS += -I$(CHRE_PREFIX)/core/include
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 
 # Pigweed ######################################################################
@@ -50,6 +51,7 @@ COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/debug.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/string.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/nanoapp/wifi.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/ble_util.cc
+COMMON_SRCS += $(CHRE_PREFIX)/util/system/error_util.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/event_callbacks.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/debug_dump.cc
 COMMON_SRCS += $(CHRE_PREFIX)/util/system/message_router.cc

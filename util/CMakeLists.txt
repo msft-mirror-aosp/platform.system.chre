@@ -161,6 +161,7 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/atomic_spsc_queue.h
     include/chre/util/system/ble_util.h
     include/chre/util/system/debug_dump.h
+    include/chre/util/system/error_util.h
     include/chre/util/system/event_callbacks.h
     include/chre/util/system/fixed_size_blocking_queue.h
     include/chre/util/system/fixed_size_blocking_queue_impl.h
@@ -196,6 +197,7 @@ pw_add_library(chre.util.system STATIC
     pw_containers.vector
   SOURCES
     system/ble_util.cc
+    system/error_util.cc
     system/event_callbacks.cc
     system/debug_dump.cc
     system/message_router.cc
