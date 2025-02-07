@@ -193,6 +193,7 @@ pw_add_library(chre.util.system STATIC
     chre.util
     chre.variant.config
     pw_allocator.deallocator
+    pw_containers.vector
   SOURCES
     system/ble_util.cc
     system/event_callbacks.cc
