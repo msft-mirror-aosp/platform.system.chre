@@ -57,23 +57,23 @@ class HostMessageHubManager : public NonCopyable {
    public:
     virtual ~HostCallback() = default;
 
-    /** Processes the details of a given endpoint. */
-    using ProcessEndpointFn = pw::Function<void(const message::MessageHubInfo &,
-                                                const message::EndpointInfo &)>;
-
     /**
-     * Allows the callee to examine MessageRouter state.
+     * Notifies the HAL that the host message hub proxies have been reset.
      *
      * Invoked within MessageHubManager::reset().
-     *
-     * This is done using the functor rather than by directly passing lists of
-     * hubs and endpoints to avoid the requisite allocations and copies.
-     *
-     * @param forEachEndpoint Functor which iterates over all embedded
-     * endpoints, applying the given ProcessEndpointFn to each.
      */
-    virtual void onReset(const pw::Function<void(const ProcessEndpointFn &)>
-                             &forEachEndpoint) = 0;
+    virtual void onReset() = 0;
+
+    /**
+     * Notifies the HAL of a new embedded message hub.
+     */
+    virtual void onHubRegistered(const message::MessageHubInfo &hub) = 0;
+
+    /**
+     * Notifies the HAL of a new embedded endpoint.
+     */
+    virtual void onEndpointRegistered(
+        message::MessageHubId hub, const message::EndpointInfo &endpoint) = 0;
 
     /**
      * Sends a message within a session.
@@ -138,18 +138,13 @@ class HostMessageHubManager : public NonCopyable {
   void onHostTransportReady(HostCallback &cb);
 
   /**
-   * Resets state with the given snapshot from the host.
+   * Resets host message hub state.
    *
-   * Any existing message hubs are cleared (see Hub::clear() below) and the new
-   * message hubs are registered after the endpoints are populated.
-   *
-   * @param hubs The list of host message hubs
-   * @param endpoints The list of host endpoints
+   * Existing message hubs are cleared (see Hub::clear() below) though they
+   * remain registered with MessageRouter. When the same hub is registered again
+   * the same slot is re-activated.
    */
-  void reset(
-      pw::span<const message::MessageHubInfo> hubs,
-      pw::span<std::pair<message::MessageHubId, const message::EndpointInfo>>
-          endpoints);
+  void reset();
 
   /**
    * Registers a new host message hub
@@ -335,6 +330,10 @@ class HostMessageHubManager : public NonCopyable {
   // interface.
   Mutex mHubsLock;
   pw::Vector<Hub, CHRE_MESSAGE_ROUTER_MAX_HOST_HUBS> mHubs;
+
+  // Serializes embedded hub and endpoint state changes being sent to the host
+  // with the operations in reset().
+  Mutex mEmbeddedHubOpLock;
 };
 
 }  // namespace chre

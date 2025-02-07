@@ -39,6 +39,13 @@ using AidlVendorHubInfo = ::aidl::android::hardware::contexthub::VendorHubInfo;
 using AidlErrorCode = ::aidl::android::hardware::contexthub::ErrorCode;
 using AidlRpcFormat = ::aidl::android::hardware::contexthub::Service::RpcFormat;
 
+void HostProtocolHostV4::encodeGetMessageHubsAndEndpointsRequest(
+    FlatBufferBuilder &builder) {
+  auto msg = ::chre::fbs::CreateGetMessageHubsAndEndpointsRequest(builder);
+  finalize(builder, ChreMessage::GetMessageHubsAndEndpointsRequest,
+           msg.Union());
+}
+
 void HostProtocolHostV4::encodeGetMessageHubsAndEndpointsResponse(
     FlatBufferBuilder &builder, const std::vector<AidlHubInfo> &hubs,
     const std::vector<AidlEndpointInfo> &endpoints) {

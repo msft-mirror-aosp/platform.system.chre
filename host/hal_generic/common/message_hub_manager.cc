@@ -232,6 +232,14 @@ pw::Status HostHub::unregister() {
   return pw::OkStatus();
 }
 
+std::vector<EndpointInfo> HostHub::getEndpoints() const {
+  std::vector<EndpointInfo> endpoints;
+  std::lock_guard lock(mManager.mLock);
+  for (const auto &[id, endpoint] : mIdToEndpoint)
+    endpoints.push_back(endpoint);
+  return endpoints;
+}
+
 pw::Status HostHub::unlinkFromManager() {
   std::lock_guard lock(mManager.mLock);
   PW_TRY(checkValidLocked());  // returns early if already unlinked
@@ -319,17 +327,6 @@ std::shared_ptr<HostHub> MessageHubManager::getHostHub(int64_t id) {
   return {};
 }
 
-void MessageHubManager::getHostState(std::vector<HubInfo> *hubs,
-                                     std::vector<EndpointInfo> *endpoints) {
-  std::lock_guard lock(mLock);
-  for (const auto &[hubId, hub] : mIdToHostHub) {
-    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
-    hubs->push_back(hub->kInfo);
-    for (const auto &[endpointId, endpoint] : hub->mIdToEndpoint)
-      endpoints->push_back(endpoint);
-  }
-}
-
 void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
   std::list<std::shared_ptr<HostHub>> hubs;
   {
@@ -339,17 +336,9 @@ void MessageHubManager::forEachHostHub(std::function<void(HostHub &hub)> fn) {
   for (auto &hub : hubs) fn(*hub);
 }
 
-void MessageHubManager::initEmbeddedState(
-    const std::vector<HubInfo> &hubs,
-    const std::vector<EndpointInfo> &endpoints) {
+void MessageHubManager::initEmbeddedState() {
   std::lock_guard lock(mLock);
   mIdToEmbeddedHub.clear();
-  for (const auto &hub : hubs) mIdToEmbeddedHub[hub.hubId].info = hub;
-  for (const auto &endpoint : endpoints) addEmbeddedEndpointLocked(endpoint);
-  for (auto &[hostHubId, hub] : mIdToHostHub) {
-    ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
-    hub->mCallback->onEndpointStarted(endpoints);
-  }
   mIdToEmbeddedHubReady = true;
 }
 

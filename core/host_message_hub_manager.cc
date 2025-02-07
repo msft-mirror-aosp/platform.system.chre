@@ -51,38 +51,32 @@ void HostMessageHubManager::onHostTransportReady(HostCallback &cb) {
   mCb = &cb;
 }
 
-void HostMessageHubManager::reset(
-    pw::span<const message::MessageHubInfo> hubs,
-    pw::span<std::pair<message::MessageHubId, const message::EndpointInfo>>
-        endpoints) {
+void HostMessageHubManager::reset() {
+  LOGI("Resetting HostMessageHubManager");
   CHRE_ASSERT_NOT_NULL(mCb);
-  LockGuard<Mutex> lock(mHubsLock);
+  LockGuard<Mutex> hostLock(mHubsLock);
 
   // Deactivate all existing message hubs.
   for (auto &hub : mHubs) hub.clear();
 
-  // Send a snapshot of MessageRouter state before adding the host hubs.
-  mCb->onReset([](const HostCallback::ProcessEndpointFn &fn) {
-    message::MessageRouterSingleton::get()->forEachEndpoint(fn);
-  });
+  // Serialize the following against any other embedded hub or endpoint
+  // registration events.
+  LockGuard<Mutex> embeddedLock(mEmbeddedHubOpLock);
 
-  // Populate mHubs based on the snapshot from the host.
-  for (const auto &hub : hubs) {
-    pw::IntrusiveList<Endpoint> endpointList;
-    for (const auto &endpoint : endpoints) {
-      if (endpoint.first != hub.id) continue;
-      auto *endpointEntry = mEndpointAllocator.allocate(endpoint.second);
-      if (!endpointEntry) {
-        LOGE("Failed to allocate storage for endpoint (%" PRIu64 ", %" PRIu64
-             ")",
-             endpoint.first, endpoint.second.id);
-        break;
-      }
-      endpointList.push_back(*endpointEntry);
-    }
-    if (!HostMessageHubManager::Hub::restoreOrCreateLocked(hub, endpointList))
-      break;
-  }
+  // Notify the HAL to accept embedded hub/endpoint registrations.
+  mCb->onReset();
+  MessageRouterSingleton::get()->forEachMessageHub(
+      [this](const MessageHubInfo &info) {
+        for (auto &hub : mHubs) {
+          if (hub.getMessageHub().getId() == info.id) return false;
+        }
+        mCb->onHubRegistered(info);
+        return false;
+      });
+  MessageRouterSingleton::get()->forEachEndpoint(
+      [this](const MessageHubInfo &hub, const EndpointInfo &endpoint) {
+        mCb->onEndpointRegistered(hub.id, endpoint);
+      });
   LOGI("Initialized HostMessageHubManager");
 }
 

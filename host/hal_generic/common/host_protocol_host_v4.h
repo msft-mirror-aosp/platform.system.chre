@@ -40,6 +40,14 @@ using AidlReason = ::aidl::android::hardware::contexthub::Reason;
 class HostProtocolHostV4 : public ::chre::HostProtocolCommon {
  public:
   /**
+   * Encodes a GetMessageHubsAndEndpointsRequest message
+   *
+   * @param builder The builder used to encode the message
+   */
+  static void encodeGetMessageHubsAndEndpointsRequest(
+      flatbuffers::FlatBufferBuilder &builder);
+
+  /**
    * Encodes a GetMessageHubsAndEndpointsResponse message
    *
    * @param builder The builder used to encode the message
