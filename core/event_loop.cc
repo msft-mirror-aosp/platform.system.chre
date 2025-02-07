@@ -221,6 +221,12 @@ bool EventLoop::startNanoapp(UniquePtr<Nanoapp> &nanoapp) {
                       /*nanoappStarted=*/false);
       } else {
         notifyAppStatusChange(CHRE_EVENT_NANOAPP_STARTED, *newNanoapp);
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+        eventLoopManager->getChreMessageHubManager()
+            .getMessageHub()
+            .registerEndpoint(newNanoapp->getAppId());
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
       }
     }
   }
@@ -690,6 +696,13 @@ void EventLoop::unloadNanoappAtIndex(size_t index, bool nanoappStarted) {
                                            .disableActiveScan(nanoapp.get());
   logDanglingResources("BLE scan", numDisabledBleScans);
 #endif  // CHRE_BLE_SUPPORT_ENABLED
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  EventLoopManagerSingleton::get()
+      ->getChreMessageHubManager()
+      .getMessageHub()
+      .unregisterEndpoint(nanoapp->getAppId());
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
   const uint32_t numCancelledTimers =
       getTimerPool().cancelAllNanoappTimers(nanoapp.get());

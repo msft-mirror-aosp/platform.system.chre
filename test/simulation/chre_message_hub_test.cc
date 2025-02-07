@@ -134,11 +134,24 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     return false;
   }
 
-  void onEndpointRegistered(MessageHubId /* messageHubId */,
-                            EndpointId /* endpointId */) override {}
+  void onEndpointRegistered(MessageHubId messageHubId,
+                            EndpointId endpointId) override {
+    mRegisteredEndpoints.insert(std::make_pair(messageHubId, endpointId));
+  }
 
-  void onEndpointUnregistered(MessageHubId /* messageHubId */,
-                              EndpointId /* endpointId */) override {}
+  void onEndpointUnregistered(MessageHubId messageHubId,
+                              EndpointId endpointId) override {
+    mRegisteredEndpoints.erase(std::make_pair(messageHubId, endpointId));
+  }
+
+  bool hasEndpointBeenRegistered(MessageHubId messageHubId,
+                                 EndpointId endpointId) {
+    return mRegisteredEndpoints.find(std::make_pair(
+               messageHubId, endpointId)) != mRegisteredEndpoints.end();
+  }
+
+ private:
+  std::set<std::pair<MessageHubId, EndpointId>> mRegisteredEndpoints;
 };
 
 //! MessageHubCallback that stores the data passed to onMessageReceived and
@@ -1576,6 +1589,44 @@ TEST_F(ChreMessageHubTest, NanoappSubscribesToServiceReadyEvent) {
   // Unsubscribe from the service ready event
   sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT);
   condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappLoadAndUnloadAreRegisteredAndUnregistered) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_NANOAPP_REGISTRATION", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // The nanoapp should be registered as an endpoint
+  EXPECT_TRUE(
+      callback.hasEndpointBeenRegistered(EventLoopManagerSingleton::get()
+                                             ->getChreMessageHubManager()
+                                             .kChreMessageHubId,
+                                         appId));
+
+  // Unload the nanoapp
+  unloadNanoapp(appId);
+
+  // The nanoapp should be unregistered as an endpoint
+  EXPECT_FALSE(
+      callback.hasEndpointBeenRegistered(EventLoopManagerSingleton::get()
+                                             ->getChreMessageHubManager()
+                                             .kChreMessageHubId,
+                                         appId));
 }
 
 }  // namespace
