@@ -27,6 +27,7 @@
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 
+#include "pw_allocator/allocator.h"
 #include "pw_allocator/unique_ptr.h"
 #include "pw_containers/intrusive_list.h"
 #include "pw_containers/vector.h"
@@ -185,7 +186,7 @@ class HostMessageHubManager : public NonCopyable {
    * @param destinationHubId Id of the destination hub
    * @param destinationEndpointId Id of the destination endpoint
    * @param sessionId Id of the new session
-   * @param serviceDescriptor The protocol for the session
+   * @param serviceDescriptor The protocol for the session (maybe nullptr)
    */
   void openSession(message::MessageHubId hubId, message::EndpointId endpointId,
                    message::MessageHubId destinationHubId,
@@ -220,7 +221,7 @@ class HostMessageHubManager : public NonCopyable {
    * @param permissions Message permissions
    */
   void sendMessage(message::MessageHubId hubId, message::SessionId sessionId,
-                   pw::UniquePtr<std::byte[]> &&data, uint32_t type,
+                   pw::span<const std::byte> data, uint32_t type,
                    uint32_t permissions);
 
  private:
@@ -317,10 +318,23 @@ class HostMessageHubManager : public NonCopyable {
     pw::IntrusiveList<Endpoint> mEndpoints;
   };
 
+  /**
+   * Trivial allocator wrapping the CHRE memory allocation platform APIs. It
+   * spits out pw::UniquePtr<std::byte> instances which can be passed to
+   * MessageRouter APIs.
+   */
+  // TODO(b/395649065): Move this into util
+  class ChreAllocator : public pw::Allocator {
+   public:
+    void *DoAllocate(Layout layout) override;
+    void DoDeallocate(void *ptr) override;
+  };
+
   // Consumes and deallocates all entries in the list.
   static void deallocateEndpoints(pw::IntrusiveList<Endpoint> &endpoints);
 
   HostCallback *mCb;
+  ChreAllocator mMsgAllocator;
 
   // Endpoint storage and allocator.
   // NOTE: This is only accessed on host-triggered invocations which take

@@ -24,6 +24,7 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/log.h"
+#include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
 #include "chre/platform/shared/generated/host_messages_generated.h"
 #include "chre/platform/shared/host_protocol_chre.h"
@@ -162,12 +163,20 @@ void HostMessageHubManager::closeSession(MessageHubId hubId,
 }
 
 void HostMessageHubManager::sendMessage(MessageHubId hubId, SessionId sessionId,
-                                        pw::UniquePtr<std::byte[]> &&data,
+                                        pw::span<const std::byte> data,
                                         uint32_t type, uint32_t permissions) {
   LockGuard<Mutex> lock(mHubsLock);
   for (auto &hub : mHubs) {
     if (hub.getMessageHub().getId() != hubId) continue;
-    hub.getMessageHub().sendMessage(std::move(data), type, permissions,
+    auto dataCopy = mMsgAllocator.MakeUniqueArray<std::byte>(data.size());
+    if (dataCopy == nullptr) {
+      LOGE("Failed to allocate endpoint message from host hub %" PRIu64
+           " over session %" PRIu16,
+           hubId, sessionId);
+      return;
+    }
+    std::memcpy(dataCopy.get(), data.data(), data.size());
+    hub.getMessageHub().sendMessage(std::move(dataCopy), type, permissions,
                                     sessionId);
     return;
   }
@@ -347,6 +356,14 @@ void HostMessageHubManager::deallocateEndpoints(
     endpoints.pop_front();
     manager.mEndpointAllocator.deallocate(&endpoint);
   }
+}
+
+void *HostMessageHubManager::ChreAllocator::DoAllocate(Layout layout) {
+  return memoryAlloc(layout.size());
+}
+
+void HostMessageHubManager::ChreAllocator::DoDeallocate(void *ptr) {
+  memoryFree(ptr);
 }
 
 }  // namespace chre

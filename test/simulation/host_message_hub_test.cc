@@ -404,13 +404,12 @@ TEST_F(HostMessageHubTest, SendMessage) {
                            kEndpoints[1].id, sessionId,
                            /*serviceDescriptor=*/nullptr);
 
-  uint8_t bytes[] = {0xde, 0xad, 0xbe, 0xef};
-  auto data = pw::allocator::GetLibCAllocator().MakeUniqueArray<std::byte>(4);
-  std::memcpy(data.get(), bytes, sizeof(bytes));
-  EXPECT_CALL(mEmbeddedHubCb, onMessageReceived(DataMatcher(bytes), 1, 2,
+  std::byte data[] = {std::byte{0xde}, std::byte{0xad}, std::byte{0xbe},
+                      std::byte{0xef}};
+  EXPECT_CALL(mEmbeddedHubCb, onMessageReceived(DataMatcher(data), 1, 2,
                                                 SessionIdMatcher(sessionId), _))
       .Times(1);
-  getManager().sendMessage(kHostHub.id, sessionId, std::move(data), 1, 2);
+  getManager().sendMessage(kHostHub.id, sessionId, {data, sizeof(data)}, 1, 2);
 }
 
 TEST_F(HostMessageHubTest, ReceiveMessage) {
@@ -426,7 +425,8 @@ TEST_F(HostMessageHubTest, ReceiveMessage) {
                            kEndpoints[1].id, sessionId,
                            /*serviceDescriptor=*/nullptr);
 
-  uint8_t bytes[] = {0xde, 0xad, 0xbe, 0xef};
+  std::byte bytes[] = {std::byte{0xde}, std::byte{0xad}, std::byte{0xbe},
+                       std::byte{0xef}};
   auto data = pw::allocator::GetLibCAllocator().MakeUniqueArray<std::byte>(4);
   std::memcpy(data.get(), bytes, sizeof(bytes));
   EXPECT_CALL(mHostCallback, onMessageReceived(kHostHub.id, sessionId,
