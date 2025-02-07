@@ -410,13 +410,13 @@ public class ChreCrossValidatorSensor
     @Override
     public void init() throws AssertionError {
         super.init();
-        restrictSensors();
+        ChreTestUtil.restrictSensors("ChreCrossValidatorSensor");
     }
 
     @Override
     public void deinit() throws AssertionError {
         super.deinit();
-        unrestrictSensors();
+        ChreTestUtil.unrestrictSensors();
     }
 
     /*
@@ -553,22 +553,6 @@ public class ChreCrossValidatorSensor
         }
         mApDatapointsArray = newApSensorDatapoints.toArray(new ApSensorDatapoint[0]);
         mChreDatapointsArray = newChreSensorDatapoints.toArray(new ChreSensorDatapoint[0]);
-    }
-
-    /**
-     * Restrict other applications from accessing sensors. Should be called before validating data.
-     */
-    private void restrictSensors() {
-        ChreTestUtil.executeShellCommand(InstrumentationRegistry.getInstrumentation(),
-                "dumpsys sensorservice restrict ChreCrossValidatorSensor");
-    }
-
-    /**
-     * Unrestrict other applications from accessing sensors. Should be called after validating data.
-     */
-    private void unrestrictSensors() {
-        ChreTestUtil.executeShellCommand(
-                InstrumentationRegistry.getInstrumentation(), "dumpsys sensorservice enable");
     }
 
     @Override

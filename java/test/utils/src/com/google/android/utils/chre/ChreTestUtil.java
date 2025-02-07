@@ -313,4 +313,22 @@ public class ChreTestUtil {
                 .that(isCountedDown)
                 .isTrue();
     }
+
+    /**
+     * Restrict other applications from accessing sensors.
+     * Should be called before validating data.
+     */
+    public static void restrictSensors(String packageName) {
+        executeShellCommand(InstrumentationRegistry.getInstrumentation(),
+                "dumpsys sensorservice restrict " + packageName);
+    }
+
+    /**
+     * Unrestrict other applications from accessing sensors.
+     * Should be called after validating data.
+     */
+    public static void unrestrictSensors() {
+        executeShellCommand(
+                InstrumentationRegistry.getInstrumentation(), "dumpsys sensorservice enable");
+    }
 }
