@@ -302,6 +302,10 @@ class HostMessageHubManager : public NonCopyable {
         const char *serviceDescriptor) override;
     bool doesEndpointHaveService(message::EndpointId endpointId,
                                  const char *serviceDescriptor) override;
+    void onEndpointRegistered(message::MessageHubId messageHubId,
+                              message::EndpointId endpointId) override;
+    void onEndpointUnregistered(message::MessageHubId messageHubId,
+                                message::EndpointId endpointId) override;
 
     char kName[kNameMaxLen + 1];
 

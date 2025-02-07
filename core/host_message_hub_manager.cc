@@ -329,6 +329,16 @@ bool HostMessageHubManager::Hub::doesEndpointHaveService(
   return false;
 }
 
+void HostMessageHubManager::Hub::onEndpointRegistered(
+    MessageHubId /* messageHubId */, EndpointId /* endpointId */) {
+  // TODO(b/390447515): Handle endpoint registration
+}
+
+void HostMessageHubManager::Hub::onEndpointUnregistered(
+    MessageHubId /* messageHubId */, EndpointId /* endpointId */) {
+  // TODO(b/390447515): Handle endpoint registration
+}
+
 void HostMessageHubManager::deallocateEndpoints(
     pw::IntrusiveList<Endpoint> &endpoints) {
   auto &manager = getManager();
