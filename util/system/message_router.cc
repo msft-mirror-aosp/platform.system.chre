@@ -66,8 +66,7 @@ SessionId MessageRouter::MessageHub::openSession(EndpointId fromEndpointId,
 
 bool MessageRouter::MessageHub::closeSession(SessionId sessionId,
                                              Reason reason) {
-  return mRouter == nullptr ? false
-                            : mRouter->closeSession(mHubId, sessionId, reason);
+  return mRouter != nullptr && mRouter->closeSession(mHubId, sessionId, reason);
 }
 
 std::optional<Session> MessageRouter::MessageHub::getSessionWithId(
@@ -80,10 +79,17 @@ bool MessageRouter::MessageHub::sendMessage(pw::UniquePtr<std::byte[]> &&data,
                                             uint32_t messageType,
                                             uint32_t messagePermissions,
                                             SessionId sessionId) {
-  return mRouter == nullptr
-             ? false
-             : mRouter->sendMessage(std::move(data), messageType,
-                                    messagePermissions, sessionId, mHubId);
+  return mRouter != nullptr &&
+         mRouter->sendMessage(std::move(data), messageType, messagePermissions,
+                              sessionId, mHubId);
+}
+
+bool MessageRouter::MessageHub::registerEndpoint(EndpointId endpointId) {
+  return mRouter != nullptr && mRouter->registerEndpoint(mHubId, endpointId);
+}
+
+bool MessageRouter::MessageHub::unregisterEndpoint(EndpointId endpointId) {
+  return mRouter != nullptr && mRouter->unregisterEndpoint(mHubId, endpointId);
 }
 
 MessageHubId MessageRouter::MessageHub::getId() {
@@ -477,6 +483,45 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
     closeSession(fromMessageHubId, sessionId, Reason::UNSPECIFIED);
   }
   return success;
+}
+
+bool MessageRouter::registerEndpoint(MessageHubId messageHubId,
+                                     EndpointId endpointId) {
+  return onEndpointRegistrationStateChanged(messageHubId, endpointId,
+                                            /* isRegistered = */ true);
+}
+
+bool MessageRouter::unregisterEndpoint(MessageHubId messageHubId,
+                                       EndpointId endpointId) {
+  return onEndpointRegistrationStateChanged(messageHubId, endpointId,
+                                            /* isRegistered = */ false);
+}
+
+bool MessageRouter::onEndpointRegistrationStateChanged(
+    MessageHubId messageHubId, EndpointId endpointId, bool isRegistered) {
+  LockGuard<Mutex> lock(mMutex);
+  MessageRouter::MessageHubCallback *callback =
+      getCallbackFromMessageHubIdLocked(messageHubId);
+  if (callback == nullptr) {
+    LOGE("Failed to register endpoint with ID %" PRIu64
+         " to message hub with ID %" PRIu64 ": hub not found",
+         endpointId, messageHubId);
+    return false;
+  }
+
+  for (const MessageHubRecord &messageHubRecord : mMessageHubs) {
+    if (messageHubRecord.info.id == messageHubId) {
+      continue;
+    }
+
+    if (isRegistered) {
+      messageHubRecord.callback->onEndpointRegistered(messageHubId, endpointId);
+    } else {
+      messageHubRecord.callback->onEndpointUnregistered(messageHubId,
+                                                        endpointId);
+    }
+  }
+  return true;
 }
 
 const MessageRouter::MessageHubRecord *MessageRouter::getMessageHubRecordLocked(

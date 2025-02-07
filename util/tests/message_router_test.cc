@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -88,6 +89,12 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     return serviceDescriptor != nullptr && endpointId == kEndpointInfos[1].id &&
            std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0;
   }
+
+  void onEndpointRegistered(MessageHubId /* messageHubId */,
+                            EndpointId /* endpointId */) override {}
+
+  void onEndpointUnregistered(MessageHubId /* messageHubId */,
+                              EndpointId /* endpointId */) override {}
 };
 
 //! MessageHubCallback that stores the data passed to onMessageReceived and
@@ -134,11 +141,28 @@ class MessageHubCallbackStoreData : public MessageHubCallbackBase {
     }
   }
 
+  void onEndpointRegistered(MessageHubId messageHubId,
+                            EndpointId endpointId) override {
+    mRegisteredEndpoints.insert(std::make_pair(messageHubId, endpointId));
+  }
+
+  void onEndpointUnregistered(MessageHubId messageHubId,
+                              EndpointId endpointId) override {
+    mRegisteredEndpoints.erase(std::make_pair(messageHubId, endpointId));
+  }
+
+  bool hasEndpointBeenRegistered(MessageHubId messageHubId,
+                                 EndpointId endpointId) {
+    return mRegisteredEndpoints.find(std::make_pair(
+               messageHubId, endpointId)) != mRegisteredEndpoints.end();
+  }
+
  private:
   Message *mMessage;
   Session *mSession;
   Reason *mReason;
   Session *mOpenedSession;
+  std::set<std::pair<MessageHubId, EndpointId>> mRegisteredEndpoints;
 };
 
 //! MessageHubCallback that always fails to process messages
@@ -426,6 +450,20 @@ TEST_F(MessageRouterTest, GetEndpointForService) {
 
   EXPECT_EQ(endpoint->messageHubId, messageHub1->getId());
   EXPECT_EQ(endpoint->endpointId, kEndpointInfos[1].id);
+}
+
+TEST_F(MessageRouterTest, DoesEndpointHaveService) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub1 =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub1.has_value());
+
+  EXPECT_TRUE(router.doesEndpointHaveService(messageHub1->getId(),
+                                             kEndpointInfos[1].id,
+                                             kServiceDescriptorForEndpoint2));
 }
 
 TEST_F(MessageRouterTest, GetEndpointForServiceBadServiceDescriptor) {
@@ -1725,6 +1763,55 @@ TEST_F(MessageRouterTest, ForEachEndpointOfHubInvalidHub) {
         return false;
       }));
   EXPECT_EQ(endpoints.size(), 0);
+}
+
+TEST_F(MessageRouterTest, RegisterEndpointCallbacksAreCalled) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub.has_value());
+
+  // Register the endpoint and verify that the callbacks were called
+  EXPECT_TRUE(messageHub->registerEndpoint(kEndpointInfos[0].id));
+  EXPECT_TRUE(callback2.hasEndpointBeenRegistered(messageHub->getId(),
+                                                  kEndpointInfos[0].id));
+}
+
+TEST_F(MessageRouterTest, UnregisterEndpointCallbacksAreCalled) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  MessageHubCallbackStoreData callback2(/* message= */ nullptr,
+                                        /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub.has_value());
+  std::optional<MessageRouter::MessageHub> messageHub2 =
+      router.registerMessageHub("hub2", /* id= */ 2, callback2);
+  EXPECT_TRUE(messageHub.has_value());
+
+  // Register the endpoint and verify that the callbacks were called
+  // only on the other hub
+  EXPECT_TRUE(messageHub->registerEndpoint(kEndpointInfos[0].id));
+  EXPECT_FALSE(callback.hasEndpointBeenRegistered(messageHub->getId(),
+                                                  kEndpointInfos[0].id));
+  EXPECT_TRUE(callback2.hasEndpointBeenRegistered(messageHub->getId(),
+                                                  kEndpointInfos[0].id));
+
+  // Unregister the endpoint and verify that the callbacks were called
+  // only on the other hub
+  EXPECT_TRUE(messageHub->unregisterEndpoint(kEndpointInfos[0].id));
+  EXPECT_FALSE(callback.hasEndpointBeenRegistered(messageHub->getId(),
+                                                  kEndpointInfos[0].id));
+  EXPECT_FALSE(callback2.hasEndpointBeenRegistered(messageHub->getId(),
+                                                   kEndpointInfos[0].id));
 }
 
 }  // namespace
