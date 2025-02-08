@@ -57,6 +57,7 @@ constexpr uint32_t kAudioDataTimerCookie = 0xc001cafe;
 uint32_t gAudioStatusTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kAudioStatusTimerCookie = 0xb01dcafe;
 uint32_t gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+constexpr uint32_t kRangingRequestSetupRetryTimerCookie = 0x600ccafe;
 constexpr uint32_t kRangingRequestRetryTimerCookie = 0x600dcafe;
 uint32_t gWwanRequestRetryTimerHandle = CHRE_TIMER_INVALID;
 constexpr uint32_t kWwanRequestRetryTimerCookie = 0x01d3cafe;
@@ -323,6 +324,10 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
 }
 
 bool Manager::requestRangingForFeatureWifiRtt() {
+  if (!mCachedRangingTarget.has_value()) {
+    LOGE("No cached WiFi RTT ranging target");
+    return false;
+  }
   struct chreWifiRangingParams params = {
       .targetListLen = 1, .targetList = &mCachedRangingTarget.value()};
   return chreWifiRequestRangingAsync(&params, &kWifiRttCookie);
@@ -336,12 +341,8 @@ bool Manager::startTestForFeature(Feature feature) {
       break;
 
     case Feature::WIFI_RTT: {
-      if (!mCachedRangingTarget.has_value()) {
-        LOGE("No cached WiFi RTT ranging target");
-      } else {
-        mWifiRequestRetries = 0;
-        success = requestRangingForFeatureWifiRtt();
-      }
+      mWifiRequestRetries = 0;
+      success = requestRangingForFeatureWifiRtt();
       break;
     }
 
@@ -436,12 +437,16 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
           // Retry on CHRE_ERROR_BUSY after a short delay
           mWifiRequestRetries++;
           uint64_t delay = kOneSecondInNanoseconds * 2;
-          gRangingRequestRetryTimerHandle = chreTimerSet(
-              delay, &kRangingRequestRetryTimerCookie, /*oneShot=*/true);
+          const uint32_t *cookie = mTestSession->step == TestStep::SETUP
+                                       ? &kRangingRequestSetupRetryTimerCookie
+                                       : &kRangingRequestRetryTimerCookie;
+          gRangingRequestRetryTimerHandle =
+              chreTimerSet(delay, cookie, /*oneShot=*/true);
           LOGW(
-              "Request failed due to CHRE_ERROR_BUSY. Retrying after "
-              "delay=%" PRIu64 "ns, num_retries=%" PRIu8 "/%" PRIu8,
-              delay, mWifiRequestRetries, kMaxWifiRequestRetries);
+              "Request failed due to CHRE_ERROR_BUSY during %s step. Retrying "
+              "after delay=%" PRIu64 "ns, num_retries=%" PRIu8 "/%" PRIu8,
+              mTestSession->step == TestStep::SETUP ? "SETUP" : "START", delay,
+              mWifiRequestRetries, kMaxWifiRequestRetries);
           return;
         }
 
@@ -691,6 +696,12 @@ void Manager::handleAudioDataEvent(const struct chreAudioDataEvent *event) {
 void Manager::handleTimerEvent(const void *eventData) {
   bool testSuccess = false;
   auto *cookie = static_cast<const uint32_t *>(eventData);
+
+  if (*cookie == kRangingRequestSetupRetryTimerCookie) {
+    gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;
+    chreWifiRequestScanAsyncDefault(&kWifiScanningCookie);
+    return;
+  }
 
   if (*cookie == kRangingRequestRetryTimerCookie) {
     gRangingRequestRetryTimerHandle = CHRE_TIMER_INVALID;

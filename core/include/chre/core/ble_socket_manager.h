@@ -18,6 +18,7 @@
 
 #ifdef CHRE_BLE_SOCKET_SUPPORT_ENABLED
 
+#include "chre/core/ble_l2cap_coc_socket_data.h"
 #include "chre_api/chre.h"
 
 namespace chre {
@@ -28,26 +29,7 @@ namespace chre {
  */
 class BleSocketManager : public NonCopyable {
  public:
-  struct L2capCocConfig {
-    //! Channel identifier of the endpoint.
-    uint16_t cid;
-
-    //! Maximum Transmission Unit.
-    uint16_t mtu;
-
-    //! Maximum PDU payload Size.
-    uint16_t mps;
-
-    //! Currently available credits for sending or receiving K-frames in LE
-    //! Credit Based Flow Control mode.
-    uint16_t credits;
-  };
-
-  chreError socketConnected(uint16_t /*hostClientId*/, uint64_t /*socketId*/,
-                            uint64_t /*endpointId*/,
-                            uint16_t /*connectionHandle*/,
-                            L2capCocConfig /*rxConfig*/,
-                            L2capCocConfig /*txConfig*/) {
+  chreError socketConnected(const BleL2capCocSocketData & /* socketData */) {
     return CHRE_ERROR_NOT_SUPPORTED;
   }
 

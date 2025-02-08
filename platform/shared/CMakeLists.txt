@@ -322,6 +322,7 @@ pw_add_library(chre.platform.shared.host_protocol_chre STATIC
     chre.platform.shared.host_protocol_common
     chre.util
     chre.util.flatbuffers
+    chre.util.system
     chre.chre_api
     chre_third_party.flatbuffers
   SOURCES

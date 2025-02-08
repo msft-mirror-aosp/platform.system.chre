@@ -86,6 +86,12 @@ class ChreMessageHubManager
                                message::EndpointId toEndpointId,
                                const char *serviceDescriptor);
 
+  //! Closes the session and verifies the fromEndpointId is a member of the
+  //! session.
+  //! @return true if the session was closed successfully, false otherwise
+  bool closeSession(message::EndpointId fromEndpointId,
+                    message::SessionId sessionId);
+
   //! Sends a reliable message on the given session. If this function fails,
   //! the free callback will be called and it will return false.
   //! @return whether the message was successfully sent

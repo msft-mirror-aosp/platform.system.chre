@@ -106,7 +106,7 @@ enum chreMsgEndpointReason {
 };
 
 /**
- * The message hub ID reserved for the Android framework (Context Hub Service)
+ * The message hub ID reserved for the Android framework (Context Hub Service).
  */
 #define CHRE_MSG_HUB_ID_ANDROID UINT64_C(0x416E64726F696400)
 
@@ -118,9 +118,15 @@ enum chreMsgEndpointReason {
 
 /**
  * Wildcard hub ID for use with chreMsgConfigureEndpointReadyEvents() and
- * chreMsgConfigureServiceReadyEvents()
+ * chreMsgConfigureServiceReadyEvents().
  */
 #define CHRE_MSG_HUB_ID_ANY CHRE_MSG_HUB_ID_INVALID
+
+/**
+ * Wildcard endpoint ID for use with chreMsgConfigureEndpointReadyEvents() and
+ * chreMsgSessionOpenAsync().
+ */
+#define CHRE_MSG_ENDPOINT_ID_ANY CHRE_MSG_ENDPOINT_ID_INVALID
 
 /**
  * The maximum length of an endpoint's name.
@@ -391,7 +397,7 @@ bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
  * endpoint that is connected with a message hub and a specific service.
  * The hubId can be CHRE_MSG_HUB_ID_ANY to configure notifications
  * for all endpoints that are connected with any message hub. The endpoint ID
- * can be CHRE_MSG_ENDPOINT_ID_INVALID to configure notifications for all
+ * can be CHRE_MSG_ENDPOINT_ID_ANY to configure notifications for all
  * endpoints that match the given hub.
  *
  * If this API succeeds, the nanoapp will receive endpoint
@@ -506,8 +512,8 @@ bool chreMsgPublishServices(const struct chreMsgServiceInfo *services,
  * @param hubId The message hub ID of the endpoint. Can be
  * CHRE_MSG_HUB_ID_ANY to open a session with the default endpoint.
  * @param endpointId The endpoint ID of the endpoint. Can be
- * CHRE_MSG_ENDPOINT_ID_INVALID to open a session with a specified service. The
- * service cannoe be NULL in this case.
+ * CHRE_MSG_ENDPOINT_ID_ANY to open a session with a specified service. The
+ * service cannot be NULL in this case.
  * @param serviceDescriptor The descriptor of the service associated with the
  * endpoint with which to open the session, a null-terminated ASCII
  * string. Can be NULL. The underlying memory must outlive the session.

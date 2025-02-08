@@ -214,19 +214,34 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
                   btSocketOpen->channelInfo());
           const char *name = getStringFromByteVector(btSocketOpen->name());
           HostMessageHandlers::handleBtSocketOpen(
-              hostClientId, static_cast<uint64_t>(btSocketOpen->socketId()),
-              name, static_cast<uint64_t>(btSocketOpen->endpointId()),
               static_cast<uint64_t>(btSocketOpen->hubId()),
-              static_cast<uint32_t>(btSocketOpen->aclConnectionHandle()),
-              static_cast<uint32_t>(leCocChannelInfo->localCid()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteCid()),
-              static_cast<uint32_t>(leCocChannelInfo->psm()),
-              static_cast<uint32_t>(leCocChannelInfo->localMtu()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteMtu()),
-              static_cast<uint32_t>(leCocChannelInfo->localMps()),
-              static_cast<uint32_t>(leCocChannelInfo->remoteMps()),
-              static_cast<uint32_t>(leCocChannelInfo->initialRxCredits()),
-              static_cast<uint32_t>(leCocChannelInfo->initialTxCredits()));
+              BleL2capCocSocketData{
+                  .socketId = static_cast<uint64_t>(btSocketOpen->socketId()),
+                  .endpointId =
+                      static_cast<uint64_t>(btSocketOpen->endpointId()),
+                  .connectionHandle = static_cast<uint16_t>(
+                      btSocketOpen->aclConnectionHandle()),
+                  .hostClientId = hostClientId,
+                  .rxConfig =
+                      L2capCocConfig{.cid = static_cast<uint16_t>(
+                                         leCocChannelInfo->localCid()),
+                                     .mtu = static_cast<uint16_t>(
+                                         leCocChannelInfo->localMtu()),
+                                     .mps = static_cast<uint16_t>(
+                                         leCocChannelInfo->localMps()),
+                                     .credits = static_cast<uint16_t>(
+                                         leCocChannelInfo->initialRxCredits())},
+                  .txConfig =
+                      L2capCocConfig{.cid = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteCid()),
+                                     .mtu = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteMtu()),
+                                     .mps = static_cast<uint16_t>(
+                                         leCocChannelInfo->remoteMps()),
+                                     .credits = static_cast<uint16_t>(
+                                         leCocChannelInfo->initialTxCredits())},
+              },
+              name, static_cast<uint32_t>(leCocChannelInfo->psm()));
           success = true;
         }
         break;
@@ -490,6 +505,74 @@ bool HostProtocolChre::getSettingEnabledFromFbs(fbs::SettingState state,
   }
 
   return success;
+}
+
+void HostProtocolChre::encodeGetMessageHubsAndEndpointsResponse(
+    ChreFlatBufferBuilder &builder) {
+  auto msg = fbs::CreateGetMessageHubsAndEndpointsResponse(builder);
+  finalize(builder, fbs::ChreMessage::GetMessageHubsAndEndpointsResponse,
+           msg.Union());
+}
+
+void HostProtocolChre::encodeRegisterMessageHub(
+    ChreFlatBufferBuilder &builder, const message::MessageHubInfo &hub) {
+  auto vendorHub = fbs::CreateVendorHubInfo(
+      builder, addStringAsByteVector(builder, hub.name));
+  auto fbsHub = fbs::CreateMessageHub(builder, hub.id,
+                                      fbs::MessageHubDetails::VendorHubInfo,
+                                      vendorHub.Union());
+  auto msg = fbs::CreateRegisterMessageHub(builder, fbsHub);
+  finalize(builder, fbs::ChreMessage::RegisterMessageHub, msg.Union());
+}
+
+void HostProtocolChre::encodeRegisterEndpoint(
+    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
+    const message::EndpointInfo &endpoint) {
+  auto id = fbs::CreateEndpointId(builder, hub, endpoint.id);
+  auto info = fbs::CreateEndpointInfo(
+      builder, id, static_cast<fbs::EndpointType>(endpoint.type),
+      addStringAsByteVector(builder, endpoint.name), endpoint.version,
+      endpoint.requiredPermissions);
+  auto msg = fbs::CreateRegisterEndpoint(builder, info);
+  finalize(builder, fbs::ChreMessage::RegisterEndpoint, msg.Union());
+}
+
+void HostProtocolChre::encodeOpenEndpointSessionRequest(
+    ChreFlatBufferBuilder &builder, const message::Session &session) {
+  auto fromEndpoint = fbs::CreateEndpointId(
+      builder, session.initiator.messageHubId, session.initiator.endpointId);
+  auto toEndpoint = fbs::CreateEndpointId(builder, session.peer.messageHubId,
+                                          session.peer.endpointId);
+  auto msg = fbs::CreateOpenEndpointSessionRequest(
+      builder, session.peer.messageHubId, session.sessionId, fromEndpoint,
+      toEndpoint, addStringAsByteVector(builder, session.serviceDescriptor));
+  finalize(builder, fbs::ChreMessage::OpenEndpointSessionRequest, msg.Union());
+}
+
+void HostProtocolChre::encodeEndpointSessionOpened(
+    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
+    message::SessionId session) {
+  auto msg = fbs::CreateEndpointSessionOpened(builder, hub, session);
+  finalize(builder, fbs::ChreMessage::EndpointSessionOpened, msg.Union());
+}
+
+void HostProtocolChre::encodeEndpointSessionClosed(
+    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
+    message::SessionId session, message::Reason reason) {
+  auto msg = fbs::CreateEndpointSessionClosed(builder, hub, session,
+                                              static_cast<fbs::Reason>(reason));
+  finalize(builder, fbs::ChreMessage::EndpointSessionClosed, msg.Union());
+}
+
+void HostProtocolChre::encodeEndpointSessionMessage(
+    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
+    message::SessionId session, pw::UniquePtr<std::byte[]> &&data,
+    uint32_t type, uint32_t permissions) {
+  auto dataVec = builder.CreateVector(reinterpret_cast<uint8_t *>(data.get()),
+                                      data.size());
+  auto msg = fbs::CreateEndpointSessionMessage(builder, hub, session, type,
+                                               permissions, dataVec);
+  finalize(builder, fbs::ChreMessage::EndpointSessionMessage, msg.Union());
 }
 
 }  // namespace chre
