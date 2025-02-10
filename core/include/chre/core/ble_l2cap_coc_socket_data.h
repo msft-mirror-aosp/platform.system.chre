@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /**
  * Parameters for a direction of packet flow in an LE L2CAP COC socket.
  */
