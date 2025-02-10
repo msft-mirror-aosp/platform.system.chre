@@ -28,6 +28,7 @@ COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_preprocessor/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_result/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_span/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_status/public
+COMMON_CFLAGS += -I$(PIGWEED_DIR)/pw_toolchain/public
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/fit/include
 COMMON_CFLAGS += -I$(PIGWEED_DIR)/third_party/fuchsia/repo/sdk/lib/stdcompat/include
 
