@@ -693,14 +693,16 @@ uint8_t chppRunTransportLoopback(struct ChppTransportState *context,
  * chppWorkThreadStart() would require to call this function after initializing
  * CHPP.
  *
+ * ChppTransportState->mutex must be held while invoking this method.
+ *
  * @param context Maintains state for each transport layer instance.
  * @param resetType Distinguishes a reset from a reset-ack, as defined in the
  * ChppTransportPacketAttributes struct.
  * @param error Provides the error that led to the reset.
  */
-void chppTransportSendReset(struct ChppTransportState *context,
-                            enum ChppTransportPacketAttributes resetType,
-                            enum ChppTransportErrorCode error);
+void chppTransportSendResetLocked(struct ChppTransportState *context,
+                                  enum ChppTransportPacketAttributes resetType,
+                                  enum ChppTransportErrorCode error);
 
 /**
  * Returns the Tx MTU size at the transport layer in bytes.
