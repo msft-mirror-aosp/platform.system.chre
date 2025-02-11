@@ -23,9 +23,9 @@
 #include "chre/platform/mutex.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
-#include "chre/util/system/message_router_callback_allocator.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
 #include "pw_containers/vector.h"
@@ -201,10 +201,10 @@ class ChreMessageHubManager
                             message::EndpointId endpointId);
 
   //! @return The free callback record from the callback allocator.
-  std::optional<message::MessageRouterCallbackAllocator<
-      MessageFreeCallbackData>::FreeCallbackRecord>
+  std::optional<
+      message::CallbackAllocator<MessageFreeCallbackData>::CallbackRecord>
   getAndRemoveFreeCallbackRecord(void *ptr) {
-    return mAllocator.GetAndRemoveFreeCallbackRecord(ptr);
+    return mAllocator.GetAndRemoveCallbackRecord(ptr);
   }
 
   //! @return The first MessageHub ID for the given endpoint ID
@@ -263,15 +263,15 @@ class ChreMessageHubManager
   message::MessageRouter::MessageHub mChreMessageHub;
 
   //! The vector of free callback records - used by the
-  //! MessageRouterCallbackAllocator
-  pw::Vector<message::MessageRouterCallbackAllocator<
-                 MessageFreeCallbackData>::FreeCallbackRecord,
-             kMaxFreeCallbackRecords>
+  //! CallbackAllocator
+  pw::Vector<
+      message::CallbackAllocator<MessageFreeCallbackData>::CallbackRecord,
+      kMaxFreeCallbackRecords>
       mFreeCallbackRecords;
 
   //! The allocator for message free callbacks - used when sending a message
   //! from a nanoapp with a free callback
-  message::MessageRouterCallbackAllocator<MessageFreeCallbackData> mAllocator;
+  message::CallbackAllocator<MessageFreeCallbackData> mAllocator;
 
   //! Mutex to protect mNanoappPublishedServices
   Mutex mNanoappPublishedServicesMutex;

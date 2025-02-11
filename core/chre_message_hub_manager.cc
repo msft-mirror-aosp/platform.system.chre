@@ -40,6 +40,7 @@
 #include <cstring>
 #include <optional>
 
+using ::chre::message::CallbackAllocator;
 using ::chre::message::Endpoint;
 using ::chre::message::ENDPOINT_ID_ANY;
 using ::chre::message::ENDPOINT_ID_INVALID;
@@ -53,7 +54,6 @@ using ::chre::message::MESSAGE_HUB_ID_INVALID;
 using ::chre::message::MessageHubId;
 using ::chre::message::MessageHubInfo;
 using ::chre::message::MessageRouter;
-using ::chre::message::MessageRouterCallbackAllocator;
 using ::chre::message::MessageRouterSingleton;
 using ::chre::message::Reason;
 using ::chre::message::Session;
@@ -472,8 +472,7 @@ void ChreMessageHubManager::onMessageFreeCallback(
 void ChreMessageHubManager::handleMessageFreeCallback(uint16_t /* type */,
                                                       void *data,
                                                       void* /* extraData */) {
-  std::optional<MessageRouterCallbackAllocator<
-      MessageFreeCallbackData>::FreeCallbackRecord>
+  std::optional<CallbackAllocator<MessageFreeCallbackData>::CallbackRecord>
       record = EventLoopManagerSingleton::get()
                    ->getChreMessageHubManager()
                    .getAndRemoveFreeCallbackRecord(data);
