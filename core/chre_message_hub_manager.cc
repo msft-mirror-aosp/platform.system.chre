@@ -21,9 +21,11 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/context.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/target_platform/log.h"
 #include "chre/util/conditional_lock_guard.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/service_helpers.h"
@@ -38,12 +40,14 @@
 #include <optional>
 
 using ::chre::message::Endpoint;
+using ::chre::message::ENDPOINT_ID_ANY;
 using ::chre::message::ENDPOINT_ID_INVALID;
 using ::chre::message::EndpointId;
 using ::chre::message::EndpointInfo;
 using ::chre::message::EndpointType;
 using ::chre::message::extractNanoappIdAndServiceId;
 using ::chre::message::Message;
+using ::chre::message::MESSAGE_HUB_ID_ANY;
 using ::chre::message::MESSAGE_HUB_ID_INVALID;
 using ::chre::message::MessageHubId;
 using ::chre::message::MessageHubInfo;
@@ -56,6 +60,56 @@ using ::chre::message::SESSION_ID_INVALID;
 using ::chre::message::SessionId;
 
 namespace chre {
+
+namespace {
+
+//! Sends a ready event to the nanoapp with the given instance ID. If
+//! serviceDescriptor is null, then the ready event is for an endpoint, else it
+//! is for a service.
+template <typename T>
+void sendReadyEventToNanoapp(uint16_t nanoappInstanceId,
+                             MessageHubId messageHubId, EndpointId endpointId,
+                             const char *serviceDescriptor) {
+  static_assert(std::is_same_v<T, chreMsgServiceReadyEvent> ||
+                std::is_same_v<T, chreMsgEndpointReadyEvent>);
+
+  UniquePtr<T> event = MakeUnique<T>();
+  if (event.isNull()) {
+    FATAL_ERROR_OOM();
+    return;
+  }
+
+  event->hubId = messageHubId;
+  event->endpointId = endpointId;
+  if constexpr (std::is_same_v<T, chreMsgServiceReadyEvent>) {
+    std::strncpy(event->serviceDescriptor, serviceDescriptor,
+                 CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN);
+    event->serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN - 1] = '\0';
+  }
+
+  EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
+      std::is_same_v<T, chreMsgServiceReadyEvent>
+          ? CHRE_EVENT_MSG_SERVICE_READY
+          : CHRE_EVENT_MSG_ENDPOINT_READY,
+      event.release(), freeEventDataCallback, nanoappInstanceId);
+}
+
+//! Sends a ready event to the nanoapp with the given instance ID. If
+//! serviceDescriptor is null, then the ready event is for an endpoint, else it
+//! is for a service.
+void sendReadyEventToNanoapp(uint16_t nanoappInstanceId,
+                             MessageHubId messageHubId, EndpointId endpointId,
+                             const char *serviceDescriptor) {
+  if (serviceDescriptor == nullptr) {
+    sendReadyEventToNanoapp<chreMsgEndpointReadyEvent>(
+        nanoappInstanceId, messageHubId, endpointId, serviceDescriptor);
+  } else {
+    sendReadyEventToNanoapp<chreMsgServiceReadyEvent>(
+        nanoappInstanceId, messageHubId, endpointId, serviceDescriptor);
+  }
+}
+
+}  // anonymous namespace
 
 ChreMessageHubManager::ChreMessageHubManager()
     : mAllocator(ChreMessageHubManager::onMessageFreeCallback,
@@ -88,6 +142,40 @@ bool ChreMessageHubManager::getEndpointInfo(MessageHubId hubId,
   info.requiredPermissions = endpointInfo->requiredPermissions;
   std::strncpy(info.name, endpointInfo->name, CHRE_MAX_ENDPOINT_NAME_LEN);
   info.name[CHRE_MAX_ENDPOINT_NAME_LEN - 1] = '\0';
+  return true;
+}
+
+bool ChreMessageHubManager::configureReadyEvents(
+    uint16_t nanoappInstanceId, EndpointId fromEndpointId, MessageHubId hubId,
+    EndpointId endpointId, const char *serviceDescriptor, bool enable) {
+  if (hubId == MESSAGE_HUB_ID_INVALID && endpointId == ENDPOINT_ID_INVALID &&
+      serviceDescriptor == nullptr) {
+    LOGE(
+        "Invalid arguments to configureReadyEvents: hubId, endpointId and "
+        "serviceDescriptor cannot all be invalid");
+    return false;
+  }
+
+  if (!enable) {
+    disableReadyEvents(fromEndpointId, hubId, endpointId, serviceDescriptor);
+    return true;
+  }
+
+  if (!mEndpointReadyEventRequests.push_back(
+          EndpointReadyEventData{.fromEndpointId = fromEndpointId,
+                                 .messageHubId = hubId,
+                                 .endpointId = endpointId,
+                                 .serviceDescriptor = serviceDescriptor})) {
+    LOG_OOM();
+    return false;
+  }
+
+  std::optional<Endpoint> endpoint =
+      searchForEndpoint(hubId, endpointId, serviceDescriptor);
+  if (endpoint.has_value()) {
+    sendReadyEventToNanoapp(nanoappInstanceId, endpoint->messageHubId,
+                            endpoint->endpointId, serviceDescriptor);
+  }
   return true;
 }
 
@@ -144,25 +232,11 @@ bool ChreMessageHubManager::openSessionAsync(EndpointId fromEndpointId,
 bool ChreMessageHubManager::openDefaultSessionAsync(
     EndpointId fromEndpointId, MessageHubId toHubId, EndpointId toEndpointId,
     const char *serviceDescriptor) {
-  if (toEndpointId == ENDPOINT_ID_INVALID) {
-    if (serviceDescriptor == nullptr) {
-      LOGE("Failed to open session: no endpoint ID or service descriptor");
-      return false;
-    }
-    std::optional<Endpoint> endpoint =
-        MessageRouterSingleton::get()->getEndpointForService(toHubId,
-                                                             serviceDescriptor);
-    if (endpoint.has_value()) {
-      toHubId = endpoint->messageHubId;
-      toEndpointId = endpoint->endpointId;
-    }
-  } else if (toHubId == MESSAGE_HUB_ID_INVALID) {
-    toHubId = findDefaultMessageHubId(toEndpointId);
-  }
-  return toHubId != MESSAGE_HUB_ID_INVALID &&
-         toEndpointId != ENDPOINT_ID_INVALID &&
-         openSessionAsync(fromEndpointId, toHubId, toEndpointId,
-                          serviceDescriptor);
+  std::optional<Endpoint> endpoint =
+      searchForEndpoint(toHubId, toEndpointId, serviceDescriptor);
+  return endpoint.has_value() &&
+         openSessionAsync(fromEndpointId, endpoint->messageHubId,
+                          endpoint->endpointId, serviceDescriptor);
 }
 
 bool ChreMessageHubManager::closeSession(EndpointId fromEndpointId,
@@ -422,6 +496,34 @@ void ChreMessageHubManager::onSessionStateChanged(
       ChreMessageHubManager::onSessionStateChangedCallback);
 }
 
+void ChreMessageHubManager::onEndpointReadyEvent(MessageHubId messageHubId,
+                                                 EndpointId endpointId) {
+  for (size_t i = 0; i < mEndpointReadyEventRequests.size(); ++i) {
+    EndpointReadyEventData &data = mEndpointReadyEventRequests[i];
+    bool messageHubIdMatches = data.messageHubId == MESSAGE_HUB_ID_ANY ||
+                               data.messageHubId == messageHubId;
+    bool endpointIdMatches =
+        data.endpointId == ENDPOINT_ID_ANY || data.endpointId == endpointId;
+    if (messageHubIdMatches && endpointIdMatches) {
+      Nanoapp *nanoapp =
+          EventLoopManagerSingleton::get()->getEventLoop().findNanoappByAppId(
+              data.fromEndpointId);
+      if (nanoapp == nullptr) {
+        LOGW("Could not find nanoapp with ID 0x%" PRIx64 " to send ready event",
+             data.fromEndpointId);
+        continue;
+      }
+
+      if (data.serviceDescriptor == nullptr ||
+          MessageRouterSingleton::get()->doesEndpointHaveService(
+              messageHubId, endpointId, data.serviceDescriptor)) {
+        sendReadyEventToNanoapp(nanoapp->getInstanceId(), messageHubId,
+                                endpointId, data.serviceDescriptor);
+      }
+    }
+  }
+}
+
 MessageHubId ChreMessageHubManager::findDefaultMessageHubId(
     EndpointId endpointId) {
   struct SearchContext {
@@ -501,7 +603,8 @@ bool ChreMessageHubManager::validateServicesLocked(
       if (std::strcmp(service.serviceInfo.serviceDescriptor,
                       serviceInfo.serviceDescriptor) == 0) {
         LOGE("Failed to publish service for nanoapp with ID 0x%" PRIx64
-             ": service descriptor: %s is already published by another nanoapp",
+             ": service descriptor: %s is already published by another "
+             "nanoapp",
              nanoappId, service.serviceInfo.serviceDescriptor);
         return false;
       }
@@ -518,6 +621,79 @@ bool ChreMessageHubManager::validateServicesLocked(
     }
   }
   return true;
+}
+
+std::optional<Endpoint> ChreMessageHubManager::searchForEndpoint(
+    MessageHubId messageHubId, EndpointId endpointId,
+    const char *serviceDescriptor) {
+  if (endpointId == ENDPOINT_ID_INVALID) {
+    if (serviceDescriptor == nullptr) {
+      LOGD(
+          "Failed to search for an endpoint: no endpoint ID or service "
+          "descriptor");
+      return std::nullopt;
+    }
+    return MessageRouterSingleton::get()->getEndpointForService(
+        messageHubId, serviceDescriptor);
+  }
+
+  if (serviceDescriptor != nullptr) {
+    if (messageHubId == MESSAGE_HUB_ID_INVALID) {
+      LOGD(
+          "Failed to search for an endpoint: no message hub ID provided with "
+          "endpoint and service descriptor");
+      return std::nullopt;
+    }
+
+    if (!MessageRouterSingleton::get()->doesEndpointHaveService(
+            messageHubId, endpointId, serviceDescriptor)) {
+      LOGD("Failed to search for an endpoint: endpoint %" PRIu64
+           " on hub %" PRIu64 " does not have service %s",
+           messageHubId, endpointId, serviceDescriptor);
+      return std::nullopt;
+    }
+    return Endpoint(messageHubId, endpointId);
+  }
+
+  if (messageHubId == MESSAGE_HUB_ID_INVALID) {
+    messageHubId = findDefaultMessageHubId(endpointId);
+    if (messageHubId == MESSAGE_HUB_ID_INVALID) {
+      LOGD(
+          "Failed to search for an endpoint: no default message hub ID "
+          "found");
+      return std::nullopt;
+    }
+  } else if (!MessageRouterSingleton::get()
+                  ->getEndpointInfo(messageHubId, endpointId)
+                  .has_value()) {
+    LOGD("Failed to search for an endpoint: endpoint %" PRIu64
+         " on hub %" PRIu64 " does not exist",
+         messageHubId, endpointId);
+    return std::nullopt;
+  }
+  return Endpoint(messageHubId, endpointId);
+}
+
+void ChreMessageHubManager::disableReadyEvents(EndpointId fromEndpointId,
+                                               MessageHubId hubId,
+                                               EndpointId endpointId,
+                                               const char *serviceDescriptor) {
+  for (size_t i = 0; i < mEndpointReadyEventRequests.size(); ++i) {
+    EndpointReadyEventData &request = mEndpointReadyEventRequests[i];
+    if (request.fromEndpointId == fromEndpointId &&
+        request.messageHubId == hubId && request.endpointId == endpointId) {
+      bool servicesAreNull =
+          request.serviceDescriptor == nullptr && serviceDescriptor == nullptr;
+      bool servicesAreSame =
+          request.serviceDescriptor != nullptr &&
+          serviceDescriptor != nullptr &&
+          std::strcmp(request.serviceDescriptor, serviceDescriptor) == 0;
+      if (servicesAreNull || servicesAreSame) {
+        mEndpointReadyEventRequests.erase(i);
+        break;
+      }
+    }
+  }
 }
 
 bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
@@ -606,6 +782,41 @@ bool ChreMessageHubManager::doesEndpointHaveService(
   // if and only if the endpoint ID matches the endpoint ID we are looking for
   std::optional<EndpointId> endpoint = getEndpointForService(serviceDescriptor);
   return endpoint.has_value() && endpoint.value() == endpointId;
+}
+
+void ChreMessageHubManager::onEndpointRegistered(MessageHubId messageHubId,
+                                                 EndpointId endpointId) {
+  if (messageHubId == MESSAGE_HUB_ID_INVALID ||
+      endpointId == ENDPOINT_ID_INVALID) {
+    LOGE(
+        "Invalid input to onEndpointRegistered: %s %s",
+        messageHubId == MESSAGE_HUB_ID_INVALID ? "messageHubId is invalid" : "",
+        endpointId == ENDPOINT_ID_INVALID ? "endpointId is invalid" : "");
+    return;
+  }
+
+  UniquePtr<Endpoint> endpoint = MakeUnique<Endpoint>(messageHubId, endpointId);
+  if (endpoint.isNull()) {
+    FATAL_ERROR_OOM();
+    return;
+  }
+
+  // We defer here to do all processing in the event loop thread. This allows
+  // for no locks as well as fast callbacks due to the potentially large
+  // number of nanoapps that may be waiting for events generated by this
+  // callback.
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::EndpointRegisteredEvent, std::move(endpoint),
+      [](SystemCallbackType /* type */, UniquePtr<Endpoint> &&data) {
+        EventLoopManagerSingleton::get()
+            ->getChreMessageHubManager()
+            .onEndpointReadyEvent(data->messageHubId, data->endpointId);
+      });
+}
+
+void ChreMessageHubManager::onEndpointUnregistered(
+    MessageHubId /* messageHubId */, EndpointId /* endpointId */) {
+  // Ignore - we only care about registered endpoints
 }
 
 }  // namespace chre

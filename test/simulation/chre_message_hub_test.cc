@@ -16,6 +16,7 @@
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/util/dynamic_vector.h"
+#include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/napp_permissions.h"
@@ -53,6 +54,11 @@ CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NO_FREE_CALLBACK, 8);
 CREATE_CHRE_TEST_EVENT(TEST_PUBLISH_SERVICE, 9);
 CREATE_CHRE_TEST_EVENT(TEST_BAD_LEGACY_SERVICE_NAME, 10);
 CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_WITH_SERVICE, 11);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT, 12);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS, 13);
+CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_READY_EVENT, 14);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT, 15);
+CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT, 16);
 
 constexpr size_t kNumEndpoints = 3;
 constexpr size_t kMessageSize = 5;
@@ -65,7 +71,12 @@ EndpointInfo kEndpointInfos[kNumEndpoints] = {
                  EndpointType::HOST_NATIVE, CHRE_MESSAGE_PERMISSION_BLE),
     EndpointInfo(/* id= */ 3, /* name= */ "endpoint3", /* version= */ 100,
                  EndpointType::GENERIC, CHRE_MESSAGE_PERMISSION_AUDIO)};
+EndpointInfo kDynamicEndpointInfo = EndpointInfo(
+    /* id= */ 4, /* name= */ "DynamicallyRegisteredEndpoint",
+    /* version= */ 1, EndpointType::NANOAPP, CHRE_MESSAGE_PERMISSION_NONE);
+
 const char kServiceDescriptorForEndpoint2[] = "TEST_SERVICE.TEST";
+const char kServiceDescriptorForDynamicEndpoint[] = "TEST_DYNAMIC_SERVICE";
 const char kServiceDescriptorForNanoapp[] = "TEST_NANOAPP.TEST_SERVICE";
 const uint64_t kLegacyServiceId = 0xDEADBEEFDEADBEEF;
 const uint32_t kLegacyServiceVersion = 1;
@@ -109,9 +120,38 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
 
   bool doesEndpointHaveService(EndpointId endpointId,
                                const char *serviceDescriptor) override {
-    return serviceDescriptor != nullptr && endpointId == kEndpointInfos[1].id &&
-           std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0;
+    if (serviceDescriptor == nullptr) {
+      return false;
+    }
+    if (endpointId == kEndpointInfos[1].id) {
+      return std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) ==
+             0;
+    }
+    if (endpointId == kDynamicEndpointInfo.id) {
+      return std::strcmp(serviceDescriptor,
+                         kServiceDescriptorForDynamicEndpoint) == 0;
+    }
+    return false;
   }
+
+  void onEndpointRegistered(MessageHubId messageHubId,
+                            EndpointId endpointId) override {
+    mRegisteredEndpoints.insert(std::make_pair(messageHubId, endpointId));
+  }
+
+  void onEndpointUnregistered(MessageHubId messageHubId,
+                              EndpointId endpointId) override {
+    mRegisteredEndpoints.erase(std::make_pair(messageHubId, endpointId));
+  }
+
+  bool hasEndpointBeenRegistered(MessageHubId messageHubId,
+                                 EndpointId endpointId) {
+    return mRegisteredEndpoints.find(std::make_pair(
+               messageHubId, endpointId)) != mRegisteredEndpoints.end();
+  }
+
+ private:
+  std::set<std::pair<MessageHubId, EndpointId>> mRegisteredEndpoints;
 };
 
 //! MessageHubCallback that stores the data passed to onMessageReceived and
@@ -1349,6 +1389,244 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithService) {
   std::unique_lock<std::mutex> lock(mutex);
   sendEventToNanoapp(appId, TEST_OPEN_SESSION_WITH_SERVICE);
   condVar.wait(lock);
+}
+
+//! Nanoapp used to test endpoint registration and ready events
+class EndpointRegistrationTestApp : public TestNanoapp {
+ public:
+  EndpointRegistrationTestApp(std::mutex &mutex,
+                              std::condition_variable &condVar,
+                              const TestNanoappInfo &info)
+      : TestNanoapp(info), mMutex(mutex), mCondVar(condVar) {}
+
+  void handleEvent(uint32_t, uint16_t eventType,
+                   const void *eventData) override {
+    switch (eventType) {
+      case CHRE_EVENT_MSG_ENDPOINT_READY: {
+        {
+          std::unique_lock<std::mutex> lock(mMutex);
+          auto event =
+              static_cast<const chreMsgEndpointReadyEvent *>(eventData);
+          EXPECT_EQ(event->hubId, kOtherMessageHubId);
+          EXPECT_EQ(event->endpointId, mEndpointId);
+        }
+        mCondVar.notify_one();
+        break;
+      }
+      case CHRE_EVENT_MSG_SERVICE_READY: {
+        {
+          std::unique_lock<std::mutex> lock(mMutex);
+          auto event = static_cast<const chreMsgServiceReadyEvent *>(eventData);
+          EXPECT_EQ(event->hubId, kOtherMessageHubId);
+          EXPECT_EQ(event->endpointId, kDynamicEndpointInfo.id);
+          EXPECT_STREQ(event->serviceDescriptor,
+                       kServiceDescriptorForDynamicEndpoint);
+        }
+        mCondVar.notify_one();
+        break;
+      }
+      case CHRE_EVENT_TEST_EVENT: {
+        auto event = static_cast<const TestEvent *>(eventData);
+        switch (event->type) {
+          case TEST_SUBSCRIBE_TO_READY_EVENT: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+              mEndpointId = kDynamicEndpointInfo.id;
+              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                  kOtherMessageHubId, mEndpointId,
+                  /* enable= */ true));
+            }
+            mCondVar.notify_one();
+            break;
+          }
+          case TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+              mEndpointId = kEndpointInfos[1].id;
+              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                  kOtherMessageHubId, mEndpointId,
+                  /* enable= */ true));
+            }
+            break;
+          }
+          case TEST_UNSUBSCRIBE_FROM_READY_EVENT: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                  kOtherMessageHubId, mEndpointId,
+                  /* enable= */ false));
+            }
+            mCondVar.notify_one();
+            break;
+          }
+          case TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+              EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
+                  kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
+                  /* enable= */ true));
+            }
+            mCondVar.notify_one();
+            break;
+          }
+          case TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT: {
+            {
+              std::unique_lock<std::mutex> lock(mMutex);
+              EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
+                  kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
+                  /* enable= */ false));
+            }
+            mCondVar.notify_one();
+            break;
+          }
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  std::mutex &mMutex;
+  std::condition_variable &mCondVar;
+  EndpointId mEndpointId = ENDPOINT_ID_INVALID;
+};
+
+TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEvent) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_ENDPOINT_READY_EVENT", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Test subscribing to the ready event
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_READY_EVENT);
+  condVar.wait(lock);
+
+  // Register the endpoint and wait for the ready event
+  EXPECT_TRUE(messageHub->registerEndpoint(kDynamicEndpointInfo.id));
+  condVar.wait(lock);
+
+  // Unsubscribe from the ready event
+  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT);
+  condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEventAlreadyExists) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_ENDPOINT_READY_EVENT", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Test subscribing to the ready event - endpoint should already exist
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS);
+  condVar.wait(lock);
+
+  // Unsubscribe from the ready event
+  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT);
+  condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappSubscribesToServiceReadyEvent) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_SERVICE_READY_EVENT", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Test subscribing to the service ready event
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT);
+  condVar.wait(lock);
+
+  // Register the endpoint and wait for the service ready event
+  EXPECT_TRUE(messageHub->registerEndpoint(kDynamicEndpointInfo.id));
+  condVar.wait(lock);
+
+  // Unsubscribe from the service ready event
+  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT);
+  condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappLoadAndUnloadAreRegisteredAndUnregistered) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_NANOAPP_REGISTRATION", .id = 0x1234}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // The nanoapp should be registered as an endpoint
+  EXPECT_TRUE(
+      callback.hasEndpointBeenRegistered(EventLoopManagerSingleton::get()
+                                             ->getChreMessageHubManager()
+                                             .kChreMessageHubId,
+                                         appId));
+
+  // Unload the nanoapp
+  unloadNanoapp(appId);
+
+  // The nanoapp should be unregistered as an endpoint
+  EXPECT_FALSE(
+      callback.hasEndpointBeenRegistered(EventLoopManagerSingleton::get()
+                                             ->getChreMessageHubManager()
+                                             .kChreMessageHubId,
+                                         appId));
 }
 
 }  // namespace

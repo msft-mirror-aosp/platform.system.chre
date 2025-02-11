@@ -22,9 +22,11 @@
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/host_endpoint_manager.h"
+#include "chre/core/host_message_hub_manager.h"
 #include "chre/platform/log.h"
 #include "chre/platform/shared/generated/host_messages_generated.h"
 #include "chre/util/macros.h"
+#include "chre/util/system/message_common.h"
 
 using flatbuffers::Offset;
 using flatbuffers::Vector;
@@ -45,6 +47,23 @@ const char *getStringFromByteVector(const flatbuffers::Vector<int8_t> *vec) {
 
   return str;
 }
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+using ::chre::message::EndpointId;
+using ::chre::message::EndpointInfo;
+using ::chre::message::EndpointType;
+using ::chre::message::MessageHubId;
+using ::chre::message::MessageHubInfo;
+using ::chre::message::Reason;
+using ::chre::message::Session;
+using ::chre::message::SessionId;
+
+namespace {
+HostMessageHubManager &getHostHubManager() {
+  return EventLoopManagerSingleton::get()->getHostMessageHubManager();
+}
+}  // namespace
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 bool HostProtocolChre::decodeMessageFromHost(const void *message,
                                              size_t messageLen) {
@@ -256,6 +275,96 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         success = true;
         break;
       }
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+      case fbs::ChreMessage::GetMessageHubsAndEndpointsRequest:
+        getHostHubManager().reset();
+        break;
+
+      case fbs::ChreMessage::RegisterMessageHub: {
+        const auto *msg =
+            static_cast<const fbs::RegisterMessageHub *>(container->message());
+        MessageHubInfo hub{.id = static_cast<MessageHubId>(msg->hub()->id())};
+        if (msg->hub()->details_type() ==
+            fbs::MessageHubDetails::VendorHubInfo) {
+          hub.name = getStringFromByteVector(
+              msg->hub()->details_as_VendorHubInfo()->name());
+        } else {
+          hub.name = getStringFromByteVector(
+              msg->hub()->details_as_HubInfoResponse()->name());
+        }
+        getHostHubManager().registerHub(hub);
+        break;
+      }
+
+      case fbs::ChreMessage::UnregisterMessageHub: {
+        const auto *msg = static_cast<const fbs::UnregisterMessageHub *>(
+            container->message());
+        getHostHubManager().unregisterHub(msg->id());
+        break;
+      }
+
+      case fbs::ChreMessage::RegisterEndpoint: {
+        const auto *fbsEndpoint =
+            static_cast<const fbs::RegisterEndpoint *>(container->message())
+                ->endpoint();
+        auto *maybeName = getStringFromByteVector(fbsEndpoint->name());
+        EndpointInfo endpoint(fbsEndpoint->id()->id(),
+                              maybeName ? maybeName : "",
+                              fbsEndpoint->version(),
+                              static_cast<EndpointType>(fbsEndpoint->type()),
+                              fbsEndpoint->required_permissions());
+        getHostHubManager().registerEndpoint(fbsEndpoint->id()->hubId(),
+                                             endpoint);
+        break;
+      }
+
+      case fbs::ChreMessage::UnregisterEndpoint: {
+        const auto *msg =
+            static_cast<const fbs::UnregisterEndpoint *>(container->message());
+        getHostHubManager().unregisterEndpoint(msg->endpoint()->hubId(),
+                                               msg->endpoint()->id());
+        break;
+      }
+
+      case fbs::ChreMessage::OpenEndpointSessionRequest: {
+        const auto *msg = static_cast<const fbs::OpenEndpointSessionRequest *>(
+            container->message());
+        getHostHubManager().openSession(
+            msg->fromEndpoint()->hubId(), msg->fromEndpoint()->id(),
+            msg->toEndpoint()->hubId(), msg->toEndpoint()->id(),
+            msg->session_id(),
+            getStringFromByteVector(msg->serviceDescriptor()));
+        break;
+      }
+
+      case fbs::ChreMessage::EndpointSessionOpened: {
+        const auto *msg = static_cast<const fbs::EndpointSessionOpened *>(
+            container->message());
+        getHostHubManager().ackSession(msg->host_hub_id(), msg->session_id());
+        break;
+      }
+
+      case fbs::ChreMessage::EndpointSessionClosed: {
+        const auto *msg = static_cast<const fbs::EndpointSessionClosed *>(
+            container->message());
+        getHostHubManager().closeSession(msg->host_hub_id(), msg->session_id(),
+                                         static_cast<Reason>(msg->reason()));
+        break;
+      }
+
+      case fbs::ChreMessage::EndpointSessionMessage: {
+        const auto *msg = static_cast<const fbs::EndpointSessionMessage *>(
+            container->message());
+        pw::span<const std::byte> data = {
+            reinterpret_cast<const std::byte *>(msg->data()->data()),
+            msg->data()->size()};
+        getHostHubManager().sendMessage(msg->host_hub_id(), msg->session_id(),
+                                        data, msg->type(), msg->permissions());
+        break;
+      }
+
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
       default:
         LOGW("Got invalid/unexpected message type %" PRIu8,

@@ -86,27 +86,45 @@ class MessageRouter {
     //! MessageHub. Underlying endpoint storage must not change during this
     //! callback. If function returns true, the MessageHub can stop iterating
     //! over future endpoints. This function should not call any MessageRouter
-    //! or MessageHub functions.
+    //! or MessageHub functions. This function will be called with the
+    //! internal lock held.
     virtual void forEachEndpoint(
         const pw::Function<bool(const EndpointInfo &)> &function) = 0;
 
     //! @return The EndpointInfo for the given endpoint ID. This function should
-    //! not call any MessageRouter or MessageHub functions.
+    //! not call any MessageRouter or MessageHub functions. This function will
+    //! be called with the internal lock held.
     virtual std::optional<EndpointInfo> getEndpointInfo(
         EndpointId endpointId) = 0;
 
     //! @return The first endpoint that has the given service descriptor, a
     //! null-terminated ASCII string. If no endpoint has the service descriptor,
     //! std::nullopt is returned. This function should not call any
-    //! MessageRouter or MessageHub functions.
+    //! MessageRouter or MessageHub functions. This function will be called with
+    //! the internal lock held.
     virtual std::optional<EndpointId> getEndpointForService(
         const char *serviceDescriptor) = 0;
 
     //! @return true if the endpoint has the given service descriptor, a
     //! null-terminated ASCII string, false otherwise. This function should not
-    //! call any MessageRouter or MessageHub functions.
+    //! call any MessageRouter or MessageHub functions. This function will be
+    //! called with the internal lock held.
     virtual bool doesEndpointHaveService(EndpointId endpointId,
                                          const char *serviceDescriptor) = 0;
+
+    //! Callback called when an endpoint is registered to any MessageHub,
+    //! except for this MessageHub. This function should not call any
+    //! MessageRouter or MessageHub functions. This function will be called with
+    //! the internal lock held.
+    virtual void onEndpointRegistered(MessageHubId messageHubId,
+                                      EndpointId endpointId) = 0;
+
+    //! Callback called when an endpoint is unregistered from any MessageHub,
+    //! except for this MessageHub. This function should not call any
+    //! MessageRouter or MessageHub functions. This function will be called with
+    //! the internal lock held.
+    virtual void onEndpointUnregistered(MessageHubId messageHubId,
+                                        EndpointId endpointId) = 0;
   };
 
   //! The API returned when registering a MessageHub with the MessageRouter.
@@ -175,6 +193,14 @@ class MessageRouter {
     //! sent
     bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
                      uint32_t messagePermissions, SessionId sessionId);
+
+    //! Registers an endpoint with the MessageHub.
+    //! @return true if the endpoint was registered, otherwise false.
+    bool registerEndpoint(EndpointId endpointId);
+
+    //! Unregisters an endpoint from the MessageHub.
+    //! @return true if the endpoint was unregistered, otherwise false.
+    bool unregisterEndpoint(EndpointId endpointId);
 
     //! @return The MessageHub ID of the currently connected MessageHub
     MessageHubId getId();
@@ -328,6 +354,22 @@ class MessageRouter {
   bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
                    uint32_t messagePermissions, SessionId sessionId,
                    MessageHubId fromMessageHubId);
+
+  //! Registers an endpoint with the MessageHub.
+  //! @return true if the endpoint was registered, otherwise false.
+  bool registerEndpoint(MessageHubId messageHubId, EndpointId endpointId);
+
+  //! Unregisters an endpoint from the MessageHub.
+  //! @return true if the endpoint was unregistered, otherwise false.
+  bool unregisterEndpoint(MessageHubId messageHubId, EndpointId endpointId);
+
+  //! Helper function for registering or unregistering an endpoint with a
+  //! MessageHub.
+  //! @return true if the endpoint was registered or unregistered, otherwise
+  //! false.
+  bool onEndpointRegistrationStateChanged(MessageHubId messageHubId,
+                                          EndpointId endpointId,
+                                          bool isRegistered);
 
   //! @return The MessageHubRecord for the given MessageHub ID
   const MessageHubRecord *getMessageHubRecordLocked(MessageHubId messageHubId);
