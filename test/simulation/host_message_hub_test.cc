@@ -85,6 +85,8 @@ class MockHostCallback : public HostMessageHubManager::HostCallback {
   MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &hub), (override));
   MOCK_METHOD(void, onEndpointRegistered,
               (MessageHubId hub, const EndpointInfo &endpoint), (override));
+  MOCK_METHOD(void, onEndpointUnregistered,
+              (MessageHubId hub, EndpointId endpoint), (override));
   MOCK_METHOD(bool, onMessageReceived,
               (MessageHubId hub, SessionId session,
                pw::UniquePtr<std::byte[]> &&data, uint32_t type,
@@ -108,6 +110,7 @@ MessageRouter &getRouter() {
 const EndpointInfo kEndpoints[] = {
     EndpointInfo(0x1, nullptr, 0, EndpointType::GENERIC, 0),
     EndpointInfo(0x2, nullptr, 0, EndpointType::GENERIC, 0)};
+const EndpointInfo kExtraEndpoint(0x3, nullptr, 0, EndpointType::GENERIC, 0);
 const EndpointId kEndpointIds[] = {0x1, 0x2};
 const char *kEmbeddedHubName = "embedded hub";
 const MessageHubInfo kEmbeddedHub{.id = CHRE_PLATFORM_ID + 1,
@@ -117,18 +120,23 @@ const MessageHubInfo kHostHub{.id = kEmbeddedHub.id + 1, .name = kHostHubName};
 
 class HostMessageHubTest : public TestBase {
  public:
+  HostMessageHubTest()
+      : TestBase(),
+        mEmbeddedEndpoints(kEndpoints, kEndpoints + std::size(kEndpoints)) {}
+
   void SetUp() override {
     TestBase::SetUp();
 
     // Specify uninteresting behaviors for the mock embedded hub callback.
     ON_CALL(mEmbeddedHubCb, forEachEndpoint(_))
-        .WillByDefault([](const pw::Function<bool(const EndpointInfo &)> &fn) {
-          for (const auto &info : kEndpoints)
-            if (fn(info)) return;
-        });
+        .WillByDefault(
+            [this](const pw::Function<bool(const EndpointInfo &)> &fn) {
+              for (const auto &info : mEmbeddedEndpoints)
+                if (fn(info)) return;
+            });
     ON_CALL(mEmbeddedHubCb, getEndpointInfo(_))
-        .WillByDefault([](EndpointId id) -> std::optional<EndpointInfo> {
-          for (const auto &endpoint : kEndpoints)
+        .WillByDefault([this](EndpointId id) -> std::optional<EndpointInfo> {
+          for (const auto &endpoint : mEmbeddedEndpoints)
             if (endpoint.id == id) return endpoint;
           return {};
         });
@@ -155,6 +163,8 @@ class HostMessageHubTest : public TestBase {
   NiceMock<MockMessageHubCallback> mEmbeddedHubCb;
   MessageRouter::MessageHub mEmbeddedHubIntf;
   MockHostCallback mHostCallback;
+
+  std::vector<EndpointInfo> mEmbeddedEndpoints;
 };
 
 MATCHER_P(HubIdMatcher, id, "Matches a MessageHubInfo by id") {
@@ -256,12 +266,16 @@ TEST_F(HostMessageHubTest, RegisterHubStaticHubLimit) {
 TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpoint) {
   getManager().registerHub(kHostHub);
 
+  EXPECT_CALL(mEmbeddedHubCb,
+              onEndpointRegistered(kHostHub.id, kEndpoints[0].id));
   getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
   getRouter().forEachEndpointOfHub(kHostHub.id, [](const EndpointInfo &info) {
     EXPECT_EQ(info.id, kEndpoints[0].id);
     return true;
   });
 
+  EXPECT_CALL(mEmbeddedHubCb,
+              onEndpointUnregistered(kHostHub.id, kEndpoints[0].id));
   getManager().unregisterEndpoint(kHostHub.id, kEndpoints[0].id);
   bool found = false;
   getRouter().forEachEndpointOfHub(kHostHub.id, [&found](const EndpointInfo &) {
@@ -269,6 +283,19 @@ TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpoint) {
     return true;
   });
   EXPECT_FALSE(found);
+}
+
+TEST_F(HostMessageHubTest, OnEndpointRegisteredAndUnregistered) {
+  getManager().registerHub(kHostHub);
+
+  mEmbeddedEndpoints.push_back(kExtraEndpoint);
+  EXPECT_CALL(mHostCallback,
+              onEndpointRegistered(kEmbeddedHub.id, kExtraEndpoint));
+  mEmbeddedHubIntf.registerEndpoint(kExtraEndpoint.id);
+
+  EXPECT_CALL(mHostCallback,
+              onEndpointUnregistered(kEmbeddedHub.id, kExtraEndpoint.id));
+  mEmbeddedHubIntf.unregisterEndpoint(kExtraEndpoint.id);
 }
 
 TEST_F(HostMessageHubTest, RegisterMaximumEndpoints) {

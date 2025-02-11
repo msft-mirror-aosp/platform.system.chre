@@ -103,6 +103,7 @@ void HostMessageHubManager::registerEndpoint(MessageHubId hubId,
   for (auto &hub : mHubs) {
     if (hub.getMessageHub().getId() != hubId) continue;
     hub.addEndpoint(info);
+    hub.getMessageHub().registerEndpoint(info.id);
     return;
   }
   LOGE("No host hub %" PRIu64 " for add endpoint", hubId);
@@ -114,6 +115,7 @@ void HostMessageHubManager::unregisterEndpoint(MessageHubId hubId,
   for (auto &hub : mHubs) {
     if (hub.getMessageHub().getId() != hubId) continue;
     hub.removeEndpoint(id);
+    hub.getMessageHub().unregisterEndpoint(id);
     return;
   }
   LOGE("No host hub %" PRIu64 " for unregister endpoint", hubId);
@@ -338,14 +340,19 @@ bool HostMessageHubManager::Hub::doesEndpointHaveService(
   return false;
 }
 
-void HostMessageHubManager::Hub::onEndpointRegistered(
-    MessageHubId /* messageHubId */, EndpointId /* endpointId */) {
-  // TODO(b/390447515): Handle endpoint registration
+void HostMessageHubManager::Hub::onEndpointRegistered(MessageHubId messageHubId,
+                                                      EndpointId endpointId) {
+  std::optional<EndpointInfo> endpoint =
+      MessageRouterSingleton::get()->getEndpointInfo(messageHubId, endpointId);
+  if (!endpoint) return;
+  LockGuard<Mutex> lock(getManager().mEmbeddedHubOpLock);
+  getManager().mCb->onEndpointRegistered(messageHubId, *endpoint);
 }
 
 void HostMessageHubManager::Hub::onEndpointUnregistered(
-    MessageHubId /* messageHubId */, EndpointId /* endpointId */) {
-  // TODO(b/390447515): Handle endpoint registration
+    MessageHubId messageHubId, EndpointId endpointId) {
+  LockGuard<Mutex> lock(getManager().mEmbeddedHubOpLock);
+  getManager().mCb->onEndpointUnregistered(messageHubId, endpointId);
 }
 
 void HostMessageHubManager::deallocateEndpoints(

@@ -390,6 +390,17 @@ class HostProtocolChre : public HostProtocolCommon {
                                      const message::EndpointInfo &endpoint);
 
   /**
+   * Encodes an embedded endpoint removal notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the removed endpoint.
+   * @param endpoint Id of the removed endpoint.
+   */
+  static void encodeUnregisterEndpoint(ChreFlatBufferBuilder &builder,
+                                       message::MessageHubId hub,
+                                       message::EndpointId endpoint);
+
+  /**
    * Encodes a request to open a new session with host endpoint.
    *
    * @param builder Builder which assembles and stores the message.

@@ -77,6 +77,12 @@ class HostMessageHubManager : public NonCopyable {
         message::MessageHubId hub, const message::EndpointInfo &endpoint) = 0;
 
     /**
+     * Notifies the HAL that an embedded endpoint is gone.
+     */
+    virtual void onEndpointUnregistered(message::MessageHubId hub,
+                                        message::EndpointId endpoint) = 0;
+
+    /**
      * Sends a message within a session.
      *
      * Invoked within MessageHubCallback::onMessageReceived().
