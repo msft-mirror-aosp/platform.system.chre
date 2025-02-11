@@ -62,6 +62,7 @@ class ChreMessageHubManager
                        chreMsgEndpointInfo &info);
 
   //! Configures ready events for the given endpoint or service.
+  //! This function must be called from the event loop thread.
   //! @return true if the ready events were configured successfully, false
   //! otherwise.
   bool configureReadyEvents(uint16_t nanoappInstanceId,
@@ -110,10 +111,20 @@ class ChreMessageHubManager
                    message::EndpointId fromEndpointId);
 
   //! Publishes a service from the given nanoapp.
+  //! This function must be called from the event loop thread.
   //! @return true if the service was published successfully, false otherwise
-  bool publishServices(uint64_t nanoappId,
+  bool publishServices(message::EndpointId fromEndpointId,
                        const chreMsgServiceInfo *serviceInfos,
                        size_t numServices);
+
+  //! Unregisters the given endpoint (nanoapp) from the MessageHub
+  //! This will clean up all pending resources then unregister the endpoint
+  //! from the MessageHub.
+  void unregisterEndpoint(message::EndpointId endpointId);
+
+  //! Cleans up all pending resources for the given endpoint (nanoapp).
+  //! This should only be called from the event loop thread.
+  void cleanupEndpointResources(message::EndpointId endpointId);
 
   //! Converts a message::EndpointType to a CHRE endpoint type
   //! @return the CHRE endpoint type
@@ -269,6 +280,7 @@ class ChreMessageHubManager
   DynamicVector<NanoappServiceData> mNanoappPublishedServices;
 
   //! The vector of ready event requests
+  //! This should only be accessed from the event loop thread
   DynamicVector<EndpointReadyEventData> mEndpointReadyEventRequests;
 };
 

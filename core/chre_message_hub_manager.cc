@@ -25,6 +25,7 @@
 #include "chre/target_platform/log.h"
 #include "chre/util/conditional_lock_guard.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
@@ -148,6 +149,8 @@ bool ChreMessageHubManager::getEndpointInfo(MessageHubId hubId,
 bool ChreMessageHubManager::configureReadyEvents(
     uint16_t nanoappInstanceId, EndpointId fromEndpointId, MessageHubId hubId,
     EndpointId endpointId, const char *serviceDescriptor, bool enable) {
+  CHRE_ASSERT(inEventLoopThread());
+
   if (hubId == MESSAGE_HUB_ID_INVALID && endpointId == ENDPOINT_ID_INVALID &&
       serviceDescriptor == nullptr) {
     LOGE(
@@ -285,10 +288,12 @@ bool ChreMessageHubManager::sendMessage(void *message, size_t messageSize,
 }
 
 bool ChreMessageHubManager::publishServices(
-    uint64_t nanoappId, const chreMsgServiceInfo *serviceInfos,
+    EndpointId fromEndpointId, const chreMsgServiceInfo *serviceInfos,
     size_t numServices) {
+  CHRE_ASSERT(inEventLoopThread());
+
   LockGuard<Mutex> lockGuard(mNanoappPublishedServicesMutex);
-  if (!validateServicesLocked(nanoappId, serviceInfos, numServices)) {
+  if (!validateServicesLocked(fromEndpointId, serviceInfos, numServices)) {
     return false;
   }
 
@@ -301,9 +306,45 @@ bool ChreMessageHubManager::publishServices(
   for (size_t i = 0; i < numServices; ++i) {
     // Cannot fail as we reserved space for the push above
     mNanoappPublishedServices.push_back(NanoappServiceData{
-        .nanoappId = nanoappId, .serviceInfo = serviceInfos[i]});
+        .nanoappId = fromEndpointId, .serviceInfo = serviceInfos[i]});
   }
   return true;
+}
+
+void ChreMessageHubManager::unregisterEndpoint(EndpointId endpointId) {
+  EventLoopManagerSingleton::get()->deferCallback(
+      SystemCallbackType::EndpointCleanupNanoappEvent,
+      MakeUnique<EndpointId>(endpointId),
+      [](SystemCallbackType /* type */, UniquePtr<EndpointId> &&endpointId) {
+        EventLoopManagerSingleton::get()
+            ->getChreMessageHubManager()
+            .cleanupEndpointResources(*endpointId);
+      });
+
+  mChreMessageHub.unregisterEndpoint(endpointId);
+}
+
+void ChreMessageHubManager::cleanupEndpointResources(EndpointId endpointId) {
+  CHRE_ASSERT(inEventLoopThread());
+
+  {
+    LockGuard<Mutex> lockGuard(mNanoappPublishedServicesMutex);
+    for (size_t i = 0; i < mNanoappPublishedServices.size();) {
+      if (mNanoappPublishedServices[i].nanoappId == endpointId) {
+        mNanoappPublishedServices.erase(i);
+      } else {
+        ++i;
+      }
+    }
+  }
+
+  for (size_t i = 0; i < mEndpointReadyEventRequests.size(); ++i) {
+    if (mEndpointReadyEventRequests[i].fromEndpointId == endpointId) {
+      mEndpointReadyEventRequests.erase(i);
+    } else {
+      ++i;
+    }
+  }
 }
 
 chreMsgEndpointType ChreMessageHubManager::toChreEndpointType(
@@ -498,6 +539,8 @@ void ChreMessageHubManager::onSessionStateChanged(
 
 void ChreMessageHubManager::onEndpointReadyEvent(MessageHubId messageHubId,
                                                  EndpointId endpointId) {
+  CHRE_ASSERT(inEventLoopThread());
+
   for (size_t i = 0; i < mEndpointReadyEventRequests.size(); ++i) {
     EndpointReadyEventData &data = mEndpointReadyEventRequests[i];
     bool messageHubIdMatches = data.messageHubId == MESSAGE_HUB_ID_ANY ||

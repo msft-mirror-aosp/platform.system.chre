@@ -1385,10 +1385,62 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithService) {
   ASSERT_TRUE(messageHub.has_value());
   callback.setMessageHub(&(*messageHub));
 
-  // Nanoapp publishes the service
+  // Nanoapp opens the session with the service
   std::unique_lock<std::mutex> lock(mutex);
   sendEventToNanoapp(appId, TEST_OPEN_SESSION_WITH_SERVICE);
   condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, NanoappUnloadUnregistersProvidedServices) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+  constexpr uint64_t kNanoappId = 0x1234;
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_UNLOAD_UNREGISTERS_PROVIDED_SERVICES",
+                      .id = kNanoappId}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Nanoapp publishes the service
+  std::unique_lock<std::mutex> lock(mutex);
+  sendEventToNanoapp(appId, TEST_PUBLISH_SERVICE);
+  condVar.wait(lock);
+
+  // Get the endpoint ID for the service
+  std::optional<Endpoint> endpoint =
+      MessageRouterSingleton::get()->getEndpointForService(
+          EventLoopManagerSingleton::get()
+              ->getChreMessageHubManager()
+              .kChreMessageHubId,
+          kServiceDescriptorForNanoapp);
+  EXPECT_TRUE(endpoint.has_value());
+  EXPECT_EQ(endpoint->messageHubId, EventLoopManagerSingleton::get()
+                                        ->getChreMessageHubManager()
+                                        .kChreMessageHubId);
+  EXPECT_EQ(endpoint->endpointId, kNanoappId);
+
+  // Unload the nanoapp
+  unloadNanoapp(appId);
+
+  // The service should be gone
+  endpoint = MessageRouterSingleton::get()->getEndpointForService(
+      EventLoopManagerSingleton::get()
+          ->getChreMessageHubManager()
+          .kChreMessageHubId,
+      kServiceDescriptorForNanoapp);
+  EXPECT_FALSE(endpoint.has_value());
 }
 
 //! Nanoapp used to test endpoint registration and ready events

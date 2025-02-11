@@ -700,7 +700,6 @@ void EventLoop::unloadNanoappAtIndex(size_t index, bool nanoappStarted) {
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
   EventLoopManagerSingleton::get()
       ->getChreMessageHubManager()
-      .getMessageHub()
       .unregisterEndpoint(nanoapp->getAppId());
 #endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
