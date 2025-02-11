@@ -142,6 +142,12 @@ inline void sendFailureToHost(const char *message,
 }
 
 /**
+ * The semantics of this method is the same as sendFailureToHost, except the
+ * message is logged through chreLog.
+ */
+void logFailureMessage(const char *message, const uint32_t *value = nullptr);
+
+/**
  * Same as sendFailureToHost(), but aborts the test with the given 'reason',
  * and never returns.
  */

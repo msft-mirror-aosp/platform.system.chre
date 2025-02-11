@@ -19,6 +19,7 @@
 #include <shared/abort.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
+#include <cinttypes>
 
 #include <chre/util/nanoapp/log.h>
 
