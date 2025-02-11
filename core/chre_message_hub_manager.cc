@@ -312,9 +312,14 @@ bool ChreMessageHubManager::publishServices(
 }
 
 void ChreMessageHubManager::unregisterEndpoint(EndpointId endpointId) {
+  UniquePtr<EndpointId> endpointIdPtr = MakeUnique<EndpointId>(endpointId);
+  if (endpointIdPtr.isNull()) {
+    FATAL_ERROR_OOM();
+    return;
+  }
+
   EventLoopManagerSingleton::get()->deferCallback(
-      SystemCallbackType::EndpointCleanupNanoappEvent,
-      MakeUnique<EndpointId>(endpointId),
+      SystemCallbackType::EndpointCleanupNanoappEvent, std::move(endpointIdPtr),
       [](SystemCallbackType /* type */, UniquePtr<EndpointId> &&endpointId) {
         EventLoopManagerSingleton::get()
             ->getChreMessageHubManager()
