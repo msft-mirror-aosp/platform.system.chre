@@ -22,9 +22,10 @@
 #include "chre/util/singleton.h"
 #include "chre/util/system/message_common.h"
 
-#include <pw_allocator/unique_ptr.h>
-#include <pw_containers/vector.h>
-#include <pw_function/function.h>
+#include "pw_allocator/unique_ptr.h"
+#include "pw_containers/vector.h"
+#include "pw_function/function.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <optional>

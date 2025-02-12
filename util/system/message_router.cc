@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include "chre/util/system/message_router.h"
+#include "chre/util/dynamic_vector.h"
+#include "chre/util/lock_guard.h"
+#include "chre/util/system/message_common.h"
+
 #include <inttypes.h>
 #include <cstring>
 #include <optional>
 #include <utility>
-
-#include "chre/util/dynamic_vector.h"
-#include "chre/util/lock_guard.h"
-#include "chre/util/system/message_common.h"
-#include "chre/util/system/message_router.h"
 
 namespace chre::message {
 
