@@ -178,10 +178,15 @@ class MessageRouter {
     //! @param messagePermissions The permissions of the message, a bit flagged
     //! value
     //! @param sessionId The session to send the message on
+    //! @param fromEndpointId The endpoint ID of the sender or ENDPOINT_ID_ANY
+    //! to allow MessageRouter to infer the sender endpoint ID. If the
+    //! sender endpoint ID cannot be inferred, (i.e. the session is between
+    //! endpoints on the same message hub), this function will return false.
     //! @return true if the message was sent, false if the message could not be
     //! sent
     bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
-                     uint32_t messagePermissions, SessionId sessionId);
+                     uint32_t messagePermissions, SessionId sessionId,
+                     EndpointId fromEndpointId = ENDPOINT_ID_ANY);
 
     //! Registers an endpoint with the MessageHub.
     //! @return true if the endpoint was registered, otherwise false.
@@ -342,7 +347,7 @@ class MessageRouter {
   //! sent
   bool sendMessage(pw::UniquePtr<std::byte[]> &&data, uint32_t messageType,
                    uint32_t messagePermissions, SessionId sessionId,
-                   MessageHubId fromMessageHubId);
+                   EndpointId fromEndpointId, MessageHubId fromMessageHubId);
 
   //! Registers an endpoint with the MessageHub.
   //! @return true if the endpoint was registered, otherwise false.

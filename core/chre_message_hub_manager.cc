@@ -278,7 +278,8 @@ bool ChreMessageHubManager::sendMessage(void *message, size_t messageSize,
     LOG_OOM();
   } else {
     success = mChreMessageHub.sendMessage(std::move(messageData), messageType,
-                                          messagePermissions, sessionId);
+                                          messagePermissions, sessionId,
+                                          fromEndpointId);
   }
 
   if (!success && freeCallback != nullptr) {
