@@ -17,6 +17,7 @@
 #include <general_test/test.h>
 
 #include <shared/abort.h>
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 #include <cinttypes>
@@ -28,7 +29,6 @@
 #define LOG_TAG "[Test]"
 
 using nanoapp_testing::sendFatalFailureToHost;
-using nanoapp_testing::sendFatalFailureToHostUint8;
 
 namespace general_test {
 
@@ -59,17 +59,14 @@ void Test::unexpectedEvent(uint16_t eventType) {
 void Test::validateChreAsyncResult(const chreAsyncResult *result,
                                    const chreAsyncRequest &request) {
   if (!result->success) {
-    sendFatalFailureToHostUint8("chre async result error: %d",
-                                result->errorCode);
+    EXPECT_FAIL_UINT8("chre async result error: ", result->errorCode);
   }
   if (result->success && result->errorCode != CHRE_ERROR_NONE) {
-    sendFatalFailureToHostUint8(
-        "Request was successfully processed, but got errorCode: %d",
-        result->errorCode);
+    EXPECT_FAIL_UINT8("Request was successfully processed, but got errorCode: ",
+                      result->errorCode);
   }
   if (result->reserved != 0) {
-    sendFatalFailureToHostUint8("reserved should be 0, got: %d",
-                                result->reserved);
+    EXPECT_FAIL_UINT8("reserved should be 0, got: ", result->reserved);
   }
   if (result->cookie != request.cookie) {
     LOGE("Request cookie is %p, got %p", request.cookie, result->cookie);
@@ -81,9 +78,10 @@ void Test::validateChreAsyncResult(const chreAsyncResult *result,
     sendFatalFailureToHost("Request requestType mismatch");
   }
   if (chreGetTime() - request.requestTimeNs > request.timeoutNs) {
-    nanoapp_testing::sendFatalFailureToHostUint8(
-        "Did not receive chreWifiAsyncEvent within %d seconds.",
-        request.timeoutNs / nanoapp_testing::kOneSecondInNanoseconds);
+    uint32_t time =
+        request.timeoutNs / nanoapp_testing::kOneSecondInNanoseconds;
+    EXPECT_FAIL("Did not receive chreWifiAsyncEvent within time (sec): ",
+                &time);
   }
 }
 

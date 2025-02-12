@@ -25,7 +25,7 @@
  *
  * This macro can be used in the following ways:
  * 1. EXPECT_FAIL(const char *message)
- * 2. EXPECT_FAIL(const char *message, uint32_t value)
+ * 2. EXPECT_FAIL(const char *message, uint32_t *value)
  *
  * In usage (2), an integer value will be encoded at the end of the message
  * string, and will be forwarded to the test host through sendFailureToHost.
