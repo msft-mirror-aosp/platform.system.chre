@@ -87,8 +87,9 @@ static void chppTransportDoWork(struct ChppTransportState *context,
 static void chppAppendToPendingTxPacket(struct ChppTransportState *context,
                                         const uint8_t *buf, size_t len);
 static const char *chppGetPacketAttrStr(uint8_t packetCode);
-static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
-                                  uint8_t packetCode, void *buf, size_t len);
+static bool chppEnqueueTxDatagramLocked(struct ChppTransportState *context,
+                                        uint8_t packetCode, void *buf,
+                                        size_t len);
 static enum ChppLinkErrorCode chppSendPendingPacket(
     struct ChppTransportState *context);
 
@@ -1206,6 +1207,8 @@ static const char *chppGetPacketAttrStr(uint8_t packetCode) {
  * If enqueueing is unsuccessful, it is up to the caller to decide when or if
  * to free the payload and/or resend it later.
  *
+ * ChppTransportState->mutex must be locked prior to invoking this method.
+ *
  * @param context State of the transport layer.
  * @param packetCode Error code and packet attributes to be sent.
  * @param buf Datagram payload allocated through chppMalloc. Cannot be null.
@@ -1214,8 +1217,9 @@ static const char *chppGetPacketAttrStr(uint8_t packetCode) {
  * @return True informs the sender that the datagram was successfully enqueued.
  * False informs the sender that the queue was full.
  */
-static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
-                                  uint8_t packetCode, void *buf, size_t len) {
+static bool chppEnqueueTxDatagramLocked(struct ChppTransportState *context,
+                                        uint8_t packetCode, void *buf,
+                                        size_t len) {
   bool success = false;
 
   if (len == 0) {
@@ -1237,8 +1241,6 @@ static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
           header->command, (uint8_t)(context->txDatagramQueue.pending + 1));
     }
 
-    chppMutexLock(&context->mutex);
-
     if (context->txDatagramQueue.pending >= CHPP_TX_DATAGRAM_QUEUE_LEN) {
       CHPP_LOGE("Cannot enqueue TX datagram");
 
@@ -1257,8 +1259,6 @@ static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
 
       success = true;
     }
-
-    chppMutexUnlock(&context->mutex);
   }
 
   return success;
@@ -1353,8 +1353,8 @@ static void chppReset(struct ChppTransportState *transportContext,
   transportContext->rxStatus.expectedSeq = transportContext->rxHeader.seq + 1;
 
   // Send reset or reset-ACK
+  chppTransportSendResetLocked(transportContext, resetType, error);
   chppMutexUnlock(&transportContext->mutex);
-  chppTransportSendReset(transportContext, resetType, error);
 
   // Inform the App Layer that a reset has completed
   if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
@@ -1599,12 +1599,14 @@ void chppRxPacketCompleteCb(struct ChppTransportState *context) {
 bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
                                  size_t len) {
   bool success = false;
+
+  chppMutexLock(&context->mutex);
   bool resetting = (context->resetState == CHPP_RESET_STATE_RESETTING);
 
   if (len == 0) {
     CHPP_DEBUG_ASSERT_LOG(false, "Enqueue datagram len=0!");
 
-  } else if (resetting || !chppEnqueueTxDatagram(
+  } else if (resetting || !chppEnqueueTxDatagramLocked(
                               context, CHPP_TRANSPORT_ERROR_NONE, buf, len)) {
     uint8_t *handle = buf;
     CHPP_LOGE("Resetting=%d. Discarding %" PRIuSIZE " bytes for H#%" PRIu8,
@@ -1615,6 +1617,7 @@ bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
   } else {
     success = true;
   }
+  chppMutexUnlock(&context->mutex);
 
   return success;
 }
@@ -1689,8 +1692,10 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
 }
 
 void chppWorkThreadStart(struct ChppTransportState *context) {
-  chppTransportSendReset(context, CHPP_TRANSPORT_ATTR_RESET,
-                         CHPP_TRANSPORT_ERROR_NONE);
+  chppMutexLock(&context->mutex);
+  chppTransportSendResetLocked(context, CHPP_TRANSPORT_ATTR_RESET,
+                               CHPP_TRANSPORT_ERROR_NONE);
+  chppMutexUnlock(&context->mutex);
   CHPP_LOGD("CHPP Work Thread started");
 
   uint32_t signals;
@@ -1901,9 +1906,9 @@ uint8_t chppRunTransportLoopback(struct ChppTransportState *context,
   return result;
 }
 
-void chppTransportSendReset(struct ChppTransportState *context,
-                            enum ChppTransportPacketAttributes resetType,
-                            enum ChppTransportErrorCode error) {
+void chppTransportSendResetLocked(struct ChppTransportState *context,
+                                  enum ChppTransportPacketAttributes resetType,
+                                  enum ChppTransportErrorCode error) {
   // Make sure CHPP is in an initialized state
   CHPP_ASSERT_LOG((context->txDatagramQueue.pending == 0 &&
                    context->txDatagramQueue.front == 0),
@@ -1932,9 +1937,9 @@ void chppTransportSendReset(struct ChppTransportState *context,
 
     context->resetTimeNs = chppGetCurrentTimeNs();
 
-    chppEnqueueTxDatagram(context,
-                          CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(resetType, error),
-                          config, sizeof(*config));
+    chppEnqueueTxDatagramLocked(
+        context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(resetType, error), config,
+        sizeof(*config));
   }
 }
 

@@ -460,9 +460,31 @@ bool unloadAllNanoapps(SocketClient &client, sp<SocketCallbacks> callbacks) {
   if (!listNanoapps(client)) {
     return false;
   }
+  bool success = true;
   for (auto appId : callbacks->getAppIdVector()) {
     if (!unloadNanoapp(client, callbacks, appId)) {
-      LOGE("Failed in unloading nanoapps, unloading aborted");
+      // TODO(b/394340594): remove workaround when CHRE stall is fixed
+      // Don't abort if we timeout during unloading one nanoapp,
+      // just continue with the rest of the list and confirm at the end.
+      // LOGE("Failed in unloading nanoapps, unloading aborted");
+      // return false;
+      LOGE("Possible timeout unloading nanoapp %" PRIx64 ", continue", appId);
+      success = false;
+    }
+  }
+  if (!success) {
+    // Check again
+    if (listNanoapps(client)) {
+      if (callbacks->getAppIdVector().size() == 0) {
+        success = true;
+      } else {
+        for (auto appId : callbacks->getAppIdVector()) {
+          LOGE("Failed to unload nanoapp %" PRIx64, appId);
+        }
+      }
+    }
+    if (!success) {
+      LOGI("Unloaded all nanoapps failed");
       return false;
     }
   }

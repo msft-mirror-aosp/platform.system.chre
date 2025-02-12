@@ -424,7 +424,8 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
   switch (result->requestType) {
     case CHRE_WIFI_REQUEST_TYPE_REQUEST_SCAN: {
       if (mTestSession->feature == Feature::WIFI_RTT) {
-        if (result->errorCode == CHRE_ERROR_BUSY) {
+        if (result->errorCode == CHRE_ERROR ||
+            result->errorCode == CHRE_ERROR_BUSY) {
           if (mWifiRequestRetries >= kMaxWifiRequestRetries) {
             // The request has failed repeatedly and we are no longer retrying
             // Return success=false to the host rather than timeout.
@@ -434,7 +435,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
             break;
           }
 
-          // Retry on CHRE_ERROR_BUSY after a short delay
+          // Retry on CHRE_ERROR/CHRE_ERROR_BUSY after a short delay
           mWifiRequestRetries++;
           uint64_t delay = kOneSecondInNanoseconds * 2;
           const uint32_t *cookie = mTestSession->step == TestStep::SETUP
@@ -443,7 +444,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
           gRangingRequestRetryTimerHandle =
               chreTimerSet(delay, cookie, /*oneShot=*/true);
           LOGW(
-              "Request failed due to CHRE_ERROR_BUSY during %s step. Retrying "
+              "Request failed during %s step. Retrying "
               "after delay=%" PRIu64 "ns, num_retries=%" PRIu8 "/%" PRIu8,
               mTestSession->step == TestStep::SETUP ? "SETUP" : "START", delay,
               mWifiRequestRetries, kMaxWifiRequestRetries);
