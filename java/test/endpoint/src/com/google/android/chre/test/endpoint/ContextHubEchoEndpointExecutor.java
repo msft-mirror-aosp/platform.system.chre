@@ -495,8 +495,8 @@ public class ContextHubEchoEndpointExecutor {
             Pair<HubEndpointSession, Integer> closeResult = callback.waitForCloseSession();
             Assert.assertNotNull(closeResult);
             Assert.assertNotNull(closeResult.first);
-            // TODO(b/385765805): Check for equality
             Log.d(TAG, "Session closed: " + closeResult.first);
+            Assert.assertEquals(session, closeResult.first);
             Assert.assertNotNull(closeResult.second);
             Assert.assertEquals(closeResult.second.intValue(), HubEndpoint.REASON_ENDPOINT_STOPPED);
         }
