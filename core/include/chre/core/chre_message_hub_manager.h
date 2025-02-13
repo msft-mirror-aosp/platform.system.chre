@@ -23,9 +23,9 @@
 #include "chre/platform/mutex.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
-#include "chre/util/system/message_router_callback_allocator.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
 #include "pw_containers/vector.h"
@@ -62,6 +62,7 @@ class ChreMessageHubManager
                        chreMsgEndpointInfo &info);
 
   //! Configures ready events for the given endpoint or service.
+  //! This function must be called from the event loop thread.
   //! @return true if the ready events were configured successfully, false
   //! otherwise.
   bool configureReadyEvents(uint16_t nanoappInstanceId,
@@ -110,10 +111,20 @@ class ChreMessageHubManager
                    message::EndpointId fromEndpointId);
 
   //! Publishes a service from the given nanoapp.
+  //! This function must be called from the event loop thread.
   //! @return true if the service was published successfully, false otherwise
-  bool publishServices(uint64_t nanoappId,
+  bool publishServices(message::EndpointId fromEndpointId,
                        const chreMsgServiceInfo *serviceInfos,
                        size_t numServices);
+
+  //! Unregisters the given endpoint (nanoapp) from the MessageHub
+  //! This will clean up all pending resources then unregister the endpoint
+  //! from the MessageHub.
+  void unregisterEndpoint(message::EndpointId endpointId);
+
+  //! Cleans up all pending resources for the given endpoint (nanoapp).
+  //! This should only be called from the event loop thread.
+  void cleanupEndpointResources(message::EndpointId endpointId);
 
   //! Converts a message::EndpointType to a CHRE endpoint type
   //! @return the CHRE endpoint type
@@ -190,10 +201,10 @@ class ChreMessageHubManager
                             message::EndpointId endpointId);
 
   //! @return The free callback record from the callback allocator.
-  std::optional<message::MessageRouterCallbackAllocator<
-      MessageFreeCallbackData>::FreeCallbackRecord>
+  std::optional<
+      message::CallbackAllocator<MessageFreeCallbackData>::CallbackRecord>
   getAndRemoveFreeCallbackRecord(void *ptr) {
-    return mAllocator.GetAndRemoveFreeCallbackRecord(ptr);
+    return mAllocator.GetAndRemoveCallbackRecord(ptr);
   }
 
   //! @return The first MessageHub ID for the given endpoint ID
@@ -252,15 +263,15 @@ class ChreMessageHubManager
   message::MessageRouter::MessageHub mChreMessageHub;
 
   //! The vector of free callback records - used by the
-  //! MessageRouterCallbackAllocator
-  pw::Vector<message::MessageRouterCallbackAllocator<
-                 MessageFreeCallbackData>::FreeCallbackRecord,
-             kMaxFreeCallbackRecords>
+  //! CallbackAllocator
+  pw::Vector<
+      message::CallbackAllocator<MessageFreeCallbackData>::CallbackRecord,
+      kMaxFreeCallbackRecords>
       mFreeCallbackRecords;
 
   //! The allocator for message free callbacks - used when sending a message
   //! from a nanoapp with a free callback
-  message::MessageRouterCallbackAllocator<MessageFreeCallbackData> mAllocator;
+  message::CallbackAllocator<MessageFreeCallbackData> mAllocator;
 
   //! Mutex to protect mNanoappPublishedServices
   Mutex mNanoappPublishedServicesMutex;
@@ -269,6 +280,7 @@ class ChreMessageHubManager
   DynamicVector<NanoappServiceData> mNanoappPublishedServices;
 
   //! The vector of ready event requests
+  //! This should only be accessed from the event loop thread
   DynamicVector<EndpointReadyEventData> mEndpointReadyEventRequests;
 };
 

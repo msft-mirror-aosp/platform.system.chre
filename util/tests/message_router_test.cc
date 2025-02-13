@@ -21,9 +21,9 @@
 #include <utility>
 
 #include "chre/util/dynamic_vector.h"
+#include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
-#include "chre/util/system/message_router_callback_allocator.h"
 #include "chre_api/chre.h"
 
 #include "pw_allocator/allocator.h"
@@ -1340,11 +1340,9 @@ TEST_F(MessageRouterTest, SendMessageToSessionUsingPointerAndFreeCallback) {
     size_t length;
   };
 
-  pw::Vector<
-      MessageRouterCallbackAllocator<FreeCallbackContext>::FreeCallbackRecord,
-      10>
+  pw::Vector<CallbackAllocator<FreeCallbackContext>::CallbackRecord, 10>
       freeCallbackRecords;
-  MessageRouterCallbackAllocator<FreeCallbackContext> allocator(
+  CallbackAllocator<FreeCallbackContext> allocator(
       [](std::byte *message, size_t length, FreeCallbackContext &&context) {
         *context.freeCallbackCalled =
             message == context.message && length == context.length;

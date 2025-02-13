@@ -71,6 +71,8 @@ public class ContextHubWwanSettingsTestExecutor {
     private void runTest(boolean enableFeature) throws InterruptedException {
         boolean airplaneModeExpected = !enableFeature;
         mSettingsUtil.setAirplaneMode(airplaneModeExpected);
+        // Wait for setting to propagate to modem.
+        Thread.sleep(1000 /*millis*/);
 
         ChreSettingsTest.TestCommand.State state = enableFeature
                 ? ChreSettingsTest.TestCommand.State.ENABLED

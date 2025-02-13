@@ -142,16 +142,20 @@ bool MessageRouter::forEachEndpointOfHub(
   return true;
 }
 
-void MessageRouter::forEachEndpoint(
+bool MessageRouter::forEachEndpoint(
     const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
         &function) {
-  LockGuard<Mutex> lock(mMutex);
+  std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
+      getMessageHubRecords();
+  if (!messageHubRecords.has_value()) {
+    return false;
+  }
 
   struct Context {
     decltype(function) function;
-    MessageHubInfo &messageHubInfo;
+    const MessageHubInfo &messageHubInfo;
   };
-  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+  for (const MessageHubRecord &messageHubRecord : *messageHubRecords) {
     Context context = {
         .function = function,
         .messageHubInfo = messageHubRecord.info,
@@ -163,6 +167,7 @@ void MessageRouter::forEachEndpoint(
           return false;
         });
   }
+  return true;
 }
 
 std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
@@ -186,8 +191,13 @@ std::optional<Endpoint> MessageRouter::getEndpointForService(
     return std::nullopt;
   }
 
-  LockGuard<Mutex> lock(mMutex);
-  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+  std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
+      getMessageHubRecords();
+  if (!messageHubRecords.has_value()) {
+    return std::nullopt;
+  }
+
+  for (const MessageHubRecord &messageHubRecord : *messageHubRecords) {
     if ((messageHubId == MESSAGE_HUB_ID_ANY ||
          messageHubId == messageHubRecord.info.id) &&
         messageHubRecord.callback != nullptr) {
@@ -226,12 +236,18 @@ bool MessageRouter::doesEndpointHaveService(MessageHubId messageHubId,
   return callback->doesEndpointHaveService(endpointId, serviceDescriptor);
 }
 
-void MessageRouter::forEachMessageHub(
+bool MessageRouter::forEachMessageHub(
     const pw::Function<bool(const MessageHubInfo &)> &function) {
-  LockGuard<Mutex> lock(mMutex);
-  for (MessageHubRecord &messageHubRecord : mMessageHubs) {
+  std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
+      getMessageHubRecords();
+  if (!messageHubRecords.has_value()) {
+    return false;
+  }
+
+  for (const MessageHubRecord &messageHubRecord : *messageHubRecords) {
     function(messageHubRecord.info);
   }
+  return true;
 }
 
 bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
@@ -499,9 +515,8 @@ bool MessageRouter::unregisterEndpoint(MessageHubId messageHubId,
 
 bool MessageRouter::onEndpointRegistrationStateChanged(
     MessageHubId messageHubId, EndpointId endpointId, bool isRegistered) {
-  LockGuard<Mutex> lock(mMutex);
   MessageRouter::MessageHubCallback *callback =
-      getCallbackFromMessageHubIdLocked(messageHubId);
+      getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
     LOGE("Failed to register endpoint with ID %" PRIu64
          " to message hub with ID %" PRIu64 ": hub not found",
@@ -509,7 +524,13 @@ bool MessageRouter::onEndpointRegistrationStateChanged(
     return false;
   }
 
-  for (const MessageHubRecord &messageHubRecord : mMessageHubs) {
+  std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
+      getMessageHubRecords();
+  if (!messageHubRecords.has_value()) {
+    return false;
+  }
+
+  for (const MessageHubRecord &messageHubRecord : *messageHubRecords) {
     if (messageHubRecord.info.id == messageHubId) {
       continue;
     }
@@ -521,7 +542,24 @@ bool MessageRouter::onEndpointRegistrationStateChanged(
                                                         endpointId);
     }
   }
+
   return true;
+}
+
+std::optional<DynamicVector<MessageRouter::MessageHubRecord>>
+MessageRouter::getMessageHubRecords() {
+  LockGuard<Mutex> lock(mMutex);
+  DynamicVector<MessageHubRecord> messageHubRecords;
+  if (!messageHubRecords.reserve(mMessageHubs.size())) {
+    LOG_OOM();
+    return std::nullopt;
+  }
+
+  for (const MessageHubRecord &messageHubRecord : mMessageHubs) {
+    // Will not fail because we reserved space above
+    messageHubRecords.push_back(messageHubRecord);
+  }
+  return messageHubRecords;
 }
 
 const MessageRouter::MessageHubRecord *MessageRouter::getMessageHubRecordLocked(
