@@ -178,6 +178,9 @@ void HostMessageHubManager::sendMessage(MessageHubId hubId, SessionId sessionId,
       return;
     }
     std::memcpy(dataCopy.get(), data.data(), data.size());
+
+    // Note: We are assuming here that no host hubs will create sessions with
+    // themselves as it is not allowed by the HAL API.
     hub.getMessageHub().sendMessage(std::move(dataCopy), type, permissions,
                                     sessionId);
     return;

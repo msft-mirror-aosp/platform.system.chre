@@ -78,10 +78,11 @@ std::optional<Session> MessageRouter::MessageHub::getSessionWithId(
 bool MessageRouter::MessageHub::sendMessage(pw::UniquePtr<std::byte[]> &&data,
                                             uint32_t messageType,
                                             uint32_t messagePermissions,
-                                            SessionId sessionId) {
+                                            SessionId sessionId,
+                                            EndpointId fromEndpointId) {
   return mRouter != nullptr &&
          mRouter->sendMessage(std::move(data), messageType, messagePermissions,
-                              sessionId, mHubId);
+                              sessionId, fromEndpointId, mHubId);
 }
 
 bool MessageRouter::MessageHub::registerEndpoint(EndpointId endpointId) {
@@ -312,13 +313,6 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     return SESSION_ID_INVALID;
   }
 
-  if (fromMessageHubId == toMessageHubId) {
-    LOGE(
-        "Failed to open session: initiator and peer message hubs are the "
-        "same");
-    return SESSION_ID_INVALID;
-  }
-
   MessageRouter::MessageHubCallback *initiatorCallback =
       getCallbackFromMessageHubId(fromMessageHubId);
   MessageRouter::MessageHubCallback *peerCallback =
@@ -460,10 +454,11 @@ std::optional<Session> MessageRouter::getSessionWithId(
 bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
                                 uint32_t messageType,
                                 uint32_t messagePermissions,
-                                SessionId sessionId,
+                                SessionId sessionId, EndpointId fromEndpointId,
                                 MessageHubId fromMessageHubId) {
   MessageRouter::MessageHubCallback *receiverCallback = nullptr;
   Session session;
+  bool sentBySessionInitiator;
   {
     LockGuard<Mutex> lock(mMutex);
 
@@ -482,17 +477,37 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
       return false;
     }
 
+    Endpoint sender(fromMessageHubId, fromEndpointId);
+    if (fromEndpointId == ENDPOINT_ID_ANY) {
+      if (session.initiator.messageHubId == session.peer.messageHubId) {
+        LOGE("Unable to infer sender endpoint ID: session with ID %" PRIu16
+             " is between endpoints on the same message hub with ID %" PRIu64,
+             sessionId, fromMessageHubId);
+        return false;
+      }
+      sender.endpointId = session.initiator.messageHubId == fromMessageHubId
+                              ? session.initiator.endpointId
+                              : session.peer.endpointId;
+    }
+
+    if (sender != session.initiator && sender != session.peer) {
+      LOGE("Failed to send message: session with ID %" PRIu16
+           " does not contain endpoint with hub ID %" PRIu64
+           " and endpoint ID %" PRIu64,
+           sessionId, fromMessageHubId, fromEndpointId);
+      return false;
+    }
+    sentBySessionInitiator = sender == session.initiator;
     receiverCallback = getCallbackFromMessageHubIdLocked(
-        session.initiator.messageHubId == fromMessageHubId
-            ? session.peer.messageHubId
-            : session.initiator.messageHubId);
+        sentBySessionInitiator ? session.peer.messageHubId
+                               : session.initiator.messageHubId);
   }
 
   bool success = false;
   if (receiverCallback != nullptr) {
-    success = receiverCallback->onMessageReceived(
-        std::move(data), messageType, messagePermissions, session,
-        session.initiator.messageHubId == fromMessageHubId);
+    success = receiverCallback->onMessageReceived(std::move(data), messageType,
+                                                  messagePermissions, session,
+                                                  sentBySessionInitiator);
   }
 
   if (!success) {

@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cstddef>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
@@ -31,7 +32,6 @@ using nanoapp_testing::kOneMillisecondInNanoseconds;
 using nanoapp_testing::kOneSecondInNanoseconds;
 using nanoapp_testing::MessageType;
 using nanoapp_testing::sendFatalFailureToHost;
-using nanoapp_testing::sendFatalFailureToHostUint8;
 using nanoapp_testing::sendInternalFailureToHost;
 using nanoapp_testing::sendStringToHost;
 using nanoapp_testing::sendSuccessToHost;
@@ -188,7 +188,7 @@ void BasicSensorTestBase::startTest() {
     found = chreSensorFind(mSensorType, mCurrentSensorIndex, &mSensorHandle);
     if (!found &&
         chreSensorFind(mSensorType, mCurrentSensorIndex + 1, &mSensorHandle)) {
-      sendFatalFailureToHostUint8("Missing sensor index ", mCurrentSensorIndex);
+      EXPECT_FAIL_UINT8("Missing sensor index ", mCurrentSensorIndex);
       return;
     }
   } else {
@@ -414,8 +414,8 @@ void BasicSensorTestBase::verifyEventHeader(const chreSensorDataHeader *header,
       sendFatalFailureToHost("SensorDataHeader has non-zero reserved field");
     }
   } else if (header->accuracy > CHRE_SENSOR_ACCURACY_HIGH) {
-    sendFatalFailureToHostUint8("Sensor accuracy is not within valid range: ",
-                                header->accuracy);
+    EXPECT_FAIL_UINT8("Sensor accuracy is not within valid range: ",
+                      header->accuracy);
   }
 }
 

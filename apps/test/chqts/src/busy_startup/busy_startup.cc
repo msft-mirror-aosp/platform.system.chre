@@ -46,6 +46,7 @@
 
 #include <chre/util/nanoapp/log.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/test_success_marker.h>
 #include <shared/time_util.h>
@@ -55,7 +56,6 @@
 
 using nanoapp_testing::MessageType;
 using nanoapp_testing::sendFatalFailureToHost;
-using nanoapp_testing::sendFatalFailureToHostUint8;
 using nanoapp_testing::sendMessageToHost;
 using nanoapp_testing::sendSuccessToHost;
 using nanoapp_testing::TestSuccessMarker;
@@ -127,8 +127,8 @@ static void checkSensorEvent(const void *eventData) {
       sendFatalFailureToHost("sensorEvent has non-zero reserved field");
     }
   } else if (header->accuracy > CHRE_SENSOR_ACCURACY_HIGH) {
-    sendFatalFailureToHostUint8("Sensor accuracy is not within valid range: ",
-                                header->accuracy);
+    EXPECT_FAIL_UINT8("Sensor accuracy is not within valid range: ",
+                      header->accuracy);
   }
 
   gTestSuccessMarker.markStageAndSuccessOnFinish(BUSY_STARTUP_STAGE_SENSOR);

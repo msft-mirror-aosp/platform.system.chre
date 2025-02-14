@@ -865,7 +865,7 @@ TEST_F(MessageRouterTest, UnregisterMessageHubCausesSessionClosed) {
   EXPECT_FALSE(messageHub->getSessionWithId(sessionId).has_value());
 }
 
-TEST_F(MessageRouterTest, RegisterSessionSameMessageHubInvalid) {
+TEST_F(MessageRouterTest, RegisterSessionSameMessageHubIsValid) {
   MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
   Session sessionFromCallback1;
   Session sessionFromCallback2;
@@ -884,12 +884,12 @@ TEST_F(MessageRouterTest, RegisterSessionSameMessageHubInvalid) {
   // Open session from messageHub:2 to messageHub:2
   SessionId sessionId = messageHub->openSession(
       kEndpointInfos[1].id, messageHub->getId(), kEndpointInfos[1].id);
-  EXPECT_EQ(sessionId, SESSION_ID_INVALID);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
 
   // Open session from messageHub:1 to messageHub:3
   sessionId = messageHub->openSession(kEndpointInfos[0].id, messageHub->getId(),
                                       kEndpointInfos[2].id);
-  EXPECT_EQ(sessionId, SESSION_ID_INVALID);
+  EXPECT_NE(sessionId, SESSION_ID_INVALID);
 }
 
 TEST_F(MessageRouterTest, RegisterSessionReservedSessionIdAreRespected) {

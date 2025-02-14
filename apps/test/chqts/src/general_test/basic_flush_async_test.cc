@@ -136,7 +136,7 @@ void BasicSensorFlushAsyncTest::finish(bool succeeded, const char *message) {
   }
 
   if (!succeeded) {
-    ASSERT_NE(message, nullptr, "message cannot be null when the test failed");
+    EXPECT_NE(message, nullptr, "message cannot be null when the test failed");
     sendFatalFailureToHost(message);
   } else {
     sendSuccessToHost();
@@ -155,7 +155,7 @@ void BasicSensorFlushAsyncTest::handleDataReceived(
 void BasicSensorFlushAsyncTest::handleFlushComplete(
     const struct chreSensorFlushCompleteEvent *eventData) {
   if (mStarted) {
-    ASSERT_NE(mLatestSensorDataTimestamp, 0, "No sensor data was received");
+    EXPECT_NE(mLatestSensorDataTimestamp, 0, "No sensor data was received");
 
     // we should fail the test if we receive too old a sensor sample.
     // ideally, we don't receive any samples that was sampled after
@@ -165,21 +165,21 @@ void BasicSensorFlushAsyncTest::handleFlushComplete(
     uint64_t oldestValidTimestamp =
         mFlushRequestTime - mFlushTestTimeWiggleRoomNs;
 
-    ASSERT_GE(mLatestSensorDataTimestamp, oldestValidTimestamp,
+    EXPECT_GE(mLatestSensorDataTimestamp, oldestValidTimestamp,
               "Received very old data");
 
     LOGI("Flush test: flush request to complete time: %" PRIu64 " ms",
          (chreGetTime() - mFlushRequestTime) / kOneMillisecondInNanoseconds);
 
     // verify event data
-    ASSERT_NE(eventData, nullptr, "null event data");
-    ASSERT_EQ(eventData->sensorHandle, mSensorHandle,
+    EXPECT_NE(eventData, nullptr, "null event data");
+    EXPECT_EQ(eventData->sensorHandle, mSensorHandle,
               "Got flush event from a different sensor handle");
-    ASSERT_EQ(eventData->errorCode, CHRE_ERROR_NONE,
+    EXPECT_EQ(eventData->errorCode, CHRE_ERROR_NONE,
               "Flush Error code was not CHRE_ERROR_NONE");
-    ASSERT_NE(eventData->cookie, nullptr,
+    EXPECT_NE(eventData->cookie, nullptr,
               "Null cookie in flush complete event");
-    ASSERT_EQ(*(static_cast<const uint32_t *>(eventData->cookie)), mCookie,
+    EXPECT_EQ(*(static_cast<const uint32_t *>(eventData->cookie)), mCookie,
               "unexpected cookie in flush complete event");
 
     finish(true /* succeeded */, nullptr /* message */);

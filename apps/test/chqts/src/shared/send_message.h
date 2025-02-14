@@ -142,24 +142,18 @@ inline void sendFailureToHost(const char *message,
 }
 
 /**
+ * The semantics of this method is the same as sendFailureToHost, except the
+ * message is logged through chreLog.
+ */
+void logFailureMessage(const char *message, const uint32_t *value = nullptr);
+
+/**
  * Same as sendFailureToHost(), but aborts the test with the given 'reason',
  * and never returns.
  */
 void sendFatalFailureToHost(const char *message,
                             const uint32_t *value = nullptr,
                             AbortBlame reason = AbortBlame::kChre);
-
-/**
- * Helper function to invoke sendFatalFailureToHost() with uint8_t type.
- * It is needed since sendFatalFailureToHost() only accepts uint32_t type.
- *
- * TODO: Deprecate this function and redesign sendFatalFailureToHost()
- * so that a generic string message is accepted.
- *
- * @param message a text message to be sent to host.
- * @param value a value output into the message.
- */
-void sendFatalFailureToHostUint8(const char *message, const uint8_t value);
 
 /**
  * Same as sendStringToHost(), but uses MessageType::kInternalFailure for the
