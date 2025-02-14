@@ -20,12 +20,13 @@
 
 #include <general_test/test_names.h>
 #include <shared/abort.h>
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
 
 using nanoapp_testing::sendFailureToHost;
-using nanoapp_testing::sendFatalFailureToHost;
+
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -45,9 +46,8 @@ HeapAllocStressTest::HeapAllocStressTest() : Test(CHRE_API_VERSION_1_0) {}
 void HeapAllocStressTest::setUp(uint32_t messageSize,
                                 const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost(
-        "HeapAllocStress message expects 0 additional bytes, got ",
-        &messageSize);
+    EXPECT_FAIL("HeapAllocStress message expects 0 additional bytes, got ",
+                &messageSize);
   }
 
   // 1GB should be absurd on any CHRE implementation we anticipate for a
@@ -73,7 +73,7 @@ void HeapAllocStressTest::setUp(uint32_t messageSize,
       reinterpret_cast<void **>(chreHeapAlloc(kNumPtrs * sizeof(void *)));
   if (ptrs == NULL) {
     // Oh, the irony.
-    sendFatalFailureToHost("Insufficient free heap to test heap exhaustion.");
+    EXPECT_FAIL("Insufficient free heap to test heap exhaustion.");
   }
 
   size_t index;
@@ -95,7 +95,7 @@ void HeapAllocStressTest::setUp(uint32_t messageSize,
     ptrs[index] = ptr;
   }
   if (index == 0) {
-    sendFatalFailureToHost("Failed to allocate anything for heap exhaustion");
+    EXPECT_FAIL("Failed to allocate anything for heap exhaustion");
   }
 
   // We should be able to free this allocation, and then obtain it again.
@@ -103,7 +103,7 @@ void HeapAllocStressTest::setUp(uint32_t messageSize,
   chreHeapFree(ptrs[index]);
   ptrs[index] = chreHeapAlloc(last_alloc_size);
   if (ptrs[index] == NULL) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL(
         "After exhausting heap and then free'ing, unable to alloc again for "
         "size",
         &last_alloc_size);

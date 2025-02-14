@@ -18,6 +18,7 @@
 #define _GTS_NANOAPPS_GENERAL_TEST_EVENT_BETWEEN_APPS_TEST_H_
 
 #include <general_test/test.h>
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 namespace general_test {

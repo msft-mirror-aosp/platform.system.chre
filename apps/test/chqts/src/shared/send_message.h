@@ -150,14 +150,6 @@ inline void sendFailureToHost(const char *message,
 }
 
 /**
- * Same as sendFailureToHost(), but aborts the test with the given 'reason',
- * and never returns.
- */
-void sendFatalFailureToHost(const char *message,
-                            const uint32_t *value = nullptr,
-                            AbortBlame reason = AbortBlame::kChre);
-
-/**
  * Same as sendStringToHost(), but uses MessageType::kInternalFailure for the
  * 'status', and aborts the test with the given 'reason' and never returns.
  */

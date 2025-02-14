@@ -18,12 +18,12 @@
 
 #include <cstddef>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre/util/macros.h"
 #include "chre_api/chre.h"
 
-using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -33,24 +33,22 @@ VersionConsistencyTest::VersionConsistencyTest() : Test(CHRE_API_VERSION_1_0) {}
 void VersionConsistencyTest::setUp(uint32_t messageSize,
                                    const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost(
-        "VersionConsistency message expects 0 additional bytes, got ",
-        &messageSize);
+    EXPECT_FAIL("VersionConsistency message expects 0 additional bytes, got ",
+                &messageSize);
   }
 
   if (mApiVersion < CHRE_API_VERSION_1_0) {
-    sendFatalFailureToHost("API version less than 1.0", &mApiVersion);
+    EXPECT_FAIL("API version less than 1.0", &mApiVersion);
   }
   if ((mApiVersion & UINT32_C(0xFFFF)) != 0) {
-    sendFatalFailureToHost("API version has two LSB set", &mApiVersion);
+    EXPECT_FAIL("API version has two LSB set", &mApiVersion);
   }
   uint32_t platformVersion = chreGetVersion();
   constexpr uint32_t kMajorMinorMask = UINT32_C(0xFFFF0000);
   // Both mApiVersion and platformVersion refer to what the CHRE was
   // built against, so they must agree in major and minor version.
   if ((platformVersion & kMajorMinorMask) != (mApiVersion & kMajorMinorMask)) {
-    sendFatalFailureToHost("API and platform version mismatch",
-                           &platformVersion);
+    EXPECT_FAIL("API and platform version mismatch", &platformVersion);
   }
 
   // Confirm that our app (CHRE_API_VERSION) and CHRE (mApiVersion) were
@@ -59,13 +57,12 @@ void VersionConsistencyTest::setUp(uint32_t messageSize,
   constexpr uint32_t kMajorMask = UINT32_C(0xFF000000);
   if ((mApiVersion & kMajorMask) != (CHRE_API_VERSION & kMajorMask)) {
     uint32_t appVersion = CHRE_API_VERSION;
-    sendFatalFailureToHost("App built against different major version",
-                           &appVersion);
+    EXPECT_FAIL("App built against different major version", &appVersion);
   }
 
   uint64_t platformId = chreGetPlatformId();
   if ((platformId == UINT64_C(0)) || (platformId == UINT64_C(-1))) {
-    sendFatalFailureToHost("Bogus platform ID");
+    EXPECT_FAIL("Bogus platform ID");
   }
   // TODO(b/30077401): We should send the Platform ID back to the Host, and
   //     have the Host confirm this is the Platform ID we used for loading

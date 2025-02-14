@@ -28,7 +28,7 @@
 
 #define LOG_TAG "[Test]"
 
-using nanoapp_testing::sendFatalFailureToHost;
+using nanoapp_testing::sendInternalFailureToHost;
 
 namespace general_test {
 
@@ -53,7 +53,7 @@ void Test::testHandleEvent(uint32_t senderInstanceId, uint16_t eventType,
 
 void Test::unexpectedEvent(uint16_t eventType) {
   uint32_t localEvent = eventType;
-  sendFatalFailureToHost("Test received unexpected event:", &localEvent);
+  EXPECT_FAIL("Test received unexpected event:", &localEvent);
 }
 
 void Test::validateChreAsyncResult(const chreAsyncResult *result,
@@ -70,12 +70,12 @@ void Test::validateChreAsyncResult(const chreAsyncResult *result,
   }
   if (result->cookie != request.cookie) {
     LOGE("Request cookie is %p, got %p", request.cookie, result->cookie);
-    sendFatalFailureToHost("Request cookie mismatch");
+    EXPECT_FAIL("Request cookie mismatch");
   }
   if (result->requestType != request.requestType) {
     LOGE("Request requestType is %d, got %d", request.requestType,
          result->requestType);
-    sendFatalFailureToHost("Request requestType mismatch");
+    EXPECT_FAIL("Request requestType mismatch");
   }
   if (chreGetTime() - request.requestTimeNs > request.timeoutNs) {
     uint32_t time =
@@ -90,21 +90,21 @@ const void *Test::getMessageDataFromHostEvent(
     nanoapp_testing::MessageType expectedMessageType,
     uint32_t expectedMessageSize) {
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    sendFatalFailureToHost("Unexpected sender ID:", &senderInstanceId);
+    sendInternalFailureToHost("Unexpected sender ID:", &senderInstanceId);
   }
   if (eventType != CHRE_EVENT_MESSAGE_FROM_HOST) {
     unexpectedEvent(eventType);
   }
   if (eventData == nullptr) {
-    sendFatalFailureToHost("NULL eventData given");
+    sendInternalFailureToHost("NULL eventData given");
   }
   auto data = static_cast<const chreMessageFromHostData *>(eventData);
   if (data->reservedMessageType != uint32_t(expectedMessageType)) {
-    sendFatalFailureToHost("Unexpected reservedMessageType:",
-                           &(data->reservedMessageType));
+    sendInternalFailureToHost("Unexpected reservedMessageType:",
+                              &(data->reservedMessageType));
   }
   if (data->messageSize != expectedMessageSize) {
-    sendFatalFailureToHost("Unexpected messageSize:", &(data->messageSize));
+    sendInternalFailureToHost("Unexpected messageSize:", &(data->messageSize));
   }
   return data->message;
 }
