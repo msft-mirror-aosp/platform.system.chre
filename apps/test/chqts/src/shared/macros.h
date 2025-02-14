@@ -21,7 +21,7 @@
 
 /**
  * A helper macro to perform an assertion in tests that leverage
- * nanoapp_testing::sendFailureToHost.
+ * nanoapp_testing::sendFailureToHost and returns from the current function.
  *
  * This macro can be used in the following ways:
  * 1. EXPECT_FAIL(const char *message)
@@ -35,7 +35,6 @@
 #define EXPECT_FAIL(...)                             \
   do {                                               \
     nanoapp_testing::sendFailureToHost(__VA_ARGS__); \
-    nanoapp_testing::logFailureMessage(__VA_ARGS__); \
     return;                                          \
   } while (0)
 

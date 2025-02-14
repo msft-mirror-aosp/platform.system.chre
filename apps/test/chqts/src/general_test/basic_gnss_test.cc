@@ -16,9 +16,12 @@
 
 #include <general_test/basic_gnss_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
+
+using nanoapp_testing::sendFailureToHost;
 
 /*
  * Test to check expected functionality of the CHRE GNSS APIs.
@@ -47,9 +50,9 @@ void testMeasurementSessionAsync() {
 bool testPassiveListener() {
   bool success = false;
   if (!chreGnssConfigurePassiveLocationListener(true /* enable */)) {
-    sendFatalFailureToHost("Failed to enable passive location listener");
+    sendFailureToHost("Failed to enable passive location listener");
   } else if (!chreGnssConfigurePassiveLocationListener(false /* enable */)) {
-    sendFatalFailureToHost("Failed to disable passive location listener");
+    sendFailureToHost("Failed to disable passive location listener");
   } else {
     success = true;
   }

@@ -16,10 +16,13 @@
 
 #include <general_test/nanoapp_info.h>
 
+#include <shared/macros.h>
 #include <shared/nano_endian.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
+
+using nanoapp_testing::sendFailureToHost;
 
 namespace general_test {
 
@@ -49,10 +52,10 @@ void NanoappInfo::sendToHost() {
 bool NanoappInfo::validate(uint64_t appId, uint32_t instanceId) {
   bool result = true;
   if (appId != mAppId) {
-    nanoapp_testing::sendFatalFailureToHost("app IDs do not match");
+    sendFailureToHost("app IDs do not match");
     result = false;
   } else if (instanceId != mInstanceId) {
-    nanoapp_testing::sendFatalFailureToHost("instance IDs do not match");
+    sendFailureToHost("instance IDs do not match");
     result = false;
   }
 
@@ -63,8 +66,7 @@ bool NanoappInfo::queryByAppId(struct chreNanoappInfo *info) {
   bool result = chreGetNanoappInfoByAppId(mAppId, info);
 
   if (!result) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Unable to get nanoapp info by app ID");
+    sendFailureToHost("Unable to get nanoapp info by app ID");
   }
 
   return result;
@@ -74,8 +76,7 @@ bool NanoappInfo::queryByInstanceId(struct chreNanoappInfo *info) {
   bool result = chreGetNanoappInfoByInstanceId(mInstanceId, info);
 
   if (!result) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Unable to get nanoapp info by instance ID");
+    sendFailureToHost("Unable to get nanoapp info by instance ID");
   }
 
   return result;

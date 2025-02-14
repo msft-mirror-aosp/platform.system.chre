@@ -21,6 +21,7 @@
 
 #include <general_test/basic_audio_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
@@ -30,6 +31,7 @@ using chre::test_shared::checkAudioSamplesAllSame;
 using chre::test_shared::checkAudioSamplesAllZeros;
 
 using nanoapp_testing::kOneSecondInNanoseconds;
+using nanoapp_testing::sendFailureToHost;
 using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
@@ -112,19 +114,19 @@ bool validateAudioSource(uint32_t handle,
                          const struct chreAudioSource &source) {
   bool valid = false;
   if (!verifyStringWithLength(source.name, CHRE_AUDIO_SOURCE_NAME_MAX_SIZE)) {
-    sendFatalFailureToHost("Invalid audio source name for handle ", &handle);
+    sendFailureToHost("Invalid audio source name for handle ", &handle);
   } else if (source.sampleRate > kMaxAudioSampleRate ||
              source.sampleRate < kMinAudioSampleRate) {
-    sendFatalFailureToHost("Invalid audio sample rate for handle ", &handle);
+    sendFailureToHost("Invalid audio sample rate for handle ", &handle);
   } else if (source.minBufferDuration < kMinBufferDuration ||
              source.minBufferDuration > kMaxBufferDuration) {
-    sendFatalFailureToHost("Invalid min buffer duration for handle ", &handle);
+    sendFailureToHost("Invalid min buffer duration for handle ", &handle);
   } else if (source.maxBufferDuration < kMinBufferDuration ||
              source.maxBufferDuration > kMaxBufferDuration) {
-    sendFatalFailureToHost("Invalid max buffer duration for handle ", &handle);
+    sendFailureToHost("Invalid max buffer duration for handle ", &handle);
   } else if (source.format != CHRE_AUDIO_DATA_FORMAT_8_BIT_U_LAW &&
              source.format != CHRE_AUDIO_DATA_FORMAT_16_BIT_SIGNED_PCM) {
-    sendFatalFailureToHost("Invalid audio format for handle ", &handle);
+    sendFailureToHost("Invalid audio format for handle ", &handle);
   } else {
     valid = true;
   }

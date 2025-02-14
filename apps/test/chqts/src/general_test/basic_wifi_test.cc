@@ -418,7 +418,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
 
 void BasicWifiTest::handleChreWifiAsyncEvent(const chreAsyncResult *result) {
   if (!mCurrentWifiRequest.has_value()) {
-    nanoapp_testing::sendFailureToHost("Unexpected async result");
+    EXPECT_FAIL("Unexpected async result");
   }
   LOGI("Received a wifi async event. request type: %" PRIu8
        " error code: %" PRIu8,
