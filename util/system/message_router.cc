@@ -289,7 +289,7 @@ bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
 
   for (auto [callback, session] : sessionsToDestroy) {
     if (callback != nullptr) {
-      callback->onSessionClosed(session, Reason::UNSPECIFIED);
+      callback->onSessionClosed(session, Reason::HUB_RESET);
     }
   }
   return true;

@@ -148,3 +148,10 @@ flag {
     purpose: PURPOSE_BUGFIX
   }
 }
+
+flag {
+  name: "bt_socket_hal_supported"
+  namespace: "context_hub"
+  description: "Flag guarding whether a working implementation of the BT socket HAL is supported in the ContextHub HAL process or a stub version"
+  bug: "380946927"
+}
