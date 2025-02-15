@@ -62,23 +62,23 @@ namespace chpp::test {
  */
 uint8_t validateChppTestResponse(void *buf, uint8_t ackSeq, uint8_t handle,
                                  uint8_t transactionID) {
-  struct ChppTestResponse *response = (ChppTestResponse *)buf;
+  struct ChppTestResponse response = *(ChppTestResponse *)buf;
 
   // Check preamble
-  EXPECT_EQ(response->preamble0, kChppPreamble0);
-  EXPECT_EQ(response->preamble1, kChppPreamble1);
+  EXPECT_EQ(response.preamble0, kChppPreamble0);
+  EXPECT_EQ(response.preamble1, kChppPreamble1);
 
   // Check response transport headers
-  EXPECT_EQ(response->transportHeader.packetCode, CHPP_TRANSPORT_ERROR_NONE);
-  EXPECT_EQ(response->transportHeader.ackSeq, ackSeq);
+  EXPECT_EQ(response.transportHeader.packetCode, CHPP_TRANSPORT_ERROR_NONE);
+  EXPECT_EQ(response.transportHeader.ackSeq, ackSeq);
 
   // Check response app headers
-  EXPECT_EQ(response->appHeader.handle, handle);
-  EXPECT_EQ(response->appHeader.type, CHPP_MESSAGE_TYPE_SERVICE_RESPONSE);
-  EXPECT_EQ(response->appHeader.transaction, transactionID);
+  EXPECT_EQ(response.appHeader.handle, handle);
+  EXPECT_EQ(response.appHeader.type, CHPP_MESSAGE_TYPE_SERVICE_RESPONSE);
+  EXPECT_EQ(response.appHeader.transaction, transactionID);
 
   // Return optional response error to be checked if desired
-  return response->appHeader.error;
+  return response.appHeader.error;
 }
 
 /**
