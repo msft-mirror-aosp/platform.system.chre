@@ -37,7 +37,6 @@ static void tryAbsurdMalloc(uint32_t hugeSize) {
     sendFailureToHost("chreHeapAlloc claimed allocation of huge size ",
                       &hugeSize);
     chreHeapFree(ptr);
-    nanoapp_testing::abort();
   }
 }
 
