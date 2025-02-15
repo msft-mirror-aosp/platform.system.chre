@@ -171,12 +171,12 @@ void App::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   // us which test to run.  We fail if it's anything else.
   if (eventType != CHRE_EVENT_MESSAGE_FROM_HOST) {
     uint32_t localEventType = eventType;
-    EXPECT_FAIL("Unexpected event type with no established test:",
-                &localEventType);
+    EXPECT_FAIL_RETURN("Unexpected event type with no established test:",
+                       &localEventType);
   }
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("Got MESSAGE_FROM_HOST not from CHRE_INSTANCE_ID:",
-                &senderInstanceId);
+    EXPECT_FAIL_RETURN("Got MESSAGE_FROM_HOST not from CHRE_INSTANCE_ID:",
+                       &senderInstanceId);
   }
   createTest(eventData);
 }
@@ -239,7 +239,8 @@ void App::createTest(const void *eventData) {
 #undef CASE
 
     default:
-      EXPECT_FAIL("Unexpected message type:", &(data->reservedMessageType));
+      EXPECT_FAIL_RETURN("Unexpected message type:",
+                         &(data->reservedMessageType));
   }
 
   if (mCurrentTest != nullptr) {

@@ -45,12 +45,13 @@ static ChunkAllocator<kAllocSize, 4> gChunkAlloc;
 static void freeChunkAllocMessage(void *message, size_t messageSize) {
   if (messageSize > kAllocSize) {
     uint32_t localSize = uint32_t(messageSize);
-    EXPECT_FAIL("freeChunkAllocMessage given oversized message:", &localSize);
+    EXPECT_FAIL_RETURN("freeChunkAllocMessage given oversized message:",
+                       &localSize);
   }
   if (!gChunkAlloc.free(message)) {
     uint32_t localPtr =
         reinterpret_cast<size_t>(message) & UINT32_C(0xFFFFFFFF);
-    EXPECT_FAIL("freeChunkAllocMessage given bad pointer:", &localPtr);
+    EXPECT_FAIL_RETURN("freeChunkAllocMessage given bad pointer:", &localPtr);
   }
 }
 
@@ -58,7 +59,7 @@ static void freeHeapMessage(void *message, size_t /* messageSize */) {
   if (gChunkAlloc.contains(message)) {
     uint32_t localPtr =
         reinterpret_cast<size_t>(message) & UINT32_C(0xFFFFFFFF);
-    EXPECT_FAIL("freeHeapMessage given ChunkAlloc pointer:", &localPtr);
+    EXPECT_FAIL_RETURN("freeHeapMessage given ChunkAlloc pointer:", &localPtr);
   }
   chreHeapFree(message);
 }

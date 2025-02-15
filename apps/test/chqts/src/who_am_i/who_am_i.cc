@@ -44,7 +44,7 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
     auto *msg = static_cast<const chreMessageFromHostData *>(eventData);
 
     if (senderInstanceId != CHRE_INSTANCE_ID) {
-      EXPECT_FAIL("Invalid sender instance ID:", &senderInstanceId);
+      EXPECT_FAIL_RETURN("Invalid sender instance ID:", &senderInstanceId);
     }
 
     messageBuffer[0] = (msg->hostEndpoint & 0xff00) >> 8;
@@ -53,7 +53,7 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
                                        sizeof(messageBuffer), msg->messageType,
                                        msg->hostEndpoint,
                                        nullptr /* messageFreeCallback */)) {
-      EXPECT_FAIL("Failed to send message to host");
+      EXPECT_FAIL_RETURN("Failed to send message to host");
     }
   }
 }

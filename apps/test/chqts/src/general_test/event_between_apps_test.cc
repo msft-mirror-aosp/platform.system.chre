@@ -43,8 +43,8 @@ EventBetweenApps0::EventBetweenApps0()
 void EventBetweenApps0::setUp(uint32_t messageSize,
                               const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Initial message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN("Initial message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   NanoappInfo info;
@@ -58,7 +58,7 @@ void EventBetweenApps0::handleEvent(uint32_t senderInstanceId,
       senderInstanceId, eventType, eventData, MessageType::kContinue,
       sizeof(app1InstanceId));
   if (mContinueCount > 0) {
-    EXPECT_FAIL("Multiple kContinue messages sent");
+    EXPECT_FAIL_RETURN("Multiple kContinue messages sent");
   }
 
   mContinueCount++;
@@ -80,8 +80,8 @@ EventBetweenApps1::EventBetweenApps1()
 void EventBetweenApps1::setUp(uint32_t messageSize,
                               const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Initial message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN("Initial message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   NanoappInfo appInfo;
@@ -98,24 +98,24 @@ void EventBetweenApps1::handleEvent(uint32_t senderInstanceId,
     if (mApp0InstanceId != CHRE_INSTANCE_ID) {
       // We know app0's instance ID can't be CHRE_INSTANCE_ID, otherwise
       // we would have aborted this test in commonInit().
-      EXPECT_FAIL("Multiple kContinue messages from host.");
+      EXPECT_FAIL_RETURN("Multiple kContinue messages from host.");
     }
     nanoapp_testing::memcpy(&mApp0InstanceId, message, sizeof(mApp0InstanceId));
     mApp0InstanceId = nanoapp_testing::littleEndianToHost(mApp0InstanceId);
 
   } else if (eventType == EventBetweenApps0::kEventType) {
     if (mReceivedInstanceId != CHRE_INSTANCE_ID) {
-      EXPECT_FAIL("Multiple messages from other nanoapp.");
+      EXPECT_FAIL_RETURN("Multiple messages from other nanoapp.");
     }
     if (senderInstanceId == CHRE_INSTANCE_ID) {
-      EXPECT_FAIL(
+      EXPECT_FAIL_RETURN(
           "Received event from other nanoapp with CHRE_INSTANCE_ID for sender");
     }
     mReceivedInstanceId = senderInstanceId;
     uint32_t magic;
     nanoapp_testing::memcpy(&magic, eventData, sizeof(magic));
     if (magic != EventBetweenApps0::kMagic) {
-      EXPECT_FAIL("Got incorrect magic data: ", &magic);
+      EXPECT_FAIL_RETURN("Got incorrect magic data: ", &magic);
     }
 
   } else {
@@ -127,8 +127,8 @@ void EventBetweenApps1::handleEvent(uint32_t senderInstanceId,
     if (mApp0InstanceId == mReceivedInstanceId) {
       sendSuccessToHost();
     } else {
-      EXPECT_FAIL("Got bad sender instance ID for nanoapp event: ",
-                  &mReceivedInstanceId);
+      EXPECT_FAIL_RETURN("Got bad sender instance ID for nanoapp event: ",
+                         &mReceivedInstanceId);
     }
   }
 }

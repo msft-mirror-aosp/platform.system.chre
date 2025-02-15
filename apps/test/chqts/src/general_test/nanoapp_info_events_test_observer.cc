@@ -90,15 +90,15 @@ void NanoAppInfoEventsTestObserver::processStartStopHistory(
   }
 
   if (startCount > 1) {
-    EXPECT_FAIL("Received too many Start events");
+    EXPECT_FAIL_RETURN("Received too many Start events");
   } else if (startCount == 0) {
-    EXPECT_FAIL("Did not receive Start event");
+    EXPECT_FAIL_RETURN("Did not receive Start event");
   } else if (stopCount > 1) {
-    EXPECT_FAIL("Received too many Stop events");
+    EXPECT_FAIL_RETURN("Received too many Stop events");
   } else if (stopCount == 0) {
-    EXPECT_FAIL("Did not receive Stop event");
+    EXPECT_FAIL_RETURN("Did not receive Stop event");
   } else if (!eventsOrdered) {
-    EXPECT_FAIL("Start and Stop events were not in order");
+    EXPECT_FAIL_RETURN("Start and Stop events were not in order");
   } else {
     nanoapp_testing::sendSuccessToHost();
   }

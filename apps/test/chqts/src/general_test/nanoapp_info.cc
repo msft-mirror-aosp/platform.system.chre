@@ -34,7 +34,7 @@ struct AppInfo {
 NanoappInfo::NanoappInfo()
     : mAppId(chreGetAppId()), mInstanceId(chreGetInstanceId()) {
   if (mInstanceId == CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("Given CHRE_INSTANCE_ID for my instance ID");
+    EXPECT_FAIL_RETURN("Given CHRE_INSTANCE_ID for my instance ID");
   }
 }
 

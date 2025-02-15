@@ -84,23 +84,23 @@ constexpr uint16_t kEventType = CHRE_EVENT_FIRST_USER_VALUE;
 static void checkSelfEvent(uint16_t eventType, const uint32_t *eventData) {
   if (eventType != kEventType) {
     uint32_t e = eventType;
-    EXPECT_FAIL("Event from self, bad event type:", &e);
+    EXPECT_FAIL_RETURN("Event from self, bad event type:", &e);
   }
   if (eventData == nullptr) {
-    EXPECT_FAIL("Event from self, null data");
+    EXPECT_FAIL_RETURN("Event from self, null data");
   }
   if (*eventData != gInstanceId) {
-    EXPECT_FAIL("Event from self, bad data:", eventData);
+    EXPECT_FAIL_RETURN("Event from self, bad data:", eventData);
   }
   gTestSuccessMarker.markStageAndSuccessOnFinish(BUSY_STARTUP_STAGE_SELF_EVENT);
 }
 
 static void checkTimerEvent(const uint32_t *eventData) {
   if (eventData == nullptr) {
-    EXPECT_FAIL("TimerEvent, null data");
+    EXPECT_FAIL_RETURN("TimerEvent, null data");
   }
   if (*eventData != gInstanceId) {
-    EXPECT_FAIL("TimerEvent, bad data:", eventData);
+    EXPECT_FAIL_RETURN("TimerEvent, bad data:", eventData);
   }
   gTestSuccessMarker.markStageAndSuccessOnFinish(BUSY_STARTUP_STAGE_TIMER);
 }
@@ -109,25 +109,25 @@ static void checkSensorEvent(const void *eventData) {
   const chreSensorDataHeader *header =
       static_cast<const chreSensorDataHeader *>(eventData);
   if (header == nullptr) {
-    EXPECT_FAIL("sensorEvent, null data");
+    EXPECT_FAIL_RETURN("sensorEvent, null data");
   }
   if (header->sensorHandle != gSensorHandle) {
-    EXPECT_FAIL("sensorEvent for wrong handle", &header->sensorHandle);
+    EXPECT_FAIL_RETURN("sensorEvent for wrong handle", &header->sensorHandle);
   }
   if (header->readingCount == 0) {
-    EXPECT_FAIL("sensorEvent has readingCount of 0");
+    EXPECT_FAIL_RETURN("sensorEvent has readingCount of 0");
   }
   if (header->reserved != 0) {
-    EXPECT_FAIL("sensorEvent has non-zero reserved field");
+    EXPECT_FAIL_RETURN("sensorEvent has non-zero reserved field");
   }
 
   if (chreGetApiVersion() < CHRE_API_VERSION_1_3) {
     if (header->accuracy != 0) {
-      EXPECT_FAIL("sensorEvent has non-zero reserved field");
+      EXPECT_FAIL_RETURN("sensorEvent has non-zero reserved field");
     }
   } else if (header->accuracy > CHRE_SENSOR_ACCURACY_HIGH) {
-    EXPECT_FAIL_UINT8("Sensor accuracy is not within valid range: ",
-                      header->accuracy);
+    EXPECT_FAIL_RETURN_UINT8("Sensor accuracy is not within valid range: ",
+                             header->accuracy);
   }
 
   gTestSuccessMarker.markStageAndSuccessOnFinish(BUSY_STARTUP_STAGE_SENSOR);
@@ -136,7 +136,7 @@ static void checkSensorEvent(const void *eventData) {
 extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
                                    uint16_t eventType, const void *eventData) {
   if (gInMethod) {
-    EXPECT_FAIL("CHRE reentered nanoapp");
+    EXPECT_FAIL_RETURN("CHRE reentered nanoapp");
   }
   gInMethod = true;
   const uint32_t *intData = static_cast<const uint32_t *>(eventData);
@@ -154,10 +154,10 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
       // sensor.  We just ignore it.
     } else {
       uint32_t e = eventType;
-      EXPECT_FAIL("Unexpected event from CHRE:", &e);
+      EXPECT_FAIL_RETURN("Unexpected event from CHRE:", &e);
     }
   } else {
-    EXPECT_FAIL("Unexpected senderInstanceId", &senderInstanceId);
+    EXPECT_FAIL_RETURN("Unexpected senderInstanceId", &senderInstanceId);
   }
   gInMethod = false;
 }
@@ -221,12 +221,12 @@ extern "C" bool nanoappStart(void) {
 extern "C" void nanoappEnd(void) {
   if (!chreSensorConfigureModeOnly(gSensorHandle,
                                    CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-    EXPECT_FAIL("Unable to configure sensor mode to DONE");
+    EXPECT_FAIL_RETURN("Unable to configure sensor mode to DONE");
   }
 
   if (gInMethod) {
     // This message won't be noticed by the host; but hopefully the
     // fatal failure prevents a clean unload of the app and fails the test.
-    EXPECT_FAIL("nanoappEnd called in reentrant manner");
+    EXPECT_FAIL_RETURN("nanoappEnd called in reentrant manner");
   }
 }

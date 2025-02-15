@@ -25,8 +25,8 @@ namespace nanoapp_testing {
 
 TestSuccessMarker::TestSuccessMarker(uint32_t numStages) {
   if (numStages > 32) {
-    EXPECT_FAIL("Total number of stage should be less than 33, got %d",
-                &numStages);
+    EXPECT_FAIL_RETURN("Total number of stage should be less than 33, got %d",
+                       &numStages);
   }
   mAllFinished = (UINT64_C(1) << numStages) - 1;
 }
@@ -34,7 +34,7 @@ TestSuccessMarker::TestSuccessMarker(uint32_t numStages) {
 void TestSuccessMarker::markStage(uint32_t stage) {
   uint32_t finishedBit = (1 << stage);
   if ((mAllFinished & finishedBit) == 0) {
-    EXPECT_FAIL("markSuccess invalid stage", &stage);
+    EXPECT_FAIL_RETURN("markSuccess invalid stage", &stage);
   }
   if ((mFinishedBitmask & finishedBit) == 0) {
     LOGD("Stage %" PRIu32 " succeeded", stage);

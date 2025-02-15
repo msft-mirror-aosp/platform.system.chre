@@ -47,13 +47,13 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
     auto *msg = static_cast<const chreMessageFromHostData *>(eventData);
 
     if (senderInstanceId != CHRE_INSTANCE_ID) {
-      EXPECT_FAIL("Invalid sender instance ID:", &senderInstanceId);
+      EXPECT_FAIL_RETURN("Invalid sender instance ID:", &senderInstanceId);
     }
 
     uint8_t *messageBuffer =
         static_cast<uint8_t *>(chreHeapAlloc(msg->messageSize));
     if (msg->messageSize != 0 && messageBuffer == nullptr) {
-      EXPECT_FAIL("Failed to allocate memory for message buffer");
+      EXPECT_FAIL_RETURN("Failed to allocate memory for message buffer");
     }
 
     std::memcpy(static_cast<void *>(messageBuffer),
@@ -62,7 +62,7 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
     if (!chreSendMessageToHostEndpoint(
             static_cast<void *>(messageBuffer), msg->messageSize,
             msg->messageType, msg->hostEndpoint, messageFreeCallback)) {
-      EXPECT_FAIL("Failed to send message to host");
+      EXPECT_FAIL_RETURN("Failed to send message to host");
     }
   }
 }

@@ -68,12 +68,12 @@ uint8_t SendEventTest::sCallbacksInvoked = 0;
 template <uint8_t kCallbackIndex>
 void SendEventTest::completeCallback(uint16_t eventType, void *data) {
   if (sInMethod) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "completeCallback called while another nanoapp method is running.");
   }
   sInMethod = true;
   if ((data == nullptr) || (data == kOddData)) {
-    EXPECT_FAIL("completeCallback called with nullptr or odd data.");
+    EXPECT_FAIL_RETURN("completeCallback called with nullptr or odd data.");
   }
   uint32_t num = *(reinterpret_cast<uint32_t *>(data));
   uint16_t expectedEventType = 0xFFFF;
@@ -96,23 +96,23 @@ void SendEventTest::completeCallback(uint16_t eventType, void *data) {
       expectedCallbackIndex = 1;
       break;
     default:
-      EXPECT_FAIL("completeCallback given bad data.", &num);
+      EXPECT_FAIL_RETURN("completeCallback given bad data.", &num);
   }
   if (expectedEventType != eventType) {
-    EXPECT_FAIL("completeCallback bad/eventType mismatch.");
+    EXPECT_FAIL_RETURN("completeCallback bad/eventType mismatch.");
   }
   if (expectedCallbackIndex != kCallbackIndex) {
-    EXPECT_FAIL("Incorrect callback function called.");
+    EXPECT_FAIL_RETURN("Incorrect callback function called.");
   }
   uint8_t mask = static_cast<uint8_t>(1 << num);
   if ((sCallbacksInvoked & mask) != 0) {
-    EXPECT_FAIL("Complete callback invoked multiple times for ", &num);
+    EXPECT_FAIL_RETURN("Complete callback invoked multiple times for ", &num);
   }
   sCallbacksInvoked |= mask;
 
   if (!chreSendEvent(kEventTypeCallback, nullptr, nullptr,
                      chreGetInstanceId())) {
-    EXPECT_FAIL("Failed chreSendEvent in callback.");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent in callback.");
   }
   sInMethod = false;
 }
@@ -130,8 +130,8 @@ SendEventTest::SendEventTest() : Test(CHRE_API_VERSION_1_0), mNextNum(0) {}
 void SendEventTest::setUp(uint32_t messageSize, const void * /* message */) {
   sInMethod = true;
   if (messageSize != 0) {
-    EXPECT_FAIL("SendEvent message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN("SendEvent message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   const uint32_t id = chreGetInstanceId();
@@ -141,42 +141,42 @@ void SendEventTest::setUp(uint32_t messageSize, const void * /* message */) {
 
   // num: 0
   if (!chreSendEvent(kEventType0, &mData[0], completeCallback0, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 0");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 0");
   }
 
   // num: 1
   if (!chreSendEvent(kEventType0, &mData[1], completeCallback1, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 1");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 1");
   }
 
   // num: 2
   if (!chreSendEvent(kEventType1, &mData[2], completeCallback0, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 2");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 2");
   }
 
   // num: 3
   if (!chreSendEvent(kEventType1, &mData[3], completeCallback1, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 3");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 3");
   }
 
   // num: 4
   if (!chreSendEvent(kEventType0, &mData[4], nullptr, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 4");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 4");
   }
 
   // num: 5
   if (!chreSendEvent(kEventType1, &mData[5], nullptr, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 5");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 5");
   }
 
   // num: 6
   if (!chreSendEvent(kEventType0, nullptr, nullptr, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 6");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 6");
   }
 
   // num: 7
   if (!chreSendEvent(kEventType1, kOddData, nullptr, id)) {
-    EXPECT_FAIL("Failed chreSendEvent num 7");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent num 7");
   }
 
   sInMethod = false;
@@ -185,12 +185,13 @@ void SendEventTest::setUp(uint32_t messageSize, const void * /* message */) {
 void SendEventTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                 const void *eventData) {
   if (sInMethod) {
-    EXPECT_FAIL("handleEvent invoked while another nanoapp method is running");
+    EXPECT_FAIL_RETURN(
+        "handleEvent invoked while another nanoapp method is running");
   }
   sInMethod = true;
   if (senderInstanceId != chreGetInstanceId()) {
-    EXPECT_FAIL("handleEvent got event from unexpected sender:",
-                &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
 
   if (mNextNum < 8) {
@@ -220,15 +221,15 @@ void SendEventTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
     }
 
     if (expectedEventType != eventType) {
-      EXPECT_FAIL("Incorrect event type sent for num ", &mNextNum);
+      EXPECT_FAIL_RETURN("Incorrect event type sent for num ", &mNextNum);
     }
     if (expectedData != eventData) {
-      EXPECT_FAIL("Incorrect data sent for num ", &mNextNum);
+      EXPECT_FAIL_RETURN("Incorrect data sent for num ", &mNextNum);
     }
 
   } else {
     if (eventType != kEventTypeCallback) {
-      EXPECT_FAIL("Unexpected event type for num ", &mNextNum);
+      EXPECT_FAIL_RETURN("Unexpected event type for num ", &mNextNum);
     }
     if (mNextNum == 11) {
       // This was our last callback.  Everything is good.

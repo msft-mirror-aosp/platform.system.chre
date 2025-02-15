@@ -27,7 +27,8 @@ HelloWorldTest::HelloWorldTest() : Test(CHRE_API_VERSION_1_0) {}
 
 void HelloWorldTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     sendSuccessToHost();
   }

@@ -98,21 +98,21 @@ template <uint8_t kCallbackIndex>
 void SendMessageToHostTest::smallMessageCallback(void *message,
                                                  size_t messageSize) {
   if (sInMethod) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "smallMessageCallback called while another nanoapp method is running");
   }
   sInMethod = true;
   if (message == nullptr) {
-    EXPECT_FAIL("smallMessageCallback given null message");
+    EXPECT_FAIL_RETURN("smallMessageCallback given null message");
   }
   if (messageSize != kSmallMessageSize) {
     uint32_t size = static_cast<uint32_t>(messageSize);
-    EXPECT_FAIL("smallMessageCallback given bad messageSize:", &size);
+    EXPECT_FAIL_RETURN("smallMessageCallback given bad messageSize:", &size);
   }
   const uint8_t *msg = static_cast<const uint8_t *>(message);
   for (size_t i = 0; i < messageSize; i++) {
     if (msg[i] != kDataByte) {
-      EXPECT_FAIL("Corrupt data in smallMessageCallback");
+      EXPECT_FAIL_RETURN("Corrupt data in smallMessageCallback");
     }
   }
 
@@ -127,13 +127,13 @@ void SendMessageToHostTest::smallMessageCallback(void *message,
       expectedCallbackIndex = 1;
       break;
     case 2:
-      EXPECT_FAIL("callback invoked when null callback given");
+      EXPECT_FAIL_RETURN("callback invoked when null callback given");
       break;
     default:
       sendInternalFailureToHost("Invalid index", &stage);
   }
   if (expectedCallbackIndex != kCallbackIndex) {
-    EXPECT_FAIL("Incorrect callback function called.");
+    EXPECT_FAIL_RETURN("Incorrect callback function called.");
   }
 
   markSuccess(stage);
@@ -165,12 +165,12 @@ uint32_t SendMessageToHostTest::getSmallDataIndex(const uint8_t *data) {
 void SendMessageToHostTest::largeMessageCallback(void *message,
                                                  size_t messageSize) {
   if (sInMethod) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "largeMessageCallback called while another nanoapp method is running");
   }
   sInMethod = true;
   if (message == nullptr) {
-    EXPECT_FAIL("largeMessageCallback given null message");
+    EXPECT_FAIL_RETURN("largeMessageCallback given null message");
   }
   uint32_t index = 2;
   if (message == sLargeMessageData[0]) {
@@ -178,18 +178,18 @@ void SendMessageToHostTest::largeMessageCallback(void *message,
   } else if (message == sLargeMessageData[1]) {
     index = 1;
   } else {
-    EXPECT_FAIL("largeMessageCallback given bad message");
+    EXPECT_FAIL_RETURN("largeMessageCallback given bad message");
   }
 
   size_t expectedMessageSize = index == 0 ? chreGetMessageToHostMaxSize() + 1
                                           : chreGetMessageToHostMaxSize();
   if (messageSize != expectedMessageSize) {
-    EXPECT_FAIL("largeMessageCallback given incorrect messageSize");
+    EXPECT_FAIL_RETURN("largeMessageCallback given incorrect messageSize");
   }
   const uint8_t *msg = static_cast<const uint8_t *>(message);
   for (size_t i = 0; i < messageSize; i++) {
     if (msg[i] != kDataByte) {
-      EXPECT_FAIL("Corrupt data in largeMessageCallback");
+      EXPECT_FAIL_RETURN("Corrupt data in largeMessageCallback");
     }
   }
   chreHeapFree(sLargeMessageData[index]);
@@ -203,10 +203,10 @@ void SendMessageToHostTest::markSuccess(uint32_t stage) {
   LOGD("Stage %" PRIu32 " succeeded", stage);
   uint32_t finishedBit = (1 << stage);
   if (sFinishedBitmask & finishedBit) {
-    EXPECT_FAIL("callback called multiple times for stage:", &stage);
+    EXPECT_FAIL_RETURN("callback called multiple times for stage:", &stage);
   }
   if ((kAllFinished & finishedBit) == 0) {
-    EXPECT_FAIL("markSuccess bad stage", &stage);
+    EXPECT_FAIL_RETURN("markSuccess bad stage", &stage);
   }
   sFinishedBitmask |= finishedBit;
   if (sFinishedBitmask == kAllFinished) {
@@ -223,7 +223,7 @@ void SendMessageToHostTest::prepTestMemory() {
                                 : chreGetMessageToHostMaxSize();
     sLargeMessageData[i] = chreHeapAlloc(messageSize);
     if (sLargeMessageData[i] == nullptr) {
-      EXPECT_FAIL("Insufficient heap memory for test");
+      EXPECT_FAIL_RETURN("Insufficient heap memory for test");
     }
     nanoapp_testing::memset(sLargeMessageData[i], kDataByte, messageSize);
   }
@@ -276,8 +276,9 @@ void SendMessageToHostTest::setUp(uint32_t messageSize,
 
   sInMethod = true;
   if (messageSize != 0) {
-    EXPECT_FAIL("SendMessageToHost message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN(
+        "SendMessageToHost message expects 0 additional bytes, got ",
+        &messageSize);
   }
 
   prepTestMemory();
@@ -285,19 +286,19 @@ void SendMessageToHostTest::setUp(uint32_t messageSize,
   // stage: 0
   if (!sendMessageToHost(sSmallMessageData[0], kSmallMessageSize,
                          kUntestedMessageType, smallMessageCallback0)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 0");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 0");
   }
 
   // stage: 1
   if (!sendMessageToHost(sSmallMessageData[1], kSmallMessageSize,
                          kUntestedMessageType, smallMessageCallback1)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 1");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 1");
   }
 
   // stage: 2
   if (!sendMessageToHost(sSmallMessageData[2], kSmallMessageSize,
                          kUntestedMessageType, nullptr)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 2");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 2");
   }
   // There's no callback, so we mark this as a success.
   markSuccess(2);
@@ -305,12 +306,12 @@ void SendMessageToHostTest::setUp(uint32_t messageSize,
   // stage: 3
   if (!sendMessageToHost(sSmallMessageData[3], kSmallMessageSize,
                          kUntestedMessageType, smallMessageCallback0)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 3");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 3");
   }
 
   // stage: 4
   if (!sendMessageToHost(nullptr, 0, kUntestedMessageType, nullptr)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 4");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 4");
   }
   // There's no callback, so we mark this as a success.
   markSuccess(4);
@@ -323,13 +324,14 @@ void SendMessageToHostTest::setUp(uint32_t messageSize,
   // stage: 6
   if (sendMessageToHost(sLargeMessageData[0], chreGetMessageToHostMaxSize() + 1,
                         kUntestedMessageType, largeMessageCallback)) {
-    EXPECT_FAIL("Oversized data to chreSendMessageToHost claimed success");
+    EXPECT_FAIL_RETURN(
+        "Oversized data to chreSendMessageToHost claimed success");
   }
 
   // stage: 7
   if (!sendMessageToHost(sLargeMessageData[1], chreGetMessageToHostMaxSize(),
                          kUntestedMessageType, largeMessageCallback)) {
-    EXPECT_FAIL("Failed chreSendMessageToHost stage 7");
+    EXPECT_FAIL_RETURN("Failed chreSendMessageToHost stage 7");
   }
 
   sInMethod = false;
@@ -339,15 +341,16 @@ void SendMessageToHostTest::handleEvent(uint32_t senderInstanceId,
                                         uint16_t eventType,
                                         const void *eventData) {
   if (sInMethod) {
-    EXPECT_FAIL("handleEvent invoked while another nanoapp method is running");
+    EXPECT_FAIL_RETURN(
+        "handleEvent invoked while another nanoapp method is running");
   }
   sInMethod = true;
 
   // TODO(b/32114261): Use getMessageDataFromHostEvent().  We can't do
   //     that now because our messageType is probably wrong.
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("handleEvent got event from unexpected sender:",
-                &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventType != CHRE_EVENT_MESSAGE_FROM_HOST) {
     unexpectedEvent(eventType);
@@ -356,8 +359,8 @@ void SendMessageToHostTest::handleEvent(uint32_t senderInstanceId,
   auto dataStruct = static_cast<const chreMessageFromHostData *>(eventData);
   // TODO(b/32114261): Test the message type.
   if (dataStruct->messageSize != 0) {
-    EXPECT_FAIL("handleEvent got non-zero message size",
-                &dataStruct->messageSize);
+    EXPECT_FAIL_RETURN("handleEvent got non-zero message size",
+                       &dataStruct->messageSize);
   }
   // We don't test dataStruct->message.  We don't require this to be
   // nullptr.  If a CHRE chooses to deal in 0-sized memory blocks, that's

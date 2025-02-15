@@ -33,13 +33,13 @@ GetTimeTest::GetTimeTest() : Test(CHRE_API_VERSION_1_0), mContinueCount(0) {}
 
 void GetTimeTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("GetTime message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN("GetTime message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   uint64_t firstTime = chreGetTime();
   if (firstTime == UINT64_C(0)) {
-    EXPECT_FAIL("chreGetTime() gave 0 well after system boot.");
+    EXPECT_FAIL_RETURN("chreGetTime() gave 0 well after system boot.");
   }
 
   uint64_t prevTime = firstTime;
@@ -53,14 +53,14 @@ void GetTimeTest::setUp(uint32_t messageSize, const void * /* message */) {
     // We don't require this to have increased, because maybe we're
     // on a relatively fast processor, or have a low resolution clock.
     if (nextTime < prevTime) {
-      EXPECT_FAIL("chreGetTime() is not monotonically increasing");
+      EXPECT_FAIL_RETURN("chreGetTime() is not monotonically increasing");
     }
 
     prevTime = nextTime;
   }
 
   if (prevTime == firstTime) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "chreGetTime() is not increasing after a large number of calls");
   }
 
@@ -76,7 +76,7 @@ void GetTimeTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   getMessageDataFromHostEvent(senderInstanceId, eventType, eventData,
                               MessageType::kContinue, 0);
   if (mContinueCount > 0) {
-    EXPECT_FAIL("Multiple kContinue messages sent");
+    EXPECT_FAIL_RETURN("Multiple kContinue messages sent");
   }
 
   mContinueCount++;

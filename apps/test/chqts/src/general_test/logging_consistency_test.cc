@@ -39,8 +39,9 @@ LoggingConsistencyTest::LoggingConsistencyTest() : Test(CHRE_API_VERSION_1_0) {}
 void LoggingConsistencyTest::setUp(uint32_t messageSize,
                                    const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("LoggingConsistency message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN(
+        "LoggingConsistency message expects 0 additional bytes, got ",
+        &messageSize);
   }
 
   // Test each warning level.

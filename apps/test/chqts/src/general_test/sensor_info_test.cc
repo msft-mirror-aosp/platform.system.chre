@@ -24,15 +24,16 @@ SensorInfoTest::SensorInfoTest() : Test(CHRE_API_VERSION_1_1) {}
 
 void SensorInfoTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else if (!chreSensorFindDefault(CHRE_SENSOR_TYPE_ACCELEROMETER,
                                     &mSensorHandle)) {
-    EXPECT_FAIL("CHRE implementation does not have an accelerometer");
+    EXPECT_FAIL_RETURN("CHRE implementation does not have an accelerometer");
   } else {
     struct chreSensorInfo info;
 
     if (!chreGetSensorInfo(mSensorHandle, &info)) {
-      EXPECT_FAIL("Failed to gather sensor info");
+      EXPECT_FAIL_RETURN("Failed to gather sensor info");
     } else {
       mCompleted = true;
       validateSensorInfo(info);
@@ -43,16 +44,16 @@ void SensorInfoTest::setUp(uint32_t messageSize, const void * /* message */) {
 void SensorInfoTest::validateSensorInfo(
     const struct chreSensorInfo &info) const {
   if ((mApiVersion < CHRE_API_VERSION_1_1) && (info.minInterval != 0)) {
-    EXPECT_FAIL("Sensor minimum interval is non-zero");
+    EXPECT_FAIL_RETURN("Sensor minimum interval is non-zero");
   } else if (info.minInterval == 0) {
-    EXPECT_FAIL("Sensor minimum interval is unknown");
+    EXPECT_FAIL_RETURN("Sensor minimum interval is unknown");
   } else if (!chreSensorConfigure(
                  mSensorHandle, CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS,
                  info.minInterval, CHRE_SENSOR_LATENCY_DEFAULT)) {
-    EXPECT_FAIL("Sensor failed configuration with minimum interval");
+    EXPECT_FAIL_RETURN("Sensor failed configuration with minimum interval");
   } else if (!chreSensorConfigureModeOnly(mSensorHandle,
                                           CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-    EXPECT_FAIL("Unable to configure sensor mode to DONE");
+    EXPECT_FAIL_RETURN("Unable to configure sensor mode to DONE");
   } else {
     nanoapp_testing::sendSuccessToHost();
   }

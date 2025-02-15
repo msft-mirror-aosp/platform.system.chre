@@ -38,16 +38,16 @@ bool CellInfoBase::isBoundedInt64(int64_t value, int64_t lower, int64_t upper,
 
 void CellInfoBase::sendFatalFailureInt32(const char *message, int32_t value) {
   uint32_t val = static_cast<uint32_t>(value);
-  EXPECT_FAIL(message, &val);
+  EXPECT_FAIL_RETURN(message, &val);
 }
 
 void CellInfoBase::sendFatalFailureUint8(const char *message, uint8_t value) {
   uint32_t val = value;
-  EXPECT_FAIL(message, &val);
+  EXPECT_FAIL_RETURN(message, &val);
 }
 
 void CellInfoBase::sendFatalFailure(const char *message) {
-  EXPECT_FAIL(message, nullptr /* value */);
+  EXPECT_FAIL_RETURN(message, nullptr /* value */);
 }
 
 }  // namespace general_test

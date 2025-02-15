@@ -26,7 +26,8 @@ WifiCapabilitiesTest::WifiCapabilitiesTest() : Test(CHRE_API_VERSION_1_1) {}
 void WifiCapabilitiesTest::setUp(uint32_t messageSize,
                                  const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     uint32_t allCapabilities = CHRE_WIFI_CAPABILITIES_NONE;
 
@@ -48,10 +49,10 @@ void WifiCapabilitiesTest::setUp(uint32_t messageSize,
     // Clear out known capabilities, any remaining are unknown
     if ((capabilities & ~allCapabilities) != 0) {
       if (mApiVersion > CHRE_API_VERSION_1_2) {
-        EXPECT_FAIL("New version with unknown capabilities encountered:",
-                    &capabilities);
+        EXPECT_FAIL_RETURN("New version with unknown capabilities encountered:",
+                           &capabilities);
       } else {
-        EXPECT_FAIL("Received unexpected capabilities:", &capabilities);
+        EXPECT_FAIL_RETURN("Received unexpected capabilities:", &capabilities);
       }
     } else {
       nanoapp_testing::sendSuccessToHost();

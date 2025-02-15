@@ -78,7 +78,7 @@ static void testMaxAlignment(uint32_t zero) {
   mfArray[1] = static_cast<MyFloat>(zero) + FLOAT_C(3.0);
   mfArray[2] = mfArray[0] / mfArray[1];
   if ((mfArray[0] * mfArray[1] + mfArray[2]) / FLOAT_C(3.0) == FLOAT_C(1.0)) {
-    EXPECT_FAIL("Float math is wrong");
+    EXPECT_FAIL_RETURN("Float math is wrong");
   }
 
   constexpr size_t kUllSize = sizeof(unsigned long long);
@@ -95,7 +95,7 @@ static void testMaxAlignment(uint32_t zero) {
   unsigned long long result = ullArray[2] / 12345ULL;
   if (((kUllSize == 8) && (result != kExpected)) ||
       ((kUllSize > 8) && (result <= kExpected))) {
-    EXPECT_FAIL("Long long math is wrong");
+    EXPECT_FAIL_RETURN("Long long math is wrong");
   }
 }
 #endif  // CHRE_CUSTOM_MAX_ALIGNMENT
@@ -108,8 +108,9 @@ void SimpleHeapAllocTest::setUp(uint32_t messageSize,
   nanoapp_testing::memset(mPtrs, 0, sizeof(mPtrs));
 
   if (messageSize != 0) {
-    EXPECT_FAIL("SimpleHeapAlloc message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN(
+        "SimpleHeapAlloc message expects 0 additional bytes, got ",
+        &messageSize);
   }
 
   // Allocate random small-ish sizes.
@@ -124,7 +125,7 @@ void SimpleHeapAllocTest::setUp(uint32_t messageSize,
   // We want to mix in a free among the allocs, just to make sure there
   // isn't some issue there.
   if (mPtrs[2] == nullptr) {
-    EXPECT_FAIL("Failed first allocation of mPtrs[2]");
+    EXPECT_FAIL_RETURN("Failed first allocation of mPtrs[2]");
   } else {
     chreHeapFree(mPtrs[2]);
   }
@@ -136,11 +137,11 @@ void SimpleHeapAllocTest::setUp(uint32_t messageSize,
       // If we're getting this failure, but convinced the CHRE is
       // correct, make sure that we're actually performing an allocation
       // for each element of mPtrs.
-      EXPECT_FAIL("Failed to allocate index ", &i);
+      EXPECT_FAIL_RETURN("Failed to allocate index ", &i);
     }
     const uintptr_t ptrValue = reinterpret_cast<uintptr_t>(mPtrs[i]);
     if ((ptrValue & (kMaxAlignment - 1)) != 0) {
-      EXPECT_FAIL("Misaligned allocation at index ", &i);
+      EXPECT_FAIL_RETURN("Misaligned allocation at index ", &i);
     }
     // Make sure all of the bytes are addressable.  Our assumption
     // is we'll crash here if that's not the case.  Not the most
@@ -163,7 +164,7 @@ void SimpleHeapAllocTest::handleEvent(uint32_t senderInstanceId,
   getMessageDataFromHostEvent(senderInstanceId, eventType, eventData,
                               MessageType::kContinue, 0);
   if (mHasFreed) {
-    EXPECT_FAIL("Multiple kContinue messages sent");
+    EXPECT_FAIL_RETURN("Multiple kContinue messages sent");
   }
 
   chreHeapFree(mPtrs[3]);

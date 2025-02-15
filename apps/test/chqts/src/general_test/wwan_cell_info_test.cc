@@ -46,13 +46,13 @@ void WwanCellInfoTest::setUp(uint32_t messageSize, const void *message) {
   if ((chreWwanGetCapabilities() & CHRE_WWAN_GET_CELL_INFO) == 0) {
     sendMessageToHost(nanoapp_testing::MessageType::kSkipped);
   } else if (!chreWwanGetCellInfoAsync(&mTimerHandle)) {
-    EXPECT_FAIL("chreWwanGetCellInfo failed unexpectedly");
+    EXPECT_FAIL_RETURN("chreWwanGetCellInfo failed unexpectedly");
   } else {
     mTimerHandle = chreTimerSet(CHRE_ASYNC_RESULT_TIMEOUT_NS, &mTimerHandle,
                                 true /* oneShot */);
 
     if (mTimerHandle == CHRE_TIMER_INVALID) {
-      EXPECT_FAIL("Unable to set timer for automatic failure");
+      EXPECT_FAIL_RETURN("Unable to set timer for automatic failure");
     }
   }
 }
@@ -66,16 +66,16 @@ void WwanCellInfoTest::handleEvent(uint32_t senderInstanceId,
                                    uint16_t eventType, const void *eventData) {
   // The only expected message is from the async call
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("handleEvent received event from unexpected sender:",
-                &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent received event from unexpected sender:",
+                       &senderInstanceId);
   } else if (eventType == CHRE_EVENT_WWAN_CELL_INFO_RESULT) {
     cancelTimer();
     validateCellInfoResult(eventData);
   } else if (eventType == CHRE_EVENT_TIMER) {
-    EXPECT_FAIL("chreWwanGetCellInfo did not return data in time");
+    EXPECT_FAIL_RETURN("chreWwanGetCellInfo did not return data in time");
   } else {
     uint32_t type = eventType;
-    EXPECT_FAIL("handleEvent received an unexpected eventType:", &type);
+    EXPECT_FAIL_RETURN("handleEvent received an unexpected eventType:", &type);
   }
 }
 
@@ -137,17 +137,17 @@ void WwanCellInfoTest::validateCellInfoResult(const void *eventData) const {
       static_cast<const chreWwanCellInfoResult *>(eventData);
 
   if (eventData == nullptr) {
-    EXPECT_FAIL("Received eventData is null");
+    EXPECT_FAIL_RETURN("Received eventData is null");
   } else if (result->version != CHRE_WWAN_CELL_INFO_RESULT_VERSION) {
-    EXPECT_FAIL("Received version is unexpected value");
+    EXPECT_FAIL_RETURN("Received version is unexpected value");
   } else if (result->reserved != 0) {
-    EXPECT_FAIL("Received reserved field non-zero");
+    EXPECT_FAIL_RETURN("Received reserved field non-zero");
   } else {
     const uint32_t *receivedCookie =
         static_cast<const uint32_t *>(result->cookie);
 
     if (receivedCookie != &mTimerHandle) {
-      EXPECT_FAIL("Received cookie does not match");
+      EXPECT_FAIL_RETURN("Received cookie does not match");
     } else if (result->cellInfoCount != 0) {
       validateCellInfo(result->cellInfoCount, result->cells);
     } else {

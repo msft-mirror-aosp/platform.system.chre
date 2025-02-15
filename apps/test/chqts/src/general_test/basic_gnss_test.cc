@@ -34,14 +34,14 @@ void testLocationSessionAsync() {
   if (!chreGnssLocationSessionStartAsync(1000 /* minIntervalMs */,
                                          0 /* minTimeToNextFixMs */,
                                          nullptr /* cookie */)) {
-    EXPECT_FAIL("Failed to start a location session");
+    EXPECT_FAIL_RETURN("Failed to start a location session");
   }
 }
 
 void testMeasurementSessionAsync() {
   if (!chreGnssMeasurementSessionStartAsync(1000 /* minIntervalMs */,
                                             nullptr /* cookie */)) {
-    EXPECT_FAIL("Failed to start a measurement session");
+    EXPECT_FAIL_RETURN("Failed to start a measurement session");
   }
 }
 
@@ -64,7 +64,8 @@ BasicGnssTest::BasicGnssTest() : Test(CHRE_API_VERSION_1_1) {}
 
 void BasicGnssTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     if (isCapabilitySet(CHRE_GNSS_CAPABILITIES_LOCATION)) {
       testLocationSessionAsync();
@@ -93,13 +94,13 @@ void BasicGnssTest::setUp(uint32_t messageSize, const void * /* message */) {
 
 void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
   if (!result->success) {
-    EXPECT_FAIL("Received unsuccessful GNSS async result");
+    EXPECT_FAIL_RETURN("Received unsuccessful GNSS async result");
   }
 
   switch (result->requestType) {
     case CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_START: {
       if (!chreGnssLocationSessionStopAsync(nullptr /* cookie */)) {
-        EXPECT_FAIL("Failed to stop a location session");
+        EXPECT_FAIL_RETURN("Failed to stop a location session");
       }
       break;
     }
@@ -110,7 +111,7 @@ void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
     }
     case CHRE_GNSS_REQUEST_TYPE_MEASUREMENT_SESSION_START: {
       if (!chreGnssMeasurementSessionStopAsync(nullptr /* cookie */)) {
-        EXPECT_FAIL("Failed to stop a measurement session");
+        EXPECT_FAIL_RETURN("Failed to stop a measurement session");
       }
       break;
     }
@@ -120,7 +121,7 @@ void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
       break;
     }
     default:
-      EXPECT_FAIL("Unexpected request type");
+      EXPECT_FAIL_RETURN("Unexpected request type");
       break;
   }
 }

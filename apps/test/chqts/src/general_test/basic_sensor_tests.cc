@@ -26,7 +26,7 @@ namespace general_test {
 static void checkFloat(float value, float extremeLow, float extremeHigh) {
   if ((value < extremeLow) || (value > extremeHigh)) {
     uint32_t i = static_cast<uint32_t>(value);
-    EXPECT_FAIL("Value beyond extreme.  As int:", &i);
+    EXPECT_FAIL_RETURN("Value beyond extreme.  As int:", &i);
   }
 }
 
@@ -37,7 +37,7 @@ static void checkTimestampDelta(uint32_t delta, size_t index) {
   }
   if (delta == 0) {
     uint32_t indexInt = static_cast<uint32_t>(index);
-    EXPECT_FAIL("timestampDelta was 0 for reading index ", &indexInt);
+    EXPECT_FAIL_RETURN("timestampDelta was 0 for reading index ", &indexInt);
   }
 }
 
@@ -104,11 +104,11 @@ void BasicProximityTest::confirmDataIsSane(const void *eventData) {
     // 'invalid' is a sane reading for v1.1 or lower.  But our padding should
     // always be zero'd.
     if (mApiVersion >= CHRE_API_VERSION_1_2 && data->readings[i].invalid) {
-      EXPECT_FAIL("Invalid flag must not be set for proximity");
+      EXPECT_FAIL_RETURN("Invalid flag must not be set for proximity");
     }
     if (data->readings[i].padding0 != 0) {
       uint32_t padding = data->readings[i].padding0;
-      EXPECT_FAIL("padding0 is data is non-zero:", &padding);
+      EXPECT_FAIL_RETURN("padding0 is data is non-zero:", &padding);
     }
   }
 }

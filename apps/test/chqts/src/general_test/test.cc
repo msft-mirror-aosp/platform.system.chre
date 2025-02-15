@@ -53,35 +53,36 @@ void Test::testHandleEvent(uint32_t senderInstanceId, uint16_t eventType,
 
 void Test::unexpectedEvent(uint16_t eventType) {
   uint32_t localEvent = eventType;
-  EXPECT_FAIL("Test received unexpected event:", &localEvent);
+  EXPECT_FAIL_RETURN("Test received unexpected event:", &localEvent);
 }
 
 void Test::validateChreAsyncResult(const chreAsyncResult *result,
                                    const chreAsyncRequest &request) {
   if (!result->success) {
-    EXPECT_FAIL_UINT8("chre async result error: ", result->errorCode);
+    EXPECT_FAIL_RETURN_UINT8("chre async result error: ", result->errorCode);
   }
   if (result->success && result->errorCode != CHRE_ERROR_NONE) {
-    EXPECT_FAIL_UINT8("Request was successfully processed, but got errorCode: ",
-                      result->errorCode);
+    EXPECT_FAIL_RETURN_UINT8(
+        "Request was successfully processed, but got errorCode: ",
+        result->errorCode);
   }
   if (result->reserved != 0) {
-    EXPECT_FAIL_UINT8("reserved should be 0, got: ", result->reserved);
+    EXPECT_FAIL_RETURN_UINT8("reserved should be 0, got: ", result->reserved);
   }
   if (result->cookie != request.cookie) {
     LOGE("Request cookie is %p, got %p", request.cookie, result->cookie);
-    EXPECT_FAIL("Request cookie mismatch");
+    EXPECT_FAIL_RETURN("Request cookie mismatch");
   }
   if (result->requestType != request.requestType) {
     LOGE("Request requestType is %d, got %d", request.requestType,
          result->requestType);
-    EXPECT_FAIL("Request requestType mismatch");
+    EXPECT_FAIL_RETURN("Request requestType mismatch");
   }
   if (chreGetTime() - request.requestTimeNs > request.timeoutNs) {
     uint32_t time =
         request.timeoutNs / nanoapp_testing::kOneSecondInNanoseconds;
-    EXPECT_FAIL("Did not receive chreWifiAsyncEvent within time (sec): ",
-                &time);
+    EXPECT_FAIL_RETURN("Did not receive chreWifiAsyncEvent within time (sec): ",
+                       &time);
   }
 }
 

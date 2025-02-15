@@ -88,8 +88,8 @@ BasicSensorTestBase::BasicSensorTestBase()
 void BasicSensorTestBase::setUp(uint32_t messageSize,
                                 const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Beginning message expects 0 additional bytes, got ",
-                &messageSize);
+    EXPECT_FAIL_RETURN("Beginning message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   sendStartTestMessage();
@@ -102,7 +102,7 @@ void BasicSensorTestBase::sendStartTestMessage() {
   // test, we don't start until after the class has been fully
   // constructed.
   if (!chreSendEvent(kStartEvent, nullptr, nullptr, mInstanceId)) {
-    EXPECT_FAIL("Failed chreSendEvent to begin test");
+    EXPECT_FAIL_RETURN("Failed chreSendEvent to begin test");
   }
   mInMethod = false;
 }
@@ -117,12 +117,12 @@ void BasicSensorTestBase::checkPassiveConfigure() {
     // or latency should fail.
     if (chreSensorConfigure(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
                             999)) {
-      EXPECT_FAIL(
+      EXPECT_FAIL_RETURN(
           "chreSensorConfigure() allowed passive with different latency");
     }
     if (chreSensorConfigure(mSensorHandle, mode, 999,
                             CHRE_SENSOR_LATENCY_DEFAULT)) {
-      EXPECT_FAIL(
+      EXPECT_FAIL_RETURN(
           "chreSensorConfigure() allowed passive with different interval");
     }
     // TODO: In a more in-depth test, we should test passive mode
@@ -137,11 +137,11 @@ void BasicSensorTestBase::checkPassiveConfigure() {
         chreSensorConfigure(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
                             kOneSecondInNanoseconds);
     if (mSupportsPassiveMode && !configureSuccess) {
-      EXPECT_FAIL(
+      EXPECT_FAIL_RETURN(
           "chreSensorConfigure() failed passive with default interval and "
           "non-default latency");
     } else if (!mSupportsPassiveMode && configureSuccess) {
-      EXPECT_FAIL(
+      EXPECT_FAIL_RETURN(
           "chreSensorConfigure() accepted passive with default interval and "
           "non-default latency");
     }
@@ -151,11 +151,11 @@ void BasicSensorTestBase::checkPassiveConfigure() {
           chreSensorConfigure(mSensorHandle, mode, kOneSecondInNanoseconds,
                               CHRE_SENSOR_LATENCY_DEFAULT);
       if (mSupportsPassiveMode && !configureSuccess) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "chreSensorConfigure() failed passive with non-default interval "
             "and default latency");
       } else if (!mSupportsPassiveMode && configureSuccess) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "chreSensorConfigure() accepted passive with non-default "
             "interval and default latency");
       }
@@ -164,11 +164,11 @@ void BasicSensorTestBase::checkPassiveConfigure() {
           chreSensorConfigure(mSensorHandle, mode, kOneSecondInNanoseconds,
                               kOneSecondInNanoseconds);
       if (mSupportsPassiveMode && !configureSuccess) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "chreSensorConfigure() failed passive with non-default interval "
             "and latency");
       } else if (!mSupportsPassiveMode && configureSuccess) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "chreSensorConfigure() accepted passive with non-default interval "
             "and latency");
       }
@@ -188,7 +188,7 @@ void BasicSensorTestBase::startTest() {
     found = chreSensorFind(mSensorType, mCurrentSensorIndex, &mSensorHandle);
     if (!found &&
         chreSensorFind(mSensorType, mCurrentSensorIndex + 1, &mSensorHandle)) {
-      EXPECT_FAIL_UINT8("Missing sensor index ", mCurrentSensorIndex);
+      EXPECT_FAIL_RETURN_UINT8("Missing sensor index ", mCurrentSensorIndex);
       return;
     }
   } else {
@@ -205,29 +205,32 @@ void BasicSensorTestBase::startTest() {
 
   chreSensorInfo info;
   if (!chreGetSensorInfo(mSensorHandle, &info)) {
-    EXPECT_FAIL("GetSensorInfo() call failed");
+    EXPECT_FAIL_RETURN("GetSensorInfo() call failed");
   }
   if (info.sensorName == nullptr) {
-    EXPECT_FAIL("chreSensorInfo::sensorName is NULL");
+    EXPECT_FAIL_RETURN("chreSensorInfo::sensorName is NULL");
   }
   if (info.sensorType != mSensorType) {
     uint32_t type = info.sensorType;
-    EXPECT_FAIL("chreSensorInfo::sensorType is not expected value, is:", &type);
+    EXPECT_FAIL_RETURN("chreSensorInfo::sensorType is not expected value, is:",
+                       &type);
   }
   if (info.isOnChange != isOnChangeSensor()) {
-    EXPECT_FAIL("chreSensorInfo::isOnChange is opposite of what we expected");
+    EXPECT_FAIL_RETURN(
+        "chreSensorInfo::isOnChange is opposite of what we expected");
   }
   if (info.isOneShot != isOneShotSensor()) {
-    EXPECT_FAIL("chreSensorInfo::isOneShot is opposite of what we expected");
+    EXPECT_FAIL_RETURN(
+        "chreSensorInfo::isOneShot is opposite of what we expected");
   }
   if (mApiVersion >= CHRE_API_VERSION_1_4) {
     mSupportsPassiveMode = info.supportsPassiveMode;
   } else if (info.supportsPassiveMode != 0) {
-    EXPECT_FAIL("chreSensorInfo::supportsPassiveMode should be 0");
+    EXPECT_FAIL_RETURN("chreSensorInfo::supportsPassiveMode should be 0");
   }
 
   if (!chreGetSensorSamplingStatus(mSensorHandle, &mOriginalStatus)) {
-    EXPECT_FAIL("chreGetSensorSamplingStatus() failed");
+    EXPECT_FAIL_RETURN("chreGetSensorSamplingStatus() failed");
   }
 
   // Set the base timestamp to compare against before configuring the sensor.
@@ -245,7 +248,7 @@ void BasicSensorTestBase::startTest() {
 
   if (!chreSensorConfigure(mSensorHandle, mode, mNewStatus.interval,
                            mNewStatus.latency)) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "chreSensorConfigure() call failed with default interval and latency");
   }
   // handleEvent may start getting events, and our testing continues there.
@@ -271,7 +274,7 @@ void BasicSensorTestBase::startTest() {
   if (!isOneShotSensor() &&
       !chreSensorConfigure(mSensorHandle, mode, mNewStatus.interval,
                            mNewStatus.latency)) {
-    EXPECT_FAIL("chreSensorConfigure() call failed");
+    EXPECT_FAIL_RETURN("chreSensorConfigure() call failed");
   }
 
   if (isOnChangeSensor()) {
@@ -294,25 +297,25 @@ void BasicSensorTestBase::finishTest() {
 
   if (!chreSensorConfigureModeOnly(mSensorHandle,
                                    CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-    EXPECT_FAIL("Unable to configure sensor mode to DONE");
+    EXPECT_FAIL_RETURN("Unable to configure sensor mode to DONE");
   }
   mDoneTimestamp = chreGetTime();
   chreSensorSamplingStatus status;
   if (!chreGetSensorSamplingStatus(mSensorHandle, &status)) {
-    EXPECT_FAIL("Could not get final sensor info");
+    EXPECT_FAIL_RETURN("Could not get final sensor info");
   }
   if (!mExternalSamplingStatusChange) {
     // No one else changed this, so it should be what we had before.
     if (status.enabled != mOriginalStatus.enabled) {
-      EXPECT_FAIL("SensorInfo.enabled not back to original");
+      EXPECT_FAIL_RETURN("SensorInfo.enabled not back to original");
     }
     // Interval and latency values are only relevent if the sensor is enabled.
     if (status.enabled) {
       if (status.interval != mOriginalStatus.interval) {
-        EXPECT_FAIL("SensorInfo.interval not back to original");
+        EXPECT_FAIL_RETURN("SensorInfo.interval not back to original");
       }
       if (status.latency != mOriginalStatus.latency) {
-        EXPECT_FAIL("SensorInfo.latency not back to original");
+        EXPECT_FAIL_RETURN("SensorInfo.latency not back to original");
       }
     }
   }
@@ -344,7 +347,8 @@ void BasicSensorTestBase::verifyEventHeader(const chreSensorDataHeader *header,
                                             uint16_t eventType,
                                             uint64_t eventDuration) {
   if (header->sensorHandle != mSensorHandle) {
-    EXPECT_FAIL("SensorDataHeader for wrong handle", &header->sensorHandle);
+    EXPECT_FAIL_RETURN("SensorDataHeader for wrong handle",
+                       &header->sensorHandle);
   }
 
   // Bias and on-change sensor events may have timestamps from before any of our
@@ -384,34 +388,34 @@ void BasicSensorTestBase::verifyEventHeader(const chreSensorDataHeader *header,
            " kEventLoopSlack %" PRIu64,
            header->baseTimestamp, minTimeWithSlack, *minTime, eventDuration,
            kEventLoopSlack);
-      EXPECT_FAIL("SensorDataHeader is in the past");
+      EXPECT_FAIL_RETURN("SensorDataHeader is in the past");
     }
     if ((mState == State::kFinished) &&
         (header->baseTimestamp > mDoneTimestamp)) {
-      EXPECT_FAIL("SensorDataHeader is from after DONE");
+      EXPECT_FAIL_RETURN("SensorDataHeader is from after DONE");
     }
     *timeToUpdate = header->baseTimestamp;
   }
 
   if (header->baseTimestamp > chreGetTime()) {
-    EXPECT_FAIL("SensorDataHeader is in the future");
+    EXPECT_FAIL_RETURN("SensorDataHeader is in the future");
   }
 
   if (header->readingCount == 0) {
-    EXPECT_FAIL("SensorDataHeader has readingCount of 0");
+    EXPECT_FAIL_RETURN("SensorDataHeader has readingCount of 0");
   }
 
   if (header->reserved != 0) {
-    EXPECT_FAIL("SensorDataHeader has non-zero reserved field");
+    EXPECT_FAIL_RETURN("SensorDataHeader has non-zero reserved field");
   }
 
   if (mApiVersion < CHRE_API_VERSION_1_3) {
     if (header->accuracy != 0) {
-      EXPECT_FAIL("SensorDataHeader has non-zero reserved field");
+      EXPECT_FAIL_RETURN("SensorDataHeader has non-zero reserved field");
     }
   } else if (header->accuracy > CHRE_SENSOR_ACCURACY_HIGH) {
-    EXPECT_FAIL_UINT8("Sensor accuracy is not within valid range: ",
-                      header->accuracy);
+    EXPECT_FAIL_RETURN_UINT8("Sensor accuracy is not within valid range: ",
+                             header->accuracy);
   }
 }
 
@@ -430,7 +434,7 @@ void BasicSensorTestBase::handleBiasEvent(
   }
 
   if (expectedSensorType != getSensorType()) {
-    EXPECT_FAIL("Unexpected bias event:", &eType);
+    EXPECT_FAIL_RETURN("Unexpected bias event:", &eType);
   }
   verifyEventHeader(&eventData->header, eventType, getEventDuration(eventData));
 
@@ -448,8 +452,8 @@ void BasicSensorTestBase::handleSamplingChangeEvent(
   }
 
   if (eventData->sensorHandle != mSensorHandle) {
-    EXPECT_FAIL("SamplingChangeEvent for wrong sensor handle:",
-                &eventData->sensorHandle);
+    EXPECT_FAIL_RETURN("SamplingChangeEvent for wrong sensor handle:",
+                       &eventData->sensorHandle);
   }
 
   // TODO: If we strictly define whether this event is or isn't
@@ -475,7 +479,7 @@ void BasicSensorTestBase::handleSamplingChangeEvent(
 void BasicSensorTestBase::handleSensorDataEvent(uint16_t eventType,
                                                 const void *eventData) {
   if ((mState == State::kPreStart) || (mState == State::kPreConfigure)) {
-    EXPECT_FAIL("SensorDataEvent sent too early.");
+    EXPECT_FAIL_RETURN("SensorDataEvent sent too early.");
   }
   // Note, if mState is kFinished, we could be getting batched data which
   // hadn't been delivered yet at the time we were DONE.  We'll consistency
@@ -502,7 +506,7 @@ void BasicSensorTestBase::handleEvent(uint32_t senderInstanceId,
                                       uint16_t eventType,
                                       const void *eventData) {
   if (mInMethod) {
-    EXPECT_FAIL("handleEvent() invoked while already in method.");
+    EXPECT_FAIL_RETURN("handleEvent() invoked while already in method.");
   }
   mInMethod = true;
   const uint16_t dataEventType =
@@ -513,11 +517,11 @@ void BasicSensorTestBase::handleEvent(uint32_t senderInstanceId,
       startTest();
     }
   } else if (senderInstanceId != CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("Unexpected senderInstanceId:", &senderInstanceId);
+    EXPECT_FAIL_RETURN("Unexpected senderInstanceId:", &senderInstanceId);
 
   } else if (eventData == nullptr) {
     uint32_t eType = eventType;
-    EXPECT_FAIL("Got NULL eventData for event:", &eType);
+    EXPECT_FAIL_RETURN("Got NULL eventData for event:", &eType);
 
   } else if (eventType == dataEventType) {
     handleSensorDataEvent(eventType, eventData);

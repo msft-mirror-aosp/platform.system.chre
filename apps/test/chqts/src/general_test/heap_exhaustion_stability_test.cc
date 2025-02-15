@@ -70,7 +70,7 @@ void HeapExhaustionStabilityTest::exhaustHeap() {
       chreHeapAlloc(kNumPtrs * sizeof(*mExhaustionPtrs)));
   if (mExhaustionPtrs == nullptr) {
     // Oh, the irony.
-    EXPECT_FAIL("Insufficient free heap to exhaust the heap.");
+    EXPECT_FAIL_RETURN("Insufficient free heap to exhaust the heap.");
   }
 
   // We start by trying to allocate massive sizes (256MB to start).
@@ -94,7 +94,7 @@ void HeapExhaustionStabilityTest::exhaustHeap() {
     mExhaustionPtrs[mExhaustionPtrCount] = ptr;
   }
   if (mExhaustionPtrCount == 0) {
-    EXPECT_FAIL("Failed to allocate anything for heap exhaustion");
+    EXPECT_FAIL_RETURN("Failed to allocate anything for heap exhaustion");
   }
 }
 
@@ -112,14 +112,14 @@ void HeapExhaustionStabilityTest::setUp(uint32_t messageSize,
                                         const void * /* message */) {
   mInMethod = true;
   if (messageSize != 0) {
-    EXPECT_FAIL(
+    EXPECT_FAIL_RETURN(
         "HeapExhaustionStability message expects 0 additional bytes, got ",
         &messageSize);
   }
 
   if (chreTimerSet(kExhaustionDuration, &kExhaustionDuration, true) ==
       CHRE_TIMER_INVALID) {
-    EXPECT_FAIL("Unable to set initial timer");
+    EXPECT_FAIL_RETURN("Unable to set initial timer");
   }
 
   exhaustHeap();
@@ -171,21 +171,21 @@ void HeapExhaustionStabilityTest::testSensor() {
   uint32_t handle;
   if (!chreSensorFindDefault(kSensorType, &handle)) {
     // We still expect this to succeed without any heap left.
-    EXPECT_FAIL("chreSensorFindDefault failed");
+    EXPECT_FAIL_RETURN("chreSensorFindDefault failed");
   }
   chreSensorInfo info;
   if (!chreGetSensorInfo(handle, &info)) {
     // We still expect this to succeed, since we're supplying the memory.
-    EXPECT_FAIL("chreGetSensorInfo failed");
+    EXPECT_FAIL_RETURN("chreGetSensorInfo failed");
   }
   if (info.sensorType != kSensorType) {
-    EXPECT_FAIL("Invalid sensor info provided");
+    EXPECT_FAIL_RETURN("Invalid sensor info provided");
   }
 
   chreSensorSamplingStatus samplingStatus;
   if (!chreGetSensorSamplingStatus(handle, &samplingStatus)) {
     // We still expect this to succeed, since we're supplying the memory.
-    EXPECT_FAIL("chreGetSensorSamplingStatus failed");
+    EXPECT_FAIL_RETURN("chreGetSensorSamplingStatus failed");
   }
 
   // TODO: We might want to consider calling chreSensorConfigure() for a
@@ -214,7 +214,8 @@ void HeapExhaustionStabilityTest::handleEvent(uint32_t senderInstanceId,
                                               uint16_t eventType,
                                               const void *eventData) {
   if (mInMethod) {
-    EXPECT_FAIL("handleEvent invoked while another nanoapp method is running");
+    EXPECT_FAIL_RETURN(
+        "handleEvent invoked while another nanoapp method is running");
   }
   mInMethod = true;
 
@@ -231,7 +232,8 @@ void HeapExhaustionStabilityTest::handleEvent(uint32_t senderInstanceId,
 void HeapExhaustionStabilityTest::handleTimer(uint32_t senderInstanceId,
                                               const void *eventData) {
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    EXPECT_FAIL("handleTimer with unexpected sender:", &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleTimer with unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventData == &kShortDuration) {
     // This was the timer we triggered while the heap was exhausted.
@@ -241,23 +243,24 @@ void HeapExhaustionStabilityTest::handleTimer(uint32_t senderInstanceId,
     // Our test is done.
     freeMemory();
     if (mFinishedBitmask != kAllFinished) {
-      EXPECT_FAIL("Done with test, but not all stages done.",
-                  &mFinishedBitmask);
+      EXPECT_FAIL_RETURN("Done with test, but not all stages done.",
+                         &mFinishedBitmask);
     }
     sendSuccessToHost();
 
   } else {
-    EXPECT_FAIL("Unexpected timer eventData");
+    EXPECT_FAIL_RETURN("Unexpected timer eventData");
   }
 }
 
 void HeapExhaustionStabilityTest::handleSelfEvent(uint32_t senderInstanceId,
                                                   const void *eventData) {
   if (senderInstanceId != chreGetInstanceId()) {
-    EXPECT_FAIL("handleSelfEvent with unexpected sender:", &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleSelfEvent with unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventData != nullptr) {
-    EXPECT_FAIL("Unexpected data for event to self");
+    EXPECT_FAIL_RETURN("Unexpected data for event to self");
   }
   markSuccess(kEventStage);
 }
@@ -266,12 +269,12 @@ void HeapExhaustionStabilityTest::markSuccess(uint32_t stage) {
   LOGD("Stage %" PRIu32 " succeeded", stage);
   uint32_t finishedBit = (1 << stage);
   if ((kAllFinished & finishedBit) == 0) {
-    EXPECT_FAIL("markSuccess bad stage", &stage);
+    EXPECT_FAIL_RETURN("markSuccess bad stage", &stage);
   }
   if ((mFinishedBitmask & finishedBit) != 0) {
     // This could be when a timer/event method returned 'false', but
     // actually did end up triggering an event.
-    EXPECT_FAIL("markSuccess stage triggered twice", &stage);
+    EXPECT_FAIL_RETURN("markSuccess stage triggered twice", &stage);
   }
   mFinishedBitmask |= finishedBit;
   // Note that unlike many markSuccess() implementations, we do not
