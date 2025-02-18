@@ -47,6 +47,10 @@ MessageRouter::MessageHub &MessageRouter::MessageHub::operator=(
   return *this;
 }
 
+MessageRouter::MessageHub::~MessageHub() {
+  unregister();
+}
+
 void MessageRouter::MessageHub::onSessionOpenComplete(SessionId sessionId) {
   if (mRouter != nullptr) {
     mRouter->onSessionOpenComplete(mHubId, sessionId);
@@ -95,6 +99,17 @@ bool MessageRouter::MessageHub::unregisterEndpoint(EndpointId endpointId) {
 
 MessageHubId MessageRouter::MessageHub::getId() {
   return mHubId;
+}
+
+bool MessageRouter::MessageHub::isRegistered() {
+  return mRouter != nullptr;
+}
+
+void MessageRouter::MessageHub::unregister() {
+  if (mRouter != nullptr) {
+    mRouter->unregisterMessageHub(mHubId);
+  }
+  mRouter = nullptr;
 }
 
 std::optional<typename MessageRouter::MessageHub>
