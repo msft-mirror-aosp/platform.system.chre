@@ -563,9 +563,9 @@ public class ChreCrossValidatorWwan extends ChreCrossValidatorBase implements Ex
 
         if (chreCellInfoLte.getIsRegistered() != apCellInfoLte.isRegistered()
                 || chreCellIdentityLte.getMcc()
-                        != Integer.parseInt(apCellIdentityLte.getMccString())
+                        != parseCellIdentityString(apCellIdentityLte.getMccString())
                 || chreCellIdentityLte.getMnc()
-                        != Integer.parseInt(apCellIdentityLte.getMncString())
+                        != parseCellIdentityString(apCellIdentityLte.getMncString())
                 || chreCellIdentityLte.getCi() != apCellIdentityLte.getCi()
                 || chreCellIdentityLte.getPci() != apCellIdentityLte.getPci()
                 || chreCellIdentityLte.getTac() != apCellIdentityLte.getTac()
@@ -583,9 +583,9 @@ public class ChreCrossValidatorWwan extends ChreCrossValidatorBase implements Ex
                 chreCellInfoGsm.getGsm().getCellIdentity();
         if (chreCellInfoGsm.getIsRegistered() != apCellInfoGsm.isRegistered()
                 || chreCellIdentityGsm.getMcc()
-                        != Integer.parseInt(apCellIdentityGsm.getMccString())
+                        != parseCellIdentityString(apCellIdentityGsm.getMccString())
                 || chreCellIdentityGsm.getMnc()
-                        != Integer.parseInt(apCellIdentityGsm.getMncString())
+                        != parseCellIdentityString(apCellIdentityGsm.getMncString())
                 || chreCellIdentityGsm.getLac() != apCellIdentityGsm.getLac()
                 || chreCellIdentityGsm.getCid() != apCellIdentityGsm.getCid()
                 || chreCellIdentityGsm.getArfcn() != apCellIdentityGsm.getArfcn()
@@ -604,9 +604,9 @@ public class ChreCrossValidatorWwan extends ChreCrossValidatorBase implements Ex
                 chreCellInfoWcdma.getWcdma().getCellIdentity();
         if (chreCellInfoWcdma.getIsRegistered() != apCellInfoWcdma.isRegistered()
                 || chreCellIdentityWcdma.getMcc()
-                        != Integer.parseInt(apCellIdentityWcdma.getMccString())
+                        != parseCellIdentityString(apCellIdentityWcdma.getMccString())
                 || chreCellIdentityWcdma.getMnc()
-                        != Integer.parseInt(apCellIdentityWcdma.getMncString())
+                        != parseCellIdentityString(apCellIdentityWcdma.getMncString())
                 || chreCellIdentityWcdma.getLac() != apCellIdentityWcdma.getLac()
                 || chreCellIdentityWcdma.getCid() != apCellIdentityWcdma.getCid()
                 || chreCellIdentityWcdma.getPsc() != apCellIdentityWcdma.getPsc()
@@ -733,4 +733,12 @@ public class ChreCrossValidatorWwan extends ChreCrossValidatorBase implements Ex
     // Unused. Required to extend ChreCrossValidatorBase.
     @Override
     protected void unregisterApDataListener() {}
+
+    /**
+     * @param value A cell identify string value. Can be null.
+     * @return the corresponding integer value, or Integer.MAX_VALUE if value is null.
+     */
+    private int parseCellIdentityString(String value) {
+        return value == null ? Integer.MAX_VALUE : Integer.parseInt(value);
+    }
 }
