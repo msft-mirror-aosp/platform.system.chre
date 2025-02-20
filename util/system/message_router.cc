@@ -40,6 +40,7 @@ MessageRouter::MessageHub::MessageHub(MessageHub &&other)
 
 MessageRouter::MessageHub &MessageRouter::MessageHub::operator=(
     MessageHub &&other) {
+  unregister();
   mRouter = other.mRouter;
   mHubId = other.mHubId;
   other.mRouter = nullptr;
