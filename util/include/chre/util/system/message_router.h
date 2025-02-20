@@ -22,9 +22,10 @@
 #include "chre/util/singleton.h"
 #include "chre/util/system/message_common.h"
 
-#include <pw_allocator/unique_ptr.h>
-#include <pw_containers/vector.h>
-#include <pw_function/function.h>
+#include "pw_allocator/unique_ptr.h"
+#include "pw_containers/vector.h"
+#include "pw_function/function.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -124,17 +125,15 @@ class MessageRouter {
     //! undefined behavior.
     MessageHub();
 
-    ~MessageHub() {
-      if (mRouter != nullptr) {
-        mRouter->unregisterMessageHub(mHubId);
-      }
-    }
     // There can only be one live MessageHub instance for a given hub ID, so
     // only move operations are supported.
     MessageHub(const MessageHub &) = delete;
     MessageHub &operator=(const MessageHub &) = delete;
     MessageHub(MessageHub &&other);
     MessageHub &operator=(MessageHub &&other);
+
+    //! Destructor. Unregisters the MessageHub from the MessageRouter.
+    ~MessageHub();
 
     //! Accepts the session open request from the peer message hub.
     //! onSessionOpened will be called on both hubs.
@@ -198,6 +197,13 @@ class MessageRouter {
 
     //! @return The MessageHub ID of the currently connected MessageHub
     MessageHubId getId();
+
+    //! @return If the MessageHub is active and registered with the
+    //! MessageRouter.
+    bool isRegistered();
+
+    //! Unregisters this MessageHub from the MessageRouter.
+    void unregister();
 
    private:
     friend class MessageRouter;

@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include "chre/util/system/message_router.h"
+#include "chre/util/dynamic_vector.h"
+#include "chre/util/lock_guard.h"
+#include "chre/util/system/message_common.h"
+
 #include <inttypes.h>
 #include <cstring>
 #include <optional>
 #include <utility>
-
-#include "chre/util/dynamic_vector.h"
-#include "chre/util/lock_guard.h"
-#include "chre/util/system/message_common.h"
-#include "chre/util/system/message_router.h"
 
 namespace chre::message {
 
@@ -45,6 +45,10 @@ MessageRouter::MessageHub &MessageRouter::MessageHub::operator=(
   other.mRouter = nullptr;
   other.mHubId = MESSAGE_HUB_ID_INVALID;
   return *this;
+}
+
+MessageRouter::MessageHub::~MessageHub() {
+  unregister();
 }
 
 void MessageRouter::MessageHub::onSessionOpenComplete(SessionId sessionId) {
@@ -95,6 +99,17 @@ bool MessageRouter::MessageHub::unregisterEndpoint(EndpointId endpointId) {
 
 MessageHubId MessageRouter::MessageHub::getId() {
   return mHubId;
+}
+
+bool MessageRouter::MessageHub::isRegistered() {
+  return mRouter != nullptr;
+}
+
+void MessageRouter::MessageHub::unregister() {
+  if (mRouter != nullptr) {
+    mRouter->unregisterMessageHub(mHubId);
+  }
+  mRouter = nullptr;
 }
 
 std::optional<typename MessageRouter::MessageHub>

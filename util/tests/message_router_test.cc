@@ -14,24 +14,21 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <utility>
-
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre_api/chre.h"
 
-#include "pw_allocator/allocator.h"
-#include "pw_allocator/capability.h"
 #include "pw_allocator/libc_allocator.h"
 #include "pw_allocator/unique_ptr.h"
 
 #include "gtest/gtest.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <utility>
 
 namespace chre::message {
 namespace {
