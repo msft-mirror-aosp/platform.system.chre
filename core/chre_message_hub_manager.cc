@@ -123,7 +123,7 @@ void ChreMessageHubManager::init() {
   if (chreMessageHub.has_value()) {
     mChreMessageHub = std::move(*chreMessageHub);
   } else {
-    LOGE("Failed to register the CHRE MessageHub");
+    FATAL_ERROR("Failed to register the CHRE MessageHub");
   }
 }
 
