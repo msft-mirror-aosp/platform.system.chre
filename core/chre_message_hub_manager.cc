@@ -40,7 +40,6 @@
 #include <cstring>
 #include <optional>
 
-using ::chre::message::CallbackAllocator;
 using ::chre::message::Endpoint;
 using ::chre::message::ENDPOINT_ID_ANY;
 using ::chre::message::ENDPOINT_ID_INVALID;

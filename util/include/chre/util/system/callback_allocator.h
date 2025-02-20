@@ -17,17 +17,18 @@
 #ifndef CHRE_UTIL_SYSTEM_CALLBACK_ALLOCATOR_H_
 #define CHRE_UTIL_SYSTEM_CALLBACK_ALLOCATOR_H_
 
-#include <pw_allocator/allocator.h>
-#include <pw_allocator/capability.h>
-#include <pw_allocator/unique_ptr.h>
-#include <pw_containers/vector.h>
-#include <pw_function/function.h>
 #include <cstddef>
 #include <optional>
 
 #include "chre/platform/mutex.h"
 
-namespace chre::message {
+#include "pw_allocator/allocator.h"
+#include "pw_allocator/capability.h"
+#include "pw_allocator/unique_ptr.h"
+#include "pw_containers/vector.h"
+#include "pw_function/function.h"
+
+namespace chre {
 
 //! An allocator that keeps track of callbacks.
 //! The allocator will call the callback when the underlying type is
@@ -86,7 +87,7 @@ class CallbackAllocator : public pw::Allocator {
   const bool mDoEraseRecord;
 };
 
-}  // namespace chre::message
+}  // namespace chre
 
 #include "chre/util/system/callback_allocator_impl.h"
 
