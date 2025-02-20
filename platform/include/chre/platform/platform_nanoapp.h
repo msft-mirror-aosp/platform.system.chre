@@ -135,4 +135,9 @@ class PlatformNanoapp : public PlatformNanoappBase, public NonCopyable {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_nanoapp_impl.h")
+#include "chre/target_platform/platform_nanoapp_impl.h"
+#endif  // __has_include("chre/target_platform/platform_nanoapp_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_NANOAPP_H_

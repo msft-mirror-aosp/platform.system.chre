@@ -73,8 +73,13 @@ void HostMessageHandlers::loadNanoappData(
 
     if (getLoadManager().hasPendingLoadTransaction()) {
       FragmentedLoadInfo info = getLoadManager().getTransactionInfo();
+      LOGW("A pending load transaction already exists (clientId=%" PRIu16
+           ", txnId=%" PRIu32 ", nextFragmentId=%" PRIu32 "). Overriding it",
+           info.hostClientId, info.transactionId, info.nextFragmentId);
+      // Send a failure response to host where nextFragmentId is either current
+      // or future to the host.
       sendFragmentResponse(info.hostClientId, info.transactionId,
-                           0 /* fragmentId */, false /* success */);
+                           info.nextFragmentId, /* success= */ false);
       getLoadManager().markFailure();
     }
 

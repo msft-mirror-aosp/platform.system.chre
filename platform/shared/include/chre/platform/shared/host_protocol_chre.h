@@ -18,6 +18,7 @@
 #define CHRE_PLATFORM_SHARED_HOST_PROTOCOL_CHRE_H_
 
 #include <stdint.h>
+#include <cstdint>
 
 #include "chre/core/event_loop_common.h"
 #include "chre/core/nanoapp.h"
@@ -100,6 +101,15 @@ class HostMessageHandlers {
 
   static void handleNanConfigurationUpdate(bool enabled);
 
+  static void handleBtSocketOpen(uint16_t hostClientId, uint64_t socketId,
+                                 const char *name, uint64_t endpointId,
+                                 uint64_t hubId, uint32_t aclConnectionHandle,
+                                 uint32_t localCid, uint32_t remoteCid,
+                                 uint32_t psm, uint32_t localMtu,
+                                 uint32_t remoteMtu, uint32_t localMps,
+                                 uint32_t remoteMps, uint32_t initialRxCredits,
+                                 uint32_t initialTxCredits);
+
  private:
   static void sendFragmentResponse(uint16_t hostClientId,
                                    uint32_t transactionId, uint32_t fragmentId,
@@ -153,10 +163,11 @@ class HostProtocolChre : public HostProtocolCommon {
   static bool decodeMessageFromHost(const void *message, size_t messageLen);
 
   /**
-   * Refer to the context hub HAL definition for a details of these parameters.
+   * Refer to the context hub HAL definition for a details of these
+   * parameters.
    *
-   * @param builder A newly constructed ChreFlatBufferBuilder that will be used
-   * to encode the message
+   * @param builder A newly constructed ChreFlatBufferBuilder that will be
+   * used to encode the message
    */
   static void encodeHubInfoResponse(
       ChreFlatBufferBuilder &builder, const char *name, const char *vendor,
@@ -324,6 +335,32 @@ class HostProtocolChre : public HostProtocolCommon {
    */
   static void encodeNanConfigurationRequest(ChreFlatBufferBuilder &builder,
                                             bool enable);
+
+  /**
+   * Encodes a BT socket open response.
+   *
+   * @param builder An instance of the CHRE Flatbuffer builder.
+   * @param hostClientId Host client identifier.
+   * @param success Whether the socket open request was successful.
+   * @param reason Failure reason if success is false.
+   * @param socketId BT socket identifier.
+   */
+  static void encodeBtSocketOpenResponse(ChreFlatBufferBuilder &builder,
+                                         uint16_t hostClientId,
+                                         uint64_t socketId, bool success,
+                                         const char *reason);
+
+  /**
+   * Encodes a BT socket close request.
+   *
+   * @param builder An instance of the CHRE Flatbuffer builder.
+   * @param hostClientId Host client identifier.
+   * @param reason Reason socket is being closed.
+   * @param socketId BT socket identifier.
+   */
+  static void encodeBtSocketClose(ChreFlatBufferBuilder &builder,
+                                  uint16_t hostClientId, uint64_t socketId,
+                                  const char *reason);
 };
 
 }  // namespace chre

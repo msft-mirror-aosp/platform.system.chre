@@ -110,7 +110,7 @@ class IntrusiveList : private intrusive_list_internal::IntrusiveListBase {
     using Node = ::chre::intrusive_list_internal::Node;
 
    public:
-    Iterator(Node *node) : mNode(node){};
+    Iterator(Node *node) : mNode(node) {}
 
     ListNode<ElementType> &operator*() const {
       return *reinterpret_cast<ListNode<ElementType> *>(mNode);

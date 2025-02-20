@@ -213,9 +213,11 @@ void BleScanner::Restart() {
       generic_filters.push_back(kDefaultGenericFilters[i]);
     }
   }
-  for (auto &tracker_filter : tracker_filters_) {
-    if (!ContainsFilter(generic_filters, tracker_filter)) {
-      generic_filters.push_back(tracker_filter);
+  if (is_tracker_filter_enabled_) {
+    for (auto &tracker_filter : tracker_filters_) {
+      if (!ContainsFilter(generic_filters, tracker_filter)) {
+        generic_filters.push_back(tracker_filter);
+      }
     }
   }
   for (auto &oem_generic_filters : generic_filters_list_) {
@@ -253,7 +255,9 @@ void BleScanner::Stop() {
   } else {
     LOGE("Failed to stop BLE scan");
   }
-  StopKeepAliveTimer();
+  if (tracker_filters_.empty()) {
+    StopKeepAliveTimer();
+  }
 }
 
 bool BleScanner::UpdateFilters(

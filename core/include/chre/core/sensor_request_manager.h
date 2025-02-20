@@ -17,6 +17,8 @@
 #ifndef CHRE_CORE_SENSOR_REQUEST_MANAGER_H_
 #define CHRE_CORE_SENSOR_REQUEST_MANAGER_H_
 
+#ifdef CHRE_SENSORS_SUPPORT_ENABLED
+
 #include "chre/core/sensor.h"
 #include "chre/core/sensor_request.h"
 #include "chre/core/sensor_request_multiplexer.h"
@@ -514,5 +516,7 @@ class SensorRequestManager : public NonCopyable {
 };
 
 }  // namespace chre
+
+#endif  // CHRE_SENSORS_SUPPORT_ENABLED
 
 #endif  // CHRE_CORE_SENSOR_REQUEST_MANAGER_H_

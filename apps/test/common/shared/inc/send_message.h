@@ -20,9 +20,15 @@
 #include <pb_encode.h>
 #include <cinttypes>
 
+#include "chre/util/system/napp_permissions.h"
+#include "chre_test_common.nanopb.h"
+
 namespace chre {
 
 namespace test_shared {
+
+chre_test_common_TestResult makeTestResultProtoMessage(
+    bool success, const char *errMessage = nullptr);
 
 /**
  * Same as sendTestResultWithMsgToHost, but doesn't accept an error message and
@@ -55,7 +61,7 @@ void sendTestResultWithMsgToHost(uint16_t hostEndpointId, uint32_t messageType,
 void sendEmptyMessageToHost(uint16_t hostEndpointId, uint32_t messageType);
 
 /**
- * Sends a message to the host.
+ * Sends a message to the host with default NanoappPermissions (CHRE_PERMS_NONE)
  *
  * @param hostEndpointId The endpoint Id of the host to send the message to.
  * @param message The proto message struct pointer.
@@ -64,6 +70,21 @@ void sendEmptyMessageToHost(uint16_t hostEndpointId, uint32_t messageType);
  */
 void sendMessageToHost(uint16_t hostEndpointId, const void *message,
                        const pb_field_t *fields, uint32_t messageType);
+
+/**
+ * Sends a message to the host with the provided NanoappPermissions.
+ *
+ * @param hostEndpointId The endpoint Id of the host to send the message to.
+ * @param message The proto message struct pointer.
+ * @param fields The fields descriptor of the proto message to encode.
+ * @param messageType The message type of the message.
+   @param perms The NanoappPermissions associated with the message.
+ */
+void sendMessageToHostWithPermissions(uint16_t hostEndpointId,
+                                      const void *message,
+                                      const pb_field_t *fields,
+                                      uint32_t messageType,
+                                      chre::NanoappPermissions perms);
 
 }  // namespace test_shared
 

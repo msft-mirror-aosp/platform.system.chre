@@ -21,11 +21,12 @@
 #include "chre/util/macros.h"
 
 using chre::EventLoopManager;
+using chre::EventLoopManagerSingleton;
 using chre::Nanoapp;
 using chre::Setting;
 
 DLL_EXPORT int8_t chreUserSettingGetState(uint8_t setting) {
-  return chre::EventLoopManagerSingleton::get()
+  return EventLoopManagerSingleton::get()
       ->getSettingManager()
       .getSettingStateAsInt8(setting);
 }

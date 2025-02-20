@@ -302,6 +302,15 @@ class Nanoapp : public PlatformNanoapp {
     return mFirstHeader;
   }
 
+  /**
+   * @return whether the nanoapp has the provided permissions.
+   */
+  bool hasPermissions(uint32_t permissions) const {
+    return permissions == 0 ||
+           (supportsAppPermissions() &&
+            (getAppPermissions() & permissions) == permissions);
+  }
+
  private:
   uint16_t mInstanceId = kInvalidInstanceId;
 

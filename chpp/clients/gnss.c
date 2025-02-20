@@ -192,7 +192,8 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
     switch (rxHeader->command) {
       case CHPP_GNSS_OPEN: {
         chppClientProcessOpenResponse(&gnssClientContext->client, buf, len);
-        if (gnssClientContext->requestStateResyncPending) {
+        if (rxHeader->error == CHPP_APP_ERROR_NONE &&
+            gnssClientContext->requestStateResyncPending) {
           gCallbacks->requestStateResync();
           gnssClientContext->requestStateResyncPending = false;
         }
@@ -326,18 +327,13 @@ static void chppGnssClientNotifyReset(void *clientContext) {
   chppClientCloseOpenRequests(&gnssClientContext->client, &kGnssClientConfig,
                               false /* clearOnly */);
 
-  if (gnssClientContext->client.openState != CHPP_OPEN_STATE_OPENED &&
-      !gnssClientContext->client.pseudoOpen) {
-    CHPP_LOGW("GNSS client reset but wasn't open");
-  } else {
-    CHPP_LOGD("GNSS client reopening from state=%" PRIu8,
-              gnssClientContext->client.openState);
-    gnssClientContext->requestStateResyncPending = true;
-    chppClientSendOpenRequest(&gGnssClientContext.client,
-                              &gGnssClientContext.outReqStates[CHPP_GNSS_OPEN],
-                              CHPP_GNSS_OPEN,
-                              /*blocking=*/false);
-  }
+  CHPP_LOGD("GNSS client reopening from state=%" PRIu8,
+            gnssClientContext->client.openState);
+  gnssClientContext->requestStateResyncPending = true;
+  chppClientSendOpenRequest(&gGnssClientContext.client,
+                            &gGnssClientContext.outReqStates[CHPP_GNSS_OPEN],
+                            CHPP_GNSS_OPEN,
+                            /*blocking=*/false);
 }
 
 /**

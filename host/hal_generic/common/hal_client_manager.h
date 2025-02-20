@@ -65,7 +65,7 @@ namespace android::hardware::contexthub::common::implementation {
  *     identifies a host app that communicates with a HAL client.
  *
  * For a host endpoint connected to ContextHubService, its endpoint id is kept
- *in the form below during the communication with CHRE.
+ * in the form below during the communication with CHRE.
  *
  *  0                   1
  *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
@@ -180,6 +180,13 @@ class HalClientManager {
    * is not found.
    */
   std::shared_ptr<IContextHubCallback> getCallback(HalClientId clientId);
+
+  /**
+   * Gets all the callbacks and postpone any API calls to the caller.
+   *
+   * @return all the non-null callback pointers
+   */
+  std::vector<std::shared_ptr<IContextHubCallback>> getCallbacks();
 
   /**
    * Registers a IContextHubCallback function mapped to the current client's

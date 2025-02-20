@@ -36,7 +36,7 @@ class Optional {
   /**
    * Default constructs the optional object with no initial value.
    */
-  Optional() = default;
+  constexpr Optional() : mObject() {}
 
   /**
    * Default copy constructor.
