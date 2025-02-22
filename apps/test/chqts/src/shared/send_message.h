@@ -134,26 +134,20 @@ void sendStringToHost(MessageType messageType, const char *message,
                       const uint32_t *value = nullptr);
 
 /**
- * Same as sendStringToHost(), but using MessageType::kFailure for the 'status'.
- */
-inline void sendFailureToHost(const char *message,
-                              const uint32_t *value = nullptr) {
-  sendStringToHost(MessageType::kFailure, message, value);
-}
-
-/**
  * The semantics of this method is the same as sendFailureToHost, except the
  * message is logged through chreLog.
  */
 void logFailureMessage(const char *message, const uint32_t *value = nullptr);
 
 /**
- * Same as sendFailureToHost(), but aborts the test with the given 'reason',
- * and never returns.
+ * Same as sendStringToHost(), but using MessageType::kFailure for the 'status',
+ * and also logs the message using chreLog.
  */
-void sendFatalFailureToHost(const char *message,
-                            const uint32_t *value = nullptr,
-                            AbortBlame reason = AbortBlame::kChre);
+inline void sendFailureToHost(const char *message,
+                              const uint32_t *value = nullptr) {
+  sendStringToHost(MessageType::kFailure, message, value);
+  logFailureMessage(message, value);
+}
 
 /**
  * Same as sendStringToHost(), but uses MessageType::kInternalFailure for the

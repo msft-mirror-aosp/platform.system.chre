@@ -15,6 +15,7 @@
  */
 #include <general_test/wwan_capabilities_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
@@ -26,8 +27,8 @@ WwanCapabilitiesTest::WwanCapabilitiesTest() : Test(CHRE_API_VERSION_1_1) {}
 void WwanCapabilitiesTest::setUp(uint32_t messageSize,
                                  const void * /* message */) {
   if (messageSize != 0) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     uint32_t allCapabilities = CHRE_WWAN_CAPABILITIES_NONE;
 
@@ -41,12 +42,10 @@ void WwanCapabilitiesTest::setUp(uint32_t messageSize,
     // Clear out known capabilities, any remaining are unknown
     if ((capabilities & ~allCapabilities) != 0) {
       if (mApiVersion > CHRE_API_VERSION_1_2) {
-        nanoapp_testing::sendFatalFailureToHost(
-            "New version with unknown capabilities encountered:",
-            &capabilities);
+        EXPECT_FAIL_RETURN("New version with unknown capabilities encountered:",
+                           &capabilities);
       } else {
-        nanoapp_testing::sendFatalFailureToHost(
-            "Received unexpected capabilities:", &capabilities);
+        EXPECT_FAIL_RETURN("Received unexpected capabilities:", &capabilities);
       }
     } else {
       nanoapp_testing::sendSuccessToHost();

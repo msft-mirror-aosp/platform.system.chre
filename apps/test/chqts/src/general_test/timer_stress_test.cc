@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cstddef>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include <chre/util/nanoapp/log.h>
@@ -27,7 +28,6 @@
 
 #define LOG_TAG "[TimerStressTest]"
 
-using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendInternalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
@@ -72,7 +72,7 @@ const uint32_t kCookies[] = {0, 1, 2};
 void TimerStressTest::startStages() {
   uint32_t cancelId = chreTimerSet(kDuration, &kCookies[0], true);
   if (cancelId == CHRE_TIMER_INVALID) {
-    sendFatalFailureToHost("No timers available");
+    EXPECT_FAIL_RETURN("No timers available");
   }
 
   mStage1CallbacksLeft = 0;
@@ -84,14 +84,14 @@ void TimerStressTest::startStages() {
     mStage1CallbacksLeft++;
   }
   if (mStage1CallbacksLeft == 0) {
-    sendFatalFailureToHost("Insufficient timers available");
+    EXPECT_FAIL_RETURN("Insufficient timers available");
   }
   if (!chreTimerCancel(cancelId)) {
-    sendFatalFailureToHost("Unable to cancel timer");
+    EXPECT_FAIL_RETURN("Unable to cancel timer");
   }
   markSuccess(0);
   if (chreTimerSet(kDuration, &kCookies[2], true) == CHRE_TIMER_INVALID) {
-    sendFatalFailureToHost("Unable to set new timer after successful cancel.");
+    EXPECT_FAIL_RETURN("Unable to set new timer after successful cancel.");
   }
 }
 
@@ -105,8 +105,8 @@ void TimerStressTest::setUp(uint32_t messageSize, const void * /* message */) {
   mInMethod = true;
 
   if (messageSize != 0) {
-    sendFatalFailureToHost(
-        "TimerStress message expects 0 additional bytes, got ", &messageSize);
+    EXPECT_FAIL_RETURN("TimerStress message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   startStages();
@@ -117,7 +117,7 @@ void TimerStressTest::setUp(uint32_t messageSize, const void * /* message */) {
 void TimerStressTest::handleStageEvent(uint32_t index) {
   switch (index) {
     case 0:
-      sendFatalFailureToHost("Canceled timer fired:", &index);
+      EXPECT_FAIL_RETURN("Canceled timer fired:", &index);
       break;
 
     case 1:
@@ -132,20 +132,20 @@ void TimerStressTest::handleStageEvent(uint32_t index) {
       break;
 
     default:
-      sendFatalFailureToHost("Unexpected event stage:", &index);
+      EXPECT_FAIL_RETURN("Unexpected event stage:", &index);
   }
 }
 
 void TimerStressTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                   const void *eventData) {
   if (mInMethod) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "handleEvent invoked while another nanoapp method is running");
   }
   mInMethod = true;
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    sendFatalFailureToHost("handleEvent got event from unexpected sender:",
-                           &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventType != CHRE_EVENT_TIMER) {
     unexpectedEvent(eventType);
@@ -161,10 +161,10 @@ void TimerStressTest::markSuccess(uint32_t stage) {
   LOGD("Stage %" PRIu32 " succeeded", stage);
   uint32_t finishedBit = (1 << stage);
   if ((kAllFinished & finishedBit) == 0) {
-    sendFatalFailureToHost("markSuccess bad stage:", &stage);
+    EXPECT_FAIL_RETURN("markSuccess bad stage:", &stage);
   }
   if ((mFinishedBitmask & finishedBit) != 0) {
-    sendFatalFailureToHost("timer over-triggered:", &stage);
+    EXPECT_FAIL_RETURN("timer over-triggered:", &stage);
   }
   mFinishedBitmask |= finishedBit;
   if (mFinishedBitmask == kAllFinished) {

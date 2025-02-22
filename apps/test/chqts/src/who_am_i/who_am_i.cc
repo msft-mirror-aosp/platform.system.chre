@@ -25,11 +25,10 @@
 #include <cstdint>
 #include <cstring>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
-
-using nanoapp_testing::sendFatalFailureToHost;
 
 namespace chre {
 namespace {
@@ -45,7 +44,7 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
     auto *msg = static_cast<const chreMessageFromHostData *>(eventData);
 
     if (senderInstanceId != CHRE_INSTANCE_ID) {
-      sendFatalFailureToHost("Invalid sender instance ID:", &senderInstanceId);
+      EXPECT_FAIL_RETURN("Invalid sender instance ID:", &senderInstanceId);
     }
 
     messageBuffer[0] = (msg->hostEndpoint & 0xff00) >> 8;
@@ -54,7 +53,7 @@ extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
                                        sizeof(messageBuffer), msg->messageType,
                                        msg->hostEndpoint,
                                        nullptr /* messageFreeCallback */)) {
-      sendFatalFailureToHost("Failed to send message to host");
+      EXPECT_FAIL_RETURN("Failed to send message to host");
     }
   }
 }

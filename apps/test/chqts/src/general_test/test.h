@@ -17,6 +17,7 @@
 #ifndef _GTS_NANOAPPS_GENERAL_TEST_TEST_H_
 #define _GTS_NANOAPPS_GENERAL_TEST_TEST_H_
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <new>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
@@ -31,7 +32,7 @@
 
 using nanoapp_testing::kOneMillisecondInNanoseconds;
 using nanoapp_testing::kOneSecondInNanoseconds;
-using nanoapp_testing::sendFatalFailureToHost;
+
 using nanoapp_testing::sendInternalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
@@ -69,10 +70,10 @@ void TimerSetTest::Stage::start() {
   mSetTime = chreGetTime();
   mTimerHandle = chreTimerSet(mDuration, mCookie, mOneShot);
   if (mTimerHandle == CHRE_TIMER_INVALID) {
-    sendFatalFailureToHost("Unable to set timer ", &mStage);
+    EXPECT_FAIL_RETURN("Unable to set timer ", &mStage);
   }
   if (mSetTime == 0) {
-    sendFatalFailureToHost("chreGetTime() gave 0");
+    EXPECT_FAIL_RETURN("chreGetTime() gave 0");
   }
 }
 
@@ -84,16 +85,16 @@ void TimerSetTest::Stage::processEvent(uint64_t timestamp, TimerSetTest *test) {
 
   uint64_t expectedTime = mSetTime + (mEventCount * mDuration);
   if (timestamp < expectedTime) {
-    sendFatalFailureToHost("Timer triggered too soon ", &mStage);
+    EXPECT_FAIL_RETURN("Timer triggered too soon ", &mStage);
   }
   // TODO(b/32179037): Make this check much stricter.
   if (timestamp > (expectedTime + kOneSecondInNanoseconds)) {
-    sendFatalFailureToHost("Timer triggered over a second late ", &mStage);
+    EXPECT_FAIL_RETURN("Timer triggered over a second late ", &mStage);
   }
 
   if (mOneShot) {
     if (mEventCount > 1) {
-      sendFatalFailureToHost("One shot timer called multiple times ", &mStage);
+      EXPECT_FAIL_RETURN("One shot timer called multiple times ", &mStage);
     } else {
       test->markSuccess(mStage);
     }
@@ -103,7 +104,7 @@ void TimerSetTest::Stage::processEvent(uint64_t timestamp, TimerSetTest *test) {
     if (chreTimerCancel(mTimerHandle)) {
       test->markSuccess(mStage);
     } else {
-      sendFatalFailureToHost("Could not cancel recurring timer", &mStage);
+      EXPECT_FAIL_RETURN("Could not cancel recurring timer", &mStage);
     }
   }
 }
@@ -113,7 +114,7 @@ void TimerSetTest::initStages() {
   // placement new to initialize it.
   mStages = static_cast<Stage *>(chreHeapAlloc(sizeof(*mStages) * kStageCount));
   if (mStages == nullptr) {
-    sendFatalFailureToHost("Insufficient heap");
+    EXPECT_FAIL_RETURN("Insufficient heap");
   }
 
 #define COOKIE(num) reinterpret_cast<const void *>(num)
@@ -142,8 +143,8 @@ void TimerSetTest::setUp(uint32_t messageSize, const void * /* message */) {
   mInMethod = true;
 
   if (messageSize != 0) {
-    sendFatalFailureToHost("TimerSet message expects 0 additional bytes, got ",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("TimerSet message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   initStages();
@@ -162,20 +163,20 @@ void TimerSetTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                const void *eventData) {
   uint64_t timestamp = chreGetTime();
   if (mInMethod) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "handleEvent invoked while another nanoapp method is running");
   }
   mInMethod = true;
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    sendFatalFailureToHost("handleEvent got event from unexpected sender:",
-                           &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventType != CHRE_EVENT_TIMER) {
     unexpectedEvent(eventType);
   }
   Stage *stage = getStageFromCookie(eventData);
   if (stage == nullptr) {
-    sendFatalFailureToHost("handleEvent got invalid eventData");
+    EXPECT_FAIL_RETURN("handleEvent got invalid eventData");
   }
   stage->processEvent(timestamp, this);
 
@@ -186,7 +187,7 @@ void TimerSetTest::markSuccess(uint32_t stage) {
   LOGD("Stage %" PRIu32 " succeeded", stage);
   uint32_t finishedBit = (1 << stage);
   if ((kAllFinished & finishedBit) == 0) {
-    sendFatalFailureToHost("markSuccess bad stage", &stage);
+    EXPECT_FAIL_RETURN("markSuccess bad stage", &stage);
   }
   mFinishedBitmask |= finishedBit;
   if (mFinishedBitmask == kAllFinished) {

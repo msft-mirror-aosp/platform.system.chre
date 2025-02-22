@@ -16,6 +16,7 @@
 
 #include <general_test/estimated_host_time_test.h>
 
+#include <shared/macros.h>
 #include <shared/nano_endian.h>
 #include <shared/nano_string.h>
 #include <shared/send_message.h>
@@ -39,8 +40,7 @@ void EstimatedHostTimeTest::setUp(uint32_t /* messageSize */,
       chreTimerSet(timerInterval, &mTimerHandle, false /* oneShot */);
 
   if (mTimerHandle == CHRE_TIMER_INVALID) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Unable to set timer for time verification");
+    EXPECT_FAIL_RETURN("Unable to set timer for time verification");
   }
 }
 
@@ -72,7 +72,7 @@ void EstimatedHostTimeTest::verifyIncreasingTime() {
 
     --mRemainingIterations;
   } else {
-    nanoapp_testing::sendFatalFailureToHost("Unable to verify increasing time");
+    EXPECT_FAIL_RETURN("Unable to verify increasing time");
   }
 }
 

@@ -18,6 +18,7 @@
 
 #ifndef INTERNAL_TESTING
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #define REPORT_INTERNAL_ERROR(msg) sendInternalFailureToHost(msg)
 

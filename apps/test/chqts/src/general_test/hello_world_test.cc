@@ -16,9 +16,9 @@
 
 #include <general_test/hello_world_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
-using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -27,8 +27,8 @@ HelloWorldTest::HelloWorldTest() : Test(CHRE_API_VERSION_1_0) {}
 
 void HelloWorldTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost("Expected 0 byte message, got more bytes:",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     sendSuccessToHost();
   }

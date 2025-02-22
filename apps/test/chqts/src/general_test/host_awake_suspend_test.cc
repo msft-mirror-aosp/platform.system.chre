@@ -16,6 +16,7 @@
 
 #include <general_test/host_awake_suspend_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
@@ -30,8 +31,8 @@ HostAwakeSuspendTest::HostAwakeSuspendTest() : Test(CHRE_API_VERSION_1_2) {}
 void HostAwakeSuspendTest::setUp(uint32_t messageSize,
                                  const void * /* message */) {
   if (messageSize != 0) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     // Invoke to verify that this API is implemented
     chreConfigureHostSleepStateEvents(true /* enable */);
@@ -39,8 +40,7 @@ void HostAwakeSuspendTest::setUp(uint32_t messageSize,
     // Assume that GTS tests are performed under USB connection,
     // in which the host should be awake.
     if (!chreIsHostAwake()) {
-      nanoapp_testing::sendFatalFailureToHost(
-          "Host must be awake during testing");
+      EXPECT_FAIL_RETURN("Host must be awake during testing");
     }
 
     nanoapp_testing::sendSuccessToHost();

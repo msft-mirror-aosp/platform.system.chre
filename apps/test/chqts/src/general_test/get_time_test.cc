@@ -19,13 +19,13 @@
 #include <cstddef>
 
 #include <shared/abort.h>
+#include <shared/macros.h>
 #include <shared/nano_endian.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
 
 using nanoapp_testing::MessageType;
-using nanoapp_testing::sendFatalFailureToHost;
 
 namespace general_test {
 
@@ -33,13 +33,13 @@ GetTimeTest::GetTimeTest() : Test(CHRE_API_VERSION_1_0), mContinueCount(0) {}
 
 void GetTimeTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost("GetTime message expects 0 additional bytes, got ",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("GetTime message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   uint64_t firstTime = chreGetTime();
   if (firstTime == UINT64_C(0)) {
-    sendFatalFailureToHost("chreGetTime() gave 0 well after system boot.");
+    EXPECT_FAIL_RETURN("chreGetTime() gave 0 well after system boot.");
   }
 
   uint64_t prevTime = firstTime;
@@ -53,14 +53,14 @@ void GetTimeTest::setUp(uint32_t messageSize, const void * /* message */) {
     // We don't require this to have increased, because maybe we're
     // on a relatively fast processor, or have a low resolution clock.
     if (nextTime < prevTime) {
-      sendFatalFailureToHost("chreGetTime() is not monotonically increasing");
+      EXPECT_FAIL_RETURN("chreGetTime() is not monotonically increasing");
     }
 
     prevTime = nextTime;
   }
 
   if (prevTime == firstTime) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "chreGetTime() is not increasing after a large number of calls");
   }
 
@@ -76,7 +76,7 @@ void GetTimeTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   getMessageDataFromHostEvent(senderInstanceId, eventType, eventData,
                               MessageType::kContinue, 0);
   if (mContinueCount > 0) {
-    sendFatalFailureToHost("Multiple kContinue messages sent");
+    EXPECT_FAIL_RETURN("Multiple kContinue messages sent");
   }
 
   mContinueCount++;

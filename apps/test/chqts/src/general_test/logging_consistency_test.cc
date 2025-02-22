@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <limits>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include <chre/util/nanoapp/log.h>
@@ -29,7 +30,6 @@
 
 #define LOG_TAG "[LoggingConsistencyTest]"
 
-using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -39,7 +39,7 @@ LoggingConsistencyTest::LoggingConsistencyTest() : Test(CHRE_API_VERSION_1_0) {}
 void LoggingConsistencyTest::setUp(uint32_t messageSize,
                                    const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "LoggingConsistency message expects 0 additional bytes, got ",
         &messageSize);
   }

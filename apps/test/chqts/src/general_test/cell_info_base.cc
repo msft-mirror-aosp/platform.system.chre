@@ -15,6 +15,7 @@
  */
 #include <general_test/cell_info_base.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 namespace general_test {
@@ -37,16 +38,16 @@ bool CellInfoBase::isBoundedInt64(int64_t value, int64_t lower, int64_t upper,
 
 void CellInfoBase::sendFatalFailureInt32(const char *message, int32_t value) {
   uint32_t val = static_cast<uint32_t>(value);
-  nanoapp_testing::sendFatalFailureToHost(message, &val);
+  EXPECT_FAIL_RETURN(message, &val);
 }
 
 void CellInfoBase::sendFatalFailureUint8(const char *message, uint8_t value) {
   uint32_t val = value;
-  nanoapp_testing::sendFatalFailureToHost(message, &val);
+  EXPECT_FAIL_RETURN(message, &val);
 }
 
 void CellInfoBase::sendFatalFailure(const char *message) {
-  nanoapp_testing::sendFatalFailureToHost(message, nullptr /* value */);
+  EXPECT_FAIL_RETURN(message, nullptr /* value */);
 }
 
 }  // namespace general_test

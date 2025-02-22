@@ -18,6 +18,7 @@
 
 #include <general_test/running_info.h>
 
+#include <shared/macros.h>
 #include <shared/nano_endian.h>
 #include <shared/nano_string.h>
 #include <shared/send_message.h>

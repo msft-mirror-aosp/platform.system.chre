@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cstddef>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
@@ -29,7 +30,7 @@
 #define LOG_TAG "[TimerCancelTest]"
 
 using nanoapp_testing::kOneMillisecondInNanoseconds;
-using nanoapp_testing::sendFatalFailureToHost;
+
 using nanoapp_testing::sendInternalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
@@ -51,7 +52,7 @@ void TimerCancelTest::startStages() {
     Stage *stage = &mStages[i];
     stage->timerId = chreTimerSet(kDuration, stage, stage->oneShot);
     if (stage->timerId == CHRE_TIMER_INVALID) {
-      sendFatalFailureToHost("Unable to set timer:", &i);
+      EXPECT_FAIL_RETURN("Unable to set timer:", &i);
     }
     if (stage->expectCallback) {
       // Go on to the next stage.  Note this stage will markSuccess()
@@ -59,10 +60,10 @@ void TimerCancelTest::startStages() {
       continue;
     }
     if (!chreTimerCancel(stage->timerId)) {
-      sendFatalFailureToHost("Unable to cancel timer:", &i);
+      EXPECT_FAIL_RETURN("Unable to cancel timer:", &i);
     }
     if (chreTimerCancel(stage->timerId)) {
-      sendFatalFailureToHost("Claimed success in second cancel:", &i);
+      EXPECT_FAIL_RETURN("Claimed success in second cancel:", &i);
     }
     markSuccess(i);
   }
@@ -88,14 +89,14 @@ void TimerCancelTest::setUp(uint32_t messageSize, const void * /* message */) {
   mInMethod = true;
 
   if (messageSize != 0) {
-    sendFatalFailureToHost(
-        "TimerCancel message expects 0 additional bytes, got ", &messageSize);
+    EXPECT_FAIL_RETURN("TimerCancel message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   constexpr uint32_t kUnownedTimer = 0;
   static_assert((kUnownedTimer != CHRE_TIMER_INVALID), "Bad test");
   if (chreTimerCancel(kUnownedTimer)) {
-    sendFatalFailureToHost("Claimed success canceling timer we don't own");
+    EXPECT_FAIL_RETURN("Claimed success canceling timer we don't own");
   }
 
   startStages();
@@ -107,7 +108,7 @@ void TimerCancelTest::setUp(uint32_t messageSize, const void * /* message */) {
 
 void TimerCancelTest::handleStageEvent(Stage *stage) {
   if (!stage->expectCallback) {
-    sendFatalFailureToHost("Timer didn't cancel:", &stage->stage);
+    EXPECT_FAIL_RETURN("Timer didn't cancel:", &stage->stage);
   }
   // Now we're going to cancel the timer, so we don't expect an
   // additional call.
@@ -116,17 +117,16 @@ void TimerCancelTest::handleStageEvent(Stage *stage) {
   bool cancelSucceeded = chreTimerCancel(stage->timerId);
   if (stage->oneShot) {
     if (cancelSucceeded) {
-      sendFatalFailureToHost(
-          "Claimed success canceling one-shot after it fired:", &stage->stage);
+      EXPECT_FAIL_RETURN("Claimed success canceling one-shot after it fired:",
+                         &stage->stage);
     }
   } else {
     if (!cancelSucceeded) {
-      sendFatalFailureToHost("Unable to cancel recurring timer:",
-                             &stage->stage);
+      EXPECT_FAIL_RETURN("Unable to cancel recurring timer:", &stage->stage);
     }
   }
   if (chreTimerCancel(stage->timerId)) {
-    sendFatalFailureToHost("Claimed success in second cancel:", &stage->stage);
+    EXPECT_FAIL_RETURN("Claimed success in second cancel:", &stage->stage);
   }
   markSuccess(stage->stage);
 }
@@ -134,20 +134,20 @@ void TimerCancelTest::handleStageEvent(Stage *stage) {
 void TimerCancelTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                   const void *eventData) {
   if (mInMethod) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "handleEvent invoked while another nanoapp method is running");
   }
   mInMethod = true;
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    sendFatalFailureToHost("handleEvent got event from unexpected sender:",
-                           &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
   if (eventType != CHRE_EVENT_TIMER) {
     unexpectedEvent(eventType);
   }
   const Stage *stage = static_cast<const Stage *>(eventData);
   if (stage->stage >= kStageCount) {
-    sendFatalFailureToHost("Invalid handleEvent data:", &stage->stage);
+    EXPECT_FAIL_RETURN("Invalid handleEvent data:", &stage->stage);
   }
   handleStageEvent(const_cast<Stage *>(stage));
 
@@ -158,7 +158,7 @@ void TimerCancelTest::markSuccess(uint32_t stage) {
   LOGD("Stage %" PRIu32 " succeeded", stage);
   uint32_t finishedBit = (1 << stage);
   if ((kAllFinished & finishedBit) == 0) {
-    sendFatalFailureToHost("markSuccess bad stage:", &stage);
+    EXPECT_FAIL_RETURN("markSuccess bad stage:", &stage);
   }
   if ((mFinishedBitmask & finishedBit) != 0) {
     sendInternalFailureToHost("markSuccess multiple times:", &stage);

@@ -15,6 +15,7 @@
  */
 #include <general_test/sensor_info_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 namespace general_test {
@@ -23,17 +24,16 @@ SensorInfoTest::SensorInfoTest() : Test(CHRE_API_VERSION_1_1) {}
 
 void SensorInfoTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else if (!chreSensorFindDefault(CHRE_SENSOR_TYPE_ACCELEROMETER,
                                     &mSensorHandle)) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "CHRE implementation does not have an accelerometer");
+    EXPECT_FAIL_RETURN("CHRE implementation does not have an accelerometer");
   } else {
     struct chreSensorInfo info;
 
     if (!chreGetSensorInfo(mSensorHandle, &info)) {
-      nanoapp_testing::sendFatalFailureToHost("Failed to gather sensor info");
+      EXPECT_FAIL_RETURN("Failed to gather sensor info");
     } else {
       mCompleted = true;
       validateSensorInfo(info);
@@ -44,20 +44,16 @@ void SensorInfoTest::setUp(uint32_t messageSize, const void * /* message */) {
 void SensorInfoTest::validateSensorInfo(
     const struct chreSensorInfo &info) const {
   if ((mApiVersion < CHRE_API_VERSION_1_1) && (info.minInterval != 0)) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Sensor minimum interval is non-zero");
+    EXPECT_FAIL_RETURN("Sensor minimum interval is non-zero");
   } else if (info.minInterval == 0) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Sensor minimum interval is unknown");
+    EXPECT_FAIL_RETURN("Sensor minimum interval is unknown");
   } else if (!chreSensorConfigure(
                  mSensorHandle, CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS,
                  info.minInterval, CHRE_SENSOR_LATENCY_DEFAULT)) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Sensor failed configuration with minimum interval");
+    EXPECT_FAIL_RETURN("Sensor failed configuration with minimum interval");
   } else if (!chreSensorConfigureModeOnly(mSensorHandle,
                                           CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Unable to configure sensor mode to DONE");
+    EXPECT_FAIL_RETURN("Unable to configure sensor mode to DONE");
   } else {
     nanoapp_testing::sendSuccessToHost();
   }

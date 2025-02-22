@@ -23,6 +23,7 @@
 #include <general_test/cell_info_tdscdma.h>
 #include <general_test/cell_info_wcdma.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre/util/macros.h"
@@ -45,15 +46,13 @@ void WwanCellInfoTest::setUp(uint32_t messageSize, const void *message) {
   if ((chreWwanGetCapabilities() & CHRE_WWAN_GET_CELL_INFO) == 0) {
     sendMessageToHost(nanoapp_testing::MessageType::kSkipped);
   } else if (!chreWwanGetCellInfoAsync(&mTimerHandle)) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "chreWwanGetCellInfo failed unexpectedly");
+    EXPECT_FAIL_RETURN("chreWwanGetCellInfo failed unexpectedly");
   } else {
     mTimerHandle = chreTimerSet(CHRE_ASYNC_RESULT_TIMEOUT_NS, &mTimerHandle,
                                 true /* oneShot */);
 
     if (mTimerHandle == CHRE_TIMER_INVALID) {
-      nanoapp_testing::sendFatalFailureToHost(
-          "Unable to set timer for automatic failure");
+      EXPECT_FAIL_RETURN("Unable to set timer for automatic failure");
     }
   }
 }
@@ -67,19 +66,16 @@ void WwanCellInfoTest::handleEvent(uint32_t senderInstanceId,
                                    uint16_t eventType, const void *eventData) {
   // The only expected message is from the async call
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "handleEvent received event from unexpected sender:",
-        &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent received event from unexpected sender:",
+                       &senderInstanceId);
   } else if (eventType == CHRE_EVENT_WWAN_CELL_INFO_RESULT) {
     cancelTimer();
     validateCellInfoResult(eventData);
   } else if (eventType == CHRE_EVENT_TIMER) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "chreWwanGetCellInfo did not return data in time");
+    EXPECT_FAIL_RETURN("chreWwanGetCellInfo did not return data in time");
   } else {
     uint32_t type = eventType;
-    nanoapp_testing::sendFatalFailureToHost(
-        "handleEvent received an unexpected eventType:", &type);
+    EXPECT_FAIL_RETURN("handleEvent received an unexpected eventType:", &type);
   }
 }
 
@@ -141,18 +137,17 @@ void WwanCellInfoTest::validateCellInfoResult(const void *eventData) const {
       static_cast<const chreWwanCellInfoResult *>(eventData);
 
   if (eventData == nullptr) {
-    nanoapp_testing::sendFatalFailureToHost("Received eventData is null");
+    EXPECT_FAIL_RETURN("Received eventData is null");
   } else if (result->version != CHRE_WWAN_CELL_INFO_RESULT_VERSION) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Received version is unexpected value");
+    EXPECT_FAIL_RETURN("Received version is unexpected value");
   } else if (result->reserved != 0) {
-    nanoapp_testing::sendFatalFailureToHost("Received reserved field non-zero");
+    EXPECT_FAIL_RETURN("Received reserved field non-zero");
   } else {
     const uint32_t *receivedCookie =
         static_cast<const uint32_t *>(result->cookie);
 
     if (receivedCookie != &mTimerHandle) {
-      nanoapp_testing::sendFatalFailureToHost("Received cookie does not match");
+      EXPECT_FAIL_RETURN("Received cookie does not match");
     } else if (result->cellInfoCount != 0) {
       validateCellInfo(result->cellInfoCount, result->cells);
     } else {

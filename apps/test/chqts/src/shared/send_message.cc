@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include <inttypes.h>
@@ -44,14 +45,13 @@ static ChunkAllocator<kAllocSize, 4> gChunkAlloc;
 static void freeChunkAllocMessage(void *message, size_t messageSize) {
   if (messageSize > kAllocSize) {
     uint32_t localSize = uint32_t(messageSize);
-    sendFatalFailureToHost("freeChunkAllocMessage given oversized message:",
-                           &localSize);
+    EXPECT_FAIL_RETURN("freeChunkAllocMessage given oversized message:",
+                       &localSize);
   }
   if (!gChunkAlloc.free(message)) {
     uint32_t localPtr =
         reinterpret_cast<size_t>(message) & UINT32_C(0xFFFFFFFF);
-    sendFatalFailureToHost("freeChunkAllocMessage given bad pointer:",
-                           &localPtr);
+    EXPECT_FAIL_RETURN("freeChunkAllocMessage given bad pointer:", &localPtr);
   }
 }
 
@@ -59,8 +59,7 @@ static void freeHeapMessage(void *message, size_t /* messageSize */) {
   if (gChunkAlloc.contains(message)) {
     uint32_t localPtr =
         reinterpret_cast<size_t>(message) & UINT32_C(0xFFFFFFFF);
-    sendFatalFailureToHost("freeHeapMessage given ChunkAlloc pointer:",
-                           &localPtr);
+    EXPECT_FAIL_RETURN("freeHeapMessage given ChunkAlloc pointer:", &localPtr);
   }
   chreHeapFree(message);
 }
@@ -187,13 +186,6 @@ void logFailureMessage(const char *message, const uint32_t *value) {
   } else {
     LOGE("TEST FAIL: %s", message);
   }
-}
-
-void sendFatalFailureToHost(const char *message, const uint32_t *value,
-                            AbortBlame reason) {
-  sendFailureToHost(message, value);
-  logFailureMessage(message, value);
-  nanoapp_testing::abort(reason);
 }
 
 void sendInternalFailureToHost(const char *message, const uint32_t *value,

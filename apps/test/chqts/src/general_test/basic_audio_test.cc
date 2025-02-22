@@ -21,6 +21,7 @@
 
 #include <general_test/basic_audio_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
@@ -30,7 +31,7 @@ using chre::test_shared::checkAudioSamplesAllSame;
 using chre::test_shared::checkAudioSamplesAllZeros;
 
 using nanoapp_testing::kOneSecondInNanoseconds;
-using nanoapp_testing::sendFatalFailureToHost;
+using nanoapp_testing::sendFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -112,19 +113,19 @@ bool validateAudioSource(uint32_t handle,
                          const struct chreAudioSource &source) {
   bool valid = false;
   if (!verifyStringWithLength(source.name, CHRE_AUDIO_SOURCE_NAME_MAX_SIZE)) {
-    sendFatalFailureToHost("Invalid audio source name for handle ", &handle);
+    sendFailureToHost("Invalid audio source name for handle ", &handle);
   } else if (source.sampleRate > kMaxAudioSampleRate ||
              source.sampleRate < kMinAudioSampleRate) {
-    sendFatalFailureToHost("Invalid audio sample rate for handle ", &handle);
+    sendFailureToHost("Invalid audio sample rate for handle ", &handle);
   } else if (source.minBufferDuration < kMinBufferDuration ||
              source.minBufferDuration > kMaxBufferDuration) {
-    sendFatalFailureToHost("Invalid min buffer duration for handle ", &handle);
+    sendFailureToHost("Invalid min buffer duration for handle ", &handle);
   } else if (source.maxBufferDuration < kMinBufferDuration ||
              source.maxBufferDuration > kMaxBufferDuration) {
-    sendFatalFailureToHost("Invalid max buffer duration for handle ", &handle);
+    sendFailureToHost("Invalid max buffer duration for handle ", &handle);
   } else if (source.format != CHRE_AUDIO_DATA_FORMAT_8_BIT_U_LAW &&
              source.format != CHRE_AUDIO_DATA_FORMAT_16_BIT_SIGNED_PCM) {
-    sendFatalFailureToHost("Invalid audio format for handle ", &handle);
+    sendFailureToHost("Invalid audio format for handle ", &handle);
   } else {
     valid = true;
   }
@@ -159,7 +160,7 @@ void validateAudioSources() {
     if (sourceFound) {
       validHandleCount++;
       if (!previousSourceFound) {
-        sendFatalFailureToHost("Gap detected in audio handles at ", &handle);
+        EXPECT_FAIL_RETURN("Gap detected in audio handles at ", &handle);
       } else {
         bool valid = validateAudioSource(handle, audioSource);
         if (valid && !minimumRequirementMet) {
@@ -173,12 +174,11 @@ void validateAudioSources() {
 
   if (validHandleCount > 0) {
     if (!minimumRequirementMet) {
-      sendFatalFailureToHost(
-          "Failed to meet minimum audio source requirements");
+      EXPECT_FAIL_RETURN("Failed to meet minimum audio source requirements");
     }
 
     if (validHandleCount == kMaxAudioSources) {
-      sendFatalFailureToHost("System is reporting too many audio sources");
+      EXPECT_FAIL_RETURN("System is reporting too many audio sources");
     }
   }
 }
@@ -192,11 +192,11 @@ void requestAudioData() {
   struct chreAudioSource audioSource;
 
   if (!chreAudioGetSource(kAudioHandle, &audioSource)) {
-    sendFatalFailureToHost("Failed to query source for handle 0");
+    EXPECT_FAIL_RETURN("Failed to query source for handle 0");
   } else if (!chreAudioConfigureSource(kAudioHandle, true /* enable */,
                                        audioSource.minBufferDuration,
                                        audioSource.minBufferDuration)) {
-    sendFatalFailureToHost("Failed to request audio data for handle 0");
+    EXPECT_FAIL_RETURN("Failed to request audio data for handle 0");
   }
 }
 
@@ -208,15 +208,15 @@ void handleAudioDataEvent(const chreAudioDataEvent *dataEvent) {
   static uint8_t numDataEventsSoFar = 1;
 
   if (dataEvent == nullptr) {
-    sendFatalFailureToHost("Null event data");
+    EXPECT_FAIL_RETURN("Null event data");
   } else if (dataEvent->samplesS16 == nullptr) {
-    sendFatalFailureToHost("Null audio data frame");
+    EXPECT_FAIL_RETURN("Null audio data frame");
   } else if (dataEvent->sampleCount == 0) {
-    sendFatalFailureToHost("0 samples in audio data frame");
+    EXPECT_FAIL_RETURN("0 samples in audio data frame");
   } else {
     struct chreAudioSource audioSource;
     if (!chreAudioGetSource(kAudioHandle, &audioSource)) {
-      sendFatalFailureToHost("Failed to get audio source for handle 0");
+      EXPECT_FAIL_RETURN("Failed to get audio source for handle 0");
     } else {
       // Per the CHRE Audio API requirements, it is expected that we exactly
       // the number of samples that we ask for - we verify that here.
@@ -230,25 +230,25 @@ void handleAudioDataEvent(const chreAudioDataEvent *dataEvent) {
             (kNumSamplesExpected > dataEvent->sampleCount)
                 ? (kNumSamplesExpected - dataEvent->sampleCount)
                 : (dataEvent->sampleCount - kNumSamplesExpected);
-        sendFatalFailureToHost("Unexpected number of samples received",
-                               &sampleCountDifference);
+        EXPECT_FAIL_RETURN("Unexpected number of samples received",
+                           &sampleCountDifference);
       }
     }
   }
 
   if (!checkAudioSamplesAllZeros(dataEvent->samplesS16,
                                  dataEvent->sampleCount)) {
-    sendFatalFailureToHost("All audio samples were zeros");
+    EXPECT_FAIL_RETURN("All audio samples were zeros");
   } else if (!checkAudioSamplesAllSame(dataEvent->samplesS16,
                                        dataEvent->sampleCount)) {
-    sendFatalFailureToHost("All audio samples were identical");
+    EXPECT_FAIL_RETURN("All audio samples were identical");
   }
 
   if (numDataEventsSoFar == 2) {
     if (!chreAudioConfigureSource(kAudioHandle, false /* enable */,
                                   0 /* bufferDuration */,
                                   0 /* deliveryInterval */)) {
-      sendFatalFailureToHost("Failed to disable audio source for handle 0");
+      EXPECT_FAIL_RETURN("Failed to disable audio source for handle 0");
     } else {
       sendSuccessToHost();
     }
@@ -271,8 +271,8 @@ BasicAudioTest::BasicAudioTest()
 
 void BasicAudioTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost("Beginning message expects 0 additional bytes, got ",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("Beginning message expects 0 additional bytes, got ",
+                       &messageSize);
   }
 
   if (!isAudioSupported()) {
@@ -292,7 +292,7 @@ void BasicAudioTest::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   UNUSED_VAR(senderInstanceId);
 
   if (mInMethod) {
-    sendFatalFailureToHost("handleEvent() invoked while already in method.");
+    EXPECT_FAIL_RETURN("handleEvent() invoked while already in method.");
   }
 
   mInMethod = true;

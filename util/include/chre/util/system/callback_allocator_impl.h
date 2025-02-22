@@ -17,18 +17,19 @@
 #ifndef CHRE_UTIL_SYSTEM_CALLBACK_ALLOCATOR_IMPL_H_
 #define CHRE_UTIL_SYSTEM_CALLBACK_ALLOCATOR_IMPL_H_
 
-#include <pw_allocator/allocator.h>
-#include <pw_allocator/capability.h>
-#include <pw_allocator/unique_ptr.h>
-#include <pw_containers/vector.h>
-#include <pw_function/function.h>
 #include <cstddef>
 #include <optional>
 
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/callback_allocator.h"
 
-namespace chre::message {
+#include "pw_allocator/allocator.h"
+#include "pw_allocator/capability.h"
+#include "pw_allocator/unique_ptr.h"
+#include "pw_containers/vector.h"
+#include "pw_function/function.h"
+
+namespace chre {
 
 template <typename Metadata>
 CallbackAllocator<Metadata>::CallbackAllocator(
@@ -41,6 +42,9 @@ CallbackAllocator<Metadata>::CallbackAllocator(
 
 template <typename Metadata>
 void *CallbackAllocator<Metadata>::DoAllocate(Layout /* layout */) {
+  // Do not allow usage of this allocator without providing a callback
+  // function. This allocator does not manage the memory, only guarantees
+  // that the callback will be called. Use MakeUniqueArrayWithCallback.
   return nullptr;
 }
 
@@ -101,6 +105,6 @@ CallbackAllocator<Metadata>::GetAndRemoveCallbackRecord(void *ptr) {
   return foundRecord;
 }
 
-}  // namespace chre::message
+}  // namespace chre
 
 #endif  // CHRE_UTIL_SYSTEM_CALLBACK_ALLOCATOR_IMPL_H_

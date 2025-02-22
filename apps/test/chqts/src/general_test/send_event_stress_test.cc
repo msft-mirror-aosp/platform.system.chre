@@ -18,11 +18,11 @@
 
 #include <cstddef>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
 
-using nanoapp_testing::sendFatalFailureToHost;
 using nanoapp_testing::sendSuccessToHost;
 
 /*
@@ -59,7 +59,7 @@ void SendEventStressTest::setUp(uint32_t messageSize,
   sInMethod = true;
 
   if (messageSize != 0) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "SendEventStress message expects 0 additional bytes, got ",
         &messageSize);
   }
@@ -81,7 +81,7 @@ void SendEventStressTest::setUp(uint32_t messageSize,
 
   // We want at least 2 events for this to pretend to be an exhaustion test.
   if (sEventsLeft < 2) {
-    sendFatalFailureToHost("Insufficient events available");
+    EXPECT_FAIL_RETURN("Insufficient events available");
   }
 
   // If kMaxEventsToSend events are sent, we need to reset
@@ -99,19 +99,19 @@ void SendEventStressTest::handleEvent(uint32_t senderInstanceId,
                                       uint16_t eventType,
                                       const void *eventData) {
   if (sInMethod) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "handleEvent invoked while another nanoapp method is running");
   }
   sInMethod = true;
   if (senderInstanceId != mInstanceId) {
-    sendFatalFailureToHost("handleEvent got event from unexpected sender:",
-                           &senderInstanceId);
+    EXPECT_FAIL_RETURN("handleEvent got event from unexpected sender:",
+                       &senderInstanceId);
   }
   verifyEvent(eventType, eventData, 0);
 
   --sEventsLeft;
   if (sEventsLeft < 0) {
-    sendFatalFailureToHost("Too many events delivered");
+    EXPECT_FAIL_RETURN("Too many events delivered");
   }
 
   sInMethod = false;
@@ -124,7 +124,7 @@ void SendEventStressTest::verifyEvent(uint16_t eventType, const void *data,
   }
   if (data != kEventData) {
     // 0: handleEvent, 1: completeCallback
-    sendFatalFailureToHost("bad event data:", &num);
+    EXPECT_FAIL_RETURN("bad event data:", &num);
   }
 }
 
@@ -140,7 +140,7 @@ void SendEventStressTest::completeCallback(uint16_t eventType, void *data) {
   }
 
   if (sInMethod) {
-    sendFatalFailureToHost(
+    EXPECT_FAIL_RETURN(
         "completeCallback invoked while another nanoapp method is running");
   }
   verifyEvent(eventType, data, 1);
@@ -148,16 +148,15 @@ void SendEventStressTest::completeCallback(uint16_t eventType, void *data) {
   --sCompleteCallbacksLeft;
   if (sCompleteCallbacksLeft == 0) {
     if (sEventsLeft != 0) {
-      sendFatalFailureToHost("completeCallbacks delivered before events");
+      EXPECT_FAIL_RETURN("completeCallbacks delivered before events");
     }
     sendSuccessToHost();
   } else if (sCompleteCallbacksLeft < 0) {
     // It's too late for the Host to catch this failure, but perhaps
     // the abort will screw up our unload, and trigger a failure that way.
-    sendFatalFailureToHost("completeCallback called too many times");
+    EXPECT_FAIL_RETURN("completeCallback called too many times");
   } else if (sEventsLeft <= 0 && sCompleteCallbacksLeft > 0) {
-    sendFatalFailureToHost(
-        "completeCallback called less times than events sent");
+    EXPECT_FAIL_RETURN("completeCallback called less times than events sent");
   }
 }
 

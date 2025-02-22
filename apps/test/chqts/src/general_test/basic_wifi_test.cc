@@ -97,9 +97,9 @@ void testConfigureScanMonitorAsync(bool enable, const void *cookie) {
   LOGI("Starts scan monitor configure test: %s", enable ? "enable" : "disable");
   if (!chreWifiConfigureScanMonitorAsync(enable, cookie)) {
     if (enable) {
-      EXPECT_FAIL("Failed to request to enable scan monitor.");
+      EXPECT_FAIL_RETURN("Failed to request to enable scan monitor.");
     } else {
-      EXPECT_FAIL("Failed to request to disable scan monitor.");
+      EXPECT_FAIL_RETURN("Failed to request to disable scan monitor.");
     }
   }
 }
@@ -121,7 +121,7 @@ void testRequestScanAsync() {
       /*.radioChainPref=*/CHRE_WIFI_RADIO_CHAIN_PREF_DEFAULT,
       /*.channelSet=*/CHRE_WIFI_CHANNEL_SET_NON_DFS};
   if (!chreWifiRequestScanAsync(&kParams, &kOnDemandScanCookie)) {
-    EXPECT_FAIL("Failed to request for on-demand WiFi scan.");
+    EXPECT_FAIL_RETURN("Failed to request for on-demand WiFi scan.");
   }
 }
 
@@ -139,8 +139,8 @@ void testRequestRangingAsync(const struct chreWifiScanResult *aps,
 
   auto targetList =
       chre::MakeUniqueArray<struct chreWifiRangingTarget[]>(targetLength);
-  EXPECT_NE(targetList, nullptr,
-            "Failed to allocate array for issuing a ranging request");
+  EXPECT_NE_OR_RETURN(targetList, nullptr,
+                      "Failed to allocate array for issuing a ranging request");
 
   // Save the last spot for any available RTT APs in case they didn't make it
   // in the array earlier. This first loop allows non-RTT compatible APs as a
@@ -163,7 +163,7 @@ void testRequestRangingAsync(const struct chreWifiScanResult *aps,
   struct chreWifiRangingParams params = {.targetListLen = targetLength,
                                          .targetList = targetList.get()};
   if (!chreWifiRequestRangingAsync(&params, &kRequestRangingCookie)) {
-    EXPECT_FAIL("Failed to request ranging for a list of WiFi scans.");
+    EXPECT_FAIL_RETURN("Failed to request ranging for a list of WiFi scans.");
   }
 }
 
@@ -226,8 +226,8 @@ void validateCenterFreq(const chreWifiScanResult &result) {
   if (result.channelWidth != CHRE_WIFI_CHANNEL_WIDTH_80_PLUS_80_MHZ &&
       result.centerFreqSecondary != 0) {
     // TODO(b/396133301): Format the centerFreqSecondary into the message
-    // after redesigning of EXPECT_FAIL()
-    EXPECT_FAIL(
+    // after redesigning of EXPECT_FAIL_RETURN()
+    EXPECT_FAIL_RETURN(
         "centerFreqSecondary must be 0 if channelWidth is not 80+80MHZ");
   }
 }
@@ -240,7 +240,7 @@ void validateRssi(int8_t rssi) {
   // right next to a high-power AP (e.g. transmitting at 20 dBm),
   // in which case RSSI will be < 20 dBm. Place a high threshold to check
   // against values likely to be erroneous (36 dBm/4W).
-  EXPECT_LT(rssi, 36, "RSSI is greater than 36");
+  EXPECT_LT_OR_RETURN(rssi, 36, "RSSI is greater than 36");
 }
 
 /**
@@ -253,9 +253,10 @@ void validateRangingEventArray(const struct chreWifiScanResult *results,
                                const struct chreWifiRangingEvent *event) {
   size_t expectedArraySize = std::min(
       resultsSize, static_cast<size_t>(CHRE_WIFI_RANGING_LIST_MAX_LEN));
-  EXPECT_EQ(event->resultCount, expectedArraySize,
-            "RTT ranging result count was not the same as the requested target "
-            "list size");
+  EXPECT_EQ_OR_RETURN(
+      event->resultCount, expectedArraySize,
+      "RTT ranging result count was not the same as the requested target "
+      "list size");
 
   uint8_t matchesFound = 0;
 
@@ -269,7 +270,7 @@ void validateRangingEventArray(const struct chreWifiScanResult *results,
     }
   }
 
-  EXPECT_EQ(
+  EXPECT_EQ_OR_RETURN(
       matchesFound, expectedArraySize,
       "BSSID(s) from the ranging request were not found in the ranging result");
 }
@@ -283,17 +284,18 @@ void validateLci(const struct chreWifiRangingResult::chreWifiLci *lci) {
   // used for lat / lng so verify that no bits outside those are used.
   constexpr int64_t kMaxLat = INT64_C(90) << 25;
   constexpr int64_t kMaxLng = INT64_C(180) << 25;
-  EXPECT_IN_RANGE(lci->latitude, -1 * kMaxLat, kMaxLat,
-                  "LCI's latitude is outside the range of -90 to 90");
-  EXPECT_IN_RANGE(lci->longitude, -1 * kMaxLng, kMaxLng,
-                  "LCI's longitude is outside the range of -180 to 180");
+  EXPECT_IN_RANGE_OR_RETURN(lci->latitude, -1 * kMaxLat, kMaxLat,
+                            "LCI's latitude is outside the range of -90 to 90");
+  EXPECT_IN_RANGE_OR_RETURN(
+      lci->longitude, -1 * kMaxLng, kMaxLng,
+      "LCI's longitude is outside the range of -180 to 180");
 
   // According to RFC 6225, values greater than 34 are reserved
   constexpr uint8_t kMaxLatLngUncertainty = 34;
-  EXPECT_LE(lci->latitudeUncertainty, kMaxLatLngUncertainty,
-            "LCI's latitude uncertainty is greater than 34");
-  EXPECT_LE(lci->longitudeUncertainty, kMaxLatLngUncertainty,
-            "LCI's longitude uncertainty is greater than 34");
+  EXPECT_LE_OR_RETURN(lci->latitudeUncertainty, kMaxLatLngUncertainty,
+                      "LCI's latitude uncertainty is greater than 34");
+  EXPECT_LE_OR_RETURN(lci->longitudeUncertainty, kMaxLatLngUncertainty,
+                      "LCI's longitude uncertainty is greater than 34");
 
   if (lci->altitudeType == CHRE_WIFI_LCI_ALTITUDE_TYPE_METERS) {
     // Highest largely populated city in the world, El Alto, Bolivia, is 4300
@@ -304,23 +306,24 @@ void validateLci(const struct chreWifiRangingResult::chreWifiLci *lci) {
     // Lowest largely populated city in the world, Baku, Azerbaijan, is 28
     // meters below sea level so -100 meters should be a good lower bound.
     constexpr int32_t kMinAltitudeMeters = (100 << 8) * -1;
-    EXPECT_IN_RANGE(
+    EXPECT_IN_RANGE_OR_RETURN(
         lci->altitude, kMinAltitudeMeters, kMaxAltitudeMeters,
         "LCI's altitude is outside of the range of -25 to 500 meters");
 
     // According to RFC 6225, values greater than 30 are reserved
     constexpr uint8_t kMaxAltitudeUncertainty = 30;
-    EXPECT_LE(lci->altitudeUncertainty, kMaxAltitudeUncertainty,
-              "LCI's altitude certainty is greater than 30");
+    EXPECT_LE_OR_RETURN(lci->altitudeUncertainty, kMaxAltitudeUncertainty,
+                        "LCI's altitude certainty is greater than 30");
   } else if (lci->altitudeType == CHRE_WIFI_LCI_ALTITUDE_TYPE_FLOORS) {
     // Tallest building has 163 floors. Assume -5 to 100 floors is a sane range.
     constexpr int32_t kMaxAltitudeFloors = 100 << 8;
     constexpr int32_t kMinAltitudeFloors = (5 << 8) * -1;
-    EXPECT_IN_RANGE(
+    EXPECT_IN_RANGE_OR_RETURN(
         lci->altitude, kMinAltitudeFloors, kMaxAltitudeFloors,
         "LCI's altitude is outside of the range of -5 to 100 floors");
   } else if (lci->altitudeType != CHRE_WIFI_LCI_ALTITUDE_TYPE_UNKNOWN) {
-    EXPECT_FAIL("LCI's altitude type was not unknown, floors, or meters");
+    EXPECT_FAIL_RETURN(
+        "LCI's altitude type was not unknown, floors, or meters");
   }
 }
 
@@ -330,7 +333,8 @@ BasicWifiTest::BasicWifiTest() : Test(CHRE_API_VERSION_1_1) {}
 
 void BasicWifiTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    EXPECT_FAIL("Expected 0 byte message, got more bytes:", &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     mWifiCapabilities = chreWifiGetCapabilities();
     startScanMonitorTestStage();
@@ -339,7 +343,7 @@ void BasicWifiTest::setUp(uint32_t messageSize, const void * /* message */) {
 
 void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
                                 uint16_t eventType, const void *eventData) {
-  EXPECT_NE(eventData, nullptr, "Received null eventData");
+  EXPECT_NE_OR_RETURN(eventData, nullptr, "Received null eventData");
   LOGI("Received event type %" PRIu16, eventType);
   switch (eventType) {
     case CHRE_EVENT_WIFI_ASYNC_RESULT:
@@ -354,7 +358,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
       }
 
       if (!scanEventExpected()) {
-        EXPECT_FAIL("WiFi scan event received when not requested");
+        EXPECT_FAIL_RETURN("WiFi scan event received when not requested");
       }
       const auto *result = static_cast<const chreWifiScanEvent *>(eventData);
       LOGI("Received wifi scan result, result count: %" PRIu8,
@@ -372,7 +376,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
       bool delayExceeded = (mStartTimestampNs != 0) &&
                            (chreGetTime() - mStartTimestampNs > maxDelayNs);
       if (delayExceeded) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "Did not receive chreWifiScanResult within 100 milliseconds.");
       }
       // Do not reset mStartTimestampNs here, because it is used for the
@@ -382,7 +386,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
     }
     case CHRE_EVENT_WIFI_RANGING_RESULT: {
       if (!rangingEventExpected()) {
-        EXPECT_FAIL("WiFi ranging event received when not requested");
+        EXPECT_FAIL_RETURN("WiFi ranging event received when not requested");
       }
       const auto *result = static_cast<const chreWifiRangingEvent *>(eventData);
       // Allow some wiggle room between the expected timeout and when the event
@@ -390,7 +394,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
       if (mStartTimestampNs != 0 &&
           chreGetTime() - mStartTimestampNs >
               CHRE_WIFI_RANGING_RESULT_TIMEOUT_NS + kTimeoutWiggleRoomNs) {
-        EXPECT_FAIL(
+        EXPECT_FAIL_RETURN(
             "Did not receive chreWifiRangingEvent within the ranging timeout");
       }
       validateRangingEvent(result);
@@ -418,7 +422,7 @@ void BasicWifiTest::handleEvent(uint32_t /* senderInstanceId */,
 
 void BasicWifiTest::handleChreWifiAsyncEvent(const chreAsyncResult *result) {
   if (!mCurrentWifiRequest.has_value()) {
-    nanoapp_testing::sendFailureToHost("Unexpected async result");
+    EXPECT_FAIL_RETURN("Unexpected async result");
   }
   LOGI("Received a wifi async event. request type: %" PRIu8
        " error code: %" PRIu8,
@@ -470,8 +474,8 @@ void BasicWifiTest::processChreWifiAsyncResult(const chreAsyncResult *result) {
       }
       break;
     default:
-      EXPECT_FAIL_UINT8("Received unexpected requestType %d",
-                        result->requestType);
+      EXPECT_FAIL_RETURN_UINT8("Received unexpected requestType %d",
+                               result->requestType);
       break;
   }
 }
@@ -546,14 +550,14 @@ void BasicWifiTest::resetCurrentWifiRequest(const void *cookie,
 
 void BasicWifiTest::validateWifiScanEvent(const chreWifiScanEvent *eventData) {
   if (eventData->version != CHRE_WIFI_SCAN_EVENT_VERSION) {
-    EXPECT_FAIL_UINT8("Got unexpected scan event version %d",
-                      eventData->version);
+    EXPECT_FAIL_RETURN_UINT8("Got unexpected scan event version %d",
+                             eventData->version);
   }
 
   if (mNextExpectedIndex != eventData->eventIndex) {
     LOGE("Expected index: %" PRIu32 ", received index: %" PRIu8,
          mNextExpectedIndex, eventData->eventIndex);
-    EXPECT_FAIL("Received out-of-order events");
+    EXPECT_FAIL_RETURN("Received out-of-order events");
   }
   mNextExpectedIndex++;
 
@@ -563,7 +567,7 @@ void BasicWifiTest::validateWifiScanEvent(const chreWifiScanEvent *eventData) {
   if (mWiFiScanResultRemaining < eventData->resultCount) {
     LOGE("Remaining scan results %" PRIu32 ", received %" PRIu8,
          mWiFiScanResultRemaining, eventData->resultCount);
-    EXPECT_FAIL("Received too many WiFi scan results");
+    EXPECT_FAIL_RETURN("Received too many WiFi scan results");
   }
   mWiFiScanResultRemaining -= eventData->resultCount;
 
@@ -600,7 +604,7 @@ void BasicWifiTest::validateWifiScanResult(uint8_t count,
                                            const chreWifiScanResult *results) {
   for (uint8_t i = 0; i < count; ++i) {
     if (results[i].ssidLen > CHRE_WIFI_SSID_MAX_LEN) {
-      EXPECT_FAIL_UINT8("Got unexpected ssidLen %d", results[i].ssidLen);
+      EXPECT_FAIL_RETURN_UINT8("Got unexpected ssidLen %d", results[i].ssidLen);
     }
 
     // TODO: Enable fatal failures on band, RSSI, and primary channel
@@ -620,8 +624,8 @@ void BasicWifiTest::validateWifiScanResult(uint8_t count,
 void BasicWifiTest::validateRangingEvent(
     const chreWifiRangingEvent *eventData) {
   if (eventData->version != CHRE_WIFI_RANGING_EVENT_VERSION) {
-    EXPECT_FAIL_UINT8("Got unexpected ranging event version %d",
-                      eventData->version);
+    EXPECT_FAIL_RETURN_UINT8("Got unexpected ranging event version %d",
+                             eventData->version);
   }
 
   validateRangingEventArray(mLatestWifiScanResults.data(),
@@ -635,13 +639,14 @@ void BasicWifiTest::validateRangingEvent(
       LOGE("Invalid Ranging result timestamp = %" PRIu64 " (%" PRIu64
            ", %" PRIu64 "). Status = %" PRIu8,
            result.timestamp, mStartTimestampNs, currentTime, result.status);
-      EXPECT_FAIL("Invalid ranging result timestamp");
+      EXPECT_FAIL_RETURN("Invalid ranging result timestamp");
     }
 
     if (result.status != CHRE_WIFI_RANGING_STATUS_SUCCESS) {
       if (result.rssi != 0 || result.distance != 0 ||
           result.distanceStdDev != 0) {
-        EXPECT_FAIL("Ranging result with failure status had non-zero state");
+        EXPECT_FAIL_RETURN(
+            "Ranging result with failure status had non-zero state");
       }
     } else {
       validateRssi(result.rssi);

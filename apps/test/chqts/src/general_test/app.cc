@@ -52,6 +52,7 @@
 #include <general_test/wwan_capabilities_test.h>
 #include <general_test/wwan_cell_info_test.h>
 #include <shared/abort.h>
+#include <shared/macros.h>
 #include <shared/nano_endian.h>
 #include <shared/nano_string.h>
 #include <shared/send_message.h>
@@ -60,7 +61,7 @@
 
 using nanoapp_testing::AbortBlame;
 using nanoapp_testing::MessageType;
-using nanoapp_testing::sendFatalFailureToHost;
+
 using nanoapp_testing::sendInternalFailureToHost;
 
 namespace general_test {
@@ -135,7 +136,7 @@ chreMessageFromHostData App::adjustHostMessageForNYC(
   chreMessageFromHostData ret;
 
   if (data->messageSize < sizeof(uint32_t)) {
-    sendFatalFailureToHost("Undersized message in adjustHostMessageForNYC");
+    sendInternalFailureToHost("Undersized message in adjustHostMessageForNYC");
   }
   const uint8_t *messageBytes = static_cast<const uint8_t *>(data->message);
   nanoapp_testing::memcpy(&(ret.reservedMessageType), messageBytes,
@@ -170,12 +171,12 @@ void App::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   // us which test to run.  We fail if it's anything else.
   if (eventType != CHRE_EVENT_MESSAGE_FROM_HOST) {
     uint32_t localEventType = eventType;
-    sendFatalFailureToHost("Unexpected event type with no established test:",
-                           &localEventType);
+    EXPECT_FAIL_RETURN("Unexpected event type with no established test:",
+                       &localEventType);
   }
   if (senderInstanceId != CHRE_INSTANCE_ID) {
-    sendFatalFailureToHost("Got MESSAGE_FROM_HOST not from CHRE_INSTANCE_ID:",
-                           &senderInstanceId);
+    EXPECT_FAIL_RETURN("Got MESSAGE_FROM_HOST not from CHRE_INSTANCE_ID:",
+                       &senderInstanceId);
   }
   createTest(eventData);
 }
@@ -238,8 +239,8 @@ void App::createTest(const void *eventData) {
 #undef CASE
 
     default:
-      sendFatalFailureToHost("Unexpected message type:",
-                             &(data->reservedMessageType));
+      EXPECT_FAIL_RETURN("Unexpected message type:",
+                         &(data->reservedMessageType));
   }
 
   if (mCurrentTest != nullptr) {

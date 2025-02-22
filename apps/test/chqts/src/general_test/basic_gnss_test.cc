@@ -16,9 +16,12 @@
 
 #include <general_test/basic_gnss_test.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
 
 #include "chre_api/chre.h"
+
+using nanoapp_testing::sendFailureToHost;
 
 /*
  * Test to check expected functionality of the CHRE GNSS APIs.
@@ -27,29 +30,27 @@ namespace general_test {
 
 namespace {
 
-using nanoapp_testing::sendFatalFailureToHost;
-
 void testLocationSessionAsync() {
   if (!chreGnssLocationSessionStartAsync(1000 /* minIntervalMs */,
                                          0 /* minTimeToNextFixMs */,
                                          nullptr /* cookie */)) {
-    sendFatalFailureToHost("Failed to start a location session");
+    EXPECT_FAIL_RETURN("Failed to start a location session");
   }
 }
 
 void testMeasurementSessionAsync() {
   if (!chreGnssMeasurementSessionStartAsync(1000 /* minIntervalMs */,
                                             nullptr /* cookie */)) {
-    sendFatalFailureToHost("Failed to start a measurement session");
+    EXPECT_FAIL_RETURN("Failed to start a measurement session");
   }
 }
 
 bool testPassiveListener() {
   bool success = false;
   if (!chreGnssConfigurePassiveLocationListener(true /* enable */)) {
-    sendFatalFailureToHost("Failed to enable passive location listener");
+    sendFailureToHost("Failed to enable passive location listener");
   } else if (!chreGnssConfigurePassiveLocationListener(false /* enable */)) {
-    sendFatalFailureToHost("Failed to disable passive location listener");
+    sendFailureToHost("Failed to disable passive location listener");
   } else {
     success = true;
   }
@@ -63,8 +64,8 @@ BasicGnssTest::BasicGnssTest() : Test(CHRE_API_VERSION_1_1) {}
 
 void BasicGnssTest::setUp(uint32_t messageSize, const void * /* message */) {
   if (messageSize != 0) {
-    sendFatalFailureToHost("Expected 0 byte message, got more bytes:",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   } else {
     if (isCapabilitySet(CHRE_GNSS_CAPABILITIES_LOCATION)) {
       testLocationSessionAsync();
@@ -93,13 +94,13 @@ void BasicGnssTest::setUp(uint32_t messageSize, const void * /* message */) {
 
 void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
   if (!result->success) {
-    sendFatalFailureToHost("Received unsuccessful GNSS async result");
+    EXPECT_FAIL_RETURN("Received unsuccessful GNSS async result");
   }
 
   switch (result->requestType) {
     case CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_START: {
       if (!chreGnssLocationSessionStopAsync(nullptr /* cookie */)) {
-        sendFatalFailureToHost("Failed to stop a location session");
+        EXPECT_FAIL_RETURN("Failed to stop a location session");
       }
       break;
     }
@@ -110,7 +111,7 @@ void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
     }
     case CHRE_GNSS_REQUEST_TYPE_MEASUREMENT_SESSION_START: {
       if (!chreGnssMeasurementSessionStopAsync(nullptr /* cookie */)) {
-        sendFatalFailureToHost("Failed to stop a measurement session");
+        EXPECT_FAIL_RETURN("Failed to stop a measurement session");
       }
       break;
     }
@@ -120,7 +121,7 @@ void BasicGnssTest::handleGnssAsyncResult(const chreAsyncResult *result) {
       break;
     }
     default:
-      sendFatalFailureToHost("Unexpected request type");
+      EXPECT_FAIL_RETURN("Unexpected request type");
       break;
   }
 }

@@ -16,7 +16,10 @@
 
 #include <general_test/running_info.h>
 
+#include <shared/macros.h>
 #include <shared/send_message.h>
+
+using nanoapp_testing::sendFailureToHost;
 
 namespace general_test {
 
@@ -31,16 +34,13 @@ bool RunningInfo::queryByInstanceId() {
 bool RunningInfo::validate(uint32_t appVersion) {
   bool result;
   if (mRunningInfo.version != appVersion) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Running info version does not match app version");
+    sendFailureToHost("Running info version does not match app version");
     result = false;
   } else if (mRunningInfo.appId != NANOAPP_ID) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Running info appId does not match build constant");
+    sendFailureToHost("Running info appId does not match build constant");
     result = false;
   } else if (mRunningInfo.version != NANOAPP_VERSION) {
-    nanoapp_testing::sendFatalFailureToHost(
-        "Running info version does not match build constant");
+    sendFailureToHost("Running info version does not match build constant");
     result = false;
   } else {
     result =

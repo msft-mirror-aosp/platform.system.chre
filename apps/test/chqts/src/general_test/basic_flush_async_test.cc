@@ -29,7 +29,7 @@
 
 using nanoapp_testing::kOneMillisecondInNanoseconds;
 using nanoapp_testing::kOneSecondInNanoseconds;
-using nanoapp_testing::sendFatalFailureToHost;
+
 using nanoapp_testing::sendSuccessToHost;
 
 namespace general_test {
@@ -43,15 +43,15 @@ void BasicSensorFlushAsyncTest::setUp(uint32_t messageSize,
       kFlushTestLatencyNs / 2;  // start the test at (now + 1/2*latency)
 
   if (messageSize != 0) {
-    sendFatalFailureToHost("Expected 0 byte message, got more bytes:",
-                           &messageSize);
+    EXPECT_FAIL_RETURN("Expected 0 byte message, got more bytes:",
+                       &messageSize);
   }
 
   // TODO: Generalize this test for all sensors by making
   // BasicSensorFlushAsyncTest a base class for sensor specific tests for the
   // FlushAsync API
   if (!chreSensorFindDefault(CHRE_SENSOR_TYPE_ACCELEROMETER, &mSensorHandle)) {
-    sendFatalFailureToHost("Default Accelerometer not found");
+    EXPECT_FAIL_RETURN("Default Accelerometer not found");
   }
 
   // We set the sampling period of the sensor to 2x the min interval,
@@ -60,13 +60,13 @@ void BasicSensorFlushAsyncTest::setUp(uint32_t messageSize,
   // 'wiggle room' from when we start the flush request.
   struct chreSensorInfo info;
   if (!chreGetSensorInfo(mSensorHandle, &info)) {
-    sendFatalFailureToHost("Failed to get sensor info");
+    EXPECT_FAIL_RETURN("Failed to get sensor info");
   }
   mFlushTestTimeWiggleRoomNs = 20 * info.minInterval;
 
   if (!chreSensorConfigure(mSensorHandle, CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS,
                            2 * info.minInterval, kFlushTestLatencyNs)) {
-    sendFatalFailureToHost("Failed to configure the accelerometer");
+    EXPECT_FAIL_RETURN("Failed to configure the accelerometer");
   }
 
   // To exercise the test, we need to confirm that we actually get sensor
@@ -78,7 +78,7 @@ void BasicSensorFlushAsyncTest::setUp(uint32_t messageSize,
       chreTimerSet(kFlushTestStartTimerValueNs, &mFlushStartTimerHandle,
                    true /* one shot */);
   if (CHRE_TIMER_INVALID == mFlushStartTimerHandle) {
-    sendFatalFailureToHost("Failed to set flush start timer");
+    EXPECT_FAIL_RETURN("Failed to set flush start timer");
   }
 }
 
@@ -119,7 +119,7 @@ void BasicSensorFlushAsyncTest::start() {
       chreTimerSet(CHRE_SENSOR_FLUSH_COMPLETE_TIMEOUT_NS,
                    &mFlushTimeoutTimerHandle, true /* oneShot */);
   if (CHRE_TIMER_INVALID == mFlushTimeoutTimerHandle) {
-    sendFatalFailureToHost("Failed to set flush start timer");
+    EXPECT_FAIL_RETURN("Failed to set flush start timer");
   }
 }
 
@@ -132,12 +132,13 @@ void BasicSensorFlushAsyncTest::finish(bool succeeded, const char *message) {
 
   if (!chreSensorConfigureModeOnly(mSensorHandle,
                                    CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-    sendFatalFailureToHost("Failed to release sensor handle");
+    EXPECT_FAIL_RETURN("Failed to release sensor handle");
   }
 
   if (!succeeded) {
-    EXPECT_NE(message, nullptr, "message cannot be null when the test failed");
-    sendFatalFailureToHost(message);
+    EXPECT_NE_OR_RETURN(message, nullptr,
+                        "message cannot be null when the test failed");
+    EXPECT_FAIL_RETURN(message);
   } else {
     sendSuccessToHost();
   }
@@ -155,7 +156,8 @@ void BasicSensorFlushAsyncTest::handleDataReceived(
 void BasicSensorFlushAsyncTest::handleFlushComplete(
     const struct chreSensorFlushCompleteEvent *eventData) {
   if (mStarted) {
-    EXPECT_NE(mLatestSensorDataTimestamp, 0, "No sensor data was received");
+    EXPECT_NE_OR_RETURN(mLatestSensorDataTimestamp, 0,
+                        "No sensor data was received");
 
     // we should fail the test if we receive too old a sensor sample.
     // ideally, we don't receive any samples that was sampled after
@@ -165,22 +167,22 @@ void BasicSensorFlushAsyncTest::handleFlushComplete(
     uint64_t oldestValidTimestamp =
         mFlushRequestTime - mFlushTestTimeWiggleRoomNs;
 
-    EXPECT_GE(mLatestSensorDataTimestamp, oldestValidTimestamp,
-              "Received very old data");
+    EXPECT_GE_OR_RETURN(mLatestSensorDataTimestamp, oldestValidTimestamp,
+                        "Received very old data");
 
     LOGI("Flush test: flush request to complete time: %" PRIu64 " ms",
          (chreGetTime() - mFlushRequestTime) / kOneMillisecondInNanoseconds);
 
     // verify event data
-    EXPECT_NE(eventData, nullptr, "null event data");
-    EXPECT_EQ(eventData->sensorHandle, mSensorHandle,
-              "Got flush event from a different sensor handle");
-    EXPECT_EQ(eventData->errorCode, CHRE_ERROR_NONE,
-              "Flush Error code was not CHRE_ERROR_NONE");
-    EXPECT_NE(eventData->cookie, nullptr,
-              "Null cookie in flush complete event");
-    EXPECT_EQ(*(static_cast<const uint32_t *>(eventData->cookie)), mCookie,
-              "unexpected cookie in flush complete event");
+    EXPECT_NE_OR_RETURN(eventData, nullptr, "null event data");
+    EXPECT_EQ_OR_RETURN(eventData->sensorHandle, mSensorHandle,
+                        "Got flush event from a different sensor handle");
+    EXPECT_EQ_OR_RETURN(eventData->errorCode, CHRE_ERROR_NONE,
+                        "Flush Error code was not CHRE_ERROR_NONE");
+    EXPECT_NE_OR_RETURN(eventData->cookie, nullptr,
+                        "Null cookie in flush complete event");
+    EXPECT_EQ_OR_RETURN(*(static_cast<const uint32_t *>(eventData->cookie)),
+                        mCookie, "unexpected cookie in flush complete event");
 
     finish(true /* succeeded */, nullptr /* message */);
   }
@@ -195,10 +197,10 @@ void BasicSensorFlushAsyncTest::handleTimerExpired(
       finish(false /* succeeded */,
              "Did not receive flush complete event in time");
     } else {
-      sendFatalFailureToHost("Unexpected timer handle received");
+      EXPECT_FAIL_RETURN("Unexpected timer handle received");
     }
   } else {
-    sendFatalFailureToHost("Null timer handle received");
+    EXPECT_FAIL_RETURN("Null timer handle received");
   }
 }
 
