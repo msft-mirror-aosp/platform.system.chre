@@ -17,6 +17,7 @@
 #include "chre/core/event_loop.h"
 #include <cinttypes>
 #include <cstdint>
+#include <cstdlib>
 #include <type_traits>
 
 #include "chre/core/event.h"
@@ -31,6 +32,7 @@
 #include "chre/util/lock_guard.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/system/event_callbacks.h"
+#include "chre/util/system/message_common.h"
 #include "chre/util/system/stats_container.h"
 #include "chre/util/throttle.h"
 #include "chre/util/time.h"
@@ -38,6 +40,8 @@
 
 using ::chre::message::EndpointInfo;
 using ::chre::message::EndpointType;
+using ::chre::message::RpcFormat;
+using ::chre::message::ServiceInfo;
 
 namespace chre {
 
@@ -486,6 +490,38 @@ void EventLoop::onMatchingNanoappEndpoint(
   for (const UniquePtr<Nanoapp> &app : mNanoapps) {
     if (function(getEndpointInfoFromNanoappLocked(*app.get()))) {
       break;
+    }
+  }
+}
+
+void EventLoop::onMatchingNanoappService(
+    const pw::Function<bool(const EndpointInfo &, const ServiceInfo &)>
+        &function) {
+  ConditionalLockGuard<Mutex> lock(mNanoappsLock, !inEventLoopThread());
+
+  // Format for legacy service descriptors:
+  // serviceDescriptor = FORMAT_STRING(
+  //     "chre.nanoapp_0x%016" PRIX64 ".service_0x%016" PRIX64, nanoapp_id,
+  //     service_id)
+  // The length of the buffer is the length of the string above, plus one for
+  // the null terminator.
+  // The arguments to the ServiceInfo constructor are specified in the CHRE API.
+  // @see chrePublishRpcServices
+  constexpr size_t kBufferSize = 59;
+  char buffer[kBufferSize];
+
+  for (const UniquePtr<Nanoapp> &app : mNanoapps) {
+    const DynamicVector<struct chreNanoappRpcService> &services =
+        app->getRpcServices();
+    for (const struct chreNanoappRpcService &service : services) {
+      std::snprintf(buffer, kBufferSize,
+                    "chre.nanoapp_0x%016" PRIX64 ".service_0x%016" PRIX64,
+                    app->getAppId(), service.id);
+      ServiceInfo serviceInfo(buffer, service.version, /* minorVersion= */ 0,
+                              RpcFormat::PW_RPC_PROTOBUF);
+      if (function(getEndpointInfoFromNanoappLocked(*app.get()), serviceInfo)) {
+        return;
+      }
     }
   }
 }
