@@ -83,6 +83,13 @@ enum class Reason : uint8_t {
   PERMISSION_DENIED,
 };
 
+//! The format of an RPC message sent using a service
+enum class RpcFormat : uint8_t {
+  CUSTOM = 0,
+  AIDL,
+  PW_RPC_PROTOBUF,
+};
+
 //! Represents a single endpoint connected to a MessageHub
 struct Endpoint {
   MessageHubId messageHubId;
@@ -267,13 +274,65 @@ struct EndpointInfo {
   }
 };
 
+//! Represents information about a service provided by an endpoint.
+struct ServiceInfo {
+  ServiceInfo(const char *serviceDescriptor, uint32_t majorVersion,
+              uint32_t minorVersion, RpcFormat format)
+      : serviceDescriptor(serviceDescriptor),
+        majorVersion(majorVersion),
+        minorVersion(minorVersion),
+        format(format) {}
+
+  bool operator==(const ServiceInfo &other) const {
+    if (majorVersion != other.majorVersion ||
+        minorVersion != other.minorVersion || format != other.format) {
+      return false;
+    }
+
+    if ((serviceDescriptor == nullptr) !=
+        (other.serviceDescriptor == nullptr)) {
+      return false;
+    }
+    if (serviceDescriptor != nullptr &&
+        std::strcmp(serviceDescriptor, other.serviceDescriptor) != 0) {
+      return false;
+    }
+    return true;
+  }
+
+  bool operator!=(const ServiceInfo &other) const {
+    return !(*this == other);
+  }
+
+  //! The service descriptor, a null-terminated ASCII string. This must be valid
+  //! only for the lifetime of the service iteration methods in MessageRouter.
+  const char *serviceDescriptor;
+
+  //! Version of the service.
+  uint32_t majorVersion;
+  uint32_t minorVersion;
+
+  //! The format of the RPC messages sent using this service.
+  RpcFormat format;
+};
+
 //! Represents information about a MessageHub
 struct MessageHubInfo {
   MessageHubId id;
   const char *name;
 
   bool operator==(const MessageHubInfo &other) const {
-    return id == other.id && std::strcmp(name, other.name) == 0;
+    if (id != other.id) {
+      return false;
+    }
+
+    if ((name == nullptr) != (other.name == nullptr)) {
+      return false;
+    }
+    if (name != nullptr && std::strcmp(name, other.name) != 0) {
+      return false;
+    }
+    return true;
   }
 
   bool operator!=(const MessageHubInfo &other) const {
