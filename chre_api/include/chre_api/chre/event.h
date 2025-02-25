@@ -1024,10 +1024,11 @@ bool chreConfigureHostEndpointNotifications(uint16_t hostEndpointId,
  * struct chreNanoappRpcService to a struct chreMsgEndpointServiceInfo and
  * call chreMsgPublishServices() instead. The conversion will be mapped as
  * follows:
- *   - majorVersion = chreNanoappRpcService.majorVersion
+ *   - majorVersion = chreNanoappRpcService.version
  *   - minorVersion = 0
  *   - serviceDescriptor = FORMAT_STRING(
- *     "chre.nanoapp_0x%016x.service_0x%016x", nanoapp_id, service_id)
+ *     "chre.nanoapp_0x%016" PRIX64 ".service_0x%016" PRIX64, nanoapp_id,
+ *     service_id)
  *   - serviceFormat = CHRE_ENDPOINT_SERVICE_FORMAT_PW_RPC_PROTOBUF
  */
 bool chrePublishRpcServices(struct chreNanoappRpcService *services,
