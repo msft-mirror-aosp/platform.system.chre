@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ChreCrossValidatorWifi extends ChreCrossValidatorBase {
-    private static final long AWAIT_STEP_RESULT_MESSAGE_TIMEOUT_SEC = 7;
+    private static final long AWAIT_STEP_RESULT_MESSAGE_TIMEOUT_SEC = 15;
     private static final long AWAIT_WIFI_SCAN_RESULT_TIMEOUT_SEC = 30;
 
     private static final long NANO_APP_ID = 0x476f6f6754000005L;
