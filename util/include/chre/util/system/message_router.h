@@ -106,6 +106,12 @@ class MessageRouter {
     virtual bool doesEndpointHaveService(EndpointId endpointId,
                                          const char *serviceDescriptor) = 0;
 
+    //! Callback called when a message hub except this one is registered.
+    virtual void onHubRegistered(const MessageHubInfo &info) = 0;
+
+    //! Callback called when a message hub except this one is unregistered.
+    virtual void onHubUnregistered(MessageHubId id) = 0;
+
     //! Callback called when an endpoint is registered to any MessageHub,
     //! except for this MessageHub.
     virtual void onEndpointRegistered(MessageHubId messageHubId,
@@ -373,6 +379,9 @@ class MessageRouter {
 
   //! @return The a copy of the list of MessageHubRecords
   std::optional<DynamicVector<MessageHubRecord>> getMessageHubRecords();
+
+  //! @return A copy of the list of MessageHubRecords while holding mMutex.
+  std::optional<DynamicVector<MessageHubRecord>> getMessageHubRecordsLocked();
 
   //! @return The MessageHubRecord for the given MessageHub ID
   const MessageHubRecord *getMessageHubRecordLocked(MessageHubId messageHubId);

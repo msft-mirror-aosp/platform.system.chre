@@ -253,6 +253,8 @@ class ChreMessageHubManager
       const char *serviceDescriptor) override;
   bool doesEndpointHaveService(message::EndpointId endpointId,
                                const char *serviceDescriptor) override;
+  void onHubRegistered(const message::MessageHubInfo &info) override;
+  void onHubUnregistered(message::MessageHubId id) override;
   void onEndpointRegistered(message::MessageHubId messageHubId,
                             message::EndpointId endpointId) override;
   void onEndpointUnregistered(message::MessageHubId messageHubId,
