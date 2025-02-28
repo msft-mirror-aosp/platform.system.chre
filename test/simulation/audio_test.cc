@@ -36,6 +36,8 @@
 namespace chre {
 namespace {
 
+class AudioTest : public TestBase {};
+
 class AudioNanoapp : public TestNanoapp {
  public:
   AudioNanoapp()
@@ -49,7 +51,7 @@ class AudioNanoapp : public TestNanoapp {
   }
 };
 
-TEST_F(TestBase, AudioCanSubscribeAndUnsubscribeToDataEvents) {
+TEST_F(AudioTest, AudioCanSubscribeAndUnsubscribeToDataEvents) {
   CREATE_CHRE_TEST_EVENT(CONFIGURE, 0);
 
   class App : public AudioNanoapp {
@@ -119,7 +121,7 @@ TEST_F(TestBase, AudioCanSubscribeAndUnsubscribeToDataEvents) {
   EXPECT_FALSE(chrePalAudioIsHandle0Enabled());
 }
 
-TEST_F(TestBase, AudioUnsubscribeToDataEventsOnUnload) {
+TEST_F(AudioTest, AudioUnsubscribeToDataEventsOnUnload) {
   CREATE_CHRE_TEST_EVENT(CONFIGURE, 0);
 
   class App : public AudioNanoapp {
