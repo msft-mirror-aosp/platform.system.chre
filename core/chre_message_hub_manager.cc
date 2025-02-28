@@ -26,13 +26,13 @@
 #include "chre/target_platform/log.h"
 #include "chre/util/conditional_lock_guard.h"
 #include "chre/util/lock_guard.h"
-#include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/event_callbacks.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/service_helpers.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
+
 #include "pw_allocator/unique_ptr.h"
 
 #include <cinttypes>

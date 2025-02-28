@@ -17,8 +17,8 @@
 #ifndef CHRE_UTIL_SYSTEM_MESSAGE_COMMON_H_
 #define CHRE_UTIL_SYSTEM_MESSAGE_COMMON_H_
 
-#include <pw_allocator/unique_ptr.h>
-#include <pw_function/function.h>
+#include "pw_allocator/unique_ptr.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -138,27 +138,6 @@ struct Session {
     this->serviceDescriptor[kMaxServiceDescriptorLength] = '\0';
   }
 
-  Session(const Session &other)
-      : sessionId(other.sessionId),
-        isActive(other.isActive),
-        hasServiceDescriptor(other.hasServiceDescriptor),
-        initiator(other.initiator),
-        peer(other.peer) {
-    std::memcpy(serviceDescriptor, other.serviceDescriptor,
-                kMaxServiceDescriptorLength + 1);
-  }
-
-  Session &operator=(const Session &other) {
-    sessionId = other.sessionId;
-    isActive = other.isActive;
-    hasServiceDescriptor = other.hasServiceDescriptor;
-    initiator = other.initiator;
-    peer = other.peer;
-    std::memcpy(serviceDescriptor, other.serviceDescriptor,
-                kMaxServiceDescriptorLength + 1);
-    return *this;
-  }
-
   SessionId sessionId;
   bool isActive;
   bool hasServiceDescriptor;
@@ -217,6 +196,9 @@ struct Message {
         messageType(messageType),
         messagePermissions(messagePermissions) {}
 
+  Message(const Message &) = delete;
+  Message &operator=(const Message &) = delete;
+
   Message(Message &&other)
       : sender(other.sender),
         recipient(other.recipient),
@@ -224,9 +206,6 @@ struct Message {
         data(std::move(other.data)),
         messageType(other.messageType),
         messagePermissions(other.messagePermissions) {}
-
-  Message(const Message &) = delete;
-  Message &operator=(const Message &) = delete;
 
   Message &operator=(Message &&other) {
     sender = other.sender;

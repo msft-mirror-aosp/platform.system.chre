@@ -28,6 +28,7 @@
 #include "chre/util/system/message_router.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
+
 #include "pw_containers/vector.h"
 
 #include <cinttypes>
