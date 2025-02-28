@@ -28,6 +28,9 @@
 #ifdef CHPP_CLIENT_ENABLED_TIMESYNC
 #include "chpp/clients/timesync.h"
 #endif
+#ifdef CHPP_CLIENT_ENABLED_LOOPBACK
+#include "chpp/clients/loopback.h"
+#endif
 #include "chpp/common/standard_uuids.h"
 #include "chpp/common/wifi.h"
 #include "chpp/common/wifi_types.h"
@@ -66,6 +69,7 @@ static bool chppWifiClientInit(void *clientContext, uint8_t handle,
 static void chppWifiClientDeinit(void *clientContext);
 static void chppWifiClientNotifyReset(void *clientContext);
 static void chppWifiClientNotifyMatch(void *clientContext);
+static void chppWifiClientProcessTimeout(void *clientContext);
 
 /************************************************
  *  Private Definitions
@@ -88,6 +92,7 @@ struct ChppWifiClientState {
                                     // service reset
   bool capabilitiesValid;  // Flag to indicate if the capabilities result
                            // is valid
+  bool scanTimeoutPending;
 };
 
 // Note: This global definition of gWifiClientContext supports only one
@@ -124,6 +129,9 @@ static const struct ChppClient kWifiClientConfig = {
 
     // Service notification dispatch function pointer
     .deinitFunctionPtr = &chppWifiClientDeinit,
+
+    // Client timeout function pointer
+    .timeoutFunctionPtr = &chppWifiClientProcessTimeout,
 
     // Number of request-response states in the outReqStates array.
     .outReqCount = ARRAY_SIZE(gWifiClientContext.outReqStates),
@@ -365,6 +373,34 @@ static void chppWifiClientDeinit(void *clientContext) {
   chppClientDeinit(&wifiClientContext->client);
 }
 
+static void chppWifiClientProcessTimeout(void *clientContext) {
+  UNUSED_VAR(clientContext);
+  struct ChppWifiClientState *wifiClientContext =
+      (struct ChppWifiClientState *)clientContext;
+  if (wifiClientContext->scanTimeoutPending) {
+    wifiClientContext->scanTimeoutPending = false;
+    // In some scenarios, it's possible that a WiFi scan event is lost due to
+    // some issues at the remote WiFi service. We trigger a loopback request in
+    // this case, in the hopes of triggering the link to receive the scan event.
+    // TODO(b/393371508): Remove this workaround when the issue is fixed
+    CHPP_LOGE("WiFi scan event did not arrive on time!");
+#ifdef CHPP_CLIENT_ENABLED_LOOPBACK
+    if (!wifiClientContext->client.appContext->clientServiceSet
+             .loopbackClient) {
+      CHPP_LOGW("Loopback client not enabled, scan may be delayed");
+    } else {
+      enum ChppAppErrorCode error =
+          chppRunLoopbackTestAsync(wifiClientContext->client.appContext);
+      if (error != CHPP_APP_ERROR_NONE) {
+        CHPP_LOGE("Failed to request loopback");
+      } else {
+        CHPP_LOGI("Async loopback request sent");
+      }
+    }
+#endif
+  }
+}
+
 /**
  * Notifies the client of an incoming reset.
  *
@@ -538,6 +574,14 @@ static void chppWifiRequestScanResult(struct ChppWifiClientState *clientContext,
     struct ChppWifiRequestScanResponseParameters *result =
         &((struct ChppWifiRequestScanResponse *)buf)->params;
     CHPP_LOGI("Scan request success=%d at service", result->pending);
+    if (result->pending) {
+      if (!chppAppRequestTimerTimeout(&clientContext->client,
+                                      CHRE_NSEC_PER_SEC)) {
+        CHPP_LOGE("Failed to schedule scan timeout");
+      } else {
+        clientContext->scanTimeoutPending = true;
+      }
+    }
     gCallbacks->scanResponseCallback(result->pending, result->errorCode);
   }
 }
@@ -653,6 +697,10 @@ static void chppWifiScanEventNotification(
 #endif
 
     CHPP_DEBUG_ASSERT(chppCheckWifiScanEventNotification(chre));
+    if (!chppCheckWifiScanEventPending()) {
+      chppAppCancelTimerTimeout(&clientContext->client);
+      clientContext->scanTimeoutPending = false;
+    }
 
     gCallbacks->scanEventCallback(chre);
   }

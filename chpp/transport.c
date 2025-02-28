@@ -1662,9 +1662,11 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
   // This function is called in the context of the transport worker thread.
   // As we do not know if the transport is used in the context of a service
   // or a client, we use the min of both timeouts.
-  uint64_t nextDoWorkTime =
-      MIN(context->appContext->nextClientRequestTimeoutNs,
-          context->appContext->nextServiceRequestTimeoutNs);
+  uint64_t nextDoWorkTime = chppAppGetNextTimerTimeoutNs(context->appContext);
+  nextDoWorkTime =
+      MIN(nextDoWorkTime, context->appContext->nextClientRequestTimeoutNs);
+  nextDoWorkTime =
+      MIN(nextDoWorkTime, context->appContext->nextServiceRequestTimeoutNs);
 
   if (chppHavePendingTxPayload(context) ||
       context->resetState == CHPP_RESET_STATE_RESETTING) {
@@ -1799,6 +1801,8 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
       context->txStatus.packetCodeToSend = 0;
     }
   }
+
+  chppAppProcessTimeout(context->appContext, currentTimeNs);
 }
 
 void chppWorkThreadStop(struct ChppTransportState *context) {

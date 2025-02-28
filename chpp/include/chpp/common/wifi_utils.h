@@ -42,6 +42,15 @@ void chppCheckWifiScanEventNotificationReset(void);
  */
 bool chppCheckWifiScanEventNotification(const struct chreWifiScanEvent *chre);
 
+/**
+ * Helper function to determine whether we are still waiting for more WiFi scan
+ * events. This method must be used in conjunction with
+ * chppCheckWifiScanEventNotification().
+ *
+ * @return true if more WiFi scan events are pending.
+ */
+bool chppCheckWifiScanEventPending(void);
+
 #ifdef __cplusplus
 }
 #endif

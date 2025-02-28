@@ -191,6 +191,7 @@ void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
   clientState->outReqStates = outReqStates;
   clientState->index = appContext->registeredClientCount;
   clientState->context = clientContext;
+  clientState->nextTimerTimeoutNs = CHPP_TIME_MAX;
   appContext->registeredClientStates[appContext->registeredClientCount] =
       clientState;
 

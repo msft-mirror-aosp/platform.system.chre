@@ -722,6 +722,31 @@ void chppAppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
   chppDatagramProcessDoneCb(context->transportContext, buf);
 }
 
+void chppAppProcessTimeout(struct ChppAppState *context,
+                           uint64_t currentTimeNs) {
+  CHPP_DEBUG_NOT_NULL(context);
+  for (uint8_t i = 0; i < context->registeredClientCount; i++) {
+    const struct ChppClient *client = context->registeredClients[i];
+    struct ChppEndpointState *endpointState =
+        context->registeredClientStates[i];
+    if ((currentTimeNs >= endpointState->nextTimerTimeoutNs) &&
+        client->timeoutFunctionPtr != NULL) {
+      client->timeoutFunctionPtr(endpointState->context);
+      endpointState->nextTimerTimeoutNs = CHPP_TIME_MAX;
+    }
+  }
+  for (uint8_t i = 0; i < context->registeredServiceCount; i++) {
+    const struct ChppService *service = context->registeredServices[i];
+    struct ChppEndpointState *endpointState =
+        context->registeredServiceStates[i];
+    if ((currentTimeNs >= endpointState->nextTimerTimeoutNs) &&
+        service->timeoutFunctionPtr != NULL) {
+      service->timeoutFunctionPtr(endpointState->context);
+      endpointState->nextTimerTimeoutNs = CHPP_TIME_MAX;
+    }
+  }
+}
+
 void chppAppProcessReset(struct ChppAppState *context) {
   CHPP_DEBUG_NOT_NULL(context);
 
@@ -1239,4 +1264,35 @@ void chppCloseOpenRequests(struct ChppEndpointState *endpointState,
   if (recalcNeeded) {
     chppRecalculateNextTimeout(appState, type);
   }
+}
+
+bool chppAppRequestTimerTimeout(struct ChppEndpointState *endpointState,
+                                uint64_t timeoutNs) {
+  if (endpointState->nextTimerTimeoutNs != CHPP_TIME_MAX) {
+    CHPP_LOGE("Timer already scheduled for %" PRIu64 "ns",
+              endpointState->nextTimerTimeoutNs);
+    return false;
+  }
+
+  endpointState->nextTimerTimeoutNs = chppGetCurrentTimeNs() + timeoutNs;
+  return true;
+}
+
+void chppAppCancelTimerTimeout(struct ChppEndpointState *endpointState) {
+  endpointState->nextTimerTimeoutNs = CHPP_TIME_MAX;
+}
+
+uint64_t chppAppGetNextTimerTimeoutNs(struct ChppAppState *context) {
+  CHPP_DEBUG_NOT_NULL(context);
+  uint64_t timeoutNs = CHPP_TIME_MAX;
+  for (uint8_t i = 0; i < context->registeredClientCount; i++) {
+    timeoutNs =
+        MIN(timeoutNs, context->registeredClientStates[i]->nextTimerTimeoutNs);
+  }
+  for (uint8_t i = 0; i < context->registeredServiceCount; i++) {
+    timeoutNs =
+        MIN(timeoutNs, context->registeredServiceStates[i]->nextTimerTimeoutNs);
+  }
+
+  return timeoutNs;
 }
