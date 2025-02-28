@@ -33,7 +33,9 @@
 namespace chre {
 namespace {
 
-TEST_F(TestBase, MemoryAllocateAndFree) {
+class MemoryTest : public TestBase {};
+
+TEST_F(MemoryTest, MemoryAllocateAndFree) {
   CREATE_CHRE_TEST_EVENT(ALLOCATE, 0);
   CREATE_CHRE_TEST_EVENT(FREE, 1);
 
@@ -103,7 +105,7 @@ TEST_F(TestBase, MemoryAllocateAndFree) {
   EXPECT_EQ(memManager.getAllocationCount(), 0);
 }
 
-TEST_F(TestBase, MemoryFreeOnNanoappUnload) {
+TEST_F(MemoryTest, MemoryFreeOnNanoappUnload) {
   CREATE_CHRE_TEST_EVENT(ALLOCATE, 0);
 
   class App : public TestNanoapp {
@@ -158,7 +160,7 @@ TEST_F(TestBase, MemoryFreeOnNanoappUnload) {
   EXPECT_EQ(memManager.getAllocationCount(), 0);
 }
 
-TEST_F(TestBase, MemoryStressTestShouldNotTriggerErrors) {
+TEST_F(MemoryTest, MemoryStressTestShouldNotTriggerErrors) {
   CREATE_CHRE_TEST_EVENT(ALLOCATE, 0);
   CREATE_CHRE_TEST_EVENT(FREE, 1);
 

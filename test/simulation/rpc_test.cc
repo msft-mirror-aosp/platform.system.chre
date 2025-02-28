@@ -45,7 +45,9 @@ pw::Status RpcTestService::Increment(const chre_rpc_NumberMessage &request,
 
 namespace {
 
-TEST_F(TestBase, PwRpcCanPublishServicesInNanoappStart) {
+class RpcTest : public TestBase {};
+
+TEST_F(RpcTest, PwRpcCanPublishServicesInNanoappStart) {
   class App : public TestNanoapp {
    public:
     bool start() override {
@@ -75,7 +77,7 @@ TEST_F(TestBase, PwRpcCanPublishServicesInNanoappStart) {
   EXPECT_EQ(napp->getRpcServices()[3].id, 4);
 }
 
-TEST_F(TestBase, PwRpcCanNotPublishDuplicateServices) {
+TEST_F(RpcTest, PwRpcCanNotPublishDuplicateServices) {
   class App : public TestNanoapp {
     bool start() override {
       struct chreNanoappRpcService servicesA[] = {
@@ -107,7 +109,7 @@ TEST_F(TestBase, PwRpcCanNotPublishDuplicateServices) {
   EXPECT_EQ(napp->getRpcServices()[1].id, 2);
 }
 
-TEST_F(TestBase, PwRpcDifferentAppCanPublishSameServices) {
+TEST_F(RpcTest, PwRpcDifferentAppCanPublishSameServices) {
   class App : public TestNanoapp {
    public:
     explicit App(uint64_t id) : TestNanoapp(TestNanoappInfo{.id = id}) {}
@@ -139,7 +141,7 @@ TEST_F(TestBase, PwRpcDifferentAppCanPublishSameServices) {
   EXPECT_EQ(napp2->getRpcServices()[1].id, 2);
 }
 
-TEST_F(TestBase, PwRpcCanNotPublishServicesOutsideOfNanoappStart) {
+TEST_F(RpcTest, PwRpcCanNotPublishServicesOutsideOfNanoappStart) {
   CREATE_CHRE_TEST_EVENT(PUBLISH_SERVICES, 0);
 
   class App : public TestNanoapp {
@@ -181,7 +183,7 @@ TEST_F(TestBase, PwRpcCanNotPublishServicesOutsideOfNanoappStart) {
   EXPECT_EQ(napp->getRpcServices().size(), 0);
 }
 
-TEST_F(TestBase, PwRpcRegisterServicesShouldGracefullyFailOnDuplicatedService) {
+TEST_F(RpcTest, PwRpcRegisterServicesShouldGracefullyFailOnDuplicatedService) {
   class App : public TestNanoapp {
    public:
     bool start() override {
@@ -213,7 +215,7 @@ TEST_F(TestBase, PwRpcRegisterServicesShouldGracefullyFailOnDuplicatedService) {
   EnvSingleton::deinit();
 }
 
-TEST_F(TestBase, PwRpcGetNanoappInfoByAppIdReturnsServices) {
+TEST_F(RpcTest, PwRpcGetNanoappInfoByAppIdReturnsServices) {
   CREATE_CHRE_TEST_EVENT(QUERY_INFO, 0);
 
   class App : public TestNanoapp {
@@ -265,7 +267,7 @@ TEST_F(TestBase, PwRpcGetNanoappInfoByAppIdReturnsServices) {
   EXPECT_EQ(pInfo->reserved[2], 0);
 }
 
-TEST_F(TestBase, PwRpcClientNanoappCanRequestServerNanoapp) {
+TEST_F(RpcTest, PwRpcClientNanoappCanRequestServerNanoapp) {
   CREATE_CHRE_TEST_EVENT(INCREMENT_REQUEST, 0);
 
   class ClientApp : public TestNanoapp {
@@ -353,7 +355,7 @@ TEST_F(TestBase, PwRpcClientNanoappCanRequestServerNanoapp) {
   EnvSingleton::deinit();
 }
 
-TEST_F(TestBase, PwRpcRpcClientHasServiceCheckForAMatchingService) {
+TEST_F(RpcTest, PwRpcRpcClientHasServiceCheckForAMatchingService) {
   CREATE_CHRE_TEST_EVENT(QUERY_HAS_SERVICE, 0);
 
   struct ServiceInfo {

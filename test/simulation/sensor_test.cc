@@ -36,7 +36,9 @@
 namespace chre {
 namespace {
 
-TEST_F(TestBase, SensorCanSubscribeAndUnsubscribeToDataEvents) {
+class SensorTest : public TestBase {};
+
+TEST_F(SensorTest, SensorCanSubscribeAndUnsubscribeToDataEvents) {
   CREATE_CHRE_TEST_EVENT(CONFIGURE, 0);
 
   struct Configuration {
@@ -103,7 +105,7 @@ TEST_F(TestBase, SensorCanSubscribeAndUnsubscribeToDataEvents) {
   EXPECT_FALSE(chrePalSensorIsSensor0Enabled());
 }
 
-TEST_F(TestBase, SensorUnsubscribeToDataEventsOnUnload) {
+TEST_F(SensorTest, SensorUnsubscribeToDataEventsOnUnload) {
   CREATE_CHRE_TEST_EVENT(CONFIGURE, 0);
 
   struct Configuration {

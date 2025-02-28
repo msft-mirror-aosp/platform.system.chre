@@ -35,6 +35,8 @@ namespace chre {
 
 namespace {
 
+class SettingsTest : public TestBase {};
+
 int8_t gExpectedLocationSettingState;
 int8_t gExpectedWifiSettingState;
 
@@ -139,7 +141,7 @@ void startTestNanoapp() {
  * 3) Toggle location setting -> enabled.
  * 4) Verify things resume.
  */
-TEST_F(TestBase, LocationSettingsTest) {
+TEST_F(SettingsTest, LocationSettingsTest) {
   startTestNanoapp();
 
   waitForEvent(CHRE_EVENT_SIMULATION_TEST_NANOAPP_LOADED);
@@ -172,7 +174,7 @@ TEST_F(TestBase, LocationSettingsTest) {
   ASSERT_TRUE(chrePalGnssIsLocationEnabled());
 }
 
-TEST_F(TestBase, DefaultSettingsAreSet) {
+TEST_F(SettingsTest, DefaultSettingsAreSet) {
   for (uint8_t setting = CHRE_USER_SETTING_LOCATION;
        setting <= CHRE_USER_SETTING_BLE_AVAILABLE; ++setting) {
     int8_t expectedSettingState = (setting == CHRE_USER_SETTING_AIRPLANE_MODE)
@@ -182,7 +184,7 @@ TEST_F(TestBase, DefaultSettingsAreSet) {
   }
 }
 
-TEST_F(TestBase, WifiSettingsTest) {
+TEST_F(SettingsTest, WifiSettingsTest) {
   startTestNanoapp();
 
   waitForEvent(CHRE_EVENT_WIFI_NAN_IDENTIFIER_RESULT);
