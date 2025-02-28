@@ -78,7 +78,7 @@ class AtomicSpscQueue : public NonCopyable {
     }
   }
 
-  size_t capacity() const {
+  constexpr size_t capacity() const {
     return kCapacity;
   }
 
@@ -123,7 +123,7 @@ class AtomicSpscQueue : public NonCopyable {
    */
   class Producer {
    public:
-    size_t capacity() const {
+    constexpr size_t capacity() const {
       return kCapacity;
     }
     bool full() const {
@@ -208,7 +208,7 @@ class AtomicSpscQueue : public NonCopyable {
    */
   class Consumer {
    public:
-    size_t capacity() const {
+    constexpr size_t capacity() const {
       return kCapacity;
     }
     bool empty() const {
