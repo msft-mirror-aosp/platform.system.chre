@@ -82,10 +82,26 @@ bool chppDispatchLoopbackServiceResponse(struct ChppAppState *appState,
  * Note that only one loopback test may be run at any time on each client.
  *
  * @param appState Application layer state.
+ * @param buf Input data. Cannot be null.
+ * @param len Length of input data in bytes.
+ *
+ * @return The result of the loopback test.
  */
 struct ChppLoopbackTestResult chppRunLoopbackTest(struct ChppAppState *appState,
                                                   const uint8_t *buf,
                                                   size_t len);
+
+/**
+ * Asynchronously starts a loopback tests. The result of the loopback test will
+ * be processed in chppDispatchLoopbackServiceResponse at a later time.
+ *
+ * Unlike the sync chppRunLoopbackTest(), this method does not expose the buffer
+ * as an input, and the loopback payload is preconfigured for simplicity.
+ *
+ * @return CHPP_ERROR_NONE if the request was accepted and the loopback test
+ * started.
+ */
+enum ChppAppErrorCode chppRunLoopbackTestAsync(struct ChppAppState *appState);
 
 #ifdef __cplusplus
 }
