@@ -117,32 +117,50 @@ std::optional<typename MessageRouter::MessageHub>
 MessageRouter::registerMessageHub(
     const char *name, MessageHubId id,
     MessageRouter::MessageRouter::MessageHubCallback &callback) {
-  LockGuard<Mutex> lock(mMutex);
-  if (mMessageHubs.full()) {
-    LOGE(
-        "Message hub '%s' not registered: maximum number of message hubs "
-        "reached",
-        name);
-    return std::nullopt;
-  }
-
-  for (MessageHubRecord &messageHub : mMessageHubs) {
-    if (std::strcmp(messageHub.info.name, name) == 0 ||
-        messageHub.info.id == id) {
+  DynamicVector<MessageHubRecord> hubsToNotify;
+  std::optional<MessageHub> newHub;
+  MessageHubInfo newHubInfo;
+  {
+    LockGuard<Mutex> lock(mMutex);
+    if (mMessageHubs.full()) {
       LOGE(
-          "Message hub '%s' not registered: hub with same name or ID already "
-          "exists",
+          "Message hub '%s' not registered: maximum number of message hubs "
+          "reached",
           name);
       return std::nullopt;
     }
+
+    for (MessageHubRecord &messageHub : mMessageHubs) {
+      if (std::strcmp(messageHub.info.name, name) == 0 ||
+          messageHub.info.id == id) {
+        LOGE(
+            "Message hub '%s' not registered: hub with same name or ID already "
+            "exists",
+            name);
+        return std::nullopt;
+      }
+    }
+
+    if (auto hubRecords = getMessageHubRecordsLocked(); hubRecords) {
+      hubsToNotify = std::move(*hubRecords);
+    } else {
+      return std::nullopt;
+    }
+
+    MessageHubRecord messageHubRecord = {
+        .info = {.id = id, .name = name},
+        .callback = &callback,
+    };
+    newHubInfo = messageHubRecord.info;
+    mMessageHubs.push_back(std::move(messageHubRecord));
+    newHub = MessageHub(*this, id);
   }
 
-  MessageHubRecord messageHubRecord = {
-      .info = {.id = id, .name = name},
-      .callback = &callback,
-  };
-  mMessageHubs.push_back(std::move(messageHubRecord));
-  return MessageHub(*this, id);
+  // NOTE: newHubInfo is guaranteed to be valid while we have newHub.
+  for (const auto &hubRecord : hubsToNotify) {
+    hubRecord.callback->onHubRegistered(newHubInfo);
+  }
+  return newHub;
 }
 
 bool MessageRouter::forEachEndpointOfHub(
@@ -269,16 +287,24 @@ bool MessageRouter::forEachMessageHub(
 
 bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
   DynamicVector<std::pair<MessageHubCallback *, Session>> sessionsToDestroy;
+  DynamicVector<MessageHubCallback *> hubsToNotify;
 
   {
     LockGuard<Mutex> lock(mMutex);
+
+    if (!mMessageHubs.empty() &&
+        !hubsToNotify.reserve(mMessageHubs.size() - 1)) {
+      LOG_OOM();
+      return false;
+    }
 
     bool success = false;
     for (MessageHubRecord &messageHubRecord : mMessageHubs) {
       if (messageHubRecord.info.id == fromMessageHubId) {
         mMessageHubs.erase(&messageHubRecord);
         success = true;
-        break;
+      } else {
+        hubsToNotify.push_back(messageHubRecord.callback);
       }
     }
     if (!success) {
@@ -306,6 +332,11 @@ bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
   for (auto [callback, session] : sessionsToDestroy) {
     if (callback != nullptr) {
       callback->onSessionClosed(session, Reason::HUB_RESET);
+    }
+  }
+  for (auto *callback : hubsToNotify) {
+    if (callback != nullptr) {
+      callback->onHubUnregistered(fromMessageHubId);
     }
   }
   return true;
@@ -580,6 +611,11 @@ bool MessageRouter::onEndpointRegistrationStateChanged(
 std::optional<DynamicVector<MessageRouter::MessageHubRecord>>
 MessageRouter::getMessageHubRecords() {
   LockGuard<Mutex> lock(mMutex);
+  return getMessageHubRecordsLocked();
+}
+
+std::optional<DynamicVector<MessageRouter::MessageHubRecord>>
+MessageRouter::getMessageHubRecordsLocked() {
   DynamicVector<MessageHubRecord> messageHubRecords;
   if (!messageHubRecords.reserve(mMessageHubs.size())) {
     LOG_OOM();

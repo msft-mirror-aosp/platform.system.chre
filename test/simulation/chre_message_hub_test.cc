@@ -136,6 +136,10 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     return false;
   }
 
+  void onHubRegistered(const MessageHubInfo & /*info*/) override {}
+
+  void onHubUnregistered(MessageHubId /*id*/) override {}
+
   void onEndpointRegistered(MessageHubId messageHubId,
                             EndpointId endpointId) override {
     mRegisteredEndpoints.insert(std::make_pair(messageHubId, endpointId));

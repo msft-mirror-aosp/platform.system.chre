@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
+#include "chre/util/system/message_router.h"
+
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
-#include "chre/util/system/message_router.h"
+#include "chre/util/system/message_router_mocks.h"
 #include "chre_api/chre.h"
 
 #include "pw_allocator/libc_allocator.h"
 #include "pw_allocator/unique_ptr.h"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include <cstddef>
@@ -86,6 +89,10 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     return serviceDescriptor != nullptr && endpointId == kEndpointInfos[1].id &&
            std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0;
   }
+
+  void onHubRegistered(const MessageHubInfo & /* info */) override {}
+
+  void onHubUnregistered(MessageHubId /* id */) override {}
 
   void onEndpointRegistered(MessageHubId /* messageHubId */,
                             EndpointId /* endpointId */) override {}
@@ -1807,6 +1814,27 @@ TEST_F(MessageRouterTest, UnregisterEndpointCallbacksAreCalled) {
                                                   kEndpointInfos[0].id));
   EXPECT_FALSE(callback2.hasEndpointBeenRegistered(messageHub->getId(),
                                                    kEndpointInfos[0].id));
+}
+
+MATCHER_P(HubMatcher, id, "Matches id in MessageHubInfo") {
+  return arg.id == id;
+}
+
+TEST_F(MessageRouterTest, OnRegisterAndUnregisterHub) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  MockMessageHubCallback hub1Callback, hub2Callback;
+  MessageHubId hub1Id = 1, hub2Id = 2;
+  std::optional<MessageRouter::MessageHub> hub1 =
+      router.registerMessageHub("hub1", hub1Id, hub1Callback);
+  ASSERT_TRUE(hub1);
+
+  EXPECT_CALL(hub1Callback, onHubRegistered(HubMatcher(hub2Id)));
+  std::optional<MessageRouter::MessageHub> hub2 =
+      router.registerMessageHub("hub2", hub2Id, hub2Callback);
+  ASSERT_TRUE(hub2);
+
+  EXPECT_CALL(hub1Callback, onHubUnregistered(hub2Id));
+  hub2.reset();
 }
 
 }  // namespace

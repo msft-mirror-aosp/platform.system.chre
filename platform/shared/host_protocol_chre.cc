@@ -634,6 +634,12 @@ void HostProtocolChre::encodeRegisterMessageHub(
   finalize(builder, fbs::ChreMessage::RegisterMessageHub, msg.Union());
 }
 
+void HostProtocolChre::encodeUnregisterMessageHub(
+    ChreFlatBufferBuilder &builder, message::MessageHubId id) {
+  auto msg = fbs::CreateUnregisterMessageHub(builder, id);
+  finalize(builder, fbs::ChreMessage::UnregisterMessageHub, msg.Union());
+}
+
 void HostProtocolChre::encodeRegisterEndpoint(
     ChreFlatBufferBuilder &builder, message::MessageHubId hub,
     const message::EndpointInfo &endpoint) {

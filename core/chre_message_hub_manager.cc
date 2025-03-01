@@ -831,6 +831,14 @@ bool ChreMessageHubManager::doesEndpointHaveService(
   return endpoint.has_value() && endpoint.value() == endpointId;
 }
 
+void ChreMessageHubManager::onHubRegistered(const MessageHubInfo & /*info*/) {
+  // We don't depend on this notification.
+}
+
+void ChreMessageHubManager::onHubUnregistered(MessageHubId /*id*/) {
+  // We don't depend on this notification.
+}
+
 void ChreMessageHubManager::onEndpointRegistered(MessageHubId messageHubId,
                                                  EndpointId endpointId) {
   if (messageHubId == MESSAGE_HUB_ID_INVALID ||

@@ -27,6 +27,7 @@
 #include "chre/core/host_message_hub_manager.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
+#include "chre/util/system/message_router_mocks.h"
 #include "chre_api/chre/event.h"
 
 #include "pw_allocator/libc_allocator.h"
@@ -44,45 +45,21 @@ using ::chre::message::MessageHubId;
 using ::chre::message::MessageHubInfo;
 using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
+using ::chre::message::MockMessageHubCallback;
 using ::chre::message::Reason;
 using ::chre::message::Session;
 using ::chre::message::SessionId;
 using ::testing::_;
+using ::testing::AnyNumber;
 using ::testing::NiceMock;
 using ::testing::Sequence;
 using ::testing::UnorderedElementsAreArray;
-
-class MockMessageHubCallback : public MessageRouter::MessageHubCallback {
- public:
-  MOCK_METHOD(bool, onMessageReceived,
-              (pw::UniquePtr<std::byte[]> && data, uint32_t messageType,
-               uint32_t messagePermissions, const Session &session,
-               bool sentBySessionInitiator),
-              (override));
-  MOCK_METHOD(void, onSessionOpenRequest, (const Session &session), (override));
-  MOCK_METHOD(void, onSessionOpened, (const Session &session), (override));
-  MOCK_METHOD(void, onSessionClosed, (const Session &session, Reason reason),
-              (override));
-  MOCK_METHOD(void, forEachEndpoint,
-              (const pw::Function<bool(const EndpointInfo &)> &function),
-              (override));
-  MOCK_METHOD(std::optional<EndpointInfo>, getEndpointInfo,
-              (EndpointId endpointId), (override));
-  MOCK_METHOD(std::optional<EndpointId>, getEndpointForService,
-              (const char *serviceDescriptor), (override));
-  MOCK_METHOD(bool, doesEndpointHaveService,
-              (EndpointId endpointId, const char *serviceDescriptor),
-              (override));
-  MOCK_METHOD(void, onEndpointRegistered,
-              (MessageHubId messageHubId, EndpointId endpointId), (override));
-  MOCK_METHOD(void, onEndpointUnregistered,
-              (MessageHubId messageHubId, EndpointId endpointId), (override));
-};
 
 class MockHostCallback : public HostMessageHubManager::HostCallback {
  public:
   MOCK_METHOD(void, onReset, (), (override));
   MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &hub), (override));
+  MOCK_METHOD(void, onHubUnregistered, (MessageHubId), (override));
   MOCK_METHOD(void, onEndpointRegistered,
               (MessageHubId hub, const EndpointInfo &endpoint), (override));
   MOCK_METHOD(void, onEndpointUnregistered,
@@ -145,6 +122,13 @@ class HostMessageHubTest : public TestBase {
             [](const char *) -> std::optional<EndpointId> { return {}; });
     ON_CALL(mEmbeddedHubCb, doesEndpointHaveService(_, _))
         .WillByDefault([](EndpointId, const char *) { return false; });
+
+    // We mostly don't care about this. Individual tests may override this
+    // behavior.
+    EXPECT_CALL(mEmbeddedHubCb, onHubRegistered(_)).Times(AnyNumber());
+    EXPECT_CALL(mEmbeddedHubCb, onHubUnregistered(_)).Times(AnyNumber());
+    EXPECT_CALL(mHostCallback, onHubRegistered(_)).Times(AnyNumber());
+    EXPECT_CALL(mHostCallback, onHubUnregistered(_)).Times(AnyNumber());
 
     // Register the embedded message hub with MessageRouter.
     auto maybeEmbeddedHub = getRouter().registerMessageHub(
@@ -216,11 +200,13 @@ TEST_F(HostMessageHubTest, RegisterAndUnregisterHub) {
   EXPECT_FALSE(getRouter().forEachEndpointOfHub(
       kHostHub.id, [](const EndpointInfo &) { return true; }));
 
+  EXPECT_CALL(mEmbeddedHubCb, onHubRegistered(kHostHub));
   getManager().registerHub(kHostHub);
   getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
   EXPECT_TRUE(getRouter().forEachEndpointOfHub(
       kHostHub.id, [](const EndpointInfo &) { return true; }));
 
+  EXPECT_CALL(mEmbeddedHubCb, onHubUnregistered(kHostHub.id));
   getManager().unregisterHub(kHostHub.id);
   // NOTE: The hub stays registered with MessageRouter to avoid races with
   // unregistering message hubs, however its endpoints are no longer accessible.
@@ -240,9 +226,12 @@ TEST_F(HostMessageHubTest, RegisterHubStaticHubLimit) {
 
   // Attempt to register a hub for each slot. The final registration should fail
   // due to the occupied slot.
+  std::vector<std::string> hubNames;
   for (uint64_t i = 1; i <= CHRE_MESSAGE_ROUTER_MAX_HOST_HUBS; ++i) {
     MessageHubId id = kHostHub.id + i;
-    getManager().registerHub({.id = id, .name = kHostHubName});
+    hubNames.push_back(std::string(kHostHubName) + '0');
+    hubNames.back().back() = i + '0';
+    getManager().registerHub({.id = id, .name = hubNames[i - 1].c_str()});
     if (i < CHRE_MESSAGE_ROUTER_MAX_HOST_HUBS) {
       EXPECT_TRUE(getRouter().forEachEndpointOfHub(
           id, [](const EndpointInfo &) { return true; }));
@@ -261,6 +250,24 @@ TEST_F(HostMessageHubTest, RegisterHubStaticHubLimit) {
     return true;
   });
   EXPECT_TRUE(found);
+}
+
+MATCHER_P(HubMatcher, id, "matches the hub id in MessageHubInfo") {
+  return arg.id == id;
+}
+
+TEST_F(HostMessageHubTest, OnHubRegisteredAndUnregistered) {
+  getManager().registerHub(kHostHub);
+
+  const MessageHubId kHubId = kHostHub.id + 1;
+  EXPECT_CALL(mHostCallback, onHubRegistered(HubMatcher(kHubId)));
+  MockMessageHubCallback newHubCb;
+  const char *name = "test embedded hub";
+  auto newHub = getRouter().registerMessageHub(name, kHubId, newHubCb);
+  EXPECT_TRUE(newHub);
+
+  EXPECT_CALL(mHostCallback, onHubUnregistered(kHubId));
+  newHub.reset();
 }
 
 TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpoint) {

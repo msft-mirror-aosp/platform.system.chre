@@ -379,6 +379,15 @@ class HostProtocolChre : public HostProtocolCommon {
                                        const message::MessageHubInfo &hub);
 
   /**
+   * Encodes an embedded hub removal notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param id Id of the unregistered hub.
+   */
+  static void encodeUnregisterMessageHub(ChreFlatBufferBuilder &builder,
+                                         message::MessageHubId id);
+
+  /**
    * Encodes a new embedded endpoint notification.
    *
    * @param builder Builder which assembles and stores the message.

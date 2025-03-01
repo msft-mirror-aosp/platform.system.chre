@@ -71,6 +71,11 @@ class HostMessageHubManager : public NonCopyable {
     virtual void onHubRegistered(const message::MessageHubInfo &hub) = 0;
 
     /**
+     * Notifies the HAL that an embedded hub has been removed.
+     */
+    virtual void onHubUnregistered(message::MessageHubId id) = 0;
+
+    /**
      * Notifies the HAL of a new embedded endpoint.
      */
     virtual void onEndpointRegistered(
@@ -309,6 +314,8 @@ class HostMessageHubManager : public NonCopyable {
         const char *serviceDescriptor) override;
     bool doesEndpointHaveService(message::EndpointId endpointId,
                                  const char *serviceDescriptor) override;
+    void onHubRegistered(const message::MessageHubInfo &info) override;
+    void onHubUnregistered(message::MessageHubId id) override;
     void onEndpointRegistered(message::MessageHubId messageHubId,
                               message::EndpointId endpointId) override;
     void onEndpointUnregistered(message::MessageHubId messageHubId,

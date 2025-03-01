@@ -94,7 +94,7 @@ void HostMessageHubManager::unregisterHub(MessageHubId id) {
     hub.clear();
     return;
   }
-  LOGE("No host hub %" PRIu64 " for unregister", id);
+  LOGE("No host hub 0x%" PRIx64 " for unregister", id);
 }
 
 void HostMessageHubManager::registerEndpoint(MessageHubId hubId,
@@ -103,10 +103,9 @@ void HostMessageHubManager::registerEndpoint(MessageHubId hubId,
   for (auto &hub : mHubs) {
     if (hub.getMessageHub().getId() != hubId) continue;
     hub.addEndpoint(info);
-    hub.getMessageHub().registerEndpoint(info.id);
     return;
   }
-  LOGE("No host hub %" PRIu64 " for add endpoint", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for add endpoint", hubId);
 }
 
 void HostMessageHubManager::unregisterEndpoint(MessageHubId hubId,
@@ -115,10 +114,9 @@ void HostMessageHubManager::unregisterEndpoint(MessageHubId hubId,
   for (auto &hub : mHubs) {
     if (hub.getMessageHub().getId() != hubId) continue;
     hub.removeEndpoint(id);
-    hub.getMessageHub().unregisterEndpoint(id);
     return;
   }
-  LOGE("No host hub %" PRIu64 " for unregister endpoint", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for unregister endpoint", hubId);
 }
 
 void HostMessageHubManager::openSession(MessageHubId hubId,
@@ -138,7 +136,7 @@ void HostMessageHubManager::openSession(MessageHubId hubId,
     }
     return;
   }
-  LOGE("No host hub %" PRIu64 " for open session", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for open session", hubId);
 }
 
 void HostMessageHubManager::ackSession(MessageHubId hubId,
@@ -150,7 +148,7 @@ void HostMessageHubManager::ackSession(MessageHubId hubId,
     mCb->onSessionOpened(hubId, sessionId);
     return;
   }
-  LOGE("No host hub %" PRIu64 " for ack session", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for ack session", hubId);
 }
 
 void HostMessageHubManager::closeSession(MessageHubId hubId,
@@ -161,7 +159,7 @@ void HostMessageHubManager::closeSession(MessageHubId hubId,
     hub.getMessageHub().closeSession(sessionId, reason);
     return;
   }
-  LOGE("No host hub %" PRIu64 " for close session", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for close session", hubId);
 }
 
 void HostMessageHubManager::sendMessage(MessageHubId hubId, SessionId sessionId,
@@ -172,7 +170,7 @@ void HostMessageHubManager::sendMessage(MessageHubId hubId, SessionId sessionId,
     if (hub.getMessageHub().getId() != hubId) continue;
     auto dataCopy = mMsgAllocator.MakeUniqueArray<std::byte>(data.size());
     if (dataCopy == nullptr) {
-      LOGE("Failed to allocate endpoint message from host hub %" PRIu64
+      LOGE("Failed to allocate endpoint message from host hub 0x%" PRIx64
            " over session %" PRIu16,
            hubId, sessionId);
       return;
@@ -185,7 +183,7 @@ void HostMessageHubManager::sendMessage(MessageHubId hubId, SessionId sessionId,
                                     sessionId);
     return;
   }
-  LOGE("No host hub %" PRIu64 " for send message", hubId);
+  LOGE("No host hub 0x%" PRIx64 " for send message", hubId);
 }
 
 namespace {
@@ -201,7 +199,7 @@ bool HostMessageHubManager::Hub::restoreOrCreateLocked(
   // If the hub already exists, initialize its endpoint list and reactive it.
   for (auto &hub : getManager().mHubs) {
     if (hub.getMessageHub().getId() != info.id) continue;
-    LOGI("Restoring host message hub %" PRIu64, info.id);
+    LOGI("Restoring host message hub 0x%" PRIx64, info.id);
     LockGuard<Mutex> lock(hub.mEndpointsLock);
     if (!hub.mEndpoints.empty()) {
       LOGE("Expected reserved hub slot to have no endpoints");
@@ -215,7 +213,7 @@ bool HostMessageHubManager::Hub::restoreOrCreateLocked(
   // If there is an available slot, create a new Hub and try to register it with
   // MessageRouter, cleaning it up on failure.
   if (getManager().mHubs.full()) {
-    LOGE("No space to register new host hub %" PRIu64, info.id);
+    LOGE("No space to register new host hub 0x%" PRIx64, info.id);
     deallocateEndpoints(endpoints);
     return false;
   }
@@ -225,10 +223,11 @@ bool HostMessageHubManager::Hub::restoreOrCreateLocked(
       MessageRouterSingleton::get()->registerMessageHub(hub.kName, info.id,
                                                         hub);
   if (!maybeHub) {
-    LOGE("Failed to register host hub %" PRIu64, info.id);
+    LOGE("Failed to register host hub 0x%" PRIx64, info.id);
     getManager().mHubs.pop_back();
     return false;
   }
+  LOGI("Registered host hub 0x%" PRIx64, info.id);
   hub.mMessageHub = std::move(*maybeHub);
   hub.mActive = true;
   return true;
@@ -256,27 +255,32 @@ void HostMessageHubManager::Hub::addEndpoint(const EndpointInfo &info) {
     LockGuard<Mutex> lock(mEndpointsLock);
     auto *endpoint = getManager().mEndpointAllocator.allocate(info);
     if (!endpoint) {
-      LOGE("Failed to allocate storage for endpoint (%" PRIu64 ", %" PRIu64 ")",
+      LOGE("Failed to allocate storage for endpoint (0x%" PRIx64 ", 0x%" PRIx64
+           ")",
            mMessageHub.getId(), info.id);
       return;
     }
     mEndpoints.push_back(*endpoint);
   }
-  // TODO(b/390447515): Register with MessageRouter
+  mMessageHub.registerEndpoint(info.id);
 }
 
 void HostMessageHubManager::Hub::removeEndpoint(EndpointId id) {
-  // TODO(b/390447515): Unregister from MessageRouter
-  LockGuard<Mutex> lock(mEndpointsLock);
-  for (auto it = mEndpoints.begin(), eraseIt = mEndpoints.before_begin();
-       it != mEndpoints.end(); ++it, ++eraseIt) {
-    auto &endpoint = *it;
-    if (endpoint.kInfo.id == id) {
-      mEndpoints.erase_after(eraseIt);
-      getManager().mEndpointAllocator.deallocate(&endpoint);
-      return;
+  bool found = false;
+  {
+    LockGuard<Mutex> lock(mEndpointsLock);
+    for (auto it = mEndpoints.begin(), eraseIt = mEndpoints.before_begin();
+         it != mEndpoints.end(); ++it, ++eraseIt) {
+      auto &endpoint = *it;
+      if (endpoint.kInfo.id == id) {
+        mEndpoints.erase_after(eraseIt);
+        getManager().mEndpointAllocator.deallocate(&endpoint);
+        found = true;
+        break;
+      }
     }
   }
+  if (found) mMessageHub.unregisterEndpoint(id);
 }
 
 bool HostMessageHubManager::Hub::onMessageReceived(
@@ -341,6 +345,16 @@ bool HostMessageHubManager::Hub::doesEndpointHaveService(
     EndpointId /*endpointId*/, const char * /*serviceDescriptor*/) {
   // TODO(b/390447515): Add support for service descriptors
   return false;
+}
+
+void HostMessageHubManager::Hub::onHubRegistered(const MessageHubInfo &info) {
+  LockGuard<Mutex> lock(getManager().mEmbeddedHubOpLock);
+  getManager().mCb->onHubRegistered(info);
+}
+
+void HostMessageHubManager::Hub::onHubUnregistered(MessageHubId id) {
+  LockGuard<Mutex> lock(getManager().mEmbeddedHubOpLock);
+  getManager().mCb->onHubUnregistered(id);
 }
 
 void HostMessageHubManager::Hub::onEndpointRegistered(MessageHubId messageHubId,
