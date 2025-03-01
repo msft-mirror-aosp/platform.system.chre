@@ -383,6 +383,18 @@ class EventLoop : public NonCopyable {
       const pw::Function<bool(const message::EndpointInfo &)> &function);
 
   /**
+   * Executes function for each service provided by a nanoapp in the event
+   * loop. If function returns true, the iteration will stop.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param function The function to execute for each service.
+   */
+  void onMatchingNanoappService(
+      const pw::Function<bool(const message::EndpointInfo &,
+                              const message::ServiceInfo &)> &function);
+
+  /**
    * Returns the EndpointInfo for the given nanoapp.
    *
    * This function is safe to call from any thread.
