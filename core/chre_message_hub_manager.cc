@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "chre/core/event_loop.h"
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 #include "chre/core/chre_message_hub_manager.h"
@@ -55,6 +56,8 @@ using ::chre::message::MessageHubInfo;
 using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
 using ::chre::message::Reason;
+using ::chre::message::RpcFormat;
+using ::chre::message::ServiceInfo;
 using ::chre::message::Session;
 using ::chre::message::SESSION_ID_INVALID;
 using ::chre::message::SessionId;
@@ -743,6 +746,19 @@ void ChreMessageHubManager::disableReadyEvents(EndpointId fromEndpointId,
   }
 }
 
+RpcFormat ChreMessageHubManager::toMessageRpcFormat(
+    chreMsgEndpointServiceFormat format) {
+  switch (format) {
+    case chreMsgEndpointServiceFormat::CHRE_MSG_ENDPOINT_SERVICE_FORMAT_AIDL:
+      return RpcFormat::AIDL;
+    case chreMsgEndpointServiceFormat::
+        CHRE_MSG_ENDPOINT_SERVICE_FORMAT_PW_RPC_PROTOBUF:
+      return RpcFormat::PW_RPC_PROTOBUF;
+    default:
+      return RpcFormat::CUSTOM;
+  }
+}
+
 bool ChreMessageHubManager::onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
                                               uint32_t messageType,
                                               uint32_t messagePermissions,
@@ -829,6 +845,33 @@ bool ChreMessageHubManager::doesEndpointHaveService(
   // if and only if the endpoint ID matches the endpoint ID we are looking for
   std::optional<EndpointId> endpoint = getEndpointForService(serviceDescriptor);
   return endpoint.has_value() && endpoint.value() == endpointId;
+}
+
+void ChreMessageHubManager::forEachService(
+    const pw::Function<bool(const EndpointInfo &, const ServiceInfo &)>
+        &function) {
+  {
+    ConditionalLockGuard<Mutex> lockGuard(mNanoappPublishedServicesMutex,
+                                          !inEventLoopThread());
+    for (const NanoappServiceData &service : mNanoappPublishedServices) {
+      std::optional<EndpointInfo> endpointInfo =
+          EventLoopManagerSingleton::get()->getEventLoop().getEndpointInfo(
+              service.nanoappId);
+      if (endpointInfo.has_value()) {
+        ServiceInfo serviceInfo(
+            service.serviceInfo.serviceDescriptor,
+            service.serviceInfo.majorVersion, service.serviceInfo.minorVersion,
+            toMessageRpcFormat(static_cast<chreMsgEndpointServiceFormat>(
+                service.serviceInfo.serviceFormat)));
+        if (function(endpointInfo.value(), serviceInfo)) {
+          return;
+        }
+      }
+    }
+  }
+
+  EventLoopManagerSingleton::get()->getEventLoop().onMatchingNanoappService(
+      function);
 }
 
 void ChreMessageHubManager::onHubRegistered(const MessageHubInfo & /*info*/) {

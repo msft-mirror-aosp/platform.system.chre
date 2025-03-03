@@ -235,6 +235,10 @@ class ChreMessageHubManager
                           message::EndpointId endpointId,
                           const char *serviceDescriptor);
 
+  //! Converts from a chreMsgEndpointServiceFormat to a message::RpcFormat.
+  //! @return the RpcFormat
+  message::RpcFormat toMessageRpcFormat(chreMsgEndpointServiceFormat format);
+
   //! Definitions for MessageHubCallback
   //! @see MessageRouter::MessageHubCallback
   bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
@@ -253,6 +257,9 @@ class ChreMessageHubManager
       const char *serviceDescriptor) override;
   bool doesEndpointHaveService(message::EndpointId endpointId,
                                const char *serviceDescriptor) override;
+  void forEachService(const pw::Function<bool(const message::EndpointInfo &,
+                                              const message::ServiceInfo &)>
+                          &function) override;
   void onHubRegistered(const message::MessageHubInfo &info) override;
   void onHubUnregistered(message::MessageHubId id) override;
   void onEndpointRegistered(message::MessageHubId messageHubId,
