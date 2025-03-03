@@ -106,6 +106,15 @@ class MessageRouter {
     virtual bool doesEndpointHaveService(EndpointId endpointId,
                                          const char *serviceDescriptor) = 0;
 
+    //! Callback called to iterate over all services provided by endpoints
+    //! connected to the MessageHub. Underlying endpoint and service storage
+    //! must not change during this callback. If function returns true, the
+    //! MessageHub can stop iterating over future endpoints. The service
+    //! descriptor must be valid for the duration of the callback.
+    virtual void forEachService(
+        const pw::Function<bool(const EndpointInfo &, const ServiceInfo &)>
+            &function) = 0;
+
     //! Callback called when a message hub except this one is registered.
     virtual void onHubRegistered(const MessageHubInfo &info) = 0;
 
@@ -269,7 +278,7 @@ class MessageRouter {
       const pw::Function<bool(const EndpointInfo &)> &function);
 
   //! Executes the function for each endpoint connected to all Message Hubs.
-  //! @return true if successful, false if failed
+  //! @return true if successful, false otherwise
   bool forEachEndpoint(
       const pw::Function<void(const MessageHubInfo &, const EndpointInfo &)>
           &function);
@@ -289,6 +298,13 @@ class MessageRouter {
   //! null-terminated ASCII string, false otherwise.
   bool doesEndpointHaveService(MessageHubId messageHubId, EndpointId endpointId,
                                const char *serviceDescriptor);
+
+  //! Executes the function for each service provided by an endpoint connected
+  //! to this MessageHub. If function returns true, the iteration will stop.
+  //! @return true if successful, false otherwise
+  bool forEachService(
+      const pw::Function<bool(const MessageHubInfo &, const EndpointInfo &,
+                              const ServiceInfo &)> &function);
 
   //! Executes the function for each MessageHub connected to the
   //! MessageRouter. If function returns true, the iteration will stop.

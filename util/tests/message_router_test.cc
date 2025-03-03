@@ -90,6 +90,14 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
            std::strcmp(serviceDescriptor, kServiceDescriptorForEndpoint2) == 0;
   }
 
+  void forEachService(
+      const pw::Function<bool(const EndpointInfo &, const ServiceInfo &)>
+          &function) override {
+    function(kEndpointInfos[1],
+             ServiceInfo(kServiceDescriptorForEndpoint2, /* majorVersion= */ 1,
+                         /* minorVersion= */ 0, RpcFormat::CUSTOM));
+  }
+
   void onHubRegistered(const MessageHubInfo & /* info */) override {}
 
   void onHubUnregistered(MessageHubId /* id */) override {}
@@ -468,6 +476,28 @@ TEST_F(MessageRouterTest, DoesEndpointHaveService) {
   EXPECT_TRUE(router.doesEndpointHaveService(messageHub1->getId(),
                                              kEndpointInfos[1].id,
                                              kServiceDescriptorForEndpoint2));
+}
+
+TEST_F(MessageRouterTest, ForEachService) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub1 =
+      router.registerMessageHub("hub1", /* id= */ 1, callback);
+  EXPECT_TRUE(messageHub1.has_value());
+
+  router.forEachService([](const MessageHubInfo &hub,
+                           const EndpointInfo &endpoint,
+                           const ServiceInfo &service) {
+    EXPECT_EQ(hub.id, 1);
+    EXPECT_EQ(endpoint.id, kEndpointInfos[1].id);
+    EXPECT_STREQ(service.serviceDescriptor, kServiceDescriptorForEndpoint2);
+    EXPECT_EQ(service.majorVersion, 1);
+    EXPECT_EQ(service.minorVersion, 0);
+    EXPECT_EQ(service.format, RpcFormat::CUSTOM);
+    return true;
+  });
 }
 
 TEST_F(MessageRouterTest, GetEndpointForServiceBadServiceDescriptor) {
