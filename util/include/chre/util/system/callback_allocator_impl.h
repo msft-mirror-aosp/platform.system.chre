@@ -87,7 +87,7 @@ CallbackAllocator<Metadata>::MakeUniqueArrayWithCallback(std::byte *ptr,
         {.message = ptr, .metadata = std::move(metadata), .messageSize = size});
   }
 
-  return WrapUniqueArray(ptr, size);
+  return WrapUnique<std::byte[]>(ptr, size);
 }
 
 template <typename Metadata>
