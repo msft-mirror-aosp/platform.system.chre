@@ -45,10 +45,12 @@ using ::chre::message::ServiceInfo;
 
 namespace chre {
 
-// Out of line declaration required for nonintegral static types
-constexpr Nanoseconds EventLoop::kIntervalWakeupBucket;
-
 namespace {
+
+//! The time interval of nanoapp wakeup buckets, adjust in conjunction with
+//! Nanoapp::kMaxSizeWakeupBuckets.
+constexpr Nanoseconds kIntervalWakeupBucket =
+    Nanoseconds(180 * kOneMinuteInNanoseconds);
 
 #ifndef CHRE_STATIC_EVENT_LOOP
 using DynamicMemoryPool =
@@ -152,6 +154,7 @@ void EventLoop::invokeMessageFreeFunction(uint64_t appId,
 
 void EventLoop::run() {
   LOGI("EventLoop start");
+  setCycleWakeupBucketsTimer();
 
   while (mRunning) {
     // Events are delivered in a single stage: they arrive in the inbound event
@@ -754,15 +757,30 @@ void EventLoop::unloadNanoappAtIndex(size_t index, bool nanoappStarted) {
   mCurrentApp = nullptr;
 }
 
-void EventLoop::handleNanoappWakeupBuckets() {
-  Nanoseconds now = SystemTime::getMonotonicTime();
-  Nanoseconds duration = now - mTimeLastWakeupBucketCycled;
-  if (duration > kIntervalWakeupBucket) {
-    mTimeLastWakeupBucketCycled = now;
-    for (auto &nanoapp : mNanoapps) {
-      nanoapp->cycleWakeupBuckets(now);
-    }
+void EventLoop::setCycleWakeupBucketsTimer() {
+  if (mCycleWakeupBucketsHandle != CHRE_TIMER_INVALID) {
+    EventLoopManagerSingleton::get()->cancelDelayedCallback(
+        mCycleWakeupBucketsHandle);
   }
+
+  auto callback = [](uint16_t /*type*/, void * /*data*/, void * /*extraData*/) {
+    EventLoopManagerSingleton::get()
+        ->getEventLoop()
+        .handleNanoappWakeupBuckets();
+  };
+  mCycleWakeupBucketsHandle =
+      EventLoopManagerSingleton::get()->setDelayedCallback(
+          SystemCallbackType::CycleNanoappWakeupBucket, nullptr /*data*/,
+          callback, kIntervalWakeupBucket);
+}
+
+void EventLoop::handleNanoappWakeupBuckets() {
+  mTimeLastWakeupBucketCycled = SystemTime::getMonotonicTime();
+  for (auto &nanoapp : mNanoapps) {
+    nanoapp->cycleWakeupBuckets(mTimeLastWakeupBucketCycled);
+  }
+  mCycleWakeupBucketsHandle = CHRE_TIMER_INVALID;
+  setCycleWakeupBucketsTimer();
 }
 
 void EventLoop::logDanglingResources(const char *name, uint32_t count) {

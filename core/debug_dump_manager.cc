@@ -72,7 +72,6 @@ void DebugDumpManager::appendNanoappLog(const Nanoapp &nanoapp,
 void DebugDumpManager::collectFrameworkDebugDumps() {
   auto *eventLoopManager = EventLoopManagerSingleton::get();
   eventLoopManager->getMemoryManager().logStateToBuffer(mDebugDump);
-  eventLoopManager->getEventLoop().handleNanoappWakeupBuckets();
   eventLoopManager->getEventLoop().logStateToBuffer(mDebugDump);
 #ifdef CHRE_SENSORS_SUPPORT_ENABLED
   eventLoopManager->getSensorRequestManager().logStateToBuffer(mDebugDump);

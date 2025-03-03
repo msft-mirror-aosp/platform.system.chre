@@ -83,6 +83,7 @@ enum class SystemCallbackType : uint16_t {
   BleSocketConnected,
   EndpointCleanupNanoappEvent,
   EndpointSessionRequestedEvent,
+  CycleNanoappWakeupBucket,
 };
 
 //! Deferred/delayed callbacks use the event subsystem but are invariably sent
