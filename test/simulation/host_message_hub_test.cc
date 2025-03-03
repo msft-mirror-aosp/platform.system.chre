@@ -122,6 +122,10 @@ class HostMessageHubTest : public TestBase {
             [](const char *) -> std::optional<EndpointId> { return {}; });
     ON_CALL(mEmbeddedHubCb, doesEndpointHaveService(_, _))
         .WillByDefault([](EndpointId, const char *) { return false; });
+    ON_CALL(mEmbeddedHubCb, forEachService(_))
+        .WillByDefault(
+            [](const pw::Function<bool(const EndpointInfo &,
+                                       const message::ServiceInfo &)> &) {});
 
     // We mostly don't care about this. Individual tests may override this
     // behavior.

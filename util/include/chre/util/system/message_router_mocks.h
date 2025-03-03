@@ -47,6 +47,11 @@ class MockMessageHubCallback : public MessageRouter::MessageHubCallback {
   MOCK_METHOD(bool, doesEndpointHaveService,
               (EndpointId endpointId, const char *serviceDescriptor),
               (override));
+  MOCK_METHOD(
+      void, forEachService,
+      (const pw::Function<bool(const EndpointInfo &,
+                               const message::ServiceInfo &)> &function),
+      (override));
   MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &), (override));
   MOCK_METHOD(void, onHubUnregistered, (MessageHubId), (override));
   MOCK_METHOD(void, onEndpointRegistered,
