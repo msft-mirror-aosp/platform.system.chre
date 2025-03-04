@@ -33,8 +33,8 @@
 
 namespace chre {
 
-// TestTimer is required to access private members of the TimerPool.
-class TestTimer : public TestBase {
+// TimerTest is required to access private members of the TimerPool.
+class TimerTest : public TestBase {
  protected:
   bool hasNanoappTimers(TimerPool &pool, uint16_t instanceId) {
     return pool.hasNanoappTimers(instanceId);
@@ -42,7 +42,8 @@ class TestTimer : public TestBase {
 };
 
 namespace {
-TEST_F(TestTimer, SetupAndCancelPeriodicTimer) {
+
+TEST_F(TimerTest, SetupAndCancelPeriodicTimer) {
   CREATE_CHRE_TEST_EVENT(START_TIMER, 0);
   CREATE_CHRE_TEST_EVENT(STOP_TIMER, 1);
 
@@ -119,7 +120,7 @@ TEST_F(TestTimer, SetupAndCancelPeriodicTimer) {
   EXPECT_FALSE(success);
 }
 
-TEST_F(TestTimer, CancelPeriodicTimerOnUnload) {
+TEST_F(TimerTest, CancelPeriodicTimerOnUnload) {
   CREATE_CHRE_TEST_EVENT(START_TIMER, 0);
 
   class App : public TestNanoapp {

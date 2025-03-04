@@ -30,7 +30,7 @@
 namespace chre {
 
 // Forward declaration needed to friend TimerPool.
-class TestTimer;
+class TimerTest;
 
 /**
  * The type to use when referring to a timer instance.
@@ -120,8 +120,8 @@ class TimerPool : public NonCopyable {
   }
 
  private:
-  // Allows TestTimer to access hasNanoappTimers.
-  friend class TestTimer;
+  // Allows TimerTest to access hasNanoappTimers.
+  friend class TimerTest;
 
   /**
    * Tracks metadata associated with a request for a timed event.

@@ -33,7 +33,9 @@
 namespace chre {
 namespace {
 
-TEST_F(TestBase, WifiCanSubscribeAndUnsubscribeToScanMonitoring) {
+class WifiTest : public TestBase {};
+
+TEST_F(WifiTest, WifiCanSubscribeAndUnsubscribeToScanMonitoring) {
   CREATE_CHRE_TEST_EVENT(MONITORING_REQUEST, 0);
 
   struct MonitoringRequest {
@@ -101,7 +103,7 @@ TEST_F(TestBase, WifiCanSubscribeAndUnsubscribeToScanMonitoring) {
   EXPECT_FALSE(chrePalWifiIsScanMonitoringActive());
 }
 
-TEST_F(TestBase, WifiScanMonitoringDisabledOnUnload) {
+TEST_F(WifiTest, WifiScanMonitoringDisabledOnUnload) {
   CREATE_CHRE_TEST_EVENT(MONITORING_REQUEST, 1);
 
   struct MonitoringRequest {
@@ -166,7 +168,7 @@ TEST_F(TestBase, WifiScanMonitoringDisabledOnUnload) {
   EXPECT_FALSE(chrePalWifiIsScanMonitoringActive());
 }
 
-TEST_F(TestBase, WifiScanMonitoringDisabledOnUnloadAndCanBeReEnabled) {
+TEST_F(WifiTest, WifiScanMonitoringDisabledOnUnloadAndCanBeReEnabled) {
   CREATE_CHRE_TEST_EVENT(MONITORING_REQUEST, 1);
 
   struct MonitoringRequest {
