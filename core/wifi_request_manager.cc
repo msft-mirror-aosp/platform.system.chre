@@ -388,6 +388,10 @@ bool WifiRequestManager::requestScan(Nanoapp *nanoapp,
     }
   }
 
+  if (success) {
+    addWifiScanRequestLog(nanoapp->getInstanceId(), params);
+  }
+
   return success;
 }
 
@@ -671,25 +675,26 @@ void WifiRequestManager::handleNanServiceSubscriptionCanceledEvent(
 }
 
 void WifiRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
-  debugDump.print("\nWifi scan monitor %s\n",
+  debugDump.print("\nWIFI:\n");
+  debugDump.print(" Scan monitor: %s\n",
                   scanMonitorIsEnabled() ? "enabled" : "disabled");
 
   if (scanMonitorIsEnabled()) {
-    debugDump.print(" Wifi scan monitor enabled nanoapps:\n");
+    debugDump.print(" Scan monitor nanoapps:\n");
     for (uint16_t instanceId : mScanMonitorNanoapps) {
       debugDump.print("  nappId=%" PRIu16 "\n", instanceId);
     }
   }
 
   if (!mPendingScanRequests.empty()) {
-    debugDump.print(" Wifi scan request queue:\n");
+    debugDump.print(" Pending scan requests:\n");
     for (const auto &request : mPendingScanRequests) {
       debugDump.print(" nappId=%" PRIu16, request.nanoappInstanceId);
     }
   }
 
   if (!mPendingScanMonitorRequests.empty()) {
-    debugDump.print(" Wifi transition queue:\n");
+    debugDump.print(" Pending scan monitor requests:\n");
     for (const auto &transition : mPendingScanMonitorRequests) {
       debugDump.print("  enable=%s nappId=%" PRIu16 "\n",
                       transition.enable ? "true" : "false",
@@ -697,7 +702,7 @@ void WifiRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     }
   }
 
-  debugDump.print(" Last %zu wifi scan requests:\n",
+  debugDump.print(" Last %zu scan requests:\n",
                   mWifiScanRequestLogs.size());
   static_assert(kNumWifiRequestLogs <= INT8_MAX,
                 "kNumWifiRequestLogs must be <= INT8_MAX");
