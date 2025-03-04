@@ -19,12 +19,16 @@
 
 #include "chre/platform/mutex.h"
 #include "chre/util/dynamic_vector.h"
+#include "chre/util/memory.h"
 #include "chre/util/singleton.h"
+#include "chre/util/system/intrusive_ref_base.h"
 #include "chre/util/system/message_common.h"
 
 #include "pw_allocator/unique_ptr.h"
 #include "pw_containers/vector.h"
 #include "pw_function/function.h"
+#include "pw_intrusive_ptr/intrusive_ptr.h"
+#include "pw_intrusive_ptr/recyclable.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -51,7 +55,8 @@ namespace chre::message {
 class MessageRouter {
  public:
   //! The callback used to register a MessageHub with the MessageRouter
-  class MessageHubCallback {
+  class MessageHubCallback : public IntrusiveRefBase,
+                             public pw::Recyclable<MessageHubCallback> {
    public:
     virtual ~MessageHubCallback() = default;
 
@@ -130,6 +135,12 @@ class MessageRouter {
     //! except for this MessageHub.
     virtual void onEndpointUnregistered(MessageHubId messageHubId,
                                         EndpointId endpointId) = 0;
+
+    //! Recycle function called by pw::IntrusivePtr when the MessageHubCallback
+    //! is no longer in use. The default behavior in Pigweed is to `delete
+    //! this`. The callbacks derived from this class should also inherit from
+    //! pw::Recyclable and override this function.
+    virtual void pw_recycle() = 0;
   };
 
   //! The API returned when registering a MessageHub with the MessageRouter.
@@ -235,7 +246,7 @@ class MessageRouter {
   //! Represents a MessageHub and its connected endpoints
   struct MessageHubRecord {
     MessageHubInfo info;
-    MessageHubCallback *callback;
+    pw::IntrusivePtr<MessageHubCallback> callback;
   };
 
   //! The default reserved session ID value
@@ -266,9 +277,9 @@ class MessageRouter {
   //! @param callback The callback to handle messages sent to the MessageHub
   //! @return The MessageHub API or std::nullopt if the MessageHub could not be
   //! registered
-  std::optional<MessageHub> registerMessageHub(const char *name,
-                                               MessageHubId id,
-                                               MessageHubCallback &callback);
+  std::optional<MessageHub> registerMessageHub(
+      const char *name, MessageHubId id,
+      pw::IntrusivePtr<MessageHubCallback> callback);
 
   //! Executes the function for each endpoint connected to this MessageHub.
   //! If function returns true, the iteration will stop.
@@ -409,15 +420,18 @@ class MessageRouter {
 
   //! @return The callback for the given MessageHub ID or nullptr if not found
   //! Requires the caller to hold the mutex
-  MessageHubCallback *getCallbackFromMessageHubId(MessageHubId messageHubId);
+  pw::IntrusivePtr<MessageHubCallback> getCallbackFromMessageHubId(
+      MessageHubId messageHubId);
 
   //! @return The callback for the given MessageHub ID or nullptr if not found
-  MessageHubCallback *getCallbackFromMessageHubIdLocked(
+  pw::IntrusivePtr<MessageHubCallback> getCallbackFromMessageHubIdLocked(
       MessageHubId messageHubId);
 
   //! @return true if the endpoint exists in the MessageHub with the given
   //! callback
-  bool checkIfEndpointExists(MessageHubCallback *callback, EndpointId endpointId);
+  bool checkIfEndpointExists(
+      const pw::IntrusivePtr<MessageHubCallback> &callback,
+      EndpointId endpointId);
 
   //! @return The next available Session ID. Will wrap around if needed and
   //! ensures the returned ID is not in the reserved range nor is it already in

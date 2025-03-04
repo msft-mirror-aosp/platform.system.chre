@@ -58,6 +58,10 @@ class MockMessageHubCallback : public MessageRouter::MessageHubCallback {
               (MessageHubId messageHubId, EndpointId endpointId), (override));
   MOCK_METHOD(void, onEndpointUnregistered,
               (MessageHubId messageHubId, EndpointId endpointId), (override));
+
+  void pw_recycle() override {
+    delete this;
+  }
 };
 
 }  // namespace chre::message
