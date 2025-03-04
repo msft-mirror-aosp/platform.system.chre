@@ -1766,8 +1766,9 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
  */
 static void chppWorkHandleTimeout(struct ChppTransportState *context) {
   const uint64_t currentTimeNs = chppGetCurrentTimeNs();
-  const bool isTxTimeout = currentTimeNs - context->txStatus.lastTxTimeNs >=
-                           CHPP_TRANSPORT_TX_TIMEOUT_NS;
+  const bool isTxTimeout = chppHavePendingTxPayload(context) &&
+                           (currentTimeNs - context->txStatus.lastTxTimeNs >=
+                            CHPP_TRANSPORT_TX_TIMEOUT_NS);
   const bool isResetting = context->resetState == CHPP_RESET_STATE_RESETTING;
 
   // Call chppTransportDoWork for both TX and request timeouts.
