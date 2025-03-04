@@ -197,11 +197,8 @@ void HalChreSocketConnection::SocketCallbacks::onMessageReceived(
 }
 
 void HalChreSocketConnection::SocketCallbacks::onConnected() {
-  ALOGI("Reconnected to CHRE daemon");
-  if (mHaveConnected) {
-    ALOGI("Reconnected to CHRE daemon");
-    mCallback->onContextHubRestarted();
-  }
+  ALOGI("Reconnected to CHRE daemon (restart: %d)", mHaveConnected);
+  mCallback->onContextHubConnected(mHaveConnected);
   mParent.sendDebugConfiguration();
   mHaveConnected = true;
 }

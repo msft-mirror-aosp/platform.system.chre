@@ -76,7 +76,6 @@ class ContextHub : public BnContextHub,
         return mConnection->sendRawMessage(builder.GetBufferPointer(),
                                            builder.GetSize());
       });
-      mV4Impl->init();
     }
   }
   ::ndk::ScopedAStatus getContextHubs(
@@ -125,7 +124,7 @@ class ContextHub : public BnContextHub,
 
   void onTransactionResult(uint32_t transactionId, bool success) override;
 
-  void onContextHubRestarted() override;
+  void onContextHubConnected(bool restart) override;
 
   void onDebugDumpData(const ::chre::fbs::DebugDumpDataT &data) override;
 
