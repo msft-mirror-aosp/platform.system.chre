@@ -110,6 +110,9 @@ static const struct ChppClient kGnssClientConfig = {
     // Service notification dispatch function pointer
     .deinitFunctionPtr = &chppGnssClientDeinit,
 
+    // Client timeout function pointer
+    .timeoutFunctionPtr = NULL,  // Not used
+
     // Number of request-response states in the outReqStates array.
     .outReqCount = ARRAY_SIZE(gGnssClientContext.outReqStates),
 

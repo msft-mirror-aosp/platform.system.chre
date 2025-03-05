@@ -63,6 +63,9 @@ static const struct ChppService kGnssServiceConfig = {
     // Client notification dispatch function pointer
     .notificationDispatchFunctionPtr = NULL,  // Not supported
 
+    // Client timeout function pointer
+    .timeoutFunctionPtr = NULL,  // Not used
+
     // Min length is the entire header
     .minLength = sizeof(struct ChppAppHeader),
 };

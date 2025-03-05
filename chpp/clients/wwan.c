@@ -110,6 +110,9 @@ static const struct ChppClient kWwanClientConfig = {
     // Service notification dispatch function pointer
     .deinitFunctionPtr = &chppWwanClientDeinit,
 
+    // Client timeout function pointer
+    .timeoutFunctionPtr = NULL,  // Not used
+
     // Number of request-response states in the outReqStates array.
     .outReqCount = ARRAY_SIZE(gWwanClientContext.outReqStates),
 
