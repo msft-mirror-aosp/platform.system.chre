@@ -4,14 +4,14 @@
 
 # arm64 Environment Checks #####################################################
 
-ifeq ($(ANDROID_NDK_PREFIX),)
-$(error "You should supply an ANDROID_NDK_PREFIX environment variable \
-         containing a path to a generated Android NDK toolchain. i.e. \
-         ./build/tools/make-standalone-toolchain.sh --arch=arm64 \
-         --platform=android-26 --install-dir=$$ANDROID_NDK_PREFIX")
+ifeq ($(ANDROID_BUILD_TOP),)
+$(error "You should supply an ANDROID_BUILD_TOP environment variable \
+         containing a path to the Android source tree. This is typically \
+         provided by initializing the Android build environment.")
 endif
 
-export ARM64_TOOLS_PREFIX=$(ANDROID_NDK_PREFIX)/bin
+include $(CHRE_PREFIX)/build/clang.mk
+export ARM64_TOOLS_PREFIX=$(CLANG_TOOLCHAIN_PATH)/bin
 
 # arm64 Tools ##################################################################
 
