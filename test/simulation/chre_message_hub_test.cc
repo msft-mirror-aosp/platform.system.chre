@@ -136,6 +136,22 @@ class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
     return false;
   }
 
+  void forEachService(
+      const pw::Function<bool(const EndpointInfo &, const ServiceInfo &)>
+          &function) override {
+    if (function(
+            kEndpointInfos[1],
+            ServiceInfo(kServiceDescriptorForEndpoint2, /* majorVersion= */ 1,
+                        /* minorVersion= */ 0, RpcFormat::CUSTOM))) {
+      return;
+    }
+
+    function(kDynamicEndpointInfo,
+             ServiceInfo(kServiceDescriptorForDynamicEndpoint,
+                         /* majorVersion= */ 1,
+                         /* minorVersion= */ 0, RpcFormat::CUSTOM));
+  }
+
   void onHubRegistered(const MessageHubInfo & /*info*/) override {}
 
   void onHubUnregistered(MessageHubId /*id*/) override {}
@@ -1391,6 +1407,45 @@ TEST_F(ChreMessageHubTest, OpenSessionWithNanoappLegacyService) {
   std::unique_lock<std::mutex> lock(mutex);
   messageHub.reset();
   condVar.wait(lock);
+}
+
+TEST_F(ChreMessageHubTest, ForEachServiceNanoappLegacyService) {
+  std::mutex mutex;
+  std::condition_variable condVar;
+
+  // Load the nanoapp
+  uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
+      mutex, condVar,
+      TestNanoappInfo{.name = "TEST_FOR_EACH_SERVICE_LEGACY_SERVICE",
+                      .id = kLegacyServiceNanoappId}));
+  Nanoapp *nanoapp = getNanoappByAppId(appId);
+  ASSERT_NE(nanoapp, nullptr);
+
+  // Create the other hub
+  MessageHubCallbackStoreData callback(/* message= */ nullptr,
+                                       /* session= */ nullptr);
+  std::optional<MessageRouter::MessageHub> messageHub =
+      MessageRouterSingleton::get()->registerMessageHub(
+          "OTHER_TEST_HUB", kOtherMessageHubId, callback);
+  ASSERT_TRUE(messageHub.has_value());
+  callback.setMessageHub(&(*messageHub));
+
+  // Find the service
+  MessageRouterSingleton::get()->forEachService(
+      [&](const MessageHubInfo &hub, const EndpointInfo &endpoint,
+          const ServiceInfo &service) {
+        if (hub.id == EventLoopManagerSingleton::get()
+                          ->getChreMessageHubManager()
+                          .kChreMessageHubId) {
+          EXPECT_EQ(endpoint.id, kLegacyServiceNanoappId);
+          EXPECT_STREQ(service.serviceDescriptor, kLegacyServiceName);
+          EXPECT_EQ(service.majorVersion, 1);
+          EXPECT_EQ(service.minorVersion, 0);
+          EXPECT_EQ(service.format, RpcFormat::PW_RPC_PROTOBUF);
+          return true;
+        }
+        return false;
+      });
 }
 
 TEST_F(ChreMessageHubTest, NanoappFailsToPublishLegacyServiceInNewWay) {

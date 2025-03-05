@@ -315,6 +315,9 @@ void WifiRequestManager::handleScanRequestTimeout() {
   } else {
     EventLoopManagerSingleton::get()->getSystemHealthMonitor().onFailure(
         HealthCheckId::WifiScanResponseTimeout);
+    // Reset the scan accumulator logic to prevent interference with the next
+    // scan request.
+    resetScanEventResultCountAccumulator();
     mPendingScanRequests.pop();
     dispatchQueuedScanRequests(true /* postAsyncResult */);
   }
@@ -1179,8 +1182,7 @@ void WifiRequestManager::handleFreeWifiScanEvent(chreWifiScanEvent *scanEvent) {
     // received and processed by the nanoapp requesting the scan event.
     mScanEventResultCountAccumulator += scanEvent->resultCount;
     if (mScanEventResultCountAccumulator >= scanEvent->resultTotal) {
-      mScanEventResultCountAccumulator = 0;
-      mScanRequestResultsArePending = false;
+      resetScanEventResultCountAccumulator();
       cancelScanRequestTimer();
     }
 

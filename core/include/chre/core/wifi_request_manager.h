@@ -920,6 +920,11 @@ class WifiRequestManager : public NonCopyable {
    * called after scan response and all pending data have been delivered.
    */
   void cancelScanRequestTimer();
+
+  void resetScanEventResultCountAccumulator() {
+      mScanEventResultCountAccumulator = 0;
+      mScanRequestResultsArePending = false;
+  }
 };
 
 }  // namespace chre

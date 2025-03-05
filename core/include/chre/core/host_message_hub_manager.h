@@ -314,6 +314,9 @@ class HostMessageHubManager : public NonCopyable {
         const char *serviceDescriptor) override;
     bool doesEndpointHaveService(message::EndpointId endpointId,
                                  const char *serviceDescriptor) override;
+    void forEachService(const pw::Function<bool(const message::EndpointInfo &,
+                                                const message::ServiceInfo &)>
+                            &function) override;
     void onHubRegistered(const message::MessageHubInfo &info) override;
     void onHubUnregistered(message::MessageHubId id) override;
     void onEndpointRegistered(message::MessageHubId messageHubId,

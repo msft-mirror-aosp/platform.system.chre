@@ -81,7 +81,7 @@ void HostProtocolHostV4::encodeRegisterEndpoint(FlatBufferBuilder &builder,
                                                 const AidlEndpointInfo &info) {
   auto msg = ::chre::fbs::CreateRegisterEndpoint(
       builder, aidlToFbsEndpointInfo(builder, info));
-  finalize(builder, ChreMessage::UnregisterMessageHub, msg.Union());
+  finalize(builder, ChreMessage::RegisterEndpoint, msg.Union());
 }
 
 void HostProtocolHostV4::encodeUnregisterEndpoint(FlatBufferBuilder &builder,

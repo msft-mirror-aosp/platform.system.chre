@@ -347,6 +347,12 @@ bool HostMessageHubManager::Hub::doesEndpointHaveService(
   return false;
 }
 
+void HostMessageHubManager::Hub::forEachService(
+    const pw::Function<bool(const message::EndpointInfo &,
+                            const message::ServiceInfo &)> & /* function */) {
+  // TODO(b/390447515): Add support for service descriptors
+}
+
 void HostMessageHubManager::Hub::onHubRegistered(const MessageHubInfo &info) {
   LockGuard<Mutex> lock(getManager().mEmbeddedHubOpLock);
   getManager().mCb->onHubRegistered(info);

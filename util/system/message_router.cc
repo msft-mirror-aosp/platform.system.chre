@@ -271,6 +271,35 @@ bool MessageRouter::doesEndpointHaveService(MessageHubId messageHubId,
   return callback->doesEndpointHaveService(endpointId, serviceDescriptor);
 }
 
+bool MessageRouter::forEachService(
+    const pw::Function<bool(const MessageHubInfo &, const EndpointInfo &,
+                            const ServiceInfo &)> &function) {
+  std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
+      getMessageHubRecords();
+  if (!messageHubRecords.has_value()) {
+    return false;
+  }
+
+  struct Context {
+    decltype(function) &function;
+    const MessageHubInfo *messageHubInfo;
+  };
+  Context context = {
+      .function = function,
+      .messageHubInfo = nullptr,
+  };
+  for (const MessageHubRecord &messageHubRecord : *messageHubRecords) {
+    context.messageHubInfo = &messageHubRecord.info;
+    messageHubRecord.callback->forEachService(
+        [&context](const EndpointInfo &endpointInfo,
+                   const ServiceInfo &serviceInfo) {
+          return context.function(*context.messageHubInfo, endpointInfo,
+                                  serviceInfo);
+        });
+  }
+  return true;
+}
+
 bool MessageRouter::forEachMessageHub(
     const pw::Function<bool(const MessageHubInfo &)> &function) {
   std::optional<DynamicVector<MessageHubRecord>> messageHubRecords =
