@@ -29,6 +29,7 @@
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
 #include "chre/platform/system_time.h"
+#include "chre/util/enum.h"
 #include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/system/event_callbacks.h"
@@ -792,7 +793,7 @@ void WifiRequestManager::dumpDebugLog(const DebugLogEntry &log,
                       log.scanMonitorResult.errorCode);
       break;
     default:
-      debugDump.print("unknown log type %" PRIu8 "\n", log.logType);
+      debugDump.print("unknown log type %" PRIu8 "\n", asBaseType(log.logType));
   }
 }
 
