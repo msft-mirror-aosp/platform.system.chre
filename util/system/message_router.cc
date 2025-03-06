@@ -512,10 +512,14 @@ bool MessageRouter::finalizeSession(MessageHubId fromMessageHubId,
 
   if (reason.has_value()) {
     initiatorCallback->onSessionClosed(session, reason.value());
-    peerCallback->onSessionClosed(session, reason.value());
+    if (initiatorCallback != peerCallback) {
+      peerCallback->onSessionClosed(session, reason.value());
+    }
   } else {
     initiatorCallback->onSessionOpened(session);
-    peerCallback->onSessionOpened(session);
+    if (initiatorCallback != peerCallback) {
+      peerCallback->onSessionOpened(session);
+    }
   }
   return true;
 }

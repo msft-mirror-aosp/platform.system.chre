@@ -34,6 +34,8 @@
 #include <optional>
 #include <utility>
 
+using ::testing::_;
+
 namespace chre::message {
 namespace {
 
@@ -53,16 +55,21 @@ const char kServiceDescriptorForEndpoint2[] = "TEST_SERVICE.TEST";
 
 class MessageRouterTest : public ::testing::Test {};
 
+//! Iterates over the endpoints
+void forEachEndpoint(const pw::Function<bool(const EndpointInfo &)> &function) {
+  for (const EndpointInfo &endpointInfo : kEndpointInfos) {
+    if (function(endpointInfo)) {
+      return;
+    }
+  }
+}
+
 //! Base class for MessageHubCallbacks used in tests
 class MessageHubCallbackBase : public MessageRouter::MessageHubCallback {
  public:
   void forEachEndpoint(
       const pw::Function<bool(const EndpointInfo &)> &function) override {
-    for (const EndpointInfo &endpointInfo : kEndpointInfos) {
-      if (function(endpointInfo)) {
-        return;
-      }
-    }
+    ::chre::message::forEachEndpoint(function);
   }
 
   std::optional<EndpointInfo> getEndpointInfo(EndpointId endpointId) override {
@@ -1937,15 +1944,55 @@ TEST_F(MessageRouterTest, OnRegisterAndUnregisterHub) {
   MessageHubId hub1Id = 1, hub2Id = 2;
   std::optional<MessageRouter::MessageHub> hub1 =
       router.registerMessageHub("hub1", hub1Id, hub1Callback);
-  ASSERT_TRUE(hub1);
+  ASSERT_TRUE(hub1.has_value());
 
   EXPECT_CALL(*hub1Callback, onHubRegistered(HubMatcher(hub2Id)));
   std::optional<MessageRouter::MessageHub> hub2 =
       router.registerMessageHub("hub2", hub2Id, hub2Callback);
-  ASSERT_TRUE(hub2);
+  ASSERT_TRUE(hub2.has_value());
 
   EXPECT_CALL(*hub1Callback, onHubUnregistered(hub2Id));
   hub2.reset();
+}
+
+MATCHER_P(SessionIdMatcher, id, "Matches id in Session") {
+  return arg.sessionId == id;
+}
+
+TEST_F(MessageRouterTest, SessionCallbacksAreCalledOnceSameHub) {
+  MessageRouterWithStorage<kMaxMessageHubs, kMaxSessions> router;
+  pw::IntrusivePtr<MockMessageHubCallback> hub1Callback =
+      pw::MakeRefCounted<MockMessageHubCallback>();
+  MessageHubId hub1Id = 1;
+  std::optional<MessageRouter::MessageHub> hub1 =
+      router.registerMessageHub("hub1", hub1Id, hub1Callback);
+  ASSERT_TRUE(hub1.has_value());
+
+  ON_CALL(*hub1Callback, forEachEndpoint).WillByDefault(forEachEndpoint);
+
+  // Try with different endpoints
+  SessionId sessionId = hub1->openSession(kEndpointInfos[0].id, hub1->getId(),
+                                          kEndpointInfos[1].id);
+  ASSERT_NE(sessionId, SESSION_ID_INVALID);
+
+  EXPECT_CALL(*hub1Callback, onSessionOpened(_)).Times(1);
+  hub1->onSessionOpenComplete(sessionId);
+
+  EXPECT_CALL(*hub1Callback, onSessionClosed(SessionIdMatcher(sessionId), _))
+      .Times(1);
+  hub1->closeSession(sessionId);
+
+  // Try with the same endpoint
+  SessionId sessionId2 = hub1->openSession(kEndpointInfos[1].id, hub1->getId(),
+                                           kEndpointInfos[1].id);
+  ASSERT_NE(sessionId2, SESSION_ID_INVALID);
+
+  EXPECT_CALL(*hub1Callback, onSessionOpened(_)).Times(1);
+  hub1->onSessionOpenComplete(sessionId2);
+
+  EXPECT_CALL(*hub1Callback, onSessionClosed(SessionIdMatcher(sessionId2), _))
+      .Times(1);
+  hub1->closeSession(sessionId2);
 }
 
 }  // namespace

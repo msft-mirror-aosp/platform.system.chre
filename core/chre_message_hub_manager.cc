@@ -525,47 +525,51 @@ void ChreMessageHubManager::handleMessageFreeCallback(uint16_t /* type */,
 
 void ChreMessageHubManager::onSessionStateChanged(
     const Session &session, std::optional<Reason> reason) {
-  auto sessionCallbackData = MakeUnique<SessionCallbackData>();
-  if (sessionCallbackData.isNull()) {
-    FATAL_ERROR_OOM();
-    return;
-  }
+  for (const Endpoint &endpoint : {session.initiator, session.peer}) {
+    if (endpoint.messageHubId != kChreMessageHubId) {
+      continue;
+    }
 
-  Endpoint otherParty;
-  uint64_t nanoappId;
-  if (session.initiator.messageHubId == kChreMessageHubId) {
-    otherParty = session.peer;
-    nanoappId = session.initiator.endpointId;
-  } else {
-    otherParty = session.initiator;
-    nanoappId = session.peer.endpointId;
-  }
+    auto sessionCallbackData = MakeUnique<SessionCallbackData>();
+    if (sessionCallbackData.isNull()) {
+      FATAL_ERROR_OOM();
+      return;
+    }
 
-  sessionCallbackData->nanoappId = nanoappId;
-  sessionCallbackData->isClosed = reason.has_value();
-  sessionCallbackData->sessionData = {
-      .hubId = otherParty.messageHubId,
-      .endpointId = otherParty.endpointId,
-      .sessionId = session.sessionId,
-  };
-  sessionCallbackData->sessionData.reason =
-      reason.has_value()
-          ? toChreEndpointReason(*reason)
-          : chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
-  if (session.serviceDescriptor[0] != '\0') {
-    std::strncpy(sessionCallbackData->sessionData.serviceDescriptor,
-                 session.serviceDescriptor,
-                 CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN);
-    sessionCallbackData->sessionData
-        .serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN - 1] = '\0';
-  } else {
-    sessionCallbackData->sessionData.serviceDescriptor[0] = '\0';
-  }
+    const Endpoint &otherParty =
+        session.initiator == endpoint ? session.peer : session.initiator;
+    uint64_t nanoappId = endpoint.endpointId;
+    sessionCallbackData->nanoappId = nanoappId;
+    sessionCallbackData->isClosed = reason.has_value();
+    sessionCallbackData->sessionData = {
+        .hubId = otherParty.messageHubId,
+        .endpointId = otherParty.endpointId,
+        .sessionId = session.sessionId,
+    };
+    sessionCallbackData->sessionData.reason =
+        reason.has_value()
+            ? toChreEndpointReason(*reason)
+            : chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED;
+    if (session.serviceDescriptor[0] != '\0') {
+      std::strncpy(sessionCallbackData->sessionData.serviceDescriptor,
+                   session.serviceDescriptor,
+                   CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN);
+      sessionCallbackData->sessionData
+          .serviceDescriptor[CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN - 1] = '\0';
+    } else {
+      sessionCallbackData->sessionData.serviceDescriptor[0] = '\0';
+    }
 
-  EventLoopManagerSingleton::get()->deferCallback(
-      SystemCallbackType::EndpointSessionStateChangedEvent,
-      std::move(sessionCallbackData),
-      ChreMessageHubManager::onSessionStateChangedCallback);
+    EventLoopManagerSingleton::get()->deferCallback(
+        SystemCallbackType::EndpointSessionStateChangedEvent,
+        std::move(sessionCallbackData),
+        ChreMessageHubManager::onSessionStateChangedCallback);
+
+    if (session.initiator == session.peer) {
+      // Session between self - only deliver one event
+      return;
+    }
+  }
 }
 
 //! Called when a session open is requested.
