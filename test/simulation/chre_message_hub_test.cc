@@ -16,7 +16,6 @@
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/util/dynamic_vector.h"
-#include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/napp_permissions.h"
@@ -529,12 +528,14 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
   ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
-  condVar.wait(lock);
+  condVar.wait(lock, [&messageReceivedAndValidated]() {
+    return messageReceivedAndValidated;
+  });
   EXPECT_TRUE(messageReceivedAndValidated);
 
   // Close the session
   EXPECT_TRUE(messageHub->closeSession(sessionId));
-  condVar.wait(lock);
+  condVar.wait(lock, [&sessionClosed]() { return sessionClosed; });
   EXPECT_TRUE(sessionClosed);
 }
 
@@ -605,7 +606,7 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
   // after the message event is processed, setting the
   // messageReceivedAndValidated variable to true, which will fail the test.
   sendEventToNanoapp(appId, TRIGGER_COND_VAR);
-  condVar.wait(lock);
+  condVar.wait(lock, [&sessionClosed]() { return sessionClosed; });
   EXPECT_FALSE(messageReceivedAndValidated);
   EXPECT_TRUE(sessionClosed);
 }
@@ -659,7 +660,7 @@ class SessionAndMessageTestApp : public TestNanoapp {
 
           // Verify the session info from the event is correct
           auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
-          EXPECT_EQ(sessionInfo->hubId, kOtherMessageHubId);
+          EXPECT_EQ(sessionInfo->hubId, mToMessageHubId);
           EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
           EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
           EXPECT_EQ(sessionInfo->sessionId, mSessionId);
@@ -1235,6 +1236,10 @@ TEST_F(ChreMessageHubTest, NanoappSendsMessageToNanoapp) {
 
   // Send the message to itself
   sendEventToNanoapp(appId, TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP);
+  condVar.wait(lock);
+
+  // Wait for the session to be closed
+  sendEventToNanoapp(appId, TEST_CLOSE_SESSION);
   condVar.wait(lock);
 }
 
