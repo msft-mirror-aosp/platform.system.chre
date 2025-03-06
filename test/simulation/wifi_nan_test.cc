@@ -47,6 +47,8 @@
 namespace chre {
 namespace {
 
+class WifiNanTest : public TestBase {};
+
 /**
  * Common settings for test nanoapps.
  *
@@ -71,7 +73,7 @@ class NanTestNanoapp : public TestNanoapp {
  * Test that an async error is received if NAN operations are attempted when
  * the WiFi setting is disabled.
  */
-TEST_F(TestBase, WifiNanDisabledViaSettings) {
+TEST_F(WifiNanTest, WifiNanDisabledViaSettings) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   class App : public NanTestNanoapp {
@@ -123,7 +125,7 @@ TEST_F(TestBase, WifiNanDisabledViaSettings) {
  * received with a matching cookie. Also test that a discovery event is later
  * received, marking the completion of the subscription process.
  */
-TEST_F(TestBase, WifiNanSuccessfulSubscribe) {
+TEST_F(WifiNanTest, WifiNanSuccessfulSubscribe) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   class App : public NanTestNanoapp {
@@ -189,7 +191,7 @@ TEST_F(TestBase, WifiNanSuccessfulSubscribe) {
   EXPECT_EQ(id, subscribeId);
 }
 
-TEST_F(TestBase, WifiNanUnsSubscribeOnNanoappUnload) {
+TEST_F(WifiNanTest, WifiNanUnsSubscribeOnNanoappUnload) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   class App : public NanTestNanoapp {
@@ -250,7 +252,7 @@ TEST_F(TestBase, WifiNanUnsSubscribeOnNanoappUnload) {
  * fake PAL engine always returns the generic CHRE_ERROR as the error code,
  * but this may vary in unsimulated scenarios).
  */
-TEST_F(TestBase, WifiNanUnuccessfulSubscribeTest) {
+TEST_F(WifiNanTest, WifiNanUnuccessfulSubscribeTest) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   class App : public NanTestNanoapp {
@@ -306,7 +308,7 @@ TEST_F(TestBase, WifiNanUnuccessfulSubscribeTest) {
  * Test that a terminated event is received upon the Pal NAN engine
  * terminating a discovered service.
  */
-TEST_F(TestBase, WifiNanServiceTerminatedTest) {
+TEST_F(WifiNanTest, WifiNanServiceTerminatedTest) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   class App : public NanTestNanoapp {
@@ -387,7 +389,7 @@ TEST_F(TestBase, WifiNanServiceTerminatedTest) {
  * Test that a service lost event is received upon the Pal NAN engine 'losing'
  * a discovered service.
  */
-TEST_F(TestBase, WifiNanServiceLostTest) {
+TEST_F(WifiNanTest, WifiNanServiceLostTest) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
 
   struct Ids {
@@ -475,7 +477,7 @@ TEST_F(TestBase, WifiNanServiceLostTest) {
  * Test that a ranging event is received upon requesting NAN range
  * measurements.
  */
-TEST_F(TestBase, WifiNanRangingTest) {
+TEST_F(WifiNanTest, WifiNanRangingTest) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
   CREATE_CHRE_TEST_EVENT(REQUEST_RANGING, 1);
 
@@ -550,7 +552,7 @@ TEST_F(TestBase, WifiNanRangingTest) {
   waitForEvent(CHRE_EVENT_WIFI_RANGING_RESULT);
 }
 
-TEST_F(TestBase, WifiNanSubscribeCancelTest) {
+TEST_F(WifiNanTest, WifiNanSubscribeCancelTest) {
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE, 0);
   CREATE_CHRE_TEST_EVENT(NAN_SUBSCRIBE_DONE, 1);
   CREATE_CHRE_TEST_EVENT(NAN_UNSUBSCRIBE, 2);

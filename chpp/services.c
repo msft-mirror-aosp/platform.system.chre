@@ -102,6 +102,7 @@ void chppRegisterService(struct ChppAppState *appContext, void *serviceContext,
   serviceState->appContext = appContext;
   serviceState->outReqStates = outReqStates;
   serviceState->context = serviceContext;
+  serviceState->nextTimerTimeoutNs = CHPP_TIME_MAX;
 
   if (numServices >= CHPP_MAX_REGISTERED_SERVICES) {
     CHPP_LOGE("Max services registered: # %" PRIu8, numServices);

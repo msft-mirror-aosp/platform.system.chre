@@ -697,8 +697,8 @@ std::optional<Endpoint> ChreMessageHubManager::searchForEndpoint(
 
     if (!MessageRouterSingleton::get()->doesEndpointHaveService(
             messageHubId, endpointId, serviceDescriptor)) {
-      LOGD("Failed to search for an endpoint: endpoint %" PRIu64
-           " on hub %" PRIu64 " does not have service %s",
+      LOGD("Failed to search for an endpoint: endpoint 0x%" PRIx64
+           " on hub 0x%" PRIx64 " does not have service %s",
            messageHubId, endpointId, serviceDescriptor);
       return std::nullopt;
     }
@@ -716,8 +716,8 @@ std::optional<Endpoint> ChreMessageHubManager::searchForEndpoint(
   } else if (!MessageRouterSingleton::get()
                   ->getEndpointInfo(messageHubId, endpointId)
                   .has_value()) {
-    LOGD("Failed to search for an endpoint: endpoint %" PRIu64
-         " on hub %" PRIu64 " does not exist",
+    LOGD("Failed to search for an endpoint: endpoint 0x%" PRIx64
+         " on hub 0x%" PRIx64 " does not exist",
          messageHubId, endpointId);
     return std::nullopt;
   }

@@ -32,6 +32,9 @@
 
 namespace chre {
 namespace {
+
+class WifiScanTest : public TestBase {};
+
 using namespace std::chrono_literals;
 
 CREATE_CHRE_TEST_EVENT(SCAN_REQUEST, 20);
@@ -114,7 +117,7 @@ class WifiScanTestNanoapp : public TestNanoapp {
   uint8_t mNextFreeCookieIndex = 0;
 };
 
-TEST_F(TestBase, WifiScanBasicSettingTest) {
+TEST_F(WifiScanTest, WifiScanBasicSettingTest) {
   uint64_t appId = loadNanoapp(MakeUnique<WifiScanTestNanoapp>());
 
   EventLoopManagerSingleton::get()->getSettingManager().postSettingChange(

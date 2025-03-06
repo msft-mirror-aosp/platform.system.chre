@@ -304,22 +304,22 @@ $$(OUT)/$(1):
 $$($(1)_CC_DEPS): $(OUT)/$$($(1)_OBJS_DIR)/%.d: %.cc
 	$(V)mkdir -p $$(dir $$@)
 	$(V)$(3) $(DEP_CFLAGS) $(COMMON_CXX_CFLAGS) \
-		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) -c $$< -o $$@
+		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) $$< -o $$@
 
 $$($(1)_CPP_DEPS): $(OUT)/$$($(1)_OBJS_DIR)/%.d: %.cpp
 	$(V)mkdir -p $$(dir $$@)
 	$(V)$(3) $(DEP_CFLAGS) $(COMMON_CXX_CFLAGS) \
-		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) -c $$< -o $$@
+		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) $$< -o $$@
 
 $$($(1)_C_DEPS): $(OUT)/$$($(1)_OBJS_DIR)/%.d: %.c
 	$(V)mkdir -p $$(dir $$@)
 	$(V)$(3) $(DEP_CFLAGS) $(COMMON_C_CFLAGS) \
-		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) -c $$< -o $$@
+		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) $$< -o $$@
 
 $$($(1)_S_DEPS): $(OUT)/$$($(1)_OBJS_DIR)/%.d: %.S
 	$(V)mkdir -p $$(dir $$@)
 	$(V)$(3) $(DEP_CFLAGS) \
-		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) -c $$< -o $$@
+		-DCHRE_FILENAME=\"$$(notdir $$<)\" $(2) $$< -o $$@
 
 # Include generated dependency files if they are in the requested build target.
 # This avoids dependency generation from occuring for a debug target when a

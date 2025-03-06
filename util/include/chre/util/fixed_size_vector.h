@@ -75,7 +75,9 @@ class FixedSizeVector : public NonCopyable {
    * @return The maximum capacity of the vector as defined by the template
    * argument.
    */
-  size_t capacity() const;
+  constexpr size_t capacity() const {
+    return kCapacity;
+  }
 
   /**
    * Determines whether the vector is empty or not.

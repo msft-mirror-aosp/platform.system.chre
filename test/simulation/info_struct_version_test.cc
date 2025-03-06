@@ -28,7 +28,9 @@
 
 namespace chre {
 
-TEST_F(TestBase, InfoStructOldVersionCheckForAppPermission) {
+class InfoStructVersionTest : public TestBase {};
+
+TEST_F(InfoStructVersionTest, InfoStructOldVersionCheckForAppPermission) {
   constexpr uint8_t kInfoStructVersionOld = 2;
 
   constexpr uint64_t kAppId = 0x01234;
@@ -42,7 +44,7 @@ TEST_F(TestBase, InfoStructOldVersionCheckForAppPermission) {
   EXPECT_FALSE(oldnanoapp->supportsAppPermissions());
 }
 
-TEST_F(TestBase, InfoStructCurrentVersionCheckForAppPermission) {
+TEST_F(InfoStructVersionTest, InfoStructCurrentVersionCheckForAppPermission) {
   constexpr uint8_t kInfoStructVersionCurrent = 3;
 
   constexpr uint64_t kAppId = 0x56789;
@@ -56,7 +58,7 @@ TEST_F(TestBase, InfoStructCurrentVersionCheckForAppPermission) {
   EXPECT_TRUE(currentnanoapp->supportsAppPermissions());
 }
 
-TEST_F(TestBase, InfoStructFutureVersionCheckForAppPermission) {
+TEST_F(InfoStructVersionTest, InfoStructFutureVersionCheckForAppPermission) {
   constexpr uint8_t kInfoStructVersionFuture = 4;
 
   constexpr uint64_t kAppId = 0xabcde;

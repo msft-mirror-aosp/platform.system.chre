@@ -37,7 +37,7 @@ namespace chre {
 template <typename ElementType, size_t kCapacity>
 class RawStorage : public NonCopyable {
  public:
-  size_t capacity() const {
+  constexpr size_t capacity() const {
     return kCapacity;
   }
 

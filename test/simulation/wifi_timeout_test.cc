@@ -33,12 +33,13 @@
 
 namespace chre {
 namespace {
-// WifiTimeoutTestBase needs to set timeout more than the max waitForEvent()
+
+// WifiTimeoutTest needs to set timeout more than the max waitForEvent()
 // should process (Currently it is
 // WifiCanDispatchSecondScanRequestInQueueAfterFirstTimeout). If not,
 // waitForEvent will timeout before actual timeout happens in CHRE, making us
 // unable to observe how system handles timeout.
-class WifiTimeoutTestBase : public TestBase {
+class WifiTimeoutTest : public TestBase {
  protected:
   uint64_t getTimeoutNs() const override {
     return 3 * CHRE_TEST_WIFI_SCAN_RESULT_TIMEOUT_NS;
@@ -48,7 +49,7 @@ class WifiTimeoutTestBase : public TestBase {
 CREATE_CHRE_TEST_EVENT(SCAN_REQUEST, 20);
 CREATE_CHRE_TEST_EVENT(REQUEST_TIMED_OUT, 21);
 
-TEST_F(WifiTimeoutTestBase, WifiScanRequestTimeoutTest) {
+TEST_F(WifiTimeoutTest, WifiScanRequestTimeoutTest) {
   class ScanTestNanoapp : public TestNanoapp {
    public:
     explicit ScanTestNanoapp()
@@ -139,7 +140,7 @@ TEST_F(WifiTimeoutTestBase, WifiScanRequestTimeoutTest) {
   unloadNanoapp(appId);
 }
 
-TEST_F(WifiTimeoutTestBase, WifiCanDispatchQueuedRequestAfterOneTimeout) {
+TEST_F(WifiTimeoutTest, WifiCanDispatchQueuedRequestAfterOneTimeout) {
   constexpr uint8_t kNanoappNum = 2;
   // receivedTimeout is shared across apps and must be static.
   // But we want it initialized each time the test is executed.
@@ -255,7 +256,7 @@ TEST_F(WifiTimeoutTestBase, WifiCanDispatchQueuedRequestAfterOneTimeout) {
   unloadNanoapp(secondAppId);
 }
 
-TEST_F(WifiTimeoutTestBase, WifiScanMonitorTimeoutTest) {
+TEST_F(WifiTimeoutTest, WifiScanMonitorTimeoutTest) {
   CREATE_CHRE_TEST_EVENT(SCAN_MONITOR_REQUEST, 1);
 
   struct MonitoringRequest {
@@ -360,7 +361,7 @@ TEST_F(WifiTimeoutTestBase, WifiScanMonitorTimeoutTest) {
   unloadNanoapp(appId);
 }
 
-TEST_F(WifiTimeoutTestBase, WifiRequestRangingTimeoutTest) {
+TEST_F(WifiTimeoutTest, WifiRequestRangingTimeoutTest) {
   CREATE_CHRE_TEST_EVENT(RANGING_REQUEST, 0);
 
   class App : public TestNanoapp {

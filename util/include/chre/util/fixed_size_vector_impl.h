@@ -72,11 +72,6 @@ size_t FixedSizeVector<ElementType, kCapacity>::size() const {
 }
 
 template <typename ElementType, size_t kCapacity>
-size_t FixedSizeVector<ElementType, kCapacity>::capacity() const {
-  return kCapacity;
-}
-
-template <typename ElementType, size_t kCapacity>
 bool FixedSizeVector<ElementType, kCapacity>::empty() const {
   return (mSize == 0);
 }

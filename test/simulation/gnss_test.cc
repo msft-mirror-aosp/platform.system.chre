@@ -35,6 +35,8 @@
 namespace chre {
 namespace {
 
+class GnssTest : public TestBase {};
+
 /**
  * Wait for the predicate to become true with a timeout.
  *
@@ -53,7 +55,7 @@ bool waitForCondition(const std::function<bool()> &predicate,
 }
 
 // ref b/228669574
-TEST_F(TestBase, GnssSubscriptionWithSettingChange) {
+TEST_F(GnssTest, GnssSubscriptionWithSettingChange) {
   CREATE_CHRE_TEST_EVENT(LOCATION_REQUEST, 0);
 
   struct LocationRequest {
@@ -169,7 +171,7 @@ TEST_F(TestBase, GnssSubscriptionWithSettingChange) {
   chrePalGnssDelaySendingLocationEvents(false);
 }
 
-TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToLocation) {
+TEST_F(GnssTest, GnssCanSubscribeAndUnsubscribeToLocation) {
   CREATE_CHRE_TEST_EVENT(LOCATION_REQUEST, 0);
 
   struct LocationRequest {
@@ -246,7 +248,7 @@ TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToLocation) {
   EXPECT_FALSE(chrePalGnssIsLocationEnabled());
 }
 
-TEST_F(TestBase, GnssUnsubscribeToLocationOnUnload) {
+TEST_F(GnssTest, GnssUnsubscribeToLocationOnUnload) {
   CREATE_CHRE_TEST_EVENT(LOCATION_REQUEST, 0);
 
   struct LocationRequest {
@@ -315,7 +317,7 @@ TEST_F(TestBase, GnssUnsubscribeToLocationOnUnload) {
   EXPECT_FALSE(chrePalGnssIsLocationEnabled());
 }
 
-TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToMeasurement) {
+TEST_F(GnssTest, GnssCanSubscribeAndUnsubscribeToMeasurement) {
   CREATE_CHRE_TEST_EVENT(MEASUREMENT_REQUEST, 0);
 
   struct MeasurementRequest {
@@ -394,7 +396,7 @@ TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToMeasurement) {
   EXPECT_FALSE(chrePalGnssIsMeasurementEnabled());
 }
 
-TEST_F(TestBase, GnssUnsubscribeToMeasurementOnUnload) {
+TEST_F(GnssTest, GnssUnsubscribeToMeasurementOnUnload) {
   CREATE_CHRE_TEST_EVENT(MEASUREMENT_REQUEST, 0);
 
   struct MeasurementRequest {
@@ -463,7 +465,7 @@ TEST_F(TestBase, GnssUnsubscribeToMeasurementOnUnload) {
   EXPECT_FALSE(chrePalGnssIsMeasurementEnabled());
 }
 
-TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToPassiveListener) {
+TEST_F(GnssTest, GnssCanSubscribeAndUnsubscribeToPassiveListener) {
   CREATE_CHRE_TEST_EVENT(LISTENER_REQUEST, 0);
 
   class App : public TestNanoapp {
@@ -508,7 +510,7 @@ TEST_F(TestBase, GnssCanSubscribeAndUnsubscribeToPassiveListener) {
   EXPECT_FALSE(chrePalGnssIsPassiveLocationListenerEnabled());
 }
 
-TEST_F(TestBase, GnssUnsubscribeToPassiveListenerOnUnload) {
+TEST_F(GnssTest, GnssUnsubscribeToPassiveListenerOnUnload) {
   CREATE_CHRE_TEST_EVENT(LISTENER_REQUEST, 0);
 
   class App : public TestNanoapp {

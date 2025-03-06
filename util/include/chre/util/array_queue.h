@@ -321,7 +321,7 @@ class ArrayQueueExternalStorage : public NonCopyable {
     return mData;
   }
 
-  size_t capacity() const {
+  constexpr size_t capacity() const {
     return kCapacity;
   }
 

@@ -275,6 +275,11 @@ typedef void(ChppClientDeinitFunction)(void *context);
 typedef void(ChppNotifierFunction)(void *context);
 
 /**
+ * Function type that processes a timeout for any client or service
+ */
+typedef void(ChppTimeoutFunction)(void *context);
+
+/**
  * Length of a service UUID and its human-readable printed form in bytes
  */
 #define CHPP_SERVICE_UUID_LEN 16
@@ -343,6 +348,9 @@ struct ChppService {
   //! Errors returned by the dispatch function are logged.
   ChppDispatchFunction *responseDispatchFunctionPtr;
 
+  //! Processes a timeout for the client.
+  ChppTimeoutFunction *timeoutFunctionPtr;
+
   //! Number of outgoing requests supported by this service.
   //! ChppAppHeader.command must be in the range [0, outReqCount - 1]
   //! ChppEndpointState.outReqStates must contains that many elements.
@@ -403,6 +411,9 @@ struct ChppClient {
 
   //! Deinitializes the client.
   ChppClientDeinitFunction *deinitFunctionPtr;
+
+  //! Processes a timeout for the client.
+  ChppTimeoutFunction *timeoutFunctionPtr;
 
   //! Number of outgoing requests supported by this client.
   //! ChppAppHeader.command must be in the range [0, outReqCount - 1]
@@ -513,6 +524,8 @@ struct ChppEndpointState {
   bool pseudoOpen : 1;       //!< Client to be opened upon a reset
   bool initialized : 1;      //!< Client is initialized
   bool everInitialized : 1;  //!< Client sync primitives initialized
+
+  uint64_t nextTimerTimeoutNs;  //!< The next timer timeout in nanoseconds.
 };
 
 struct ChppAppState {
@@ -628,6 +641,18 @@ void chppAppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
  * @param context Maintains status for each app layer instance.
  */
 void chppAppProcessReset(struct ChppAppState *context);
+
+/**
+ * Processes a timeout event. This method is called by the transport layer when
+ * a timeout has occurred, based on the next timer timeout specified through
+ * chppAppGetNextTimerTimeoutNs().
+ *
+ * @param context Maintains status for each app layer instance.
+ * @param currentTimeNs The current time to check the timeout against, used as
+ * an argument to save processing overhead to call chppGetCurrentTimeNs().
+ */
+void chppAppProcessTimeout(struct ChppAppState *context,
+                           uint64_t currentTimeNs);
 
 /**
  * Convert UUID to a human-readable, null-terminated string.
@@ -908,6 +933,31 @@ uint64_t *getNextRequestTimeoutNs(struct ChppAppState *appState,
  */
 void chppCloseOpenRequests(struct ChppEndpointState *endpointState,
                            enum ChppEndpointType type, bool clearOnly);
+
+/**
+ * Schedules a timer for the given endpoint.
+ *
+ * @param endpointState State of the endpoint.
+ * @param timeoutNs The timeout in nanoseconds.
+ * @return True if the timer was scheduled successfully.
+ */
+bool chppAppRequestTimerTimeout(struct ChppEndpointState *endpointState,
+                                uint64_t timeoutNs);
+
+/**
+ *  Cancels a timer for the given endpoint.
+ *
+ * @param endpointState State of the endpoint.
+ */
+void chppAppCancelTimerTimeout(struct ChppEndpointState *endpointState);
+
+/**
+ * Returns the next timer timeout for endpoints.
+ *
+ * @param appState State of the app layer.
+ * @return The next timer timeout in nanoseconds.
+ */
+uint64_t chppAppGetNextTimerTimeoutNs(struct ChppAppState *appState);
 
 #ifdef __cplusplus
 }

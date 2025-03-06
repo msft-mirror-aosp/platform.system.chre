@@ -32,6 +32,8 @@ using ::chre::platform_linux::SystemTimeOverride;
 namespace chre {
 namespace {
 
+class DelayEventTest : public TestBase {};
+
 CREATE_CHRE_TEST_EVENT(DELAY_EVENT, 0);
 
 constexpr Seconds kDelayEventInterval(2);
@@ -69,7 +71,7 @@ class DelayEventNanoapp : public TestNanoapp {
   bool hasSeenDelayEvent = false;
 };
 
-TEST_F(TestBase, DelayedEventIsFlagged) {
+TEST_F(DelayEventTest, DelayedEventIsFlagged) {
   constexpr uint32_t kDelayEventCount = 3;
   SystemTimeOverride override(0);
   uint64_t appId = loadNanoapp(MakeUnique<DelayEventNanoapp>());

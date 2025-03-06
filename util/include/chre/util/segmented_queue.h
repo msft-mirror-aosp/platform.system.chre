@@ -60,14 +60,14 @@ class SegmentedQueue : public NonCopyable {
   /**
    * @return size_t: Number of elements that this segmented queue holds.
    */
-  size_t size() {
+  size_t size() const {
     return mSize;
   }
 
   /**
    * @return size_t: How many blocks does this segmented queue contains.
    */
-  size_t block_count() {
+  size_t block_count() const {
     return mRawStoragePtrs.size();
   }
 
@@ -75,14 +75,14 @@ class SegmentedQueue : public NonCopyable {
    * @return size_t: Number of items that this queue can store without pushing
    * new blocks.
    */
-  size_t capacity() {
+  size_t capacity() const {
     return mRawStoragePtrs.size() * kBlockSize;
   }
 
   /**
    * @return true: Return true if the segmented queue cannot accept new element.
    */
-  bool full() {
+  bool full() const {
     return mSize == kMaxBlockCount * kBlockSize;
   }
 

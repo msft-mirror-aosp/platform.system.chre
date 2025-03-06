@@ -169,7 +169,7 @@ bool MessageRouter::forEachEndpointOfHub(
   MessageRouter::MessageHubCallback *callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
-    LOGE("Failed to find message hub with ID %" PRIu64, messageHubId);
+    LOGE("Failed to find message hub with ID 0x%" PRIx64, messageHubId);
     return false;
   }
 
@@ -210,8 +210,8 @@ std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
   MessageRouter::MessageHubCallback *callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
-    LOGE("Failed to get endpoint info for message hub with ID %" PRIu64
-         " and endpoint ID %" PRIu64 ": hub not found",
+    LOGE("Failed to get endpoint info for message hub with ID 0x%" PRIx64
+         " and endpoint ID 0x%" PRIx64 ": hub not found",
          messageHubId, endpointId);
     return std::nullopt;
   }
@@ -264,7 +264,7 @@ bool MessageRouter::doesEndpointHaveService(MessageHubId messageHubId,
   if (callback == nullptr) {
     LOGE(
         "Failed to check if endpoint has service for message hub with ID "
-        "%" PRIu64 " and endpoint ID %" PRIu64 ": hub not found",
+        "0x%" PRIx64 " and endpoint ID 0x%" PRIx64 ": hub not found",
         messageHubId, endpointId);
     return false;
   }
@@ -400,22 +400,22 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
   }
 
   if (!checkIfEndpointExists(initiatorCallback, fromEndpointId)) {
-    LOGE("Failed to open session: endpoint with ID %" PRIu64
-         " not found in message hub with ID %" PRIu64,
+    LOGE("Failed to open session: endpoint with ID 0x%" PRIx64
+         " not found in message hub with ID 0x%" PRIx64,
          fromEndpointId, fromMessageHubId);
     return SESSION_ID_INVALID;
   }
 
   if (!checkIfEndpointExists(peerCallback, toEndpointId)) {
-    LOGE("Failed to open session: endpoint with ID %" PRIu64
-         " not found in message hub with ID %" PRIu64,
+    LOGE("Failed to open session: endpoint with ID 0x%" PRIx64
+         " not found in message hub with ID 0x%" PRIx64,
          toEndpointId, toMessageHubId);
     return SESSION_ID_INVALID;
   }
 
   if (serviceDescriptor != nullptr &&
       !peerCallback->doesEndpointHaveService(toEndpointId, serviceDescriptor)) {
-    LOGE("Failed to open session: endpoint with ID %" PRIu64
+    LOGE("Failed to open session: endpoint with ID 0x%" PRIx64
          " does not have service descriptor '%s'",
          toEndpointId, serviceDescriptor);
     return SESSION_ID_INVALID;
@@ -494,7 +494,7 @@ bool MessageRouter::finalizeSession(MessageHubId fromMessageHubId,
     peerCallback = getCallbackFromMessageHubIdLocked(session.peer.messageHubId);
 
     if (initiatorCallback == nullptr || peerCallback == nullptr) {
-      LOGE("Failed to finalize session: %s message hub with ID %" PRIu64
+      LOGE("Failed to finalize session: %s message hub with ID 0x%" PRIx64
            " not found",
            initiatorCallback == nullptr ? "initiator" : "peer",
            initiatorCallback == nullptr ? session.initiator.messageHubId
@@ -557,7 +557,7 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
     if (fromEndpointId == ENDPOINT_ID_ANY) {
       if (session.initiator.messageHubId == session.peer.messageHubId) {
         LOGE("Unable to infer sender endpoint ID: session with ID %" PRIu16
-             " is between endpoints on the same message hub with ID %" PRIu64,
+             " is between endpoints on the same message hub with ID 0x%" PRIx64,
              sessionId, fromMessageHubId);
         return false;
       }
@@ -568,8 +568,8 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
 
     if (sender != session.initiator && sender != session.peer) {
       LOGE("Failed to send message: session with ID %" PRIu16
-           " does not contain endpoint with hub ID %" PRIu64
-           " and endpoint ID %" PRIu64,
+           " does not contain endpoint with hub ID 0x%" PRIx64
+           " and endpoint ID 0x%" PRIx64,
            sessionId, fromMessageHubId, fromEndpointId);
       return false;
     }
@@ -609,8 +609,8 @@ bool MessageRouter::onEndpointRegistrationStateChanged(
   MessageRouter::MessageHubCallback *callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
-    LOGE("Failed to register endpoint with ID %" PRIu64
-         " to message hub with ID %" PRIu64 ": hub not found",
+    LOGE("Failed to register endpoint with ID 0x%" PRIx64
+         " to message hub with ID 0x%" PRIx64 ": hub not found",
          endpointId, messageHubId);
     return false;
   }
@@ -678,8 +678,8 @@ std::optional<size_t> MessageRouter::findSessionIndexLocked(
       }
 
       LOGE("Hub mismatch for session with ID %" PRIu16
-           ": requesting hub ID %" PRIu64
-           " but session is between hubs %" PRIu64 " and %" PRIu64,
+           ": requesting hub ID 0x%" PRIx64
+           " but session is between hubs 0x%" PRIx64 " and 0x%" PRIx64,
            sessionId, fromMessageHubId, mSessions[i].initiator.messageHubId,
            mSessions[i].peer.messageHubId);
       break;

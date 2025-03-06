@@ -195,6 +195,7 @@ pw_add_library(chre.util.system STATIC
     chre.variant.config
     pw_allocator.deallocator
     pw_containers.vector
+    pw_intrusive_ptr
   SOURCES
     system/ble_util.cc
     system/error_util.cc

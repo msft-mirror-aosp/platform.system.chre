@@ -70,3 +70,7 @@ bool chppCheckWifiScanEventNotification(const struct chreWifiScanEvent *chre) {
 
   return success;
 }
+
+bool chppCheckWifiScanEventPending(void) {
+  return gResultAcc != gResultTotal;
+}

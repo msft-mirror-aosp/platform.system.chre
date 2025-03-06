@@ -33,6 +33,8 @@ namespace chre {
 
 namespace {
 
+class HostEndpointNotificationTest : public TestBase {};
+
 //! The host endpoint ID to use for this test.
 constexpr uint16_t kHostEndpointId = 123;
 
@@ -44,7 +46,7 @@ HostEndpointManager &getHostEndpointManager() {
 /**
  * Verifies basic functionality of chreConfigureHostEndpointNotifications.
  */
-TEST_F(TestBase, HostEndpointDisconnectedTest) {
+TEST_F(HostEndpointNotificationTest, HostEndpointDisconnectedTest) {
   CREATE_CHRE_TEST_EVENT(SETUP_NOTIFICATION, 0);
 
   struct Config {
@@ -121,13 +123,13 @@ TEST_F(TestBase, HostEndpointDisconnectedTest) {
                    .getHostEndpointInfo(kHostEndpointId, &retrievedInfo));
 }
 
-TEST_F(TestBase, HostEndpointNotRegisteredTest) {
+TEST_F(HostEndpointNotificationTest, HostEndpointNotRegisteredTest) {
   struct chreHostEndpointInfo retrievedInfo;
   ASSERT_FALSE(getHostEndpointManager().getHostEndpointInfo(kHostEndpointId,
                                                             &retrievedInfo));
 }
 
-TEST_F(TestBase, HostEndpointDisconnectedTwiceTest) {
+TEST_F(HostEndpointNotificationTest, HostEndpointDisconnectedTwiceTest) {
   struct chreHostEndpointInfo info;
   info.hostEndpointId = kHostEndpointId;
   info.hostEndpointType = CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK;

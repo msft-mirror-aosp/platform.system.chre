@@ -29,11 +29,13 @@
 #include "chpp/common/wifi.h"
 #include "chpp/link.h"
 #include "chpp/log.h"
+#include "chpp/macros.h"
 #include "chpp/platform/platform_link.h"
 #include "chpp/transport.h"
 #include "chre/pal/wifi.h"
 #include "chre/platform/shared/pal_system_api.h"
 #include "fake_link.h"
+#include "fake_link_client.h"
 #include "packet_util.h"
 
 using chpp::test::FakeLink;
@@ -544,6 +546,38 @@ TEST_F(FakeLinkWithClientSyncTests, ReopenFromBrokenLink) {
   deliverRxPacket(ackForReset);
 
   ASSERT_NO_FATAL_FAILURE(waitForReopenRequest());
+}
+
+class FakeLinkWithTestClientSyncTests : public FakeLinkSyncTests {
+ public:
+  void initChppAppLayer() override {
+    // We use a vendor client which triggers a client-layer timeout during init.
+    // This is used to test the timeout mechanism.
+    ChppClientServiceSet set = {
+        .vendorClients = 1,
+    };
+    chppAppInitWithClientServiceSet(&mAppContext, &mTransportContext, set);
+    mAppContext.isDiscoveryComplete = true;  // Bypass initial discovery
+  }
+
+  virtual void handleFirstPacket() override {
+    ASSERT_TRUE(mFakeLink->waitForTxPacket());
+    std::vector<uint8_t> ackPkt = mFakeLink->popTxPacket();
+    ASSERT_TRUE(comparePacket(ackPkt, generateEmptyPacket()))
+        << "Full packet: " << asChpp(ackPkt);
+    CHPP_LOGI("CHPP handshake complete");
+
+    mAppContext.matchedClientCount = mAppContext.discoveredServiceCount = 1;
+    // Initialize the client similar to how discovery would
+    EXPECT_TRUE(mAppContext.registeredClients[0]->initFunctionPtr(
+        mAppContext.registeredClientStates[0]->context,
+        CHPP_SERVICE_HANDLE_OF_INDEX(0), /*version=*/{1, 0, 0}));
+  }
+};
+
+TEST_F(FakeLinkWithTestClientSyncTests, SampleTimeoutTest) {
+  EXPECT_TRUE(chppTestClientWaitForTimeout(
+      /* timeoutMs=*/CHPP_MSEC_PER_SEC));
 }
 
 }  // namespace chpp::test

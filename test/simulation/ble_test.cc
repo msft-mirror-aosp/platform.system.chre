@@ -34,12 +34,14 @@ namespace chre {
 
 namespace {
 
+class BleTest : public TestBase {};
+
 /**
  * This test verifies that a nanoapp can query for BLE capabilities and filter
  * capabilities. Note that a nanoapp does not require BLE permissions to use
  * these APIs.
  */
-TEST_F(TestBase, BleCapabilitiesTest) {
+TEST_F(BleTest, BleCapabilitiesTest) {
   CREATE_CHRE_TEST_EVENT(GET_CAPABILITIES, 0);
   CREATE_CHRE_TEST_EVENT(GET_FILTER_CAPABILITIES, 1);
 
@@ -109,7 +111,7 @@ class BleTestNanoapp : public TestNanoapp {
  * This test validates the case in which a nanoapp starts a scan, receives
  * at least one advertisement event, and stops a scan.
  */
-TEST_F(TestBase, BleSimpleScanTest) {
+TEST_F(BleTest, BleSimpleScanTest) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
@@ -177,7 +179,7 @@ TEST_F(TestBase, BleSimpleScanTest) {
   ASSERT_FALSE(chrePalIsBleEnabled());
 }
 
-TEST_F(TestBase, BleStopScanOnUnload) {
+TEST_F(BleTest, BleStopScanOnUnload) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
 
@@ -228,7 +230,7 @@ TEST_F(TestBase, BleStopScanOnUnload) {
  * This test validates that a nanoapp can start a scan twice and the platform
  * will be enabled.
  */
-TEST_F(TestBase, BleStartTwiceScanTest) {
+TEST_F(BleTest, BleStartTwiceScanTest) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
@@ -302,7 +304,7 @@ TEST_F(TestBase, BleStartTwiceScanTest) {
  * any ongoing scan existing. It asserts that the nanoapp did not receive any
  * advertisment events because a scan was never started.
  */
-TEST_F(TestBase, BleStopTwiceScanTest) {
+TEST_F(BleTest, BleStopTwiceScanTest) {
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
   CREATE_CHRE_TEST_EVENT(SCAN_STOPPED, 3);
@@ -366,7 +368,7 @@ TEST_F(TestBase, BleStopTwiceScanTest) {
  * 3) Toggle BLE setting -> enabled.
  * 4) Verify things resume.
  */
-TEST_F(TestBase, BleSettingChangeTest) {
+TEST_F(BleTest, BleSettingChangeTest) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(SCAN_STOPPED, 3);
@@ -455,7 +457,7 @@ TEST_F(TestBase, BleSettingChangeTest) {
  * Test that a nanoapp receives a function disabled error if it attempts to
  * start a scan when the BLE setting is disabled.
  */
-TEST_F(TestBase, BleSettingDisabledStartScanTest) {
+TEST_F(BleTest, BleSettingDisabledStartScanTest) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
 
   class App : public BleTestNanoapp {
@@ -517,7 +519,7 @@ TEST_F(TestBase, BleSettingDisabledStartScanTest) {
  * Test that a nanoapp receives a success response when it attempts to stop a
  * BLE scan while the BLE setting is disabled.
  */
-TEST_F(TestBase, BleSettingDisabledStopScanTest) {
+TEST_F(BleTest, BleSettingDisabledStopScanTest) {
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
   CREATE_CHRE_TEST_EVENT(SCAN_STOPPED, 3);
@@ -582,7 +584,7 @@ TEST_F(TestBase, BleSettingDisabledStopScanTest) {
 /**
  * Test that a nanoapp can read RSSI successfully.
  */
-TEST_F(TestBase, BleReadRssi) {
+TEST_F(BleTest, BleReadRssi) {
   constexpr uint16_t kConnectionHandle = 6;
   constexpr uint32_t kCookie = 123;
 
@@ -645,7 +647,7 @@ TEST_F(TestBase, BleReadRssi) {
  * receiving an async response. It should invalidate its original request by
  * calling start scan a second time.
  */
-TEST_F(TestBase, BleStartScanTwiceBeforeAsyncResponseTest) {
+TEST_F(BleTest, BleStartScanTwiceBeforeAsyncResponseTest) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
@@ -733,7 +735,7 @@ TEST_F(TestBase, BleStartScanTwiceBeforeAsyncResponseTest) {
  * is enabled for the nanoapp. This test validates that batching will hold the
  * data and flush will send the batched data and then a flush complete event.
  */
-TEST_F(TestBase, BleFlush) {
+TEST_F(BleTest, BleFlush) {
   CREATE_CHRE_TEST_EVENT(START_SCAN, 0);
   CREATE_CHRE_TEST_EVENT(SCAN_STARTED, 1);
   CREATE_CHRE_TEST_EVENT(STOP_SCAN, 2);
