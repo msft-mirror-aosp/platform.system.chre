@@ -36,7 +36,7 @@
 
 #elif defined(CHRE_ASSERTIONS_ENABLED)
 
-#include "chre/target_platform/assert.h"
+#include "chre/target_platform/assert.h"  // IWYU pragma: export
 
 #ifndef CHRE_ASSERT
 #error "CHRE_ASSERT must be defined by the target platform's assert.h"

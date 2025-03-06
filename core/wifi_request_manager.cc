@@ -965,7 +965,13 @@ bool WifiRequestManager::postScanMonitorAsyncResultEvent(
     const void *cookie) {
   // Allocate and post an event to the nanoapp requesting wifi.
   bool eventPosted = false;
-  if (!success || updateNanoappScanMonitoringList(enable, nanoappInstanceId)) {
+  // If we failed to enable, don't add the nanoapp to the list, but always
+  // remove it if it was trying to disable. This keeps us from getting stuck in
+  // a state where we think the scan monitor is enabled (because the list is
+  // non-empty) when we actually aren't sure (e.g. the scan monitor disablement
+  // may have been handled but delivering the result ran into an error).
+  if ((!success && enable) ||
+      updateNanoappScanMonitoringList(enable, nanoappInstanceId)) {
     chreAsyncResult *event = memoryAlloc<chreAsyncResult>();
     if (event == nullptr) {
       LOG_OOM();
@@ -1049,24 +1055,20 @@ void WifiRequestManager::postScanEventFatal(chreWifiScanEvent *event) {
 
 void WifiRequestManager::handleScanMonitorStateChangeSync(bool enabled,
                                                           uint8_t errorCode) {
-  // Success is defined as having no errors ... in life ༼ つ ◕_◕ ༽つ
-  bool success = (errorCode == CHRE_ERROR_NONE);
-
-  // TODO(b/62904616): re-enable this assertion
-  // CHRE_ASSERT_LOG(!mScanMonitorStateTransitions.empty(),
-  //                "handleScanMonitorStateChangeSync called with no
-  //                transitions");
-  if (mPendingScanMonitorRequests.empty()) {
-    LOGE(
-        "WiFi PAL error: handleScanMonitorStateChangeSync called with no "
-        "transitions (enabled %d errorCode %" PRIu8 ")", enabled, errorCode);
-  }
-
   addDebugLog(DebugLogEntry::forScanMonitorResult(
       mPendingScanMonitorRequests.empty()
           ? kSystemInstanceId
           : mPendingScanMonitorRequests.front().nanoappInstanceId,
       enabled, errorCode));
+  if (mPendingScanMonitorRequests.empty()) {
+    LOGE("Scan monitor change with no pending requests (enabled %d "
+         "errorCode %" PRIu8 ")", enabled, errorCode);
+    EventLoopManagerSingleton::get()->getSystemHealthMonitor().onFailure(
+        HealthCheckId::UnexpectedWifiScanMonitorStateChange);
+  }
+
+  // Success is defined as having no errors ... in life ༼ つ ◕_◕ ༽つ
+  bool success = (errorCode == CHRE_ERROR_NONE);
   if (!mPendingScanMonitorRequests.empty()) {
     const auto &stateTransition = mPendingScanMonitorRequests.front();
     success &= (stateTransition.enable == enabled);
@@ -1101,25 +1103,21 @@ void WifiRequestManager::postNanAsyncResultEvent(uint16_t nanoappInstanceId,
 
 void WifiRequestManager::handleScanResponseSync(bool pending,
                                                 uint8_t errorCode) {
-  // TODO(b/65206783): re-enable this assertion
-  // CHRE_ASSERT_LOG(mPendingScanRequests.empty(),
-  //                "handleScanResponseSync called with no outstanding
-  //                request");
-  if (mPendingScanRequests.empty()) {
-    LOGE("handleScanResponseSync called with no outstanding request");
-  }
-
-  // TODO: raise this to CHRE_ASSERT_LOG
-  if (!pending && errorCode == CHRE_ERROR_NONE) {
-    LOGE("Invalid wifi scan response");
-    errorCode = CHRE_ERROR;
-  }
-
   addDebugLog(DebugLogEntry::forScanResponse(
       mPendingScanRequests.empty()
           ? kSystemInstanceId
           : mPendingScanRequests.front().nanoappInstanceId,
       pending, errorCode));
+  if (mPendingScanRequests.empty()) {
+    EventLoopManagerSingleton::get()->getSystemHealthMonitor().onFailure(
+        HealthCheckId::UnexpectedWifiScanResponse);
+  }
+
+  if (!pending && errorCode == CHRE_ERROR_NONE) {
+    LOGE("Invalid wifi scan response");
+    errorCode = CHRE_ERROR;
+  }
+
   if (!mPendingScanRequests.empty()) {
     bool success = (pending && errorCode == CHRE_ERROR_NONE);
     if (!success) {
