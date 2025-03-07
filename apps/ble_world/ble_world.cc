@@ -234,6 +234,7 @@ void parseReport(const chreBleAdvertisingReport *report) {
        report->directAddress[1], report->directAddress[2],
        report->directAddress[3], report->directAddress[4],
        report->directAddress[5]);
+  LOGD("rssi value: %" PRIi8, report->rssi);
 }
 
 void handleAsyncResultEvent(const chreAsyncResult *result) {
