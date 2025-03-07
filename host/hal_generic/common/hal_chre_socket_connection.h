@@ -73,9 +73,11 @@ class IChreSocketCallback {
       const ::chre::fbs::NanoappListResponseT &response) = 0;
 
   /**
-   * Invoked when CHRE restarts.
+   * Invoked on connection to CHRE.
+   *
+   * @param restart true if CHRE restarted since the first connection
    */
-  virtual void onContextHubRestarted() = 0;
+  virtual void onContextHubConnected(bool restart) = 0;
 
   /**
    * Invoked when a data is available as a result of a debug dump request

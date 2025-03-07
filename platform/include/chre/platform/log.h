@@ -35,8 +35,8 @@
  * the log levels Error, Warning, Informational, and Debug, respectively.
  */
 
-#include "chre/target_platform/log.h"
-#include "chre/util/log_common.h"
+#include "chre/target_platform/log.h"  // IWYU pragma: export
+#include "chre/util/log_common.h"      // IWYU pragma: export
 
 #ifndef LOGE
 #error "LOGE must be defined by chre/target_platform/log.h"

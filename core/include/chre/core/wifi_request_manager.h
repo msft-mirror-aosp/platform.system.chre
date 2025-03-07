@@ -26,7 +26,6 @@
 #include "chre/platform/platform_wifi.h"
 #include "chre/util/buffer.h"
 #include "chre/util/non_copyable.h"
-#include "chre/util/optional.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/wifi.h"
@@ -344,19 +343,64 @@ class WifiRequestManager : public NonCopyable {
           scanParams(*scanParams_) {}
   };
 
-  //! An internal struct to hold scan request data for logging
-  struct WifiScanRequestLog {
-    WifiScanRequestLog(Nanoseconds timestampIn, uint16_t instanceIdIn,
-                       chreWifiScanType scanTypeIn, Milliseconds maxScanAgeMsIn)
-        : timestamp(timestampIn),
-          instanceId(instanceIdIn),
-          scanType(scanTypeIn),
-          maxScanAgeMs(maxScanAgeMsIn) {}
+  enum class WifiScanLogType : uint8_t {
+    SCAN_REQUEST = 0,
+    SCAN_RESPONSE = 1,
+    SCAN_EVENT = 2,
+    SCAN_MONITOR_REQUEST = 3,
+    SCAN_MONITOR_RESULT = 4,
+  };
+
+  //! An internal struct to hold PAL request/callback data for logging
+  struct DebugLogEntry {
+    static DebugLogEntry forScanRequest(uint16_t nanoappInstanceId,
+                                        const chreWifiScanParams &scanParams,
+                                        bool syncResult);
+    static DebugLogEntry forScanResponse(uint16_t nanoappInstanceId,
+                                         bool pending, uint8_t errorCode);
+    static DebugLogEntry forScanEvent(const chreWifiScanEvent &scanEvent);
+    static DebugLogEntry forScanMonitorRequest(uint16_t nanoappInstanceId,
+                                               bool enable, bool syncResult);
+    static DebugLogEntry forScanMonitorResult(uint16_t nanoappInstanceId,
+                                              bool enabled, uint8_t errorCode);
 
     Nanoseconds timestamp;
-    uint16_t instanceId;
-    enum chreWifiScanType scanType;
-    Milliseconds maxScanAgeMs;
+    WifiScanLogType logType;
+    union {
+      struct {
+        uint16_t nanoappInstanceId;
+        uint16_t maxScanAgeMs;
+        uint8_t scanType : 2;
+        uint8_t radioChainPref : 2;
+        uint8_t channelSet : 1;
+        bool syncResult;
+      } scanRequest;
+
+      struct {
+        uint16_t nanoappInstanceId;
+        bool pending;
+        uint8_t errorCode;
+      } scanResponse;
+
+      struct {
+        uint8_t resultCount;
+        uint8_t resultTotal;
+        uint8_t eventIndex;
+        uint8_t scanType;
+      } scanEvent;
+
+      struct {
+        uint16_t nanoappInstanceId;
+        bool enable;
+        bool syncResult;
+      } scanMonitorRequest;
+
+      struct {
+        uint16_t nanoappInstanceId;
+        bool enabled;
+        uint8_t errorCode;
+      } scanMonitorResult;
+    };
   };
 
   struct NanoappNanSubscriptions {
@@ -421,8 +465,7 @@ class WifiRequestManager : public NonCopyable {
       mPendingNanSubscribeRequests;
 
   //! List of most recent wifi scan request logs
-  static constexpr size_t kNumWifiRequestLogs = 10;
-  ArrayQueue<WifiScanRequestLog, kNumWifiRequestLogs> mWifiScanRequestLogs;
+  ArrayQueue<DebugLogEntry, 32> mDebugLogs;
 
   //! Manages the timer when a ranging request is dispatched to the PAL.
   TimerHandle mRequestRangingTimeoutHandle;
@@ -435,13 +478,16 @@ class WifiRequestManager : public NonCopyable {
   //! to the PAL.
   TimerHandle mScanRequestTimeoutHandle = CHRE_TIMER_INVALID;
 
-  //! System time when the last WiFi scan event was received.
-  Milliseconds mLastScanEventTime;
-
   //! ErrorCode Histogram for collected errors, the index of this array
   //! corresponds to the type of the errorcode
   uint32_t mScanMonitorErrorHistogram[CHRE_ERROR_SIZE] = {0};
   uint32_t mActiveScanErrorHistogram[CHRE_ERROR_SIZE] = {0};
+
+  void addDebugLog(const DebugLogEntry &&log) {
+    mDebugLogs.kick_push(log);
+  }
+  void dumpDebugLog(const DebugLogEntry &log,
+                    DebugDumpWrapper &debugDump) const;
 
   /**
    * @return true if the scan monitor is enabled by any nanoapps.
@@ -750,16 +796,6 @@ class WifiRequestManager : public NonCopyable {
    * @param scanEvent The scan event to release.
    */
   void handleFreeWifiScanEvent(chreWifiScanEvent *scanEvent);
-
-  /**
-   * Adds a wifi scan request log onto list possibly kicking earliest log out
-   * if full.
-   *
-   * @param nanoappInstanceId The instance Id of the requesting nanoapp
-   * @param params The chre wifi scan params
-   */
-  void addWifiScanRequestLog(uint16_t nanoappInstanceId,
-                             const chreWifiScanParams *params);
 
   /**
    * Releases a wifi event (scan, ranging, NAN discovery) after nanoapps have

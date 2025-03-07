@@ -332,7 +332,8 @@ class GenericContextHubBase : public IContexthubT,
         [&]() { return mCallbacks->handleTxnResult(transactionId, result); });
   }
 
-  void onContextHubRestarted() override {
+  void onContextHubConnected(bool restart) override {
+    if (!restart) return;
     invokeClientCallback([&]() {
       return mCallbacks->handleHubEvent(AsyncEventType::RESTARTED);
     });

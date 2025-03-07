@@ -514,6 +514,15 @@ void SensorRequestManager::handleSamplingStatusUpdate(
       EventLoopManagerSingleton::get()->getSensorRequestManager().getSensor(
           sensorHandle);
   if (sensor == nullptr || sensor->isOneShot()) {
+    if (sensor == nullptr) {
+      LOGW(
+          "Received a sampling status update for non existing sensorHandle "
+          "%" PRIu32,
+          sensorHandle);
+    } else {
+      LOGW("Received a sampling status update for one shot sensor %s",
+           sensor->getSensorName());
+    }
     releaseSamplingStatusUpdate(status);
   } else {
     sensor->setSamplingStatus(*status);
@@ -522,6 +531,10 @@ void SensorRequestManager::handleSamplingStatusUpdate(
       uint32_t cbSensorHandle = NestedDataPtr<uint32_t>(data);
       auto *cbStatus =
           static_cast<struct chreSensorSamplingStatus *>(extraData);
+      EventLoopManagerSingleton::get()
+          ->getSensorRequestManager()
+          .mSensorSamplingUpdateLogs.kick_push(SensorSamplingStatusUpdateLog(
+              SystemTime::getMonotonicTime(), cbSensorHandle, cbStatus));
       postSamplingStatus(cbSensorHandle, *cbStatus);
       EventLoopManagerSingleton::get()
           ->getSensorRequestManager()
@@ -564,38 +577,73 @@ void SensorRequestManager::handleBiasEvent(uint32_t sensorHandle,
   }
 }
 
-void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
+void SensorRequestManager::logCurrentSensorStateToBuffer(
+    DebugDumpWrapper &debugDump) const {
   debugDump.print("\nSensors:\n");
   for (uint8_t i = 0; i < mSensors.size(); i++) {
     for (const auto &request : mSensors[i].getRequests()) {
-      debugDump.print(
-          " %s: nappId=%" PRIu16 " mode=%s int=%" PRIu64 " lat=%" PRIu64 "\n",
-          mSensors[i].getSensorTypeName(), request.getInstanceId(),
-          getSensorModeName(request.getMode()),
-          request.getInterval().toRawNanoseconds(),
-          request.getLatency().toRawNanoseconds());
+      debugDump.print(" %s: instanceId=%" PRIu16 " mode=%s intervalNs=%" PRIu64
+                      " latencyNs=%" PRIu64 "\n",
+                      mSensors[i].getSensorTypeName(), request.getInstanceId(),
+                      getSensorModeName(request.getMode()),
+                      request.getInterval().toRawNanoseconds(),
+                      request.getLatency().toRawNanoseconds());
     }
   }
-  debugDump.print("\n Last %zu Sensor Requests:\n", mSensorRequestLogs.size());
+  debugDump.print("\n");
+}
+
+void SensorRequestManager::logSensorRequestLogsToBuffer(
+    DebugDumpWrapper &debugDump) const {
+  debugDump.print(" Last %zu Sensor Requests:\n", mSensorRequestLogs.size());
   static_assert(kMaxSensorRequestLogs <= INT8_MAX,
                 "kMaxSensorRequestLogs must be <= INT8_MAX");
   for (int8_t i = static_cast<int8_t>(mSensorRequestLogs.size()) - 1; i >= 0;
        i--) {
     const auto &log = mSensorRequestLogs[static_cast<size_t>(i)];
     const Sensor &sensor = mSensors[log.sensorHandle];
-    debugDump.print("  ts=%" PRIu64 " nappId=%" PRIu16 " type=%s idx=%" PRIu8
-                    " mask=%" PRIx16 " mode=%s",
+    debugDump.print("  ts=%" PRIu64 " instanceId=%" PRIu16
+                    " type=%s idx=%" PRIu8 " mask=%" PRIx16 " mode=%s",
                     log.timestamp.toRawNanoseconds(), log.instanceId,
                     sensor.getSensorTypeName(), sensor.getSensorIndex(),
                     sensor.getTargetGroupMask(), getSensorModeName(log.mode));
 
     if (sensorModeIsContinuous(log.mode)) {
-      debugDump.print(" int=%" PRIu64 " lat=%" PRIu64,
+      debugDump.print(" intervalNs=%" PRIu64 " latencyNs=%" PRIu64,
                       log.interval.toRawNanoseconds(),
                       log.latency.toRawNanoseconds());
     }
     debugDump.print("\n");
   }
+  debugDump.print("\n");
+}
+
+void SensorRequestManager::logSensorSamplingStatusLogsToBuffer(
+    DebugDumpWrapper &debugDump) const {
+  debugDump.print(" Last %zu Sensor Sampling Status Updates:\n",
+                  mSensorSamplingUpdateLogs.size());
+  static_assert(kMaxSensorRequestLogs <= INT8_MAX,
+                "kMaxSensorRequestLogs must be <= INT8_MAX");
+  for (int8_t i = static_cast<int8_t>(mSensorSamplingUpdateLogs.size()) - 1;
+       i >= 0; i--) {
+    const auto &log = mSensorSamplingUpdateLogs[static_cast<size_t>(i)];
+    const Sensor &sensor = mSensors[log.sensorHandle];
+    debugDump.print("  ts=%" PRIu64 " type=%s idx=%" PRIu8 " mask=%" PRIx16
+                    " enable=%s intervalNs=%" PRIu64 " latencyNs=%" PRIu64,
+                    log.timestamp.toRawNanoseconds(),
+                    sensor.getSensorTypeName(), sensor.getSensorIndex(),
+                    sensor.getTargetGroupMask(), log.enabled ? "true" : "false",
+                    log.interval, log.latency);
+
+    debugDump.print("\n");
+  }
+  debugDump.print("\n");
+}
+
+void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
+  logCurrentSensorStateToBuffer(debugDump);
+  logSensorRequestLogsToBuffer(debugDump);
+  logSensorSamplingStatusLogsToBuffer(debugDump);
 }
 
 uint32_t SensorRequestManager::disableAllSubscriptions(Nanoapp *nanoapp) {

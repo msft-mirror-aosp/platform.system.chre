@@ -242,6 +242,16 @@ class SensorRequestManager : public NonCopyable {
   void handleBiasEvent(uint32_t sensorHandle, void *biasData);
 
   /**
+   * Helper functions to log sensor manager state to debug dump.
+   *
+   * @param debugDump The debug dump wrapper where a string can be printed
+   *     into one of the buffers.
+   */
+  void logCurrentSensorStateToBuffer(DebugDumpWrapper &debugDump) const;
+  void logSensorRequestLogsToBuffer(DebugDumpWrapper &debugDump) const;
+  void logSensorSamplingStatusLogsToBuffer(DebugDumpWrapper &debugDump) const;
+
+  /**
    * Prints state in a string buffer. Must only be called from the context of
    * the main CHRE thread.
    *
@@ -334,12 +344,35 @@ class SensorRequestManager : public NonCopyable {
     SensorMode mode;
   };
 
+  //! An internal structure to store sensor sampling status update
+  struct SensorSamplingStatusUpdateLog {
+    SensorSamplingStatusUpdateLog(Nanoseconds timestampIn,
+                                  uint32_t sensorHandleIn,
+                                  chreSensorSamplingStatus *statusIn)
+        : timestamp(timestampIn),
+          sensorHandle(sensorHandleIn),
+          enabled(statusIn->enabled),
+          interval(statusIn->interval),
+          latency(statusIn->latency) {}
+
+    Nanoseconds timestamp;
+    uint32_t sensorHandle;
+    bool enabled;
+    uint64_t interval;
+    uint64_t latency;
+  };
+
   //! The list of all sensors
   DynamicVector<Sensor> mSensors;
 
   //! The list of logged sensor requests
   static constexpr size_t kMaxSensorRequestLogs = 15;
   ArrayQueue<SensorRequestLog, kMaxSensorRequestLogs> mSensorRequestLogs;
+
+  //! The list of logged sensor sampling update
+  static constexpr size_t kMaxSensorSamplingStatusUpdateLogs = 15;
+  ArrayQueue<SensorSamplingStatusUpdateLog, kMaxSensorSamplingStatusUpdateLogs>
+      mSensorSamplingUpdateLogs;
 
   //! A queue of flush requests made by nanoapps.
   static constexpr size_t kMaxFlushRequests = 16;

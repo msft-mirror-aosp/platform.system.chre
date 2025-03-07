@@ -457,7 +457,13 @@ void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
   }
 }
 
-void ContextHub::onContextHubRestarted() {
+void ContextHub::onContextHubConnected(bool restart) {
+  // Handle any initialization on the first CHRE connection.
+  if (!restart) {
+    if (mV4Impl) mV4Impl->init();
+    return;
+  }
+
   if (mV4Impl) {
     mV4Impl->onChreDisconnected();
     mV4Impl->onChreRestarted();
