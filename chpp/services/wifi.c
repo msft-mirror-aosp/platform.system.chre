@@ -64,6 +64,9 @@ static const struct ChppService kWifiServiceConfig = {
     // Client notification dispatch function pointer
     .notificationDispatchFunctionPtr = NULL,  // Not supported
 
+    // Service timeout function pointer
+    .timeoutFunctionPtr = NULL,  // Not used
+
     // Min length is the entire header
     .minLength = sizeof(struct ChppAppHeader),
 };

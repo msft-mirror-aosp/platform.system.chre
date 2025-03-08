@@ -30,23 +30,21 @@
 #include "chre_api/chre.h"
 
 #include "pw_containers/vector.h"
+#include "pw_intrusive_ptr/recyclable.h"
 
-#include <cinttypes>
 #include <cstdint>
 #include <optional>
 
 namespace chre {
 
 //! Manager class for the CHRE Message Hub.
-class ChreMessageHubManager
-    : public NonCopyable,
-      public message::MessageRouter::MessageHubCallback {
+class ChreMessageHubManager : public NonCopyable {
  public:
   //! The ID of the CHRE MessageHub
   constexpr static message::MessageHubId kChreMessageHubId = CHRE_PLATFORM_ID;
 
-  //! Constructor for the ChreMessageHubManager
   ChreMessageHubManager();
+  ~ChreMessageHubManager();
 
   //! Initializes the ChreMessageHubManager
   void init();
@@ -170,6 +168,62 @@ class ChreMessageHubManager
     const char *serviceDescriptor;
   };
 
+  //! The callback used to register the CHRE MessageHub with the MessageRouter
+  //! @see MessageRouter::MessageHubCallback
+  class ChreMessageHubCallback
+      : public message::MessageRouter::MessageHubCallback,
+        pw::Recyclable<ChreMessageHubCallback> {
+   public:
+    explicit ChreMessageHubCallback(ChreMessageHubManager &manager)
+        : mChreMessageHubManager(&manager) {}
+
+    ~ChreMessageHubCallback() {
+      clearManager();
+    }
+
+    //! Clears the manager pointer.
+    void clearManager();
+
+   private:
+    friend class pw::Recyclable<ChreMessageHubCallback>;
+
+    //! @see MessageRouter::MessageHubCallback
+    bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
+                           uint32_t messageType, uint32_t messagePermissions,
+                           const message::Session &session,
+                           bool sentBySessionInitiator) override;
+    void onSessionOpenRequest(const message::Session &session) override;
+    void onSessionOpened(const message::Session &session) override;
+    void onSessionClosed(const message::Session &session,
+                         message::Reason reason) override;
+    void forEachEndpoint(const pw::Function<bool(const message::EndpointInfo &)>
+                             &function) override;
+    std::optional<message::EndpointInfo> getEndpointInfo(
+        message::EndpointId endpointId) override;
+    std::optional<message::EndpointId> getEndpointForService(
+        const char *serviceDescriptor) override;
+    bool doesEndpointHaveService(message::EndpointId endpointId,
+                                 const char *serviceDescriptor) override;
+    void forEachService(const pw::Function<bool(const message::EndpointInfo &,
+                                                const message::ServiceInfo &)>
+                            &function) override;
+    void onHubRegistered(const message::MessageHubInfo &info) override;
+    void onHubUnregistered(message::MessageHubId id) override;
+    void onEndpointRegistered(message::MessageHubId messageHubId,
+                              message::EndpointId endpointId) override;
+    void onEndpointUnregistered(message::MessageHubId messageHubId,
+                                message::EndpointId endpointId) override;
+
+    //! @see pw::Recyclable
+    void pw_recycle() override;
+
+    //! The ChreMessageHubManager that owns this callback and its lock.
+    Mutex mManagerLock;
+    ChreMessageHubManager *mChreMessageHubManager;
+  };
+
+  friend class ChreMessageHubCallback;
+
   constexpr static size_t kMaxFreeCallbackRecords = 25;
 
   //! Callback to process message sent to a nanoapp - used by the event loop
@@ -183,6 +237,10 @@ class ChreMessageHubManager
       SystemCallbackType type,
       UniquePtr<ChreMessageHubManager::SessionCallbackData> &&data);
 
+  //! Callback to process session open complete event - used by the event loop
+  static void onSessionOpenCompleteCallback(uint16_t type, void *data,
+                                            void *extraData);
+
   //! Callback called when a message is freed
   static void onMessageFreeCallback(std::byte *message, size_t length,
                                     MessageFreeCallbackData &&callbackData);
@@ -195,6 +253,9 @@ class ChreMessageHubManager
   //! not provided, the state change is open, else it is closed.
   void onSessionStateChanged(const message::Session &session,
                              std::optional<message::Reason> reason);
+
+  //! Called when a session open is requested.
+  void onSessionOpenComplete(message::SessionId sessionId);
 
   //! Processes an endpoint ready event from MessageRouter. Can only be called
   //! from the event loop thread.
@@ -240,36 +301,11 @@ class ChreMessageHubManager
   //! @return the RpcFormat
   message::RpcFormat toMessageRpcFormat(chreMsgEndpointServiceFormat format);
 
-  //! Definitions for MessageHubCallback
-  //! @see MessageRouter::MessageHubCallback
-  bool onMessageReceived(pw::UniquePtr<std::byte[]> &&data,
-                         uint32_t messageType, uint32_t messagePermissions,
-                         const message::Session &session,
-                         bool sentBySessionInitiator) override;
-  void onSessionOpenRequest(const message::Session &session) override;
-  void onSessionOpened(const message::Session &session) override;
-  void onSessionClosed(const message::Session &session,
-                       message::Reason reason) override;
-  void forEachEndpoint(const pw::Function<bool(const message::EndpointInfo &)>
-                           &function) override;
-  std::optional<message::EndpointInfo> getEndpointInfo(
-      message::EndpointId endpointId) override;
-  std::optional<message::EndpointId> getEndpointForService(
-      const char *serviceDescriptor) override;
-  bool doesEndpointHaveService(message::EndpointId endpointId,
-                               const char *serviceDescriptor) override;
-  void forEachService(const pw::Function<bool(const message::EndpointInfo &,
-                                              const message::ServiceInfo &)>
-                          &function) override;
-  void onHubRegistered(const message::MessageHubInfo &info) override;
-  void onHubUnregistered(message::MessageHubId id) override;
-  void onEndpointRegistered(message::MessageHubId messageHubId,
-                            message::EndpointId endpointId) override;
-  void onEndpointUnregistered(message::MessageHubId messageHubId,
-                              message::EndpointId endpointId) override;
-
   //! The MessageHub for the CHRE
   message::MessageRouter::MessageHub mChreMessageHub;
+
+  //! The callback for the CHRE MessageHub
+  pw::IntrusivePtr<ChreMessageHubCallback> mChreMessageHubCallback;
 
   //! The vector of free callback records - used by the
   //! CallbackAllocator

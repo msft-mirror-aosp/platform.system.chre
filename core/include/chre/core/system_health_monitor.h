@@ -19,8 +19,6 @@
 
 #include <cstdint>
 
-#include "chre/platform/assert.h"
-#include "chre/platform/log.h"
 #include "chre/util/enum.h"
 #include "chre/util/non_copyable.h"
 
@@ -38,7 +36,8 @@ enum class HealthCheckId : uint16_t {
   WifiScanResponseTimeout = 0,
   WifiConfigureScanMonitorTimeout = 1,
   WifiRequestRangingTimeout = 2,
-  UnexpectedWifiPalCallback = 3,
+  UnexpectedWifiScanResponse = 3,
+  UnexpectedWifiScanMonitorStateChange = 4,
 
   //! Must be last
   NumCheckIds

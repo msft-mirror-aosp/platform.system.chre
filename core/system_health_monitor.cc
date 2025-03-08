@@ -17,6 +17,7 @@
 #include "chre/core/system_health_monitor.h"
 
 #include "chre/core/event_loop_manager.h"
+#include "chre/platform/assert.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
 #include "chre/util/macros.h"

@@ -116,7 +116,7 @@ void MessageRouter::MessageHub::unregister() {
 std::optional<typename MessageRouter::MessageHub>
 MessageRouter::registerMessageHub(
     const char *name, MessageHubId id,
-    MessageRouter::MessageRouter::MessageHubCallback &callback) {
+    pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback) {
   DynamicVector<MessageHubRecord> hubsToNotify;
   std::optional<MessageHub> newHub;
   MessageHubInfo newHubInfo;
@@ -149,7 +149,7 @@ MessageRouter::registerMessageHub(
 
     MessageHubRecord messageHubRecord = {
         .info = {.id = id, .name = name},
-        .callback = &callback,
+        .callback = std::move(callback),
     };
     newHubInfo = messageHubRecord.info;
     mMessageHubs.push_back(std::move(messageHubRecord));
@@ -166,7 +166,7 @@ MessageRouter::registerMessageHub(
 bool MessageRouter::forEachEndpointOfHub(
     MessageHubId messageHubId,
     const pw::Function<bool(const EndpointInfo &)> &function) {
-  MessageRouter::MessageHubCallback *callback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
     LOGE("Failed to find message hub with ID 0x%" PRIx64, messageHubId);
@@ -207,7 +207,7 @@ bool MessageRouter::forEachEndpoint(
 
 std::optional<EndpointInfo> MessageRouter::getEndpointInfo(
     MessageHubId messageHubId, EndpointId endpointId) {
-  MessageRouter::MessageHubCallback *callback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
     LOGE("Failed to get endpoint info for message hub with ID 0x%" PRIx64
@@ -259,7 +259,7 @@ bool MessageRouter::doesEndpointHaveService(MessageHubId messageHubId,
     return false;
   }
 
-  MessageRouter::MessageHubCallback *callback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
     LOGE(
@@ -315,8 +315,9 @@ bool MessageRouter::forEachMessageHub(
 }
 
 bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
-  DynamicVector<std::pair<MessageHubCallback *, Session>> sessionsToDestroy;
-  DynamicVector<MessageHubCallback *> hubsToNotify;
+  DynamicVector<std::pair<pw::IntrusivePtr<MessageHubCallback>, Session>>
+      sessionsToDestroy;
+  DynamicVector<pw::IntrusivePtr<MessageHubCallback>> hubsToNotify;
 
   {
     LockGuard<Mutex> lock(mMutex);
@@ -347,9 +348,10 @@ bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
       bool peerIsFromHub = session.peer.messageHubId == fromMessageHubId;
 
       if (initiatorIsFromHub || peerIsFromHub) {
-        MessageHubCallback *callback = getCallbackFromMessageHubIdLocked(
-            initiatorIsFromHub ? session.peer.messageHubId
-                               : session.initiator.messageHubId);
+        pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback =
+            getCallbackFromMessageHubIdLocked(
+                initiatorIsFromHub ? session.peer.messageHubId
+                                   : session.initiator.messageHubId);
         sessionsToDestroy.push_back(std::make_pair(callback, session));
         mSessions.erase(&mSessions[i]);
       } else {
@@ -363,7 +365,7 @@ bool MessageRouter::unregisterMessageHub(MessageHubId fromMessageHubId) {
       callback->onSessionClosed(session, Reason::HUB_RESET);
     }
   }
-  for (auto *callback : hubsToNotify) {
+  for (auto callback : hubsToNotify) {
     if (callback != nullptr) {
       callback->onHubUnregistered(fromMessageHubId);
     }
@@ -389,9 +391,9 @@ SessionId MessageRouter::openSession(MessageHubId fromMessageHubId,
     return SESSION_ID_INVALID;
   }
 
-  MessageRouter::MessageHubCallback *initiatorCallback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> initiatorCallback =
       getCallbackFromMessageHubId(fromMessageHubId);
-  MessageRouter::MessageHubCallback *peerCallback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> peerCallback =
       getCallbackFromMessageHubId(toMessageHubId);
   if (initiatorCallback == nullptr || peerCallback == nullptr) {
     LOGE("Failed to open session: %s message hub not found",
@@ -468,8 +470,9 @@ bool MessageRouter::closeSession(MessageHubId fromMessageHubId,
 bool MessageRouter::finalizeSession(MessageHubId fromMessageHubId,
                                     SessionId sessionId,
                                     std::optional<Reason> reason) {
-  MessageRouter::MessageHubCallback *peerCallback = nullptr;
-  MessageRouter::MessageHubCallback *initiatorCallback = nullptr;
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> peerCallback = nullptr;
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> initiatorCallback =
+      nullptr;
   Session session;
   {
     LockGuard<Mutex> lock(mMutex);
@@ -509,10 +512,14 @@ bool MessageRouter::finalizeSession(MessageHubId fromMessageHubId,
 
   if (reason.has_value()) {
     initiatorCallback->onSessionClosed(session, reason.value());
-    peerCallback->onSessionClosed(session, reason.value());
+    if (initiatorCallback != peerCallback) {
+      peerCallback->onSessionClosed(session, reason.value());
+    }
   } else {
     initiatorCallback->onSessionOpened(session);
-    peerCallback->onSessionOpened(session);
+    if (initiatorCallback != peerCallback) {
+      peerCallback->onSessionOpened(session);
+    }
   }
   return true;
 }
@@ -532,7 +539,8 @@ bool MessageRouter::sendMessage(pw::UniquePtr<std::byte[]> &&data,
                                 uint32_t messagePermissions,
                                 SessionId sessionId, EndpointId fromEndpointId,
                                 MessageHubId fromMessageHubId) {
-  MessageRouter::MessageHubCallback *receiverCallback = nullptr;
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> receiverCallback =
+      nullptr;
   Session session;
   bool sentBySessionInitiator;
   {
@@ -606,7 +614,7 @@ bool MessageRouter::unregisterEndpoint(MessageHubId messageHubId,
 
 bool MessageRouter::onEndpointRegistrationStateChanged(
     MessageHubId messageHubId, EndpointId endpointId, bool isRegistered) {
-  MessageRouter::MessageHubCallback *callback =
+  pw::IntrusivePtr<MessageRouter::MessageHubCallback> callback =
       getCallbackFromMessageHubId(messageHubId);
   if (callback == nullptr) {
     LOGE("Failed to register endpoint with ID 0x%" PRIx64
@@ -688,13 +696,13 @@ std::optional<size_t> MessageRouter::findSessionIndexLocked(
   return std::nullopt;
 }
 
-MessageRouter::MessageHubCallback *MessageRouter::getCallbackFromMessageHubId(
-    MessageHubId messageHubId) {
+pw::IntrusivePtr<MessageRouter::MessageHubCallback>
+MessageRouter::getCallbackFromMessageHubId(MessageHubId messageHubId) {
   LockGuard<Mutex> lock(mMutex);
   return getCallbackFromMessageHubIdLocked(messageHubId);
 }
 
-MessageRouter::MessageHubCallback *
+pw::IntrusivePtr<MessageRouter::MessageHubCallback>
 MessageRouter::getCallbackFromMessageHubIdLocked(MessageHubId messageHubId) {
   const MessageHubRecord *messageHubRecord =
       getMessageHubRecordLocked(messageHubId);
@@ -702,7 +710,8 @@ MessageRouter::getCallbackFromMessageHubIdLocked(MessageHubId messageHubId) {
 }
 
 bool MessageRouter::checkIfEndpointExists(
-    MessageRouter::MessageHubCallback *callback, EndpointId endpointId) {
+    const pw::IntrusivePtr<MessageRouter::MessageHubCallback> &callback,
+    EndpointId endpointId) {
   struct EndpointContext {
     EndpointId endpointId;
     bool foundEndpoint = false;
