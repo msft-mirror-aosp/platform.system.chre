@@ -88,9 +88,7 @@ bool HostProtocolHost::decodeMessageFromChre(const void *message,
         break;
 
       default:
-        LOGW("Got invalid/unexpected message type %" PRIu8,
-             static_cast<uint8_t>(msg.type));
-        success = false;
+        success = handlers.handleContextHubV4Message(msg);
     }
   }
 

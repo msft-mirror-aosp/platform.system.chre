@@ -101,6 +101,13 @@ class PreloadedNanoappLoader {
     size_t fragmentId;
   };
 
+  /** The possible results of verification of a fragment load response. */
+  enum class ResponseVerificationResult {
+    SUCCESS = 0,
+    FAILURE = 1,
+    IGNORED = 2,
+  };
+
   /**
    * Loads a preloaded nanoapp.
    *
@@ -130,10 +137,11 @@ class PreloadedNanoappLoader {
                                          const FragmentedLoadRequest &request);
 
   /** Verifies the response of a loading request. */
-  [[nodiscard]] bool verifyFragmentLoadResponse(
+  [[nodiscard]] ResponseVerificationResult verifyFragmentLoadResponse(
       const ::chre::fbs::LoadNanoappResponseT &response) const;
 
-  Transaction mPreloadedNanoappPendingTransaction{0, 0};
+  Transaction mPendingTransaction{/* transactionId= */ 0,
+                                  /* fragmentId= */ 0};
 
   /** The value of this promise carries the result in the load response. */
   std::optional<std::promise<bool>> mFragmentedLoadPromise = std::nullopt;

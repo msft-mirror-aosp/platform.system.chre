@@ -27,7 +27,6 @@
 #include "chre/platform/context.h"
 #include "chre/platform/host_link.h"
 #include "chre/platform/log.h"
-#include "chre/target_platform/log.h"
 #include "chre/util/duplicate_message_detector.h"
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
@@ -352,9 +351,9 @@ void HostCommsManager::deliverNanoappMessageFromHost(
   if (!foundNanoapp) {
     error = CHRE_ERROR_DESTINATION_NOT_FOUND;
   } else if (shouldDeliverMessage) {
-    EventLoopManagerSingleton::get()->getEventLoop().deliverEventSync(
-        targetInstanceId, CHRE_EVENT_MESSAGE_FROM_HOST,
-        &craftedMessage->fromHostData);
+    EventLoopManagerSingleton::get()->getEventLoop().distributeEventSync(
+        CHRE_EVENT_MESSAGE_FROM_HOST, &craftedMessage->fromHostData,
+        targetInstanceId);
     error = CHRE_ERROR_NONE;
   }
 
@@ -485,8 +484,8 @@ void HostCommsManager::handleMessageDeliveryStatusSync(
     asyncResult.cookie = message->cookie;
 
     onMessageToHostCompleteInternal(message);
-    eventLoop.deliverEventSync(
-        nanoappInstanceId, CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT, &asyncResult);
+    eventLoop.distributeEventSync(CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT,
+                                  &asyncResult, nanoappInstanceId);
   }
 }
 

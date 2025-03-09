@@ -16,6 +16,8 @@
 
 #include "chre/core/event_loop_manager.h"
 
+#include "chre/core/event_loop_common.h"
+#include "chre/event.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/memory.h"
@@ -71,6 +73,10 @@ void EventLoopManager::lateInit() {
 #ifdef CHRE_BLE_SUPPORT_ENABLED
   mBleRequestManager.init();
 #endif  // CHRE_BLE_SUPPORT_ENABLED
+
+#ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
+  mChreMessageHubManager.init();
+#endif  // CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 }
 
 // Explicitly instantiate the EventLoopManagerSingleton to reduce codesize.

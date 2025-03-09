@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "chre/target_platform/platform_cache_management.h"
+#include "chre/platform/shared/platform_cache_management.h"
 
 namespace chre {
 

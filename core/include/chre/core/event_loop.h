@@ -17,6 +17,10 @@
 #ifndef CHRE_CORE_EVENT_LOOP_H_
 #define CHRE_CORE_EVENT_LOOP_H_
 
+#include <pw_function/function.h>
+#include <stddef.h>
+#include <optional>
+
 #include "chre/core/event.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/timer_pool.h"
@@ -27,13 +31,14 @@
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/debug_dump.h"
+#include "chre/util/system/message_common.h"
 #include "chre/util/system/stats_container.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre/event.h"
 
 #ifdef CHRE_STATIC_EVENT_LOOP
-#include "chre/util/fixed_size_blocking_queue.h"
-#include "chre/util/synchronized_memory_pool.h"
+#include "chre/util/system/fixed_size_blocking_queue.h"
+#include "chre/util/system/synchronized_memory_pool.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_MAX_EVENT_COUNT
@@ -45,7 +50,7 @@
 #endif
 #else
 #include "chre/util/blocking_segmented_queue.h"
-#include "chre/util/synchronized_expandable_memory_pool.h"
+#include "chre/util/system/synchronized_expandable_memory_pool.h"
 
 // These default values can be overridden in the variant-specific makefile.
 #ifndef CHRE_EVENT_PER_BLOCK
@@ -67,6 +72,11 @@ namespace chre {
  */
 class EventLoop : public NonCopyable {
  public:
+  /**
+   * Synchronous callback used with forEachNanoapp
+   */
+  typedef void(NanoappCallbackFunction)(const Nanoapp *nanoapp, void *data);
+
   EventLoop()
       :
 #ifndef CHRE_STATIC_EVENT_LOOP
@@ -75,11 +85,6 @@ class EventLoop : public NonCopyable {
         mTimeLastWakeupBucketCycled(SystemTime::getMonotonicTime()),
         mRunning(true) {
   }
-
-  /**
-   * Synchronous callback used with forEachNanoapp
-   */
-  typedef void(NanoappCallbackFunction)(const Nanoapp *nanoapp, void *data);
 
   /**
    * Searches the set of nanoapps managed by this EventLoop for one with the
@@ -172,8 +177,15 @@ class EventLoop : public NonCopyable {
   void stop();
 
   /**
-   * Synchronously deliver an event to a nanoapp. The event is sent from the
-   * system to the nanoapp with instance ID nanoappInstanceId.
+   * Synchronously distributes an event to all nanoapps that should receive it.
+   * The event is sent from the system to a specific nanoapp if targetInstanceId
+   * matches the nanoappId, or to all registered nanoapps if targetInstanceId
+   * is set to kBroadcastInstanceId
+   *
+   * This is intended to be used by the function provided to
+   * EventLoopManager::deferCallback in cases where pre- and post-processing are
+   * required around event delivery. This closes the gaps around event delivery
+   * and can remove the need for posting multiple events.
    *
    * This must only be used from the EventLoop thread, and must only be used in
    * rare circumstances where one of the postEvent functions cannot be used. In
@@ -181,16 +193,18 @@ class EventLoop : public NonCopyable {
    * ordering guarantees and trigger subtle bugs in nanoapps, so use with
    * caution.
    *
-   * freeCallback is guaranteed to be called before returning.
+   * No freeCallback is provided. The caller is expected to manage the memory
+   * for eventData, and handle any cleanup.
    *
-   * @param nanoappInstanceId The instance ID of the destination of this event
    * @param eventType Event type identifier, which implies the type of eventData
    * @param eventData The data being posted
-   * @return true if the event was successfully delivered, false otherwise.
+   * @param targetInstanceId The instance ID of the destination of this event
+   * @param targetGroupMask Mask used to limit the recipients that are
+   *        registered to receive this event
    */
-  bool deliverEventSync(uint16_t nanoappInstanceId,
-                        uint16_t eventType,
-                        void *eventData);
+  bool distributeEventSync(uint16_t eventType, void *eventData,
+                           uint16_t targetInstanceId = kBroadcastInstanceId,
+                           uint16_t targetGroupMask = kDefaultTargetGroupMask);
 
   /**
    * Posts an event to a nanoapp that is currently running (or all nanoapps if
@@ -314,6 +328,17 @@ class EventLoop : public NonCopyable {
   Nanoapp *findNanoappByInstanceId(uint16_t instanceId) const;
 
   /**
+   * Searches the set of nanoapps managed by this EventLoop for one with the
+   * given nanoapp ID.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param appId The nanoapp ID to search for.
+   * @return a pointer to the found nanoapp or nullptr if no match was found.
+   */
+  Nanoapp *findNanoappByAppId(uint64_t appId) const;
+
+  /**
    * Looks for an app with the given ID and if found, populates info with its
    * metadata. Safe to call from any thread.
    *
@@ -345,6 +370,28 @@ class EventLoop : public NonCopyable {
    *     into one of the buffers.
    */
   void logStateToBuffer(DebugDumpWrapper &debugDump) const;
+
+  /**
+   * Executes function for each nanoapp in the event loop. If function
+   * returns true, the iteration will stop.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param function The function to execute for each nanoapp.
+   */
+  void onMatchingNanoappEndpoint(
+      const pw::Function<bool(const message::EndpointInfo &)> &function);
+
+  /**
+   * Returns the EndpointInfo for the given nanoapp.
+   *
+   * This function is safe to call from any thread.
+   *
+   * @param appId The nanoapp ID to search for.
+   * @return The EndpointInfo for the given nanoapp, or std::nullopt if not
+   * found.
+   */
+  std::optional<message::EndpointInfo> getEndpointInfo(uint64_t appId);
 
   /**
    * Returns a reference to the power control manager. This allows power
@@ -489,6 +536,16 @@ class EventLoop : public NonCopyable {
   void distributeEvent(Event *event);
 
   /**
+   * Shared functionality to distributeEvent and distributeEventSync. Should
+   * only be called by those functions. Hnadles event distribution and logging
+   * without any pre- or post-processing.
+   *
+   * @param event The Event to distribute to Nanoapps
+   * @return True if the event was delivered to any nanoapps, otherwise false
+   */
+  bool distributeEventCommon(Event *event);
+
+  /**
    * Distribute all events pending in the inbound event queue. Note that this
    * function only guarantees that any events in the inbound queue at the time
    * it is called will be distributed to Nanoapp event queues - new events may
@@ -559,6 +616,18 @@ class EventLoop : public NonCopyable {
    * @param count The number of dangling resources.
    */
   void logDanglingResources(const char *name, uint32_t count);
+
+  /**
+   * Returns the EndpointInfo for the given nanoapp.
+   *
+   * Only safe to call within this EventLoop's thread, or if mNanoappsLock is
+   * held.
+   *
+   * @param nanoapp The nanoapp to get the EndpointInfo for.
+   * @return The EndpointInfo for the given nanoapp
+   */
+  message::EndpointInfo getEndpointInfoFromNanoappLocked(
+      const Nanoapp &nanoapp);
 };
 
 }  // namespace chre

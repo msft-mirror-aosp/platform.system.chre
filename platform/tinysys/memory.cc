@@ -30,7 +30,6 @@ extern "C" {
 #include "encoding.h"
 #include "mt_heap.h"
 #include "resource_req.h"
-#include "sensorhub/heap.h"
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -80,7 +79,7 @@ void *nanoappBinaryDramAlloc(size_t size, size_t alignment) {
 }
 
 void *memoryAlloc(size_t size) {
-  void *address = heap_alloc(size);
+  void *address = pvPortMalloc(size);
   if (address == nullptr && size > 0) {
     // Try dram if allocation from sram fails.
     // DramVoteClient tracks the duration of the allocations falling back to
@@ -103,7 +102,7 @@ void memoryFree(void *pointer) {
     vPortDramFree(pointer);
     DramVoteClientSingleton::get()->decrementDramVoteCount();
   } else {
-    heap_free(pointer);
+    vPortFree(pointer);
   }
 }
 }  // namespace chre

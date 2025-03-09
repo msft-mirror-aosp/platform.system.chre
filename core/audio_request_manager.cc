@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_AUDIO_SUPPORT_ENABLED
+
 #include "chre/core/audio_request_manager.h"
 
 #include "chre/core/audio_util.h"
@@ -513,3 +515,5 @@ void AudioRequestManager::onSettingChanged(Setting setting, bool enabled) {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_AUDIO_SUPPORT_ENABLED
