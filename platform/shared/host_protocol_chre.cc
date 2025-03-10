@@ -24,7 +24,7 @@
 #include "chre/core/host_endpoint_manager.h"
 #include "chre/core/host_message_hub_manager.h"
 #include "chre/platform/log.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/util/macros.h"
 #include "chre/util/system/message_common.h"
 

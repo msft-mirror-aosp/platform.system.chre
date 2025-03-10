@@ -7,7 +7,7 @@ exit
 fi
 
 # Generate the CHRE-side header file
-flatc --cpp -o ../include/generated/ --scoped-enums \
+flatc --cpp -o ../generated/include/generated/ --scoped-enums \
   --cpp-ptr-type chre::UniquePtr chre_power_test.fbs
 
 # Generate the AP-side header file with some extra goodies

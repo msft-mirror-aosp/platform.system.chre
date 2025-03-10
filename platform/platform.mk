@@ -29,6 +29,7 @@ SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/rtld/inc
 
 SLPI_CFLAGS += -Iplatform/shared/aligned_alloc_unsupported/include
 SLPI_CFLAGS += -Iplatform/shared/include
+SLPI_CFLAGS += -Iplatform/shared/fbs/include
 SLPI_CFLAGS += -Iplatform/slpi/include
 
 # We use FlatBuffers in the SLPI platform layer
@@ -49,6 +50,7 @@ SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/goog/api
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/internal
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/utils/nanopb
+SLPI_SEE_CFLAGS += -Iplatform/shared/fbs/include
 
 SLPI_SEE_CFLAGS += -Iplatform/slpi/see/include
 
@@ -315,6 +317,7 @@ GOOGLE_ARM64_ANDROID_CFLAGS += -Ihost/common/include
 
 # Also add the linux sources to fall back to the default Linux implementation.
 GOOGLE_ARM64_ANDROID_CFLAGS += -Iplatform/linux/include
+GOOGLE_ARM64_ANDROID_CFLAGS += -Iplatform/shared/fbs/include
 
 # We use FlatBuffers in the Android simulator
 GOOGLE_ARM64_ANDROID_CFLAGS += -I$(FLATBUFFERS_PATH)/include
@@ -417,6 +420,7 @@ EMBOS_SRCS += $(CHRE_PREFIX)/platform/shared/nanoapp_loader.cc
 
 # Exynos specific compiler flags
 EXYNOS_CFLAGS += -I$(CHRE_PREFIX)/platform/exynos/include
+EXYNOS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/fbs/include
 EXYNOS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/audio_pal/include
 
 EXYNOS_SRCS += $(CHRE_PREFIX)/platform/exynos/chre_api_re.cc
@@ -544,6 +548,7 @@ TINYSYS_PLATFORM = mt6989
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/aligned_alloc_unsupported/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/fbs/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_ble_pal
 TINYSYS_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/public_platform_debug_dump_manager

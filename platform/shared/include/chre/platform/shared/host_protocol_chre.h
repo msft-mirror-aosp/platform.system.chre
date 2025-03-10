@@ -23,7 +23,7 @@
 #include "chre/core/ble_l2cap_coc_socket_data.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/platform/shared/host_protocol_common.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/flatbuffers/helpers.h"

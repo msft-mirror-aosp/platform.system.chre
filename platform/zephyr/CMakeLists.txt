@@ -25,6 +25,7 @@ if(CONFIG_CHRE)
       "${CHRE_DIR}/pal/include"
       "${CHRE_DIR}/platform/include"
       "${CHRE_DIR}/platform/shared/include"
+      "${CHRE_DIR}/platform/shared/fbs/include"
       "${CHRE_DIR}/util/include"
       "${CMAKE_CURRENT_SOURCE_DIR}/include")
   zephyr_include_directories("${CHRE_INCLUDE_DIRS}")

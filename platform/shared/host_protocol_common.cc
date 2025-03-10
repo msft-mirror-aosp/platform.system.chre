@@ -19,7 +19,7 @@
 #include <string.h>
 #include <cstdint>
 
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 
 using flatbuffers::FlatBufferBuilder;
 using flatbuffers::Offset;

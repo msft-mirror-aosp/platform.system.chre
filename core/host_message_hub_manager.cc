@@ -27,7 +27,7 @@
 #include "chre/platform/log.h"
 #include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/platform/shared/host_protocol_chre.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/memory.h"
