@@ -36,6 +36,10 @@ void WwanCapabilitiesTest::setUp(uint32_t messageSize,
       allCapabilities |= CHRE_WWAN_GET_CELL_INFO;
     }
 
+    if (mApiVersion >= CHRE_API_VERSION_1_11) {
+      allCapabilities |= CHRE_WWAN_GET_CELL_NEIGHBOR_INFO;
+    }
+
     // Call the new API
     uint32_t capabilities = chreWwanGetCapabilities();
 
