@@ -431,7 +431,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
 
           // Retry on CHRE_ERROR_BUSY after a short delay
           mWifiRequestRetries++;
-          uint64_t delay = kOneSecondInNanoseconds;
+          uint64_t delay = kOneSecondInNanoseconds * 2;
           gRangingRequestRetryTimerHandle = chreTimerSet(
               delay, &kRangingRequestRetryTimerCookie, /*oneShot=*/true);
           LOGW(

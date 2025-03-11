@@ -129,4 +129,9 @@ class PlatformWifi : public PlatformWifiBase {
 
 }  // namespace chre
 
+/* The platform can optionally provide an inlined implementation */
+#if __has_include("chre/target_platform/platform_wifi_impl.h")
+#include "chre/target_platform/platform_wifi_impl.h"
+#endif  // __has_include("chre/target_platform/platform_wifi_impl.h")
+
 #endif  // CHRE_PLATFORM_PLATFORM_WIFI_H_
