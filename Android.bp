@@ -588,6 +588,7 @@ cc_test_host {
         "host/common/fragmented_load_transaction.cc",
         "host/common/hal_client.cc",
         "host/hal_generic/common/hal_client_manager.cc",
+        "host/hal_generic/common/message_hub_manager.cc",
         "host/test/**/*_test.cc",
     ],
     local_include_dirs: [

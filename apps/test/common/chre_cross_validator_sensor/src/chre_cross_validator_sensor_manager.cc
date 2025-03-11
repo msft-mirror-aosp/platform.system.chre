@@ -81,12 +81,11 @@ Manager::~Manager() {
 
 void Manager::cleanup() {
   if (mCrossValidatorState.has_value() &&
-      mCrossValidatorState->crossValidatorType == CrossValidatorType::SENSOR) {
-    if (!chreSensorConfigureModeOnly(mCrossValidatorState->sensorHandle,
-                                     CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
-      LOGE("Sensor cleanup failed to set mode to DONE. handle=%" PRIu32,
-           mCrossValidatorState->sensorHandle);
-    }
+      mCrossValidatorState->crossValidatorType == CrossValidatorType::SENSOR &&
+      !chreSensorConfigureModeOnly(mCrossValidatorState->sensorHandle,
+                                   CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
+    LOGE("Sensor cleanup failed to set mode to DONE. handle=%" PRIu32,
+         mCrossValidatorState->sensorHandle);
   }
 }
 
@@ -366,7 +365,7 @@ bool Manager::handleStartSensorMessage(
          sensorType, intervalInNs, latencyInNs);
     return false;
   }
-
+  LOGD("Sensor with type %" PRIu8 " is configured", sensorType);
   return true;
 }
 
@@ -456,9 +455,6 @@ void Manager::handleInfoMessage(uint16_t hostEndpoint,
       infoResponse.sensorIndex = i;
       nameData.sensorName = info.sensorName;
       nameData.size = strlen(info.sensorName);
-      // TODO: b/378499203 - Remove this log after verification
-      LOGD("%s: name addr: %p; size: %zu", __func__, nameData.sensorName,
-           nameData.size);
       infoResponse.sensorName.funcs.encode = encodeSensorName;
       infoResponse.sensorName.arg = &nameData;
       break;
