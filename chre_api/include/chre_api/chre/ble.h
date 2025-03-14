@@ -201,11 +201,12 @@ extern "C" {
 /**
  * nanoappHandleEvent argument: struct chreBleSocketConnectionEvent
  *
- * This is a unicast event that is sent to a nanoapp when an offloaded socket is
- * connected and is available to be used by the nanoapp. The nanoapp must call
- * chreBleSocketAccept() to accept ownership of the socket and
- * subscribe to CHRE_EVENT_BLE_SOCKET_PACKET events.
+ * This event is sent to a nanoapp when ownership of a connected BLE socket is
+ * being transferred to the nanoapp. If the nanoapp does not call
+ * chreBleSocketAccept() while handling this event, then the transfer is
+ * aborted.
  *
+ * @see chreBleSocketAccept()
  * @since v1.11
  */
 #define CHRE_EVENT_BLE_SOCKET_CONNECTION CHRE_BLE_EVENT_ID(6)
@@ -213,8 +214,8 @@ extern "C" {
 /**
  * nanoappHandleEvent argument: struct chreBleSocketDisconnectionEvent
  *
- * This is a unicast event that is sent to a nanoapp when an offloaded socket is
- * disconnected and can no longer be used by the nanoapp.
+ * This event is sent to a nanoapp when a socket it previously accepted via
+ * chreBleSocketAccept() can no longer be used by the nanoapp.
  *
  * @since v1.11
  */
@@ -223,8 +224,8 @@ extern "C" {
 /**
  * nanoappHandleEvent argument: struct chreBleSocketPacketEvent
  *
- * This event is sent when the nanoapp receives a packet from the offload
- * socket.
+ * This event is sent when a packet is received over a socket owned by the
+ * nanoapp.
  *
  * @since v1.11
  */
@@ -233,8 +234,10 @@ extern "C" {
 /**
  * nanoappHandleEvent argument: NULL
  *
- * This event is sent when the socket is available to send packets again.
+ * This event is sent when a socket is ready to accept packets after
+ * encountering CHRE_BLE_SOCKET_SEND_STATUS_QUEUE_FULL.
  *
+ * @see chreBleSocketSend()
  * @since v1.11
  */
 #define CHRE_EVENT_BLE_SOCKET_SEND_AVAILABLE CHRE_BLE_EVENT_ID(9)
@@ -722,10 +725,7 @@ struct chreBleScanStatus {
 };
 
 /**
- * Notifies a nanoapp that a socket has been connected and offloaded and is
- * ready to be used. The nanoapp is expected to accept ownership of the socket
- * by calling the chreBleSocketAccept() API. If the nanoapp does not accept
- * ownership of the socket, the transfer of ownership to the nanoapp is aborted.
+ * Data associated with CHRE_EVENT_BLE_SOCKET_CONNECTION.
  *
  * @since v1.11
  */
@@ -751,20 +751,20 @@ struct chreBleSocketConnectionEvent {
 };
 
 /**
- * Notifies a nanoapp that a socket has been disconnected and can no longer be
- * used by the nanoapp. Once a socket is disconnected, the same socket ID will
- * not be reconnected. If the nanoapp wants to continue using an offloaded
- * socket, a new offloaded socket must be created and connected.
+ * Data associated with CHRE_EVENT_BLE_SOCKET_DISCONNECTION.
  *
  * @since v1.11
  */
 struct chreBleSocketDisconnectionEvent {
+  //! Identifier for the disconnected socket. Once a socket is disconnected, the
+  //! same socket ID will not be reconnected. To resume communication, a new
+  //! socket must be created and transferred to the nanoapp.
   //! @see chreBleSocketConnectionEvent.socketId
   uint64_t socketId;
 };
 
 /**
- * Notifies a nanoapp that it has received a packet from a socket.
+ * Incoming socket data, sent with CHRE_EVENT_BLE_SOCKET_PACKET.
  *
  * @since v1.11
  */
@@ -1079,11 +1079,11 @@ bool chreBleReadRssiAsync(uint16_t connectionHandle, const void *cookie);
 bool chreBleGetScanStatus(struct chreBleScanStatus *status);
 
 /**
- * Accepts that this nanoapp owns the socket and subscribes to
- * CHRE_EVENT_BLE_SOCKET_PACKET events from this socket. This API is only
+ * Accepts transfer of ownership of a connected socket and subscribes to
+ * CHRE_EVENT_BLE_SOCKET_PACKET events for this socket. This API is only
  * valid to call while handling the CHRE_EVENT_BLE_SOCKET_CONNECTION event.
  *
- * @param socketId @see chreBleSocketConnectionEvent.socketId
+ * @param socketId ID passed in chreBleSocketConnectionEvent.socketId
  * @return True if CHRE confirms that socket ownership has been transferred.
  *
  * @since v1.11
