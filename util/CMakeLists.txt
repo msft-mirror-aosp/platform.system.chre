@@ -160,6 +160,7 @@ pw_add_library(chre.util.system STATIC
   HEADERS
     include/chre/util/system/atomic_spsc_queue.h
     include/chre/util/system/ble_util.h
+    include/chre/util/system/chre_error_util.h
     include/chre/util/system/debug_dump.h
     include/chre/util/system/error_util.h
     include/chre/util/system/event_callbacks.h

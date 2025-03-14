@@ -21,11 +21,11 @@
 
 #include <cstdint>
 
-#include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
 #include "chre/platform/platform_gnss.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/system/chre_error_util.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/time.h"
 

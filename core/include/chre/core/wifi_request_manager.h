@@ -19,13 +19,13 @@
 
 #ifdef CHRE_WIFI_SUPPORT_ENABLED
 
-#include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
 #include "chre/core/timer_pool.h"
 #include "chre/platform/platform_wifi.h"
 #include "chre/util/buffer.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/system/chre_error_util.h"
 #include "chre/util/system/debug_dump.h"
 #include "chre/util/time.h"
 #include "chre_api/chre/wifi.h"
@@ -958,8 +958,8 @@ class WifiRequestManager : public NonCopyable {
   void cancelScanRequestTimer();
 
   void resetScanEventResultCountAccumulator() {
-      mScanEventResultCountAccumulator = 0;
-      mScanRequestResultsArePending = false;
+    mScanEventResultCountAccumulator = 0;
+    mScanRequestResultsArePending = false;
   }
 };
 

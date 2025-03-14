@@ -5,7 +5,6 @@ pw_add_library(chre.core STATIC
     include/chre/core/host_comms_manager.h
     include/chre/core/settings.h
     include/chre/core/audio_request_manager.h
-    include/chre/core/api_manager_common.h
     include/chre/core/wifi_request_manager.h
     include/chre/core/event_ref_queue.h
     include/chre/core/sensor_request_multiplexer.h

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_CORE_API_MANAGER_COMMON_H_
-#define CHRE_CORE_API_MANAGER_COMMON_H_
+#ifndef CHRE_UTIL_SYSTEM_CHRE_ERROR_UTIL_H_
+#define CHRE_UTIL_SYSTEM_CHRE_ERROR_UTIL_H_
 
 #include <cstddef>
 
@@ -31,4 +31,4 @@ static constexpr size_t CHRE_ERROR_SIZE =
 
 }  // namespace chre
 
-#endif  // CHRE_CORE_API_MANAGER_COMMON_H_
+#endif  // CHRE_UTIL_SYSTEM_CHRE_ERROR_UTIL_H_
