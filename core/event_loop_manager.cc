@@ -16,12 +16,12 @@
 
 #include "chre/core/event_loop_manager.h"
 
-#include "chre/core/event_loop_common.h"
 #include "chre/event.h"
 #include "chre/platform/atomic.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/memory.h"
 #include "chre/util/lock_guard.h"
+#include "chre/util/system/system_callback_type.h"
 
 namespace chre {
 

@@ -17,9 +17,9 @@
 #ifndef CHRE_CORE_EVENT_H_
 #define CHRE_CORE_EVENT_H_
 
-#include "chre/core/event_loop_common.h"
 #include "chre/platform/assert.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/system/system_callback_type.h"
 #include "chre_api/chre/event.h"
 
 #include <cstdint>

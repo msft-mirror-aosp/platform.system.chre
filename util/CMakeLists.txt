@@ -179,6 +179,7 @@ pw_add_library(chre.util.system STATIC
     include/chre/util/system/synchronized_memory_pool.h
     include/chre/util/system/synchronized_memory_pool_impl.h
     include/chre/util/system/stats_container.h
+    include/chre/util/system/system_callback_type.h
     include/chre/util/system/transaction_manager.h
     include/chre/util/system/transaction_manager_impl.h
     include/chre/util/system/wifi_util.h

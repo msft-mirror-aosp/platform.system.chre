@@ -18,7 +18,6 @@
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 #include "chre/core/chre_message_hub_manager.h"
-#include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/context.h"
@@ -31,6 +30,7 @@
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/service_helpers.h"
+#include "chre/util/system/system_callback_type.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
 
@@ -289,9 +289,8 @@ bool ChreMessageHubManager::sendMessage(void *message, size_t messageSize,
   pw::UniquePtr<std::byte[]> messageData =
       mAllocator.MakeUniqueArrayWithCallback(
           reinterpret_cast<std::byte *>(message), messageSize,
-          MessageFreeCallbackData{
-              .freeCallback = freeCallback,
-              .nanoappId = fromEndpointId});
+          MessageFreeCallbackData{.freeCallback = freeCallback,
+                                  .nanoappId = fromEndpointId});
   if (messageData == nullptr) {
     LOG_OOM();
   } else {

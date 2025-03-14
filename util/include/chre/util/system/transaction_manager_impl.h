@@ -20,9 +20,9 @@
 // IWYU pragma: private
 #include "chre/util/system/transaction_manager.h"
 
-#include "chre/core/event_loop_common.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/hash.h"
+#include "chre/util/system/system_callback_type.h"
 
 namespace chre {
 
