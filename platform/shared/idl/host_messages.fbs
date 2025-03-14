@@ -584,6 +584,42 @@ table BtSocketCloseResponse {
   socketId:long;
 }
 
+// Request from the host to the offload domain to get the capabilities of the
+// offload stack for BT sockets.
+table BtSocketCapabilitiesRequest {}
+
+//Capabilities for LE L2CAP COC that the offload stack supports.
+table BtSocketLeCocCapabilities {
+  // Maximum number of LE COC sockets supported. If not supported, the value
+  // must be zero.
+  numberOfSupportedSockets :int;
+
+  // Local Maximum Transmission Unit size in octets. The MTU size must be in
+  // range 23 to 65535.
+  mtu:int;
+}
+
+// Capabilities for RFCOMM that the offload stack supports.
+table BtSocketRfcommCapabilities {
+  // Maximum number of RFCOMM sockets supported. If not supported, the value
+  // must be zero.
+  numberOfSupportedSockets :int;
+
+  // Maximum frame size in octets negotiated during DLCI establishment. The
+  // frame size must be in range 23 to 32767.
+  maxFrameSize :int;
+}
+
+// Response from the offload domain to the host with the capabilities of the
+// offload stack for BT sockets.
+table BtSocketCapabilitiesResponse {
+  // Capabilities for LE COC sockets.
+  leCocCapabilities:BtSocketLeCocCapabilities;
+
+  // Capabilities for RFCOMM sockets.
+  rfcommCapabilities:BtSocketRfcommCapabilities;
+}
+
 table VendorHubInfo {
   /// The name of the hub. Nominally a UTF-8 string, but note that we're not
   /// using the built-in "string" data type from FlatBuffers here, because the
@@ -841,6 +877,9 @@ union ChreMessage {
 
   EndpointSessionMessage,
   EndpointSessionMessageDeliveryStatus,
+
+  BtSocketCapabilitiesRequest,
+  BtSocketCapabilitiesResponse,
 }
 
 struct HostAddress {

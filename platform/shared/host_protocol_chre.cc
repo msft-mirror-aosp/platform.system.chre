@@ -266,6 +266,12 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
         break;
       }
 
+      case fbs::ChreMessage::BtSocketCapabilitiesRequest: {
+        HostMessageHandlers::handleBtSocketCapabilitiesRequest();
+        success = true;
+        break;
+      }
+
       case fbs::ChreMessage::BtSocketCloseResponse: {
         const auto *btSocketCloseResponse =
             static_cast<const fbs::BtSocketCloseResponse *>(
@@ -569,6 +575,20 @@ void HostProtocolChre::encodeBtSocketClose(ChreFlatBufferBuilder &builder,
   auto socketClose = fbs::CreateBtSocketClose(builder, socketId, reasonOffset);
   finalize(builder, fbs::ChreMessage::BtSocketClose, socketClose.Union(),
            hostClientId);
+}
+
+void HostProtocolChre::encodeBtSocketGetCapabilitiesResponse(
+    ChreFlatBufferBuilder &builder, uint32_t leCocNumberOfSupportedSockets,
+    uint32_t leCocMtu, uint32_t rfcommNumberOfSupportedSockets,
+    uint32_t rfcommMaxFrameSize) {
+  auto leCocCapabilities = fbs::CreateBtSocketLeCocCapabilities(
+      builder, leCocNumberOfSupportedSockets, leCocMtu);
+  auto rfcommCapabilities = fbs::CreateBtSocketRfcommCapabilities(
+      builder, rfcommNumberOfSupportedSockets, rfcommMaxFrameSize);
+  auto socketCapabilitiesResponse = fbs::CreateBtSocketCapabilitiesResponse(
+      builder, leCocCapabilities, rfcommCapabilities);
+  finalize(builder, fbs::ChreMessage::BtSocketCapabilitiesResponse,
+           socketCapabilitiesResponse.Union());
 }
 
 bool HostProtocolChre::getSettingFromFbs(fbs::Setting setting,
