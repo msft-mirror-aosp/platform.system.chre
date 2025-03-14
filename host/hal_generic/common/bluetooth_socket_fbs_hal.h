@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <future>
 
 #include "aidl/android/hardware/bluetooth/socket/BnBluetoothSocket.h"
 #include "bluetooth_socket_offload_link.h"
@@ -66,6 +67,10 @@ class BluetoothSocketFbsHal : public BnBluetoothSocket,
   // should be guaranteed by the BT Socket offload link's disconnection handler.
   std::atomic_bool mOffloadLinkAvailable = true;
 
+  // A promise that is set when getSocketCapabilities is called and is fulfilled
+  // when a response is received from the offload stack.
+  std::promise<SocketCapabilities> mCapabilitiesPromise;
+
   void sendOpenedCompleteMessage(int64_t socketId, Status status,
                                  std::string reason);
 
@@ -73,6 +78,9 @@ class BluetoothSocketFbsHal : public BnBluetoothSocket,
       const ::chre::fbs::BtSocketOpenResponseT &response);
 
   void handleBtSocketClose(const ::chre::fbs::BtSocketCloseT &message);
+
+  void handleBtSocketCapabilitiesResponse(
+      const ::chre::fbs::BtSocketCapabilitiesResponseT &response);
 };
 
 }  // namespace aidl::android::hardware::bluetooth::socket::impl
