@@ -37,7 +37,7 @@ class IntrusiveRefBase {
 
   //! Reference count
   [[nodiscard]] int32_t ref_count() const {
-    return mRefCount.load();
+    return static_cast<int32_t>(mRefCount.load());
   }
 
  protected:
