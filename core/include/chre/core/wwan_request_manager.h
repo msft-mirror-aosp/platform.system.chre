@@ -21,11 +21,11 @@
 
 #include <cstdint>
 
-#include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/platform_wwan.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/optional.h"
+#include "chre/util/system/chre_error_util.h"
 #include "chre/util/system/debug_dump.h"
 
 namespace chre {

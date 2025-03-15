@@ -16,7 +16,7 @@
 
 #include "chre/util/system/error_util.h"
 
-#include "chre/core/api_manager_common.h"
+#include "chre/util/system/chre_error_util.h"
 
 namespace chre {
 

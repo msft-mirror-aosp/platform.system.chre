@@ -17,13 +17,13 @@
 #include "chre/core/timer_pool.h"
 #include "chre/core/event.h"
 #include "chre/core/event_loop.h"
-#include "chre/core/event_loop_common.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
 #include "chre/platform/system_time.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/nested_data_ptr.h"
+#include "chre/util/system/system_callback_type.h"
 
 #include <cstdint>
 
@@ -273,8 +273,7 @@ bool TimerPool::handleExpiredTimersAndScheduleNextLocked() {
         success = EventLoopManagerSingleton::get()->deferCallback(
             SystemCallbackType::TimerPoolTimerExpired,
             NestedDataPtr<TimerHandle>(currentTimerRequest.timerHandle),
-            TimerPool::handleTimerExpiredCallback,
-            this);
+            TimerPool::handleTimerExpiredCallback, this);
       }
       if (!success) {
         LOGW("Failed to defer timer callback");
@@ -343,15 +342,14 @@ void TimerPool::handleSystemTimerCallback(void *timerPoolPtr) {
 void TimerPool::handleTimerExpiredCallback(uint16_t /* type */, void *data,
                                            void *extraData) {
   NestedDataPtr<TimerHandle> timerHandle(data);
-  TimerPool* timerPool = static_cast<TimerPool*>(extraData);
+  TimerPool *timerPool = static_cast<TimerPool *>(extraData);
   size_t index;
   TimerRequest currentTimerRequest;
 
   {
     LockGuard<Mutex> lock(timerPool->mMutex);
-    TimerRequest* timerRequest =
-        timerPool->getTimerRequestByTimerHandleLocked(
-            timerHandle, &index);
+    TimerRequest *timerRequest =
+        timerPool->getTimerRequestByTimerHandleLocked(timerHandle, &index);
     if (timerRequest == nullptr) {
       return;
     }

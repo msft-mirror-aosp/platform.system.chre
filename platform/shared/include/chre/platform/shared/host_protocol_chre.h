@@ -21,7 +21,6 @@
 #include <cstdint>
 
 #include "chre/core/ble_l2cap_coc_socket_data.h"
-#include "chre/core/event_loop_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
 #include "chre/platform/shared/generated/host_messages_generated.h"
@@ -29,6 +28,7 @@
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/flatbuffers/helpers.h"
 #include "chre/util/system/message_common.h"
+#include "chre/util/system/system_callback_type.h"
 #include "chre_api/chre/event.h"
 #include "flatbuffers/flatbuffers.h"
 

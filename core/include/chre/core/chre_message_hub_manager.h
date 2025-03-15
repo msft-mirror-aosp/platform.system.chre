@@ -19,13 +19,13 @@
 
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
-#include "chre/core/event_loop_common.h"
 #include "chre/platform/mutex.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/callback_allocator.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
+#include "chre/util/system/system_callback_type.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre.h"
 

@@ -19,9 +19,9 @@
 #include <algorithm>
 #include <map>
 
-#include "chre/core/event_loop_common.h"
 #include "chre/core/timer_pool.h"
 #include "chre/platform/linux/system_time.h"
+#include "chre/util/system/system_callback_type.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

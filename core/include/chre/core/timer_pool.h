@@ -20,12 +20,12 @@
 #include <cstdint>
 #include "chre_api/chre/re.h"
 
-#include "chre/core/event_loop_common.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/mutex.h"
 #include "chre/platform/system_timer.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/priority_queue.h"
+#include "chre/util/system/system_callback_type.h"
 
 namespace chre {
 

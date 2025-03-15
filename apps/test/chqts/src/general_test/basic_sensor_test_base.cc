@@ -75,6 +75,16 @@ bool isBiasEventType(uint16_t eventType) {
          (eventType == CHRE_EVENT_SENSOR_GEOMAGNETIC_FIELD_BIAS_INFO);
 }
 
+// Helper function to call chreSensorConfigure and log the result
+bool configureSensor(uint32_t handle, enum chreSensorConfigureMode mode,
+                     uint64_t intervalNs, uint64_t latencyNs) {
+  bool success = chreSensorConfigure(handle, mode, intervalNs, latencyNs);
+  LOGI("Enabled sensor with handle %" PRIu32 " mode %d interval %" PRIu64
+       " latency %" PRIu64 " success=%d",
+       handle, mode, intervalNs, latencyNs, success);
+  return success;
+}
+
 }  // anonymous namespace
 
 BasicSensorTestBase::BasicSensorTestBase()
@@ -115,13 +125,13 @@ void BasicSensorTestBase::checkPassiveConfigure() {
   if (mApiVersion == CHRE_API_VERSION_1_0) {
     // Any attempt to make a PASSIVE call with a non-default interval
     // or latency should fail.
-    if (chreSensorConfigure(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
-                            999)) {
+    if (configureSensor(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
+                        999)) {
       EXPECT_FAIL_RETURN(
           "chreSensorConfigure() allowed passive with different latency");
     }
-    if (chreSensorConfigure(mSensorHandle, mode, 999,
-                            CHRE_SENSOR_LATENCY_DEFAULT)) {
+    if (configureSensor(mSensorHandle, mode, 999,
+                        CHRE_SENSOR_LATENCY_DEFAULT)) {
       EXPECT_FAIL_RETURN(
           "chreSensorConfigure() allowed passive with different interval");
     }
@@ -134,8 +144,8 @@ void BasicSensorTestBase::checkPassiveConfigure() {
     //     the system.
   } else {
     bool configureSuccess =
-        chreSensorConfigure(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
-                            kOneSecondInNanoseconds);
+        configureSensor(mSensorHandle, mode, CHRE_SENSOR_INTERVAL_DEFAULT,
+                        kOneSecondInNanoseconds);
     if (mSupportsPassiveMode && !configureSuccess) {
       EXPECT_FAIL_RETURN(
           "chreSensorConfigure() failed passive with default interval and "
@@ -148,8 +158,8 @@ void BasicSensorTestBase::checkPassiveConfigure() {
 
     if (!isOneShotSensor()) {
       configureSuccess =
-          chreSensorConfigure(mSensorHandle, mode, kOneSecondInNanoseconds,
-                              CHRE_SENSOR_LATENCY_DEFAULT);
+          configureSensor(mSensorHandle, mode, kOneSecondInNanoseconds,
+                          CHRE_SENSOR_LATENCY_DEFAULT);
       if (mSupportsPassiveMode && !configureSuccess) {
         EXPECT_FAIL_RETURN(
             "chreSensorConfigure() failed passive with non-default interval "
@@ -161,8 +171,8 @@ void BasicSensorTestBase::checkPassiveConfigure() {
       }
 
       configureSuccess =
-          chreSensorConfigure(mSensorHandle, mode, kOneSecondInNanoseconds,
-                              kOneSecondInNanoseconds);
+          configureSensor(mSensorHandle, mode, kOneSecondInNanoseconds,
+                          kOneSecondInNanoseconds);
       if (mSupportsPassiveMode && !configureSuccess) {
         EXPECT_FAIL_RETURN(
             "chreSensorConfigure() failed passive with non-default interval "
@@ -231,6 +241,11 @@ void BasicSensorTestBase::startTest() {
 
   if (!chreGetSensorSamplingStatus(mSensorHandle, &mOriginalStatus)) {
     EXPECT_FAIL_RETURN("chreGetSensorSamplingStatus() failed");
+  } else {
+    LOGI("Original sampling status interval=%" PRIu64 " latency=%" PRIu64
+         " enabled %d",
+         mOriginalStatus.interval, mOriginalStatus.latency,
+         mOriginalStatus.enabled);
   }
 
   // Set the base timestamp to compare against before configuring the sensor.
@@ -246,11 +261,12 @@ void BasicSensorTestBase::startTest() {
                                      ? CHRE_SENSOR_CONFIGURE_MODE_ONE_SHOT
                                      : CHRE_SENSOR_CONFIGURE_MODE_CONTINUOUS;
 
-  if (!chreSensorConfigure(mSensorHandle, mode, mNewStatus.interval,
-                           mNewStatus.latency)) {
+  if (!configureSensor(mSensorHandle, mode, mNewStatus.interval,
+                       mNewStatus.latency)) {
     EXPECT_FAIL_RETURN(
         "chreSensorConfigure() call failed with default interval and latency");
   }
+
   // handleEvent may start getting events, and our testing continues there.
   // (Note: The CHRE is not allow to call handleEvent() while we're still
   // in this method, so it's not a race to set this state here.)
@@ -272,8 +288,8 @@ void BasicSensorTestBase::startTest() {
 
   // Skip one-shot sensors for non-default interval configurations.
   if (!isOneShotSensor() &&
-      !chreSensorConfigure(mSensorHandle, mode, mNewStatus.interval,
-                           mNewStatus.latency)) {
+      !configureSensor(mSensorHandle, mode, mNewStatus.interval,
+                       mNewStatus.latency)) {
     EXPECT_FAIL_RETURN("chreSensorConfigure() call failed");
   }
 
@@ -298,12 +314,17 @@ void BasicSensorTestBase::finishTest() {
   if (!chreSensorConfigureModeOnly(mSensorHandle,
                                    CHRE_SENSOR_CONFIGURE_MODE_DONE)) {
     EXPECT_FAIL_RETURN("Unable to configure sensor mode to DONE");
+  } else {
+    LOGI("Successfully disabled sensor");
   }
   mDoneTimestamp = chreGetTime();
   chreSensorSamplingStatus status;
   if (!chreGetSensorSamplingStatus(mSensorHandle, &status)) {
     EXPECT_FAIL_RETURN("Could not get final sensor info");
   }
+  LOGI("Final sampling status interval=%" PRIu64 " latency=%" PRIu64
+       " enabled %d",
+       status.interval, status.latency, status.enabled);
   if (!mExternalSamplingStatusChange) {
     // No one else changed this, so it should be what we had before.
     if (status.enabled != mOriginalStatus.enabled) {
@@ -444,6 +465,10 @@ void BasicSensorTestBase::handleBiasEvent(
 
 void BasicSensorTestBase::handleSamplingChangeEvent(
     const chreSensorSamplingStatusEvent *eventData) {
+  LOGI("handleSamplingChangeEvent interval=%" PRIu64 " latency=%" PRIu64
+       " enabled=%d",
+       eventData->status.interval, eventData->status.latency,
+       eventData->status.enabled);
   if (mPrevSensorHandle.has_value() &&
       (mPrevSensorHandle.value() == eventData->sensorHandle)) {
     // We can get a "DONE" event from the previous sensor for multi-sensor

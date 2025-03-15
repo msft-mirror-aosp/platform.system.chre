@@ -23,7 +23,6 @@
 #include "chre/core/chre_message_hub_manager.h"
 #include "chre/core/debug_dump_manager.h"
 #include "chre/core/event_loop.h"
-#include "chre/core/event_loop_common.h"
 #include "chre/core/gnss_manager.h"
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/host_endpoint_manager.h"
@@ -41,6 +40,7 @@
 #include "chre/util/fixed_size_vector.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/singleton.h"
+#include "chre/util/system/system_callback_type.h"
 #include "chre/util/unique_ptr.h"
 #include "chre_api/chre/event.h"
 

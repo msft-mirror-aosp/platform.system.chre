@@ -136,7 +136,7 @@ enum chreError {
     //!< Do not exceed this value when adding new error codes
     CHRE_ERROR_LAST = UINT8_MAX,
 };
-// LINT.ThenChange(../../../../core/include/chre/core/api_manager_common.h)
+// LINT.ThenChange(../../../../util/include/chre/util/system/chre_error_util.h)
 
 /**
  * Generic data structure to indicate the result of an asynchronous operation.
