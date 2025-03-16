@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
+
 #include "chre/core/wifi_request_manager.h"
 
 #include <cinttypes>
@@ -1418,3 +1420,5 @@ void WifiRequestManager::onSettingChanged(Setting setting, bool enabled) {
 }
 
 }  // namespace chre
+
+#endif  // CHRE_WIFI_SUPPORT_ENABLED

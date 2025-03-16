@@ -213,7 +213,9 @@ static enum ChppAppErrorCode chppDispatchWifiResponse(void *clientContext,
     switch (rxHeader->command) {
       case CHPP_WIFI_OPEN: {
         chppClientProcessOpenResponse(&wifiClientContext->client, buf, len);
-        chppWiFiRecoverScanMonitor(wifiClientContext);
+        if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+          chppWiFiRecoverScanMonitor(wifiClientContext);
+        }
         break;
       }
 
@@ -376,17 +378,12 @@ static void chppWifiClientNotifyReset(void *clientContext) {
                               false /* clearOnly */);
   chppCheckWifiScanEventNotificationReset();
 
-  if (wifiClientContext->client.openState != CHPP_OPEN_STATE_OPENED &&
-      !wifiClientContext->client.pseudoOpen) {
-    CHPP_LOGW("WiFi client reset but wasn't open");
-  } else {
-    CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
-              wifiClientContext->client.openState);
-    chppClientSendOpenRequest(&wifiClientContext->client,
-                              &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
-                              CHPP_WIFI_OPEN,
-                              /*blocking=*/false);
-  }
+  CHPP_LOGI("WiFi client reopening from state=%" PRIu8,
+            wifiClientContext->client.openState);
+  chppClientSendOpenRequest(&wifiClientContext->client,
+                            &wifiClientContext->outReqStates[CHPP_WIFI_OPEN],
+                            CHPP_WIFI_OPEN,
+                            /*blocking=*/false);
 }
 
 /**
@@ -491,9 +488,10 @@ static void chppWifiConfigureScanMonitorResult(
 
   if (len < sizeof(struct ChppWifiConfigureScanMonitorAsyncResponse)) {
     // Short response length indicates an error
-    gCallbacks->scanMonitorStatusChangeCallback(
-        false, chppAppShortResponseErrorHandler(buf, len, "ScanMonitor"));
-
+    uint8_t error = chppAppShortResponseErrorHandler(buf, len, "ScanMonitor");
+    if (!gWifiClientContext.scanMonitorSilenceCallback) {
+      gCallbacks->scanMonitorStatusChangeCallback(false, error);
+    }
   } else {
     struct ChppWifiConfigureScanMonitorAsyncResponseParameters *result =
         &((struct ChppWifiConfigureScanMonitorAsyncResponse *)buf)->params;
@@ -643,7 +641,7 @@ static void chppWifiScanEventNotification(
                                         CHPP_WIFI_MAX_TIMESYNC_AGE_NS);
     uint64_t currentTime = chppGetCurrentTimeNs();
     if (correctedTime > currentTime) {
-      CHPP_LOGD("WiFi scan time overcorrected %" PRIu64 " current %" PRIu64,
+      CHPP_LOGW("WiFi scan time overcorrected %" PRIu64 " current %" PRIu64,
                 correctedTime / CHPP_NSEC_PER_MSEC,
                 currentTime / CHPP_NSEC_PER_MSEC);
       correctedTime = currentTime;
@@ -691,6 +689,13 @@ static void chppWifiRangingEventNotification(
         results[i].timestamp -
         (uint64_t)chppTimesyncGetOffset(gWifiClientContext.client.appContext,
                                         CHPP_WIFI_MAX_TIMESYNC_AGE_NS);
+    uint64_t currentTime = chppGetCurrentTimeNs();
+    if (correctedTime > currentTime) {
+      CHPP_LOGW("WiFi ranging time overcorrected %" PRIu64 " current %" PRIu64,
+                correctedTime / CHPP_NSEC_PER_MSEC,
+                currentTime / CHPP_NSEC_PER_MSEC);
+      correctedTime = currentTime;
+    }
     CHPP_LOGD("WiFi ranging result time corrected from %" PRIu64 "to %" PRIu64,
               results[i].timestamp / CHPP_NSEC_PER_MSEC,
               correctedTime / CHPP_NSEC_PER_MSEC);
@@ -946,10 +951,7 @@ static bool chppWifiClientConfigureScanMonitor(bool enable) {
     CHPP_LOG_OOM();
   } else {
     request->header.command = CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC;
-    request->params.enable = enable;
-    request->params.cookie =
-        &gWifiClientContext
-             .outReqStates[CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC];
+    request->enable = enable;
 
     result = chppClientSendTimestampedRequestOrFail(
         &gWifiClientContext.client,

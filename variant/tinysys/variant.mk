@@ -53,20 +53,21 @@ TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/middleware/sensorhub/include
 TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/$(TINYSYS_PLATFORM)/platform/inc
 TINYSYS_CFLAGS += -I$(RISCV_TINYSYS_PREFIX)/scp/project/RV55_A/common/platform/inc
 
-# Clang include paths
-TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/lib/clang/9.0.1/include
-TINYSYS_CFLAGS += -I$(RISCV_TOOLCHAIN_PATH)/dkwlib/MRV55E03v/include
-
 # Common Compiler Flags ########################################################
 
 # Supply a symbol to indicate that the build variant supplies the static
 # nanoapp list.
 COMMON_CFLAGS += -DCHRE_VARIANT_SUPPLIES_STATIC_NANOAPP_LIST
 
+# Enable nanoapp authentication by default
+TINYSYS_CFLAGS += -DCHRE_NAPP_AUTHENTICATION_ENABLED
+
 # CHRE event count #############################################################
 
 TINYSYS_CFLAGS += -DCHRE_EVENT_PER_BLOCK=32
 TINYSYS_CFLAGS += -DCHRE_MAX_EVENT_BLOCKS=4
+TINYSYS_CFLAGS += -DCHRE_UNSCHEDULED_EVENT_PER_BLOCK=32
+TINYSYS_CFLAGS += -DCHRE_MAX_UNSCHEDULED_EVENT_BLOCKS=4
 
 # Optional Features ############################################################
 
@@ -74,7 +75,7 @@ CHRE_AUDIO_SUPPORT_ENABLED = true
 CHRE_GNSS_SUPPORT_ENABLED = true
 CHRE_SENSORS_SUPPORT_ENABLED = true
 CHRE_WIFI_SUPPORT_ENABLED = true
-CHRE_WWAN_SUPPORT_ENABLED = false
+CHRE_WWAN_SUPPORT_ENABLED = true
 CHRE_BLE_SUPPORT_ENABLED = true
 
 # Common Source Files ##########################################################

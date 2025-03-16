@@ -30,7 +30,8 @@ class Foo {
     if (mValue >= 0) {
       destructor_count[mValue]++;
     }
-  };
+  }
+
   void setValue(int value) {
     mValue = value;
   }

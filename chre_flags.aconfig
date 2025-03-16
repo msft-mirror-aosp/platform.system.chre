@@ -1,12 +1,19 @@
 package: "android.chre.flags"
 container: "system"
 
+# Exported flags should remain here indefinitely
+# Flags guarding APIs are exported
+# Begin removed exported flags (keep flag definition)
+
 flag {
-  name: "context_hub_callback_uuid_enabled"
+  name: "reliable_message"
+  is_exported: true
   namespace: "context_hub"
-  description: "Call IContextHubCallback.getUuid() to retrieve the UUID when this flag is on"
-  bug: "247124878"
+  description: "Enable the reliable message APIs"
+  bug: "314081414"
 }
+
+# End removed exported flags (keep flag definition)
 
 flag {
   name: "abort_if_no_context_hub_found"
@@ -20,21 +27,6 @@ flag {
   namespace: "context_hub"
   description: "Reconnect host endpoints of ContextHubService after Context Hub HAL restarts."
   bug: "348253728"
-}
-
-flag {
-  name: "reliable_message"
-  is_exported: true
-  namespace: "context_hub"
-  description: "Enable the reliable message APIs"
-  bug: "314081414"
-}
-
-flag {
-  name: "reliable_message_implementation"
-  namespace: "context_hub"
-  description: "Enable support for reliable messages in CHRE"
-  bug: "314081414"
 }
 
 flag {
@@ -96,24 +88,62 @@ flag {
 }
 
 flag {
-  name: "unified_metrics_reporting_api"
-  namespace: "context_hub"
-  description: "The API for unified metrics reporting in the Context Hub Service"
-  bug: "361804033"
-}
-
-flag {
-  name: "unified_metrics_reporting_implementation"
-  namespace: "context_hub"
-  description: "The implementation for unified metrics reporting in the Context Hub Service"
-  bug: "361804033"
-}
-
-flag {
   name: "reduce_locking_context_hub_transaction_manager"
   namespace: "context_hub"
   description: "Reduces locking in the ContextHubTransactionManager"
   bug: "362299144"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "offload_api"
+  namespace: "context_hub"
+  description: "Enables the generic offload APIs"
+  bug: "361573382"
+  is_exported: true
+}
+
+flag {
+  name: "offload_implementation"
+  namespace: "context_hub"
+  description: "Enables support for generic offload"
+  bug: "361573382"
+}
+
+flag {
+  name: "efw_xport_rewind_on_error"
+  namespace: "context_hub"
+  description: "Flag guarding the AOC-dependent behavior to rewind to the last good message"
+  bug: "371057943"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "efw_xport_in_context_hub"
+  namespace: "context_hub"
+  description: "Flag guarding the use of the new EFW transport for ContextHub <-> CHRE comms"
+  bug: "369883034"
+}
+
+flag {
+  name: "bug_fix_remove_exit_call_in_hal"
+  namespace: "context_hub"
+  description: "Flag enabling multiclient HAL to gracefully handle connection to CHRE in init/restart"
+  bug: "374773993"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "hal_handle_nanoapp_query_test_mode"
+  namespace: "context_hub"
+  description: "Flag guarding the fix for nanoapp query handling when enabling test mode"
+  bug: "379342519"
   metadata {
     purpose: PURPOSE_BUGFIX
   }

@@ -125,6 +125,9 @@ class AppManager : public TrackerStorageCallbackInterface {
   // Handles host awake event.
   void HandleHostAwakeEvent();
 
+  // Handles timer event.
+  void HandleTimerEvent(const void *event_data);
+
   // Handles tracker filter config request from the host.
   bool HandleExtTrackerFilterConfig(
       const chreHostEndpointInfo &host_info,

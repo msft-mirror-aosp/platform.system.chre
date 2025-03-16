@@ -74,6 +74,11 @@ class IChreMessageHandlers {
 
   virtual void handleSelfTestResponse(
       const ::chre::fbs::SelfTestResponseT & /*response*/){};
+
+  virtual bool handleContextHubV4Message(
+      const ::chre::fbs::ChreMessageUnion & /*msg*/) {
+    return false;
+  };
 };
 
 /**

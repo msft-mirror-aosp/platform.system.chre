@@ -35,6 +35,7 @@
 #define PW_HANDLE_ASSERT_FAILURE(condition_string, message, ...) \
   do {                                                           \
     PW_LOG(PW_LOG_LEVEL_FATAL,                                   \
+           PW_LOG_LEVEL,                                         \
            PW_LOG_MODULE_NAME,                                   \
            PW_LOG_FLAGS,                                         \
            "Check failed: " condition_string ". " message,       \
@@ -51,6 +52,7 @@
                                                 message, ...)             \
   do {                                                                    \
     PW_LOG(PW_LOG_LEVEL_FATAL,                                            \
+           PW_LOG_LEVEL,                                                  \
            PW_LOG_MODULE_NAME,                                            \
            PW_LOG_FLAGS,                                                  \
            "Check failed: "                                               \
