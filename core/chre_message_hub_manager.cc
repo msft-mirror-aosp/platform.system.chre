@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "chre/core/event_loop.h"
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
 
 #include "chre/core/chre_message_hub_manager.h"
+#include "chre/core/event_loop.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
 #include "chre/platform/context.h"

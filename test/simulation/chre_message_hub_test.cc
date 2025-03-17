@@ -43,25 +43,24 @@
 namespace chre::message {
 namespace {
 
-CREATE_CHRE_TEST_EVENT(TRIGGER_COND_VAR, 0);
-CREATE_CHRE_TEST_EVENT(TEST_GET_EVENT_INFO, 1);
-CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION, 2);
-CREATE_CHRE_TEST_EVENT(TEST_OPEN_DEFAULT_SESSION, 3);
-CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_NANOAPP_TO_NANOAPP, 4);
-CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION, 5);
-CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION_NON_PARTY, 6);
-CREATE_CHRE_TEST_EVENT(TEST_GET_SESSION_INFO_INVALID_SESSION, 7);
-CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE, 8);
-CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NO_FREE_CALLBACK, 9);
-CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP, 10);
-CREATE_CHRE_TEST_EVENT(TEST_PUBLISH_SERVICE, 11);
-CREATE_CHRE_TEST_EVENT(TEST_BAD_LEGACY_SERVICE_NAME, 12);
-CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_WITH_SERVICE, 13);
-CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT, 14);
-CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS, 15);
-CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_READY_EVENT, 16);
-CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT, 17);
-CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT, 18);
+CREATE_CHRE_TEST_EVENT(TEST_GET_EVENT_INFO, 0);
+CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION, 1);
+CREATE_CHRE_TEST_EVENT(TEST_OPEN_DEFAULT_SESSION, 2);
+CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_NANOAPP_TO_NANOAPP, 3);
+CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION, 4);
+CREATE_CHRE_TEST_EVENT(TEST_CLOSE_SESSION_NON_PARTY, 5);
+CREATE_CHRE_TEST_EVENT(TEST_GET_SESSION_INFO_INVALID_SESSION, 6);
+CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE, 7);
+CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NO_FREE_CALLBACK, 8);
+CREATE_CHRE_TEST_EVENT(TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP, 9);
+CREATE_CHRE_TEST_EVENT(TEST_PUBLISH_SERVICE, 10);
+CREATE_CHRE_TEST_EVENT(TEST_BAD_LEGACY_SERVICE_NAME, 11);
+CREATE_CHRE_TEST_EVENT(TEST_OPEN_SESSION_WITH_SERVICE, 12);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT, 13);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS, 14);
+CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_READY_EVENT, 15);
+CREATE_CHRE_TEST_EVENT(TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT, 16);
+CREATE_CHRE_TEST_EVENT(TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT, 17);
 
 constexpr size_t kNumEndpoints = 3;
 constexpr size_t kMessageSize = 5;
@@ -298,9 +297,7 @@ TEST_F(ChreMessageHubTest, NanoappsAreEndpointsToChreMessageHub) {
 //! Nanoapp used to test getting endpoint info
 class EndpointInfoTestApp : public TestNanoapp {
  public:
-  EndpointInfoTestApp(std::mutex &mutex, std::condition_variable &condVar,
-                      const TestNanoappInfo &info)
-      : TestNanoapp(info), mMutex(mutex), mCondVar(condVar) {}
+  EndpointInfoTestApp(const TestNanoappInfo &info) : TestNanoapp(info) {}
 
   void handleEvent(uint32_t, uint16_t eventType,
                    const void *eventData) override {
@@ -309,27 +306,23 @@ class EndpointInfoTestApp : public TestNanoapp {
         auto event = static_cast<const TestEvent *>(eventData);
         switch (event->type) {
           case TEST_GET_EVENT_INFO: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
+            for (size_t i = 0; i < kNumEndpoints; ++i) {
+              chreMsgEndpointInfo info = {};
+              EXPECT_TRUE(chreMsgGetEndpointInfo(kOtherMessageHubId,
+                                                 kEndpointInfos[i].id, &info));
 
-              for (size_t i = 0; i < kNumEndpoints; ++i) {
-                chreMsgEndpointInfo info = {};
-                EXPECT_TRUE(chreMsgGetEndpointInfo(
-                    kOtherMessageHubId, kEndpointInfos[i].id, &info));
-
-                EXPECT_EQ(info.hubId, kOtherMessageHubId);
-                EXPECT_EQ(info.endpointId, kEndpointInfos[i].id);
-                EXPECT_EQ(info.version, kEndpointInfos[i].version);
-                EXPECT_EQ(info.type,
-                          EventLoopManagerSingleton::get()
-                              ->getChreMessageHubManager()
-                              .toChreEndpointType(kEndpointInfos[i].type));
-                EXPECT_EQ(info.requiredPermissions,
-                          kEndpointInfos[i].requiredPermissions);
-                EXPECT_STREQ(info.name, kEndpointInfos[i].name);
-              }
+              EXPECT_EQ(info.hubId, kOtherMessageHubId);
+              EXPECT_EQ(info.endpointId, kEndpointInfos[i].id);
+              EXPECT_EQ(info.version, kEndpointInfos[i].version);
+              EXPECT_EQ(info.type,
+                        EventLoopManagerSingleton::get()
+                            ->getChreMessageHubManager()
+                            .toChreEndpointType(kEndpointInfos[i].type));
+              EXPECT_EQ(info.requiredPermissions,
+                        kEndpointInfos[i].requiredPermissions);
+              EXPECT_STREQ(info.name, kEndpointInfos[i].name);
             }
-            mCondVar.notify_one();
+            triggerWait(TEST_GET_EVENT_INFO);
             break;
           }
         }
@@ -340,18 +333,12 @@ class EndpointInfoTestApp : public TestNanoapp {
       }
     }
   }
-
-  std::mutex &mMutex;
-  std::condition_variable &mCondVar;
 };
 
 TEST_F(ChreMessageHubTest, NanoappGetsEndpointInfo) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<EndpointInfoTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_GET_ENDPOINT_INFO", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
@@ -367,9 +354,7 @@ TEST_F(ChreMessageHubTest, NanoappGetsEndpointInfo) {
   callback->setMessageHub(&(*messageHub));
 
   // Test getting endpoint info
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_GET_EVENT_INFO);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_GET_EVENT_INFO, TEST_GET_EVENT_INFO);
 }
 
 TEST_F(ChreMessageHubTest, MultipleNanoappsAreEndpointsToChreMessageHub) {
@@ -416,12 +401,9 @@ TEST_F(ChreMessageHubTest, MultipleNanoappsAreEndpointsToChreMessageHub) {
 //! Nanoapp used to test sending messages from a generic endpoint to a nanoapp
 class MessageTestApp : public TestNanoapp {
  public:
-  MessageTestApp(std::mutex &mutex, std::condition_variable &condVar,
-                 bool &messageReceivedAndValidated, bool &sessionClosed,
+  MessageTestApp(bool &messageReceivedAndValidated, bool &sessionClosed,
                  const TestNanoappInfo &info)
       : TestNanoapp(info),
-        mMutex(mutex),
-        mCondVar(condVar),
         mMessageReceivedAndValidated(messageReceivedAndValidated),
         mSessionClosed(sessionClosed) {}
 
@@ -429,47 +411,28 @@ class MessageTestApp : public TestNanoapp {
                    const void *eventData) override {
     switch (eventType) {
       case CHRE_EVENT_MSG_FROM_ENDPOINT: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-          auto *message =
-              static_cast<const struct chreMsgMessageFromEndpointData *>(
-                  eventData);
-          EXPECT_EQ(message->messageType, 1);
-          EXPECT_EQ(message->messagePermissions, 0);
-          EXPECT_EQ(message->messageSize, kMessageSize);
+        auto *message =
+            static_cast<const struct chreMsgMessageFromEndpointData *>(
+                eventData);
+        EXPECT_EQ(message->messageType, 1);
+        EXPECT_EQ(message->messagePermissions, 0);
+        EXPECT_EQ(message->messageSize, kMessageSize);
 
-          auto *messageData = static_cast<const std::byte *>(message->message);
-          for (size_t i = 0; i < kMessageSize; ++i) {
-            EXPECT_EQ(messageData[i], static_cast<std::byte>(i + 1));
-          }
-          mMessageReceivedAndValidated = true;
+        auto *messageData = static_cast<const std::byte *>(message->message);
+        for (size_t i = 0; i < kMessageSize; ++i) {
+          EXPECT_EQ(messageData[i], static_cast<std::byte>(i + 1));
         }
-        mCondVar.notify_one();
+        mMessageReceivedAndValidated = true;
+        triggerWait(CHRE_EVENT_MSG_FROM_ENDPOINT);
         break;
       }
       case CHRE_EVENT_MSG_SESSION_CLOSED: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-          auto *session =
-              static_cast<const struct chreMsgSessionInfo *>(eventData);
-          EXPECT_EQ(session->hubId, kOtherMessageHubId);
-          EXPECT_EQ(session->endpointId, kEndpointInfos[0].id);
-          mSessionClosed = true;
-        }
-        mCondVar.notify_one();
-        break;
-      }
-      case CHRE_EVENT_TEST_EVENT: {
-        auto event = static_cast<const TestEvent *>(eventData);
-        switch (event->type) {
-          case TRIGGER_COND_VAR: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-            }
-            mCondVar.notify_one();
-            break;
-          }
-        }
+        auto *session =
+            static_cast<const struct chreMsgSessionInfo *>(eventData);
+        EXPECT_EQ(session->hubId, kOtherMessageHubId);
+        EXPECT_EQ(session->endpointId, kEndpointInfos[0].id);
+        mSessionClosed = true;
+        triggerWait(CHRE_EVENT_MSG_SESSION_CLOSED);
         break;
       }
       default: {
@@ -478,16 +441,13 @@ class MessageTestApp : public TestNanoapp {
     }
   }
 
-  std::mutex &mMutex;
-  std::condition_variable &mCondVar;
   bool &mMessageReceivedAndValidated;
   bool &mSessionClosed;
 };
 
 TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
+
   bool messageReceivedAndValidated = false;
   bool sessionClosed = false;
 
@@ -498,8 +458,10 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<MessageTestApp>(
-      mutex, condVar, messageReceivedAndValidated, sessionClosed,
+      messageReceivedAndValidated, sessionClosed,
       TestNanoappInfo{.name = "TEST1", .id = kNanoappId}));
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -524,18 +486,15 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
   });
 
   // Send the message to the nanoapp
-  std::unique_lock<std::mutex> lock(mutex);
   ASSERT_TRUE(messageHub->sendMessage(std::move(messageData),
                                       /* messageType= */ 1,
                                       /* messagePermissions= */ 0, sessionId));
-  condVar.wait(lock, [&messageReceivedAndValidated]() {
-    return messageReceivedAndValidated;
-  });
+  testNanoapp->wait(CHRE_EVENT_MSG_FROM_ENDPOINT);
   EXPECT_TRUE(messageReceivedAndValidated);
 
   // Close the session
   EXPECT_TRUE(messageHub->closeSession(sessionId));
-  condVar.wait(lock, [&sessionClosed]() { return sessionClosed; });
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_CLOSED);
   EXPECT_TRUE(sessionClosed);
 }
 
@@ -543,17 +502,14 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoapp) {
 //! with a different permissions set
 class MessagePermissionTestApp : public MessageTestApp {
  public:
-  MessagePermissionTestApp(std::mutex &mutex, std::condition_variable &condVar,
-                           bool &messageReceivedAndValidated,
+  MessagePermissionTestApp(bool &messageReceivedAndValidated,
                            bool &sessionClosed, const TestNanoappInfo &info)
-      : MessageTestApp(mutex, condVar, messageReceivedAndValidated,
-                       sessionClosed, info) {}
+      : MessageTestApp(messageReceivedAndValidated, sessionClosed, info) {}
 };
 
 TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
+
   bool messageReceivedAndValidated = false;
   bool sessionClosed = false;
 
@@ -566,9 +522,11 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<MessagePermissionTestApp>(
-      mutex, condVar, messageReceivedAndValidated, sessionClosed,
+      messageReceivedAndValidated, sessionClosed,
       TestNanoappInfo{
           .name = "TEST1", .id = kNanoappId, .perms = CHRE_PERMS_BLE}));
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -593,20 +551,13 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
   });
 
   // Send the message to the nanoapp
-  std::unique_lock<std::mutex> lock(mutex);
   ASSERT_TRUE(messageHub->sendMessage(
       std::move(messageData),
       /* messageType= */ 1,
       /* messagePermissions= */ CHRE_PERMS_AUDIO | CHRE_PERMS_GNSS, sessionId));
 
-  // Send the trigger cond var event, which will be handled after the
-  // CHRE message from endpoint event (if it is sent erroneously). If the
-  // message event is not sent, this event will unlock the condition variable.
-  // If the message event is sent, the condition variable will be unlocked
-  // after the message event is processed, setting the
-  // messageReceivedAndValidated variable to true, which will fail the test.
-  sendEventToNanoapp(appId, TRIGGER_COND_VAR);
-  condVar.wait(lock, [&sessionClosed]() { return sessionClosed; });
+  // Wait for the session to close due to the permission failure
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_CLOSED);
   EXPECT_FALSE(messageReceivedAndValidated);
   EXPECT_TRUE(sessionClosed);
 }
@@ -615,194 +566,139 @@ TEST_F(ChreMessageHubTest, SendMessageToNanoappPermissionFailure) {
 //! to a generic endpoint
 class SessionAndMessageTestApp : public TestNanoapp {
  public:
-  SessionAndMessageTestApp(std::mutex &mutex, std::condition_variable &condVar,
-                           SessionId &sessionId, const TestNanoappInfo &info)
-      : TestNanoapp(info),
-        mMutex(mutex),
-        mCondVar(condVar),
-        mSessionId(sessionId) {}
+  SessionAndMessageTestApp(SessionId &sessionId, const TestNanoappInfo &info)
+      : TestNanoapp(info), mSessionId(sessionId) {}
 
   void handleEvent(uint32_t, uint16_t eventType,
                    const void *eventData) override {
     switch (eventType) {
       case CHRE_EVENT_MSG_SESSION_OPENED: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
+        // Verify the session info from the event is correct
+        auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
+        EXPECT_EQ(sessionInfo->hubId, mToMessageHubId);
+        EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
+        EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
+        EXPECT_NE(sessionInfo->sessionId, UINT16_MAX);
+        EXPECT_EQ(sessionInfo->reason,
+                  chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
+        mSessionId = sessionInfo->sessionId;
 
-          // Verify the session info from the event is correct
-          auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
-          EXPECT_EQ(sessionInfo->hubId, mToMessageHubId);
-          EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
-          EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
-          EXPECT_NE(sessionInfo->sessionId, UINT16_MAX);
-          EXPECT_EQ(
-              sessionInfo->reason,
-              chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
-          mSessionId = sessionInfo->sessionId;
-
-          // Get the session info and verify it is correct
-          struct chreMsgSessionInfo sessionInfo2;
-          EXPECT_TRUE(chreMsgSessionGetInfo(mSessionId, &sessionInfo2));
-          EXPECT_EQ(sessionInfo2.hubId, mToMessageHubId);
-          EXPECT_EQ(sessionInfo2.endpointId, mToEndpointId);
-          EXPECT_STREQ(sessionInfo2.serviceDescriptor, "");
-          EXPECT_EQ(sessionInfo2.sessionId, mSessionId);
-          EXPECT_EQ(
-              sessionInfo2.reason,
-              chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
-        }
-        mCondVar.notify_one();
+        // Get the session info and verify it is correct
+        struct chreMsgSessionInfo sessionInfo2;
+        EXPECT_TRUE(chreMsgSessionGetInfo(mSessionId, &sessionInfo2));
+        EXPECT_EQ(sessionInfo2.hubId, mToMessageHubId);
+        EXPECT_EQ(sessionInfo2.endpointId, mToEndpointId);
+        EXPECT_STREQ(sessionInfo2.serviceDescriptor, "");
+        EXPECT_EQ(sessionInfo2.sessionId, mSessionId);
+        EXPECT_EQ(sessionInfo2.reason,
+                  chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
+        triggerWait(CHRE_EVENT_MSG_SESSION_OPENED);
         break;
       }
       case CHRE_EVENT_MSG_SESSION_CLOSED: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-
-          // Verify the session info from the event is correct
-          auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
-          EXPECT_EQ(sessionInfo->hubId, mToMessageHubId);
-          EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
-          EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
-          EXPECT_EQ(sessionInfo->sessionId, mSessionId);
-        }
-        mCondVar.notify_one();
+        // Verify the session info from the event is correct
+        auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
+        EXPECT_EQ(sessionInfo->hubId, mToMessageHubId);
+        EXPECT_EQ(sessionInfo->endpointId, mToEndpointId);
+        EXPECT_STREQ(sessionInfo->serviceDescriptor, "");
+        EXPECT_EQ(sessionInfo->sessionId, mSessionId);
+        triggerWait(CHRE_EVENT_MSG_SESSION_CLOSED);
         break;
       }
       case CHRE_EVENT_MSG_FROM_ENDPOINT: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
+        auto messageData =
+            static_cast<const chreMsgMessageFromEndpointData *>(eventData);
+        EXPECT_EQ(messageData->messageType, 1);
+        EXPECT_EQ(messageData->messagePermissions,
+                  CHRE_MESSAGE_PERMISSION_NONE);
+        EXPECT_EQ(messageData->messageSize, kMessageSize);
 
-          auto messageData =
-              static_cast<const chreMsgMessageFromEndpointData *>(eventData);
-          EXPECT_EQ(messageData->messageType, 1);
-          EXPECT_EQ(messageData->messagePermissions,
-                    CHRE_MESSAGE_PERMISSION_NONE);
-          EXPECT_EQ(messageData->messageSize, kMessageSize);
-
-          auto message =
-              reinterpret_cast<const uint8_t *>(messageData->message);
-          for (size_t i = 0; i < kMessageSize; ++i) {
-            EXPECT_EQ(message[i], i + 1);
-          }
-          EXPECT_EQ(messageData->sessionId, mSessionId);
+        auto message = reinterpret_cast<const uint8_t *>(messageData->message);
+        for (size_t i = 0; i < kMessageSize; ++i) {
+          EXPECT_EQ(message[i], i + 1);
         }
-        mCondVar.notify_one();
+        EXPECT_EQ(messageData->sessionId, mSessionId);
+        triggerWait(CHRE_EVENT_MSG_FROM_ENDPOINT);
         break;
       }
       case CHRE_EVENT_TEST_EVENT: {
         auto event = static_cast<const TestEvent *>(eventData);
         switch (event->type) {
           case TEST_OPEN_SESSION: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-
-              // Open the session from the nanoapp to the other hub:0
-              mToMessageHubId = kOtherMessageHubId;
-              mToEndpointId = kEndpointInfos[0].id;
-              EXPECT_TRUE(
-                  chreMsgSessionOpenAsync(mToMessageHubId, mToEndpointId,
-                                          /* serviceDescriptor= */ nullptr));
-              mSessionId = UINT16_MAX;
-            }
+            // Open the session from the nanoapp to the other hub:0
+            mToMessageHubId = kOtherMessageHubId;
+            mToEndpointId = kEndpointInfos[0].id;
+            EXPECT_TRUE(
+                chreMsgSessionOpenAsync(mToMessageHubId, mToEndpointId,
+                                        /* serviceDescriptor= */ nullptr));
+            mSessionId = UINT16_MAX;
             break;
           }
           case TEST_OPEN_DEFAULT_SESSION: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-
-              // Open the default session from the nanoapp to the other hub:1
-              mToMessageHubId = kOtherMessageHubId;
-              mToEndpointId = kEndpointInfos[1].id;
-              EXPECT_TRUE(
-                  chreMsgSessionOpenAsync(CHRE_MSG_HUB_ID_ANY, mToEndpointId,
-                                          /* serviceDescriptor= */ nullptr));
-              mSessionId = UINT16_MAX;
-            }
+            // Open the default session from the nanoapp to the other hub:1
+            mToMessageHubId = kOtherMessageHubId;
+            mToEndpointId = kEndpointInfos[1].id;
+            EXPECT_TRUE(
+                chreMsgSessionOpenAsync(CHRE_MSG_HUB_ID_ANY, mToEndpointId,
+                                        /* serviceDescriptor= */ nullptr));
+            mSessionId = UINT16_MAX;
             break;
           }
           case TEST_OPEN_SESSION_NANOAPP_TO_NANOAPP: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-
-              // Open a session from the nanoapp to itself
-              mToMessageHubId = CHRE_PLATFORM_ID;
-              mToEndpointId = id();
-              EXPECT_TRUE(
-                  chreMsgSessionOpenAsync(mToMessageHubId, mToEndpointId,
-                                          /* serviceDescriptor= */ nullptr));
-              mSessionId = UINT16_MAX;
-            }
+            // Open a session from the nanoapp to itself
+            mToMessageHubId = CHRE_PLATFORM_ID;
+            mToEndpointId = id();
+            EXPECT_TRUE(
+                chreMsgSessionOpenAsync(mToMessageHubId, mToEndpointId,
+                                        /* serviceDescriptor= */ nullptr));
+            mSessionId = UINT16_MAX;
             break;
           }
           case TEST_CLOSE_SESSION: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-
-              // Close the session
-              EXPECT_TRUE(chreMsgSessionCloseAsync(mSessionId));
-            }
+            // Close the session
+            EXPECT_TRUE(chreMsgSessionCloseAsync(mSessionId));
             break;
           }
           case TEST_CLOSE_SESSION_NON_PARTY: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
+            ASSERT_NE(event->data, nullptr);
+            SessionId sessionId = *static_cast<SessionId *>(event->data);
 
-              ASSERT_NE(event->data, nullptr);
-              SessionId sessionId = *static_cast<SessionId *>(event->data);
-
-              // Close the session that was opened by the other nanoapp
-              EXPECT_FALSE(chreMsgSessionCloseAsync(sessionId));
-            }
-            mCondVar.notify_one();
+            // Close the session that was opened by the other nanoapp
+            EXPECT_FALSE(chreMsgSessionCloseAsync(sessionId));
+            triggerWait(TEST_CLOSE_SESSION_NON_PARTY);
             break;
           }
           case TEST_GET_SESSION_INFO_INVALID_SESSION: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-
-              struct chreMsgSessionInfo sessionInfo;
-              EXPECT_NE(mSessionId, SESSION_ID_INVALID);
-              EXPECT_FALSE(chreMsgSessionGetInfo(mSessionId, &sessionInfo));
-            }
-            mCondVar.notify_one();
+            struct chreMsgSessionInfo sessionInfo;
+            EXPECT_NE(mSessionId, SESSION_ID_INVALID);
+            EXPECT_FALSE(chreMsgSessionGetInfo(mSessionId, &sessionInfo));
+            triggerWait(TEST_GET_SESSION_INFO_INVALID_SESSION);
             break;
           }
           case TEST_SEND_MESSAGE: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgSend(reinterpret_cast<void *>(kMessage),
-                                      kMessageSize,
-                                      /* messageType= */ 1, mSessionId,
-                                      CHRE_MESSAGE_PERMISSION_NONE,
-                                      [](void *message, size_t length) {
-                                        EXPECT_EQ(message, kMessage);
-                                        EXPECT_EQ(length, kMessageSize);
-                                      }));
-            }
-            mCondVar.notify_one();
+            EXPECT_TRUE(chreMsgSend(
+                reinterpret_cast<void *>(kMessage), kMessageSize,
+                /* messageType= */ 1, mSessionId, CHRE_MESSAGE_PERMISSION_NONE,
+                [](void *message, size_t length) {
+                  EXPECT_EQ(message, kMessage);
+                  EXPECT_EQ(length, kMessageSize);
+                }));
+            triggerWait(TEST_SEND_MESSAGE);
             break;
           }
           case TEST_SEND_MESSAGE_NO_FREE_CALLBACK: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgSend(reinterpret_cast<void *>(kMessage),
-                                      kMessageSize,
-                                      /* messageType= */ 1, mSessionId,
-                                      CHRE_MESSAGE_PERMISSION_NONE,
-                                      /* freeCallback= */ nullptr));
-            }
-            mCondVar.notify_one();
+            EXPECT_TRUE(chreMsgSend(
+                reinterpret_cast<void *>(kMessage), kMessageSize,
+                /* messageType= */ 1, mSessionId, CHRE_MESSAGE_PERMISSION_NONE,
+                /* freeCallback= */ nullptr));
+            triggerWait(TEST_SEND_MESSAGE_NO_FREE_CALLBACK);
             break;
           }
           case TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgSend(reinterpret_cast<void *>(kMessage),
-                                      kMessageSize,
-                                      /* messageType= */ 1, mSessionId,
-                                      CHRE_MESSAGE_PERMISSION_NONE,
-                                      /* freeCallback= */ nullptr));
-            }
+            EXPECT_TRUE(chreMsgSend(
+                reinterpret_cast<void *>(kMessage), kMessageSize,
+                /* messageType= */ 1, mSessionId, CHRE_MESSAGE_PERMISSION_NONE,
+                /* freeCallback= */ nullptr));
             break;
           }
         }
@@ -816,8 +712,6 @@ class SessionAndMessageTestApp : public TestNanoapp {
 
   static uint8_t kMessage[kMessageSize];
 
-  std::mutex &mMutex;
-  std::condition_variable &mCondVar;
   SessionId &mSessionId;
   MessageHubId mToMessageHubId = MESSAGE_HUB_ID_INVALID;
   EndpointId mToEndpointId = ENDPOINT_ID_INVALID;
@@ -825,16 +719,15 @@ class SessionAndMessageTestApp : public TestNanoapp {
 uint8_t SessionAndMessageTestApp::kMessage[kMessageSize] = {1, 2, 3, 4, 5};
 
 TEST_F(ChreMessageHubTest, NanoappOpensSessionWithGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -847,14 +740,12 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Verify the other hub received the correct session information
   std::optional<Session> session = messageHub->getSessionWithId(sessionId);
   ASSERT_TRUE(session.has_value());
-
   EXPECT_EQ(session->sessionId, sessionId);
   EXPECT_EQ(session->initiator.messageHubId, EventLoopManagerSingleton::get()
                                                  ->getChreMessageHubManager()
@@ -863,26 +754,28 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithGenericEndpoint) {
   EXPECT_EQ(session->peer.messageHubId, kOtherMessageHubId);
   EXPECT_EQ(session->peer.endpointId, kEndpointInfos[0].id);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &session]() {
+        messageHub->closeSession(session->sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappTriesToCloseNonPartySession) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Load the nanoapp
   uint64_t appId2 = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
+      sessionId,
       TestNanoappInfo{.name = "TEST_OPEN_SESSION_NON_PARTY", .id = 0x1235}));
   Nanoapp *nanoapp2 = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp2, nullptr);
@@ -898,30 +791,32 @@ TEST_F(ChreMessageHubTest, NanoappTriesToCloseNonPartySession) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Now close the session and expect failure
-  sendEventToNanoapp(appId, TEST_CLOSE_SESSION_NON_PARTY, &sessionId);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_CLOSE_SESSION_NON_PARTY, &sessionId,
+                            TEST_CLOSE_SESSION_NON_PARTY);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappOpensDefaultSessionWithGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
+      sessionId,
       TestNanoappInfo{.name = "TEST_OPEN_DEFAULT_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -934,9 +829,8 @@ TEST_F(ChreMessageHubTest, NanoappOpensDefaultSessionWithGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening the default session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_DEFAULT_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_DEFAULT_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Verify the other hub received the correct session information
   std::optional<Session> session = messageHub->getSessionWithId(sessionId);
@@ -950,21 +844,21 @@ TEST_F(ChreMessageHubTest, NanoappOpensDefaultSessionWithGenericEndpoint) {
   EXPECT_EQ(session->peer.messageHubId, kOtherMessageHubId);
   EXPECT_EQ(session->peer.endpointId, kEndpointInfos[1].id);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappClosesSessionWithGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   Session session;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
 
@@ -979,13 +873,12 @@ TEST_F(ChreMessageHubTest, NanoappClosesSessionWithGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Now close the session
-  sendEventToNanoapp(appId, TEST_CLOSE_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_CLOSE_SESSION,
+                            CHRE_EVENT_MSG_SESSION_CLOSED);
 
   // Verify the other hub received the correct session information
   EXPECT_EQ(session.sessionId, sessionId);
@@ -998,17 +891,16 @@ TEST_F(ChreMessageHubTest, NanoappClosesSessionWithGenericEndpoint) {
 }
 
 TEST_F(ChreMessageHubTest, OtherHubClosesNanoappSessionWithGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   Session session;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1021,13 +913,12 @@ TEST_F(ChreMessageHubTest, OtherHubClosesNanoappSessionWithGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Now close the session and wait for the event to be processed
   EXPECT_TRUE(messageHub->closeSession(sessionId));
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_CLOSED);
 
   // Verify the other hub received the correct session information
   EXPECT_EQ(session.sessionId, sessionId);
@@ -1040,15 +931,12 @@ TEST_F(ChreMessageHubTest, OtherHubClosesNanoappSessionWithGenericEndpoint) {
 }
 
 TEST_F(ChreMessageHubTest, NanoappGetSessionInfoForNonPartySession) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   Session session;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
 
@@ -1077,23 +965,21 @@ TEST_F(ChreMessageHubTest, NanoappGetSessionInfoForNonPartySession) {
   EXPECT_NE(sessionId, SESSION_ID_INVALID);
 
   // Tell the nanoapp to get the session info for our session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_GET_SESSION_INFO_INVALID_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_GET_SESSION_INFO_INVALID_SESSION,
+                            TEST_GET_SESSION_INFO_INVALID_SESSION);
 }
 
 TEST_F(ChreMessageHubTest, NanoappSendsMessageToGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
   Message message;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1106,13 +992,12 @@ TEST_F(ChreMessageHubTest, NanoappSendsMessageToGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Send the message to the other hub and verify it was received
-  sendEventToNanoapp(appId, TEST_SEND_MESSAGE);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SEND_MESSAGE,
+                            TEST_SEND_MESSAGE);
 
   EXPECT_EQ(message.data.size(), kMessageSize);
   for (size_t i = 0; i < kMessageSize; ++i) {
@@ -1122,24 +1007,26 @@ TEST_F(ChreMessageHubTest, NanoappSendsMessageToGenericEndpoint) {
   EXPECT_EQ(message.messageType, 1);
   EXPECT_EQ(message.messagePermissions, CHRE_MESSAGE_PERMISSION_NONE);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest,
        NanoappSendsMessageWithNoFreeCallbackToGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
   Message message;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1152,13 +1039,12 @@ TEST_F(ChreMessageHubTest,
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Send the message to the other hub and verify it was received
-  sendEventToNanoapp(appId, TEST_SEND_MESSAGE_NO_FREE_CALLBACK);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SEND_MESSAGE_NO_FREE_CALLBACK,
+                            TEST_SEND_MESSAGE_NO_FREE_CALLBACK);
 
   EXPECT_EQ(message.data.size(), kMessageSize);
   for (size_t i = 0; i < kMessageSize; ++i) {
@@ -1168,23 +1054,25 @@ TEST_F(ChreMessageHubTest,
   EXPECT_EQ(message.messageType, 1);
   EXPECT_EQ(message.messagePermissions, CHRE_MESSAGE_PERMISSION_NONE);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappGetsMessageFromGenericEndpoint) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   SessionId sessionId = SESSION_ID_INVALID;
   Message message;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_OPEN_SESSION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1197,9 +1085,8 @@ TEST_F(ChreMessageHubTest, NanoappGetsMessageFromGenericEndpoint) {
   callback->setMessageHub(&(*messageHub));
 
   // Test opening session
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Send the message to the nanoapp and verify it was received
   pw::allocator::LibCAllocator allocator = pw::allocator::GetLibCAllocator();
@@ -1208,47 +1095,45 @@ TEST_F(ChreMessageHubTest, NanoappGetsMessageFromGenericEndpoint) {
   EXPECT_TRUE(messageHub->sendMessage(std::move(messageData),
                                       /* messageType= */ 1,
                                       CHRE_MESSAGE_PERMISSION_NONE, sessionId));
-  condVar.wait(lock);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_FROM_ENDPOINT);
+
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappSendsMessageToNanoapp) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   Session session;
   SessionId sessionId = SESSION_ID_INVALID;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<SessionAndMessageTestApp>(
-      mutex, condVar, sessionId,
-      TestNanoappInfo{.name = "TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP",
-                      .id = 0x1234}));
+      sessionId, TestNanoappInfo{.name = "TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP",
+                                 .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
 
   // Test opening the session to itself
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION_NANOAPP_TO_NANOAPP);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION_NANOAPP_TO_NANOAPP,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Send the message to itself
-  sendEventToNanoapp(appId, TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SEND_MESSAGE_NANOAPP_TO_NANOAPP,
+                            CHRE_EVENT_MSG_FROM_ENDPOINT);
 
   // Wait for the session to be closed
-  sendEventToNanoapp(appId, TEST_CLOSE_SESSION);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_CLOSE_SESSION,
+                            CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 //! Nanoapp used to test opening sessions with services
 class ServiceSessionTestApp : public TestNanoapp {
  public:
-  ServiceSessionTestApp(std::mutex &mutex, std::condition_variable &condVar,
-                        const TestNanoappInfo &info)
-      : TestNanoapp(info), mMutex(mutex), mCondVar(condVar) {}
+  ServiceSessionTestApp(const TestNanoappInfo &info) : TestNanoapp(info) {}
 
   bool start() override {
     chreNanoappRpcService serviceInfo;
@@ -1263,72 +1148,53 @@ class ServiceSessionTestApp : public TestNanoapp {
                    const void *eventData) override {
     switch (eventType) {
       case CHRE_EVENT_MSG_SESSION_OPENED: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
+        // Verify the session info from the event is correct
+        auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
+        EXPECT_EQ(sessionInfo->hubId, kOtherMessageHubId);
+        EXPECT_EQ(sessionInfo->reason,
+                  chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
 
-          // Verify the session info from the event is correct
-          auto sessionInfo = static_cast<const chreMsgSessionInfo *>(eventData);
-          EXPECT_EQ(sessionInfo->hubId, kOtherMessageHubId);
-          EXPECT_EQ(
-              sessionInfo->reason,
-              chreMsgEndpointReason::CHRE_MSG_ENDPOINT_REASON_UNSPECIFIED);
-
-          if (std::strcmp(sessionInfo->serviceDescriptor,
-                          kServiceDescriptorForEndpoint2) == 0) {
-            EXPECT_EQ(sessionInfo->endpointId, kEndpointInfos[1].id);
-            EXPECT_NE(sessionInfo->sessionId, UINT16_MAX);
-          }
+        if (std::strcmp(sessionInfo->serviceDescriptor,
+                        kServiceDescriptorForEndpoint2) == 0) {
+          EXPECT_EQ(sessionInfo->endpointId, kEndpointInfos[1].id);
+          EXPECT_NE(sessionInfo->sessionId, UINT16_MAX);
         }
-        mCondVar.notify_one();
+        triggerWait(CHRE_EVENT_MSG_SESSION_OPENED);
         break;
       }
       case CHRE_EVENT_MSG_SESSION_CLOSED: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-        }
-        mCondVar.notify_one();
+        triggerWait(CHRE_EVENT_MSG_SESSION_CLOSED);
         break;
       }
       case CHRE_EVENT_TEST_EVENT: {
         auto event = static_cast<const TestEvent *>(eventData);
         switch (event->type) {
           case TEST_PUBLISH_SERVICE: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              chreMsgServiceInfo serviceInfo;
-              serviceInfo.majorVersion = 1;
-              serviceInfo.minorVersion = 0;
-              serviceInfo.serviceDescriptor = kServiceDescriptorForNanoapp;
-              serviceInfo.serviceFormat =
-                  CHRE_MSG_ENDPOINT_SERVICE_FORMAT_CUSTOM;
-              EXPECT_TRUE(
-                  chreMsgPublishServices(&serviceInfo, /* numServices= */ 1));
-            }
-            mCondVar.notify_one();
+            chreMsgServiceInfo serviceInfo;
+            serviceInfo.majorVersion = 1;
+            serviceInfo.minorVersion = 0;
+            serviceInfo.serviceDescriptor = kServiceDescriptorForNanoapp;
+            serviceInfo.serviceFormat = CHRE_MSG_ENDPOINT_SERVICE_FORMAT_CUSTOM;
+            EXPECT_TRUE(
+                chreMsgPublishServices(&serviceInfo, /* numServices= */ 1));
+            triggerWait(TEST_PUBLISH_SERVICE);
             break;
           }
           case TEST_BAD_LEGACY_SERVICE_NAME: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              chreMsgServiceInfo serviceInfo;
-              serviceInfo.majorVersion = 1;
-              serviceInfo.minorVersion = 0;
-              serviceInfo.serviceDescriptor = kBadLegacyServiceName;
-              serviceInfo.serviceFormat =
-                  CHRE_MSG_ENDPOINT_SERVICE_FORMAT_CUSTOM;
-              EXPECT_FALSE(
-                  chreMsgPublishServices(&serviceInfo, /* numServices= */ 1));
-            }
-            mCondVar.notify_one();
+            chreMsgServiceInfo serviceInfo;
+            serviceInfo.majorVersion = 1;
+            serviceInfo.minorVersion = 0;
+            serviceInfo.serviceDescriptor = kBadLegacyServiceName;
+            serviceInfo.serviceFormat = CHRE_MSG_ENDPOINT_SERVICE_FORMAT_CUSTOM;
+            EXPECT_FALSE(
+                chreMsgPublishServices(&serviceInfo, /* numServices= */ 1));
+            triggerWait(TEST_BAD_LEGACY_SERVICE_NAME);
             break;
           }
           case TEST_OPEN_SESSION_WITH_SERVICE: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgSessionOpenAsync(
-                  kOtherMessageHubId, kEndpointInfos[1].id,
-                  kServiceDescriptorForEndpoint2));
-            }
+            EXPECT_TRUE(chreMsgSessionOpenAsync(
+                kOtherMessageHubId, kEndpointInfos[1].id,
+                kServiceDescriptorForEndpoint2));
             break;
           }
         }
@@ -1339,23 +1205,20 @@ class ServiceSessionTestApp : public TestNanoapp {
       }
     }
   }
-
-  std::mutex &mMutex;
-  std::condition_variable &mCondVar;
 };
 
 TEST_F(ChreMessageHubTest, OpenSessionWithNanoappService) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_OPEN_SESSION_WITH_SERVICE",
                       .id = kNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1368,9 +1231,7 @@ TEST_F(ChreMessageHubTest, OpenSessionWithNanoappService) {
   callback->setMessageHub(&(*messageHub));
 
   // Nanoapp publishes the service
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_PUBLISH_SERVICE);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_PUBLISH_SERVICE, TEST_PUBLISH_SERVICE);
 
   // Open the session from the other hub:1 to the nanoapp with the service
   SessionId sessionId = SESSION_ID_INVALID;
@@ -1386,25 +1247,28 @@ TEST_F(ChreMessageHubTest, OpenSessionWithNanoappService) {
   });
 
   // Wait for the nanoapp to receive the session open event
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_OPENED);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, OpenTwoSessionsWithNanoappServiceAndNoService) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_OPEN_SESSION_WITH_SERVICE",
                       .id = kNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1417,9 +1281,7 @@ TEST_F(ChreMessageHubTest, OpenTwoSessionsWithNanoappServiceAndNoService) {
   callback->setMessageHub(&(*messageHub));
 
   // Nanoapp publishes the service
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_PUBLISH_SERVICE);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_PUBLISH_SERVICE, TEST_PUBLISH_SERVICE);
 
   // Open the session from the other hub:1 to the nanoapp with the service
   SessionId sessionId = SESSION_ID_INVALID;
@@ -1435,7 +1297,7 @@ TEST_F(ChreMessageHubTest, OpenTwoSessionsWithNanoappServiceAndNoService) {
   });
 
   // Wait for the nanoapp to receive the session open event
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_OPENED);
 
   // Open the other session from the other hub:1 to the nanoapp
   SessionId sessionId2 = SESSION_ID_INVALID;
@@ -1451,24 +1313,33 @@ TEST_F(ChreMessageHubTest, OpenTwoSessionsWithNanoappServiceAndNoService) {
   });
 
   // Wait for the nanoapp to receive the session open event
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_SESSION_OPENED);
 
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
+
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId2]() {
+        messageHub->closeSession(sessionId2);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, OpenSessionWithNanoappLegacyService) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_OPEN_SESSION_WITH_LEGACY_SERVICE",
                       .id = kLegacyServiceNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1493,22 +1364,18 @@ TEST_F(ChreMessageHubTest, OpenSessionWithNanoappLegacyService) {
     return sessionId;
   });
 
-  // Wait for the nanoapp to receive the session open event
-  std::unique_lock<std::mutex> lock(mutex);
-  condVar.wait(lock);
-
-  // Explicitly clear the message hub and wait for the session to be closed
-  messageHub.reset();
-  condVar.wait(lock);
+  testNanoapp->doActionAndWait(
+      [&messageHub, &sessionId]() {
+        messageHub->closeSession(sessionId);
+        return true;
+      },
+      CHRE_EVENT_MSG_SESSION_CLOSED);
 }
 
 TEST_F(ChreMessageHubTest, ForEachServiceNanoappLegacyService) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_FOR_EACH_SERVICE_LEGACY_SERVICE",
                       .id = kLegacyServiceNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
@@ -1544,12 +1411,10 @@ TEST_F(ChreMessageHubTest, ForEachServiceNanoappLegacyService) {
 
 TEST_F(ChreMessageHubTest, NanoappFailsToPublishLegacyServiceInNewWay) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_BAD_LEGACY_SERVICE_NAME",
                       .id = kNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
@@ -1566,19 +1431,16 @@ TEST_F(ChreMessageHubTest, NanoappFailsToPublishLegacyServiceInNewWay) {
   callback->setMessageHub(&(*messageHub));
 
   // Nanoapp publishes the service
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_BAD_LEGACY_SERVICE_NAME);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_BAD_LEGACY_SERVICE_NAME,
+                            TEST_BAD_LEGACY_SERVICE_NAME);
 }
 
 TEST_F(ChreMessageHubTest, NanoappOpensSessionWithService) {
   constexpr uint64_t kNanoappId = 0x1234;
-  std::mutex mutex;
-  std::condition_variable condVar;
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_OPEN_SESSION_WITH_SERVICE",
                       .id = kNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
@@ -1595,14 +1457,11 @@ TEST_F(ChreMessageHubTest, NanoappOpensSessionWithService) {
   callback->setMessageHub(&(*messageHub));
 
   // Nanoapp opens the session with the service
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_OPEN_SESSION_WITH_SERVICE);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_OPEN_SESSION_WITH_SERVICE,
+                            CHRE_EVENT_MSG_SESSION_OPENED);
 }
 
 TEST_F(ChreMessageHubTest, NanoappUnloadUnregistersProvidedServices) {
-  std::mutex mutex;
-  std::condition_variable condVar;
   constexpr uint64_t kNanoappId = 0x1234;
 
   // Create the other hub
@@ -1617,16 +1476,14 @@ TEST_F(ChreMessageHubTest, NanoappUnloadUnregistersProvidedServices) {
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<ServiceSessionTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_UNLOAD_UNREGISTERS_PROVIDED_SERVICES",
                       .id = kNanoappId}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
-  ASSERT_NE(nanoapp, nullptr);
+  callback->setMessageHub(&(*messageHub));
 
   // Nanoapp publishes the service
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_PUBLISH_SERVICE);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_PUBLISH_SERVICE, TEST_PUBLISH_SERVICE);
 
   // Get the endpoint ID for the service
   std::optional<Endpoint> endpoint =
@@ -1644,6 +1501,10 @@ TEST_F(ChreMessageHubTest, NanoappUnloadUnregistersProvidedServices) {
   // Unload the nanoapp
   unloadNanoapp(appId);
 
+  // Load another nanoapp. This forces this thread to wait for the finish
+  // load nanoapp event to process, which is after the cleanup event.
+  loadNanoapp(MakeUnique<TestNanoapp>());
+
   // The service should be gone
   endpoint = MessageRouterSingleton::get()->getEndpointForService(
       EventLoopManagerSingleton::get()
@@ -1656,89 +1517,65 @@ TEST_F(ChreMessageHubTest, NanoappUnloadUnregistersProvidedServices) {
 //! Nanoapp used to test endpoint registration and ready events
 class EndpointRegistrationTestApp : public TestNanoapp {
  public:
-  EndpointRegistrationTestApp(std::mutex &mutex,
-                              std::condition_variable &condVar,
-                              const TestNanoappInfo &info)
-      : TestNanoapp(info), mMutex(mutex), mCondVar(condVar) {}
+  EndpointRegistrationTestApp(const TestNanoappInfo &info)
+      : TestNanoapp(info) {}
 
   void handleEvent(uint32_t, uint16_t eventType,
                    const void *eventData) override {
     switch (eventType) {
       case CHRE_EVENT_MSG_ENDPOINT_READY: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-          auto event =
-              static_cast<const chreMsgEndpointReadyEvent *>(eventData);
-          EXPECT_EQ(event->hubId, kOtherMessageHubId);
-          EXPECT_EQ(event->endpointId, mEndpointId);
-        }
-        mCondVar.notify_one();
+        auto event = static_cast<const chreMsgEndpointReadyEvent *>(eventData);
+        EXPECT_EQ(event->hubId, kOtherMessageHubId);
+        EXPECT_EQ(event->endpointId, mEndpointId);
+        triggerWait(CHRE_EVENT_MSG_ENDPOINT_READY);
         break;
       }
       case CHRE_EVENT_MSG_SERVICE_READY: {
-        {
-          std::unique_lock<std::mutex> lock(mMutex);
-          auto event = static_cast<const chreMsgServiceReadyEvent *>(eventData);
-          EXPECT_EQ(event->hubId, kOtherMessageHubId);
-          EXPECT_EQ(event->endpointId, kDynamicEndpointInfo.id);
-          EXPECT_STREQ(event->serviceDescriptor,
-                       kServiceDescriptorForDynamicEndpoint);
-        }
-        mCondVar.notify_one();
+        auto event = static_cast<const chreMsgServiceReadyEvent *>(eventData);
+        EXPECT_EQ(event->hubId, kOtherMessageHubId);
+        EXPECT_EQ(event->endpointId, kDynamicEndpointInfo.id);
+        EXPECT_STREQ(event->serviceDescriptor,
+                     kServiceDescriptorForDynamicEndpoint);
+        triggerWait(CHRE_EVENT_MSG_SERVICE_READY);
         break;
       }
       case CHRE_EVENT_TEST_EVENT: {
         auto event = static_cast<const TestEvent *>(eventData);
         switch (event->type) {
           case TEST_SUBSCRIBE_TO_READY_EVENT: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              mEndpointId = kDynamicEndpointInfo.id;
-              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
-                  kOtherMessageHubId, mEndpointId,
-                  /* enable= */ true));
-            }
-            mCondVar.notify_one();
+            mEndpointId = kDynamicEndpointInfo.id;
+            EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                kOtherMessageHubId, mEndpointId,
+                /* enable= */ true));
+            triggerWait(TEST_SUBSCRIBE_TO_READY_EVENT);
             break;
           }
           case TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              mEndpointId = kEndpointInfos[1].id;
-              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
-                  kOtherMessageHubId, mEndpointId,
-                  /* enable= */ true));
-            }
+            mEndpointId = kEndpointInfos[1].id;
+            EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                kOtherMessageHubId, mEndpointId,
+                /* enable= */ true));
             break;
           }
           case TEST_UNSUBSCRIBE_FROM_READY_EVENT: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
-                  kOtherMessageHubId, mEndpointId,
-                  /* enable= */ false));
-            }
-            mCondVar.notify_one();
+            EXPECT_TRUE(chreMsgConfigureEndpointReadyEvents(
+                kOtherMessageHubId, mEndpointId,
+                /* enable= */ false));
+            triggerWait(TEST_UNSUBSCRIBE_FROM_READY_EVENT);
             break;
           }
           case TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
-                  kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
-                  /* enable= */ true));
-            }
-            mCondVar.notify_one();
+            EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
+                kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
+                /* enable= */ true));
+            triggerWait(TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT);
             break;
           }
           case TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT: {
-            {
-              std::unique_lock<std::mutex> lock(mMutex);
-              EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
-                  kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
-                  /* enable= */ false));
-            }
-            mCondVar.notify_one();
+            EXPECT_TRUE(chreMsgConfigureServiceReadyEvents(
+                kOtherMessageHubId, kServiceDescriptorForDynamicEndpoint,
+                /* enable= */ false));
+            triggerWait(TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT);
             break;
           }
         }
@@ -1750,21 +1587,18 @@ class EndpointRegistrationTestApp : public TestNanoapp {
     }
   }
 
-  std::mutex &mMutex;
-  std::condition_variable &mCondVar;
   EndpointId mEndpointId = ENDPOINT_ID_INVALID;
 };
 
 TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEvent) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_ENDPOINT_READY_EVENT", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1777,26 +1611,22 @@ TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEvent) {
   callback->setMessageHub(&(*messageHub));
 
   // Test subscribing to the ready event
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_READY_EVENT);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SUBSCRIBE_TO_READY_EVENT,
+                            TEST_SUBSCRIBE_TO_READY_EVENT);
 
   // Register the endpoint and wait for the ready event
   EXPECT_TRUE(messageHub->registerEndpoint(kDynamicEndpointInfo.id));
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_ENDPOINT_READY);
 
   // Unsubscribe from the ready event
-  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT,
+                            TEST_UNSUBSCRIBE_FROM_READY_EVENT);
 }
 
 TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEventAlreadyExists) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
-      mutex, condVar,
+
       TestNanoappInfo{.name = "TEST_ENDPOINT_READY_EVENT", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
@@ -1812,25 +1642,22 @@ TEST_F(ChreMessageHubTest, NanoappSubscribesToEndpointReadyEventAlreadyExists) {
   callback->setMessageHub(&(*messageHub));
 
   // Test subscribing to the ready event - endpoint should already exist
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SUBSCRIBE_TO_READY_EVENT_ALREADY_EXISTS,
+                            CHRE_EVENT_MSG_ENDPOINT_READY);
 
   // Unsubscribe from the ready event
-  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_UNSUBSCRIBE_FROM_READY_EVENT,
+                            TEST_UNSUBSCRIBE_FROM_READY_EVENT);
 }
 
 TEST_F(ChreMessageHubTest, NanoappSubscribesToServiceReadyEvent) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
-      mutex, condVar,
       TestNanoappInfo{.name = "TEST_SERVICE_READY_EVENT", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
+  TestNanoapp *testNanoapp = queryNanoapp(appId);
+  ASSERT_NE(testNanoapp, nullptr);
 
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
@@ -1843,23 +1670,19 @@ TEST_F(ChreMessageHubTest, NanoappSubscribesToServiceReadyEvent) {
   callback->setMessageHub(&(*messageHub));
 
   // Test subscribing to the service ready event
-  std::unique_lock<std::mutex> lock(mutex);
-  sendEventToNanoapp(appId, TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT,
+                            TEST_SUBSCRIBE_TO_SERVICE_READY_EVENT);
 
   // Register the endpoint and wait for the service ready event
   EXPECT_TRUE(messageHub->registerEndpoint(kDynamicEndpointInfo.id));
-  condVar.wait(lock);
+  testNanoapp->wait(CHRE_EVENT_MSG_SERVICE_READY);
 
   // Unsubscribe from the service ready event
-  sendEventToNanoapp(appId, TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT);
-  condVar.wait(lock);
+  sendEventToNanoappAndWait(appId, TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT,
+                            TEST_UNSUBSCRIBE_FROM_SERVICE_READY_EVENT);
 }
 
 TEST_F(ChreMessageHubTest, NanoappLoadAndUnloadAreRegisteredAndUnregistered) {
-  std::mutex mutex;
-  std::condition_variable condVar;
-
   // Create the other hub
   pw::IntrusivePtr<MessageHubCallbackStoreData> callback =
       pw::MakeRefCounted<MessageHubCallbackStoreData>(/* message= */ nullptr,
@@ -1872,7 +1695,6 @@ TEST_F(ChreMessageHubTest, NanoappLoadAndUnloadAreRegisteredAndUnregistered) {
 
   // Load the nanoapp
   uint64_t appId = loadNanoapp(MakeUnique<EndpointRegistrationTestApp>(
-      mutex, condVar,
       TestNanoappInfo{.name = "TEST_NANOAPP_REGISTRATION", .id = 0x1234}));
   Nanoapp *nanoapp = getNanoappByAppId(appId);
   ASSERT_NE(nanoapp, nullptr);
