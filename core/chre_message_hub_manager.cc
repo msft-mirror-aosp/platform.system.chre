@@ -159,6 +159,8 @@ bool ChreMessageHubManager::getEndpointInfo(MessageHubId hubId,
   info.type = toChreEndpointType(endpointInfo->type);
   info.version = endpointInfo->version;
   info.requiredPermissions = endpointInfo->requiredPermissions;
+  // TODO(b/404241918): populate maxMessageSize from MessageRouter
+  info.maxMessageSize = chreGetMessageToHostMaxSize();
   std::strncpy(info.name, endpointInfo->name, CHRE_MAX_ENDPOINT_NAME_LEN);
   info.name[CHRE_MAX_ENDPOINT_NAME_LEN - 1] = '\0';
   return true;
