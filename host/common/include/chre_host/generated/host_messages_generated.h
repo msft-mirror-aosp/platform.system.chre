@@ -213,6 +213,14 @@ struct RegisterEndpoint;
 struct RegisterEndpointBuilder;
 struct RegisterEndpointT;
 
+struct AddServiceToEndpoint;
+struct AddServiceToEndpointBuilder;
+struct AddServiceToEndpointT;
+
+struct EndpointReady;
+struct EndpointReadyBuilder;
+struct EndpointReadyT;
+
 struct UnregisterEndpoint;
 struct UnregisterEndpointBuilder;
 struct UnregisterEndpointT;
@@ -836,11 +844,13 @@ enum class ChreMessage : uint8_t {
   EndpointSessionMessageDeliveryStatus = 47,
   BtSocketCapabilitiesRequest = 48,
   BtSocketCapabilitiesResponse = 49,
+  AddServiceToEndpoint = 50,
+  EndpointReady = 51,
   MIN = NONE,
-  MAX = BtSocketCapabilitiesResponse
+  MAX = EndpointReady
 };
 
-inline const ChreMessage (&EnumValuesChreMessage())[50] {
+inline const ChreMessage (&EnumValuesChreMessage())[52] {
   static const ChreMessage values[] = {
     ChreMessage::NONE,
     ChreMessage::NanoappMessage,
@@ -891,13 +901,15 @@ inline const ChreMessage (&EnumValuesChreMessage())[50] {
     ChreMessage::EndpointSessionMessage,
     ChreMessage::EndpointSessionMessageDeliveryStatus,
     ChreMessage::BtSocketCapabilitiesRequest,
-    ChreMessage::BtSocketCapabilitiesResponse
+    ChreMessage::BtSocketCapabilitiesResponse,
+    ChreMessage::AddServiceToEndpoint,
+    ChreMessage::EndpointReady
   };
   return values;
 }
 
 inline const char * const *EnumNamesChreMessage() {
-  static const char * const names[51] = {
+  static const char * const names[53] = {
     "NONE",
     "NanoappMessage",
     "HubInfoRequest",
@@ -948,13 +960,15 @@ inline const char * const *EnumNamesChreMessage() {
     "EndpointSessionMessageDeliveryStatus",
     "BtSocketCapabilitiesRequest",
     "BtSocketCapabilitiesResponse",
+    "AddServiceToEndpoint",
+    "EndpointReady",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameChreMessage(ChreMessage e) {
-  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::BtSocketCapabilitiesResponse)) return "";
+  if (flatbuffers::IsOutRange(e, ChreMessage::NONE, ChreMessage::EndpointReady)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesChreMessage()[index];
 }
@@ -1157,6 +1171,14 @@ template<> struct ChreMessageTraits<chre::fbs::BtSocketCapabilitiesRequest> {
 
 template<> struct ChreMessageTraits<chre::fbs::BtSocketCapabilitiesResponse> {
   static const ChreMessage enum_value = ChreMessage::BtSocketCapabilitiesResponse;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::AddServiceToEndpoint> {
+  static const ChreMessage enum_value = ChreMessage::AddServiceToEndpoint;
+};
+
+template<> struct ChreMessageTraits<chre::fbs::EndpointReady> {
+  static const ChreMessage enum_value = ChreMessage::EndpointReady;
 };
 
 struct ChreMessageUnion {
@@ -1582,6 +1604,22 @@ struct ChreMessageUnion {
   const chre::fbs::BtSocketCapabilitiesResponseT *AsBtSocketCapabilitiesResponse() const {
     return type == ChreMessage::BtSocketCapabilitiesResponse ?
       reinterpret_cast<const chre::fbs::BtSocketCapabilitiesResponseT *>(value) : nullptr;
+  }
+  chre::fbs::AddServiceToEndpointT *AsAddServiceToEndpoint() {
+    return type == ChreMessage::AddServiceToEndpoint ?
+      reinterpret_cast<chre::fbs::AddServiceToEndpointT *>(value) : nullptr;
+  }
+  const chre::fbs::AddServiceToEndpointT *AsAddServiceToEndpoint() const {
+    return type == ChreMessage::AddServiceToEndpoint ?
+      reinterpret_cast<const chre::fbs::AddServiceToEndpointT *>(value) : nullptr;
+  }
+  chre::fbs::EndpointReadyT *AsEndpointReady() {
+    return type == ChreMessage::EndpointReady ?
+      reinterpret_cast<chre::fbs::EndpointReadyT *>(value) : nullptr;
+  }
+  const chre::fbs::EndpointReadyT *AsEndpointReady() const {
+    return type == ChreMessage::EndpointReady ?
+      reinterpret_cast<const chre::fbs::EndpointReadyT *>(value) : nullptr;
   }
 };
 
@@ -6207,6 +6245,144 @@ inline flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(
 
 flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const RegisterEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct AddServiceToEndpointT : public flatbuffers::NativeTable {
+  typedef AddServiceToEndpoint TableType;
+  std::unique_ptr<chre::fbs::EndpointIdT> endpoint;
+  std::unique_ptr<chre::fbs::ServiceT> service;
+  AddServiceToEndpointT() {
+  }
+};
+
+/// MessageRouter handles service inspection separately from endpoint inspection
+/// so these messages are required to send embedded endpoint information in
+/// pieces to the host. After RegisterEndpoint, the endpoint is only ready once
+/// an EndpointReady message is sent. After EndpointReady, AddServiceToEndpoint
+/// will be rejected.
+struct AddServiceToEndpoint FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef AddServiceToEndpointT NativeTableType;
+  typedef AddServiceToEndpointBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT = 4,
+    VT_SERVICE = 6
+  };
+  const chre::fbs::EndpointId *endpoint() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  chre::fbs::EndpointId *mutable_endpoint() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  const chre::fbs::Service *service() const {
+    return GetPointer<const chre::fbs::Service *>(VT_SERVICE);
+  }
+  chre::fbs::Service *mutable_service() {
+    return GetPointer<chre::fbs::Service *>(VT_SERVICE);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT) &&
+           verifier.VerifyTable(endpoint()) &&
+           VerifyOffset(verifier, VT_SERVICE) &&
+           verifier.VerifyTable(service()) &&
+           verifier.EndTable();
+  }
+  AddServiceToEndpointT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(AddServiceToEndpointT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<AddServiceToEndpoint> Pack(flatbuffers::FlatBufferBuilder &_fbb, const AddServiceToEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct AddServiceToEndpointBuilder {
+  typedef AddServiceToEndpoint Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_endpoint(flatbuffers::Offset<chre::fbs::EndpointId> endpoint) {
+    fbb_.AddOffset(AddServiceToEndpoint::VT_ENDPOINT, endpoint);
+  }
+  void add_service(flatbuffers::Offset<chre::fbs::Service> service) {
+    fbb_.AddOffset(AddServiceToEndpoint::VT_SERVICE, service);
+  }
+  explicit AddServiceToEndpointBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  AddServiceToEndpointBuilder &operator=(const AddServiceToEndpointBuilder &);
+  flatbuffers::Offset<AddServiceToEndpoint> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<AddServiceToEndpoint>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<AddServiceToEndpoint> CreateAddServiceToEndpoint(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointId> endpoint = 0,
+    flatbuffers::Offset<chre::fbs::Service> service = 0) {
+  AddServiceToEndpointBuilder builder_(_fbb);
+  builder_.add_service(service);
+  builder_.add_endpoint(endpoint);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<AddServiceToEndpoint> CreateAddServiceToEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const AddServiceToEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct EndpointReadyT : public flatbuffers::NativeTable {
+  typedef EndpointReady TableType;
+  std::unique_ptr<chre::fbs::EndpointIdT> endpoint;
+  EndpointReadyT() {
+  }
+};
+
+struct EndpointReady FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef EndpointReadyT NativeTableType;
+  typedef EndpointReadyBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT = 4
+  };
+  const chre::fbs::EndpointId *endpoint() const {
+    return GetPointer<const chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  chre::fbs::EndpointId *mutable_endpoint() {
+    return GetPointer<chre::fbs::EndpointId *>(VT_ENDPOINT);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT) &&
+           verifier.VerifyTable(endpoint()) &&
+           verifier.EndTable();
+  }
+  EndpointReadyT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EndpointReadyT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static flatbuffers::Offset<EndpointReady> Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointReadyT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct EndpointReadyBuilder {
+  typedef EndpointReady Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_endpoint(flatbuffers::Offset<chre::fbs::EndpointId> endpoint) {
+    fbb_.AddOffset(EndpointReady::VT_ENDPOINT, endpoint);
+  }
+  explicit EndpointReadyBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  EndpointReadyBuilder &operator=(const EndpointReadyBuilder &);
+  flatbuffers::Offset<EndpointReady> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<EndpointReady>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<EndpointReady> CreateEndpointReady(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<chre::fbs::EndpointId> endpoint = 0) {
+  EndpointReadyBuilder builder_(_fbb);
+  builder_.add_endpoint(endpoint);
+  return builder_.Finish();
+}
+
+flatbuffers::Offset<EndpointReady> CreateEndpointReady(flatbuffers::FlatBufferBuilder &_fbb, const EndpointReadyT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct UnregisterEndpointT : public flatbuffers::NativeTable {
   typedef UnregisterEndpoint TableType;
   std::unique_ptr<chre::fbs::EndpointIdT> endpoint;
@@ -7136,6 +7312,12 @@ struct MessageContainer FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const chre::fbs::BtSocketCapabilitiesResponse *message_as_BtSocketCapabilitiesResponse() const {
     return message_type() == chre::fbs::ChreMessage::BtSocketCapabilitiesResponse ? static_cast<const chre::fbs::BtSocketCapabilitiesResponse *>(message()) : nullptr;
   }
+  const chre::fbs::AddServiceToEndpoint *message_as_AddServiceToEndpoint() const {
+    return message_type() == chre::fbs::ChreMessage::AddServiceToEndpoint ? static_cast<const chre::fbs::AddServiceToEndpoint *>(message()) : nullptr;
+  }
+  const chre::fbs::EndpointReady *message_as_EndpointReady() const {
+    return message_type() == chre::fbs::ChreMessage::EndpointReady ? static_cast<const chre::fbs::EndpointReady *>(message()) : nullptr;
+  }
   void *mutable_message() {
     return GetPointer<void *>(VT_MESSAGE);
   }
@@ -7358,6 +7540,14 @@ template<> inline const chre::fbs::BtSocketCapabilitiesRequest *MessageContainer
 
 template<> inline const chre::fbs::BtSocketCapabilitiesResponse *MessageContainer::message_as<chre::fbs::BtSocketCapabilitiesResponse>() const {
   return message_as_BtSocketCapabilitiesResponse();
+}
+
+template<> inline const chre::fbs::AddServiceToEndpoint *MessageContainer::message_as<chre::fbs::AddServiceToEndpoint>() const {
+  return message_as_AddServiceToEndpoint();
+}
+
+template<> inline const chre::fbs::EndpointReady *MessageContainer::message_as<chre::fbs::EndpointReady>() const {
+  return message_as_EndpointReady();
 }
 
 struct MessageContainerBuilder {
@@ -8949,6 +9139,61 @@ inline flatbuffers::Offset<RegisterEndpoint> CreateRegisterEndpoint(flatbuffers:
       _endpoint);
 }
 
+inline AddServiceToEndpointT *AddServiceToEndpoint::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::AddServiceToEndpointT> _o = std::unique_ptr<chre::fbs::AddServiceToEndpointT>(new AddServiceToEndpointT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void AddServiceToEndpoint::UnPackTo(AddServiceToEndpointT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint(); if (_e) _o->endpoint = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+  { auto _e = service(); if (_e) _o->service = std::unique_ptr<chre::fbs::ServiceT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<AddServiceToEndpoint> AddServiceToEndpoint::Pack(flatbuffers::FlatBufferBuilder &_fbb, const AddServiceToEndpointT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateAddServiceToEndpoint(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<AddServiceToEndpoint> CreateAddServiceToEndpoint(flatbuffers::FlatBufferBuilder &_fbb, const AddServiceToEndpointT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const AddServiceToEndpointT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint = _o->endpoint ? CreateEndpointId(_fbb, _o->endpoint.get(), _rehasher) : 0;
+  auto _service = _o->service ? CreateService(_fbb, _o->service.get(), _rehasher) : 0;
+  return chre::fbs::CreateAddServiceToEndpoint(
+      _fbb,
+      _endpoint,
+      _service);
+}
+
+inline EndpointReadyT *EndpointReady::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
+  std::unique_ptr<chre::fbs::EndpointReadyT> _o = std::unique_ptr<chre::fbs::EndpointReadyT>(new EndpointReadyT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void EndpointReady::UnPackTo(EndpointReadyT *_o, const flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint(); if (_e) _o->endpoint = std::unique_ptr<chre::fbs::EndpointIdT>(_e->UnPack(_resolver)); }
+}
+
+inline flatbuffers::Offset<EndpointReady> EndpointReady::Pack(flatbuffers::FlatBufferBuilder &_fbb, const EndpointReadyT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateEndpointReady(_fbb, _o, _rehasher);
+}
+
+inline flatbuffers::Offset<EndpointReady> CreateEndpointReady(flatbuffers::FlatBufferBuilder &_fbb, const EndpointReadyT *_o, const flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { flatbuffers::FlatBufferBuilder *__fbb; const EndpointReadyT* __o; const flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint = _o->endpoint ? CreateEndpointId(_fbb, _o->endpoint.get(), _rehasher) : 0;
+  return chre::fbs::CreateEndpointReady(
+      _fbb,
+      _endpoint);
+}
+
 inline UnregisterEndpointT *UnregisterEndpoint::UnPack(const flatbuffers::resolver_function_t *_resolver) const {
   std::unique_ptr<chre::fbs::UnregisterEndpointT> _o = std::unique_ptr<chre::fbs::UnregisterEndpointT>(new UnregisterEndpointT());
   UnPackTo(_o.get(), _resolver);
@@ -9594,6 +9839,14 @@ inline bool VerifyChreMessage(flatbuffers::Verifier &verifier, const void *obj, 
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCapabilitiesResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
+    case ChreMessage::AddServiceToEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::AddServiceToEndpoint *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case ChreMessage::EndpointReady: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointReady *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
     default: return true;
   }
 }
@@ -9808,6 +10061,14 @@ inline void *ChreMessageUnion::UnPack(const void *obj, ChreMessage type, const f
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCapabilitiesResponse *>(obj);
       return ptr->UnPack(resolver);
     }
+    case ChreMessage::AddServiceToEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::AddServiceToEndpoint *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case ChreMessage::EndpointReady: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointReady *>(obj);
+      return ptr->UnPack(resolver);
+    }
     default: return nullptr;
   }
 }
@@ -10010,6 +10271,14 @@ inline flatbuffers::Offset<void> ChreMessageUnion::Pack(flatbuffers::FlatBufferB
       auto ptr = reinterpret_cast<const chre::fbs::BtSocketCapabilitiesResponseT *>(value);
       return CreateBtSocketCapabilitiesResponse(_fbb, ptr, _rehasher).Union();
     }
+    case ChreMessage::AddServiceToEndpoint: {
+      auto ptr = reinterpret_cast<const chre::fbs::AddServiceToEndpointT *>(value);
+      return CreateAddServiceToEndpoint(_fbb, ptr, _rehasher).Union();
+    }
+    case ChreMessage::EndpointReady: {
+      auto ptr = reinterpret_cast<const chre::fbs::EndpointReadyT *>(value);
+      return CreateEndpointReady(_fbb, ptr, _rehasher).Union();
+    }
     default: return 0;
   }
 }
@@ -10210,6 +10479,14 @@ inline ChreMessageUnion::ChreMessageUnion(const ChreMessageUnion &u) : type(u.ty
     }
     case ChreMessage::BtSocketCapabilitiesResponse: {
       FLATBUFFERS_ASSERT(false);  // chre::fbs::BtSocketCapabilitiesResponseT not copyable.
+      break;
+    }
+    case ChreMessage::AddServiceToEndpoint: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::AddServiceToEndpointT not copyable.
+      break;
+    }
+    case ChreMessage::EndpointReady: {
+      FLATBUFFERS_ASSERT(false);  // chre::fbs::EndpointReadyT not copyable.
       break;
     }
     default:
@@ -10461,6 +10738,16 @@ inline void ChreMessageUnion::Reset() {
     }
     case ChreMessage::BtSocketCapabilitiesResponse: {
       auto ptr = reinterpret_cast<chre::fbs::BtSocketCapabilitiesResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::AddServiceToEndpoint: {
+      auto ptr = reinterpret_cast<chre::fbs::AddServiceToEndpointT *>(value);
+      delete ptr;
+      break;
+    }
+    case ChreMessage::EndpointReady: {
+      auto ptr = reinterpret_cast<chre::fbs::EndpointReadyT *>(value);
       delete ptr;
       break;
     }
