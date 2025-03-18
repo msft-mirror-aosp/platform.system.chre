@@ -65,6 +65,11 @@ ifneq ($(filter $(TARGET_NAME)% all, $(MAKECMDGOALS)),)
   TINYSYS_CFLAGS += -DCFG_STATIC_ALLOCATE
   TINYSYS_CFLAGS += -DconfigSUPPORT_STATIC_ALLOCATION=1
 
+  # Disable atomic operations in Pigweed as they are not supported on this platform.
+  # This will eventually be deprecated by the Pigweed team when they move to
+  # portable atomics with pw_atomic.
+  TINYSYS_CFLAGS += -DPW_ALLOCATOR_HAS_ATOMICS=0
+
   # Compiling flags ##############################################################
 
   TINYSYS_CFLAGS += $(FLATBUFFERS_CFLAGS)
