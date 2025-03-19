@@ -973,6 +973,9 @@ cc_test_host {
         "pw_containers",
         "pw_intrusive_ptr",
     ],
+    shared_libs: [
+        "libbase",
+    ],
     defaults: [
         "chre_linux_cflags",
         "pw_rpc_cflags_chre",
@@ -1094,6 +1097,9 @@ cc_library_static {
         "pw_allocator",
         "pw_intrusive_ptr",
         "pw_rpc_chre",
+    ],
+    shared_libs: [
+        "libbase",
     ],
     host_supported: true,
 }

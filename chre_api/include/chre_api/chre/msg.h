@@ -240,6 +240,14 @@ struct chreMsgEndpointInfo {
   uint32_t requiredPermissions;
 
   /**
+   * The maximum size of a message that can be sent to the endpoint.
+   *
+   * For endpoints on CHRE_MSG_HUB_ID_ANDROID, this is the same as
+   * chreGetMessageToHostMaxSize().
+   */
+  uint32_t maxMessageSize;
+
+  /**
    * The name of the endpoint, an ASCII null-terminated string. This name is
    * specified by the endpoint when it is registered by its message hub.
    */

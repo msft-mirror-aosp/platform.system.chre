@@ -17,10 +17,12 @@
 #include "test_util.h"
 
 #include <gtest/gtest.h>
+#include <cstdint>
 #include <unordered_map>
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/nanoapp.h"
+#include "chre/platform/system_time.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 #include "chre/util/memory.h"
@@ -41,13 +43,8 @@ DynamicVector<UniquePtr<chreNslNanoappInfo>> gNanoappInfos;
 /** Registry of nanoapp by ID. */
 std::unordered_map<uint64_t, UniquePtr<TestNanoapp>> nanoapps;
 
-/**
- * @return a pointer to a registered nanoapp or nullptr if the appId is not
- *         registered.
- */
-TestNanoapp *queryNanoapp(uint64_t appId) {
-  return nanoapps.count(appId) == 0 ? nullptr : nanoapps[appId].get();
-}
+//! The timeout for wait/triggerWait() calls.
+uint64_t gWaitTimeout = 3 * kOneSecondInNanoseconds;
 
 /**
  * Nanoapp start.
@@ -76,6 +73,7 @@ void handleEvent(uint32_t senderInstanceId, uint16_t eventType,
   if (app == nullptr) {
     LOGE("[handleEvent] unregistered nanoapp 0x%016" PRIx64, id);
   } else {
+    std::lock_guard<std::mutex> lock(app->mutex());
     app->handleEvent(senderInstanceId, eventType, eventData);
   }
 }
@@ -121,6 +119,18 @@ void unregisterNanoapp(uint64_t appId) {
 }
 
 }  // namespace
+
+std::chrono::nanoseconds getWaitTimeout() {
+  return std::chrono::nanoseconds(gWaitTimeout);
+}
+
+void setWaitTimeout(uint64_t timeout) {
+  gWaitTimeout = timeout;
+}
+
+TestNanoapp *queryNanoapp(uint64_t appId) {
+  return nanoapps.count(appId) == 0 ? nullptr : nanoapps[appId].get();
+}
 
 void unregisterAllTestNanoapps() {
   nanoapps.clear();
@@ -218,6 +228,18 @@ void sendEventToNanoapp(uint64_t appId, uint16_t eventType) {
   } else {
     LOGE("No instance found for nanoapp id = 0x%016" PRIx64, appId);
   }
+}
+
+void sendEventToNanoappAndWait(uint64_t appId, uint16_t eventType,
+                               uint16_t waitEventType) {
+  TestNanoapp *app = queryNanoapp(appId);
+  ASSERT_NE(app, nullptr);
+  app->doActionAndWait(
+      [appId, eventType]() {
+        sendEventToNanoapp(appId, eventType);
+        return true;
+      },
+      waitEventType);
 }
 
 void unloadNanoapp(uint64_t appId) {

@@ -959,4 +959,8 @@ DRAM_REGION_FUNCTION void sendAudioRelease() {
                          kInitialSize, msgBuilder, /* cookie= */ nullptr);
 }
 
+void HostMessageHandlers::handleBtSocketCapabilitiesRequest() {
+  LOGE("BT Socket offload not supported");
+}
+
 }  // namespace chre

@@ -109,6 +109,8 @@ class HostMessageHandlers {
                                  const BleL2capCocSocketData &socketData,
                                  const char *name, uint32_t psm);
 
+  static void handleBtSocketCapabilitiesRequest();
+
  private:
   static void sendFragmentResponse(uint16_t hostClientId,
                                    uint32_t transactionId, uint32_t fragmentId,
@@ -360,6 +362,20 @@ class HostProtocolChre : public HostProtocolCommon {
   static void encodeBtSocketClose(ChreFlatBufferBuilder &builder,
                                   uint16_t hostClientId, uint64_t socketId,
                                   const char *reason);
+
+  /**
+   * Encodes a BT socket capabilities response.
+   *
+   * @param builder An instance of the CHRE Flatbuffer builder.
+   * @param leCocNumberOfSupportedSockets Number of LE CoC sockets supported.
+   * @param leCocMtu Max local MTU of LE CoC sockets.
+   * @param rfcommNumberOfSupportedSockets Number of RFCOMM sockets supported.
+   * @param rfcommMaxFrameSize Max frame size of RFCOMM sockets.
+   */
+  static void encodeBtSocketGetCapabilitiesResponse(
+      ChreFlatBufferBuilder &builder, uint32_t leCocNumberOfSupportedSockets,
+      uint32_t leCocMtu, uint32_t rfcommNumberOfSupportedSockets,
+      uint32_t rfcommMaxFrameSize);
 
   /**
    * Encodes the response acking a GetMessageHubsAndEndpointsRequest.

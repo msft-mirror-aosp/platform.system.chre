@@ -227,4 +227,8 @@ void HostMessageHandlers::handleBtSocketOpen(
   LOGE("BT Socket offload not supported");
 }
 
+void HostMessageHandlers::handleBtSocketCapabilitiesRequest() {
+  LOGE("BT Socket offload not supported");
+}
+
 }  // namespace chre

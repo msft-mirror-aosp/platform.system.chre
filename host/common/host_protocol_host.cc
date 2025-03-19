@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include "chre_host/generated/host_messages_generated.h"
 #include "chre_host/log.h"
 
 using flatbuffers::FlatBufferBuilder;
@@ -89,6 +90,7 @@ bool HostProtocolHost::decodeMessageFromChre(const void *message,
 
       case fbs::ChreMessage::BtSocketOpenResponse:
       case fbs::ChreMessage::BtSocketClose:
+      case fbs::ChreMessage::BtSocketCapabilitiesResponse:
         handlers.handleBluetoothSocketMessage(message, messageLen);
         break;
 

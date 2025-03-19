@@ -382,9 +382,6 @@ bool HostCommsManager::doSendMessageToHostFromNanoapp(
   }
 
   if (wokeHost) {
-    EventLoopManagerSingleton::get()
-        ->getEventLoop()
-        .handleNanoappWakeupBuckets();
     mIsNanoappBlamedForWakeup = true;
     nanoapp->blameHostWakeup();
   }

@@ -59,6 +59,8 @@ pw::Vector<Session, kMaxSessions> gSessions;
  * this test.
  */
 void TestBase::SetUp() {
+  setWaitTimeout(getTimeoutNs() / 2);
+
   MessageRouterSingleton::init(gMessageHubs, gSessions);
   chre::PlatformLogSingleton::init();
   TaskManagerSingleton::init();
