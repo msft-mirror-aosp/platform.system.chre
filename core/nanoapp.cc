@@ -69,7 +69,7 @@ bool Nanoapp::isRegisteredForBroadcastEvent(const Event *event) const {
     size_t foundIndex = registrationIndex(eventType);
     if (foundIndex < mRegisteredEvents.size()) {
       const EventRegistration &reg = mRegisteredEvents[foundIndex];
-      if (targetGroupIdMask & reg.groupIdMask) {
+      if ((targetGroupIdMask & reg.groupIdMask) == targetGroupIdMask) {
         registered = true;
       }
     }
