@@ -720,6 +720,19 @@ table RegisterEndpoint {
   endpoint:EndpointInfo;
 }
 
+/// MessageRouter handles service inspection separately from endpoint inspection
+/// so these messages are required to send embedded endpoint information in
+/// pieces to the host. After RegisterEndpoint, the endpoint is only ready once
+/// an EndpointReady message is sent. After EndpointReady, AddServiceToEndpoint
+/// will be rejected.
+table AddServiceToEndpoint {
+  endpoint:EndpointId;
+  service:Service;
+}
+table EndpointReady {
+  endpoint:EndpointId;
+}
+
 table UnregisterEndpoint {
   endpoint:EndpointId;
 }
@@ -880,6 +893,9 @@ union ChreMessage {
 
   BtSocketCapabilitiesRequest,
   BtSocketCapabilitiesResponse,
+
+  AddServiceToEndpoint,
+  EndpointReady,
 }
 
 struct HostAddress {

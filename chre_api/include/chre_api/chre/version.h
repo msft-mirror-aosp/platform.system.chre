@@ -171,11 +171,9 @@ extern "C" {
 /**
  * Value for version 1.11 of the Context Hub Runtime Environment API interface.
  *
- * This version of the CHRE API is shipped with Android 16. It adds definitions
- * for WWAN Cell Neighbors.
- *
- * @note This version of the CHRE API has not been finalized yet, and is
- * currently considered a preview that is subject to change.
+ * This version of the CHRE API is shipped with Android 16. It adds support for
+ * for session-based generic endpoint messaging (msg.h), BLE socket offload,
+ * remote source GNSS, and explicit WWAN cell neighbor capability indication.
  *
  * @see CHRE_API_VERSION
  */

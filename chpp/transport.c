@@ -102,6 +102,8 @@ struct ChppAppHeader *chppTransportGetRequestTimeoutResponse(
 static const char *chppGetRxStatusLabel(enum ChppRxState state);
 static void chppWorkHandleTimeout(struct ChppTransportState *context);
 
+void chppCheckRxPacketTimeout(struct ChppTransportState *context, uint64_t now);
+
 /************************************************
  *  Private Functions
  ***********************************************/
@@ -1530,14 +1532,7 @@ bool chppRxDataCb(struct ChppTransportState *context, const uint8_t *buf,
   CHPP_NOT_NULL(buf);
   CHPP_NOT_NULL(context);
 
-  chppMutexLock(&context->mutex);
-  if (context->rxStatus.state != CHPP_STATE_PREAMBLE &&
-      chppGetCurrentTimeNs() >
-          context->rxStatus.packetStartTimeNs + CHPP_TRANSPORT_RX_TIMEOUT_NS) {
-    CHPP_LOGE("Packet RX timeout");
-    chppAbortRxPacket(context);
-  }
-  chppMutexUnlock(&context->mutex);
+  chppCheckRxPacketTimeout(context, chppGetCurrentTimeNs());
 
   CHPP_LOGD("RX %" PRIuSIZE " bytes: state=%s", len,
             chppGetRxStatusLabel(context->rxStatus.state));
@@ -1677,6 +1672,11 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
                                      : context->txStatus.lastTxTimeNs));
   }
 
+  if (context->rxStatus.state != CHPP_STATE_PREAMBLE) {
+    nextDoWorkTime = MIN(nextDoWorkTime, context->rxStatus.packetStartTimeNs +
+                                             CHPP_TRANSPORT_RX_TIMEOUT_NS);
+  }
+
   if (nextDoWorkTime == CHPP_TIME_MAX) {
     CHPP_LOGD("NextDoWork=n/a currentTime=%" PRIu64,
               currentTime / CHPP_NSEC_PER_MSEC);
@@ -1804,6 +1804,20 @@ static void chppWorkHandleTimeout(struct ChppTransportState *context) {
   }
 
   chppAppProcessTimeout(context->appContext, currentTimeNs);
+  chppCheckRxPacketTimeout(context, currentTimeNs);
+}
+
+void chppCheckRxPacketTimeout(struct ChppTransportState *context,
+                              uint64_t now) {
+  chppMutexLock(&context->mutex);
+  if (context->rxStatus.state != CHPP_STATE_PREAMBLE &&
+      now >
+          context->rxStatus.packetStartTimeNs + CHPP_TRANSPORT_RX_TIMEOUT_NS) {
+    CHPP_LOGE("Packet RX timeout");
+    chppAbortRxPacket(context);
+    chppEnqueueTxPacket(context, CHPP_TRANSPORT_ERROR_TIMEOUT);  // NACK
+  }
+  chppMutexUnlock(&context->mutex);
 }
 
 void chppWorkThreadStop(struct ChppTransportState *context) {
