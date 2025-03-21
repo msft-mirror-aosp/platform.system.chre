@@ -690,7 +690,8 @@ class SessionAndMessageTestApp : public TestNanoapp {
             EXPECT_TRUE(chreMsgSend(
                 reinterpret_cast<void *>(kMessage), kMessageSize,
                 /* messageType= */ 1, mSessionId, CHRE_MESSAGE_PERMISSION_NONE,
-                /* freeCallback= */ nullptr));
+                /* freeCallback= */ [](void * /*message*/, size_t /*length*/) {
+                }));
             triggerWait(TEST_SEND_MESSAGE_NO_FREE_CALLBACK);
             break;
           }
@@ -698,7 +699,8 @@ class SessionAndMessageTestApp : public TestNanoapp {
             EXPECT_TRUE(chreMsgSend(
                 reinterpret_cast<void *>(kMessage), kMessageSize,
                 /* messageType= */ 1, mSessionId, CHRE_MESSAGE_PERMISSION_NONE,
-                /* freeCallback= */ nullptr));
+                /* freeCallback= */ [](void * /*message*/, size_t /*length*/) {
+                }));
             break;
           }
         }
