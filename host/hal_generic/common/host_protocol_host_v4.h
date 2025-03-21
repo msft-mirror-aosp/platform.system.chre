@@ -35,6 +35,7 @@ using AidlMessage = ::aidl::android::hardware::contexthub::Message;
 using AidlMessageDeliveryStatus =
     ::aidl::android::hardware::contexthub::MessageDeliveryStatus;
 using AidlReason = ::aidl::android::hardware::contexthub::Reason;
+using AidlService = ::aidl::android::hardware::contexthub::Service;
 
 /** Helpers for converting ContextHub V4+ AIDL <-> CHRE flatbuffer messages */
 class HostProtocolHostV4 : public ::chre::HostProtocolCommon {
@@ -195,6 +196,26 @@ class HostProtocolHostV4 : public ::chre::HostProtocolCommon {
    */
   static void decodeRegisterEndpoint(const ::chre::fbs::RegisterEndpointT &msg,
                                      AidlEndpointInfo &info);
+
+  /**
+   * Decodes a AddServiceToEndpoint message
+   *
+   * @param msg The message
+   * @param info (out) The id of the new embedded endpoint
+   * @param service (out) The service being added
+   */
+  static void decodeAddServiceToEndpoint(
+      const ::chre::fbs::AddServiceToEndpointT &msg, AidlEndpointId &id,
+      AidlService &service);
+
+  /**
+   * Decodes a EndpointReady message
+   *
+   * @param msg The message
+   * @param info (out) The id of the newly ready embedded endpoint
+   */
+  static void decodeEndpointReady(const ::chre::fbs::EndpointReadyT &msg,
+                                  AidlEndpointId &id);
 
   /**
    * Decodes a UnregisterEndpoint message

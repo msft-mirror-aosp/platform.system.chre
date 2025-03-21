@@ -123,8 +123,10 @@ pw::Status HostHub::openSession(const EndpointId &hostEndpoint,
   PW_TRY(checkValidLocked());
 
   // Lookup the endpoints.
-  PW_TRY(endpointExistsLocked(hostEndpoint));
-  PW_TRY(mManager.embeddedEndpointExistsLocked(embeddedEndpoint));
+  PW_TRY(endpointExistsLocked(
+      hostEndpoint, hostInitiated ? std::nullopt : serviceDescriptor));
+  PW_TRY(mManager.embeddedEndpointExistsLocked(
+      embeddedEndpoint, hostInitiated ? serviceDescriptor : std::nullopt));
 
   // Validate the session id.
   if (hostInitiated) {
@@ -282,15 +284,23 @@ pw::Status HostHub::checkValidLocked() {
   return pw::OkStatus();
 }
 
-pw::Status HostHub::endpointExistsLocked(const EndpointId &id) {
+pw::Status HostHub::endpointExistsLocked(
+    const EndpointId &id, std::optional<std::string> serviceDescriptor) {
   if (id.hubId != kInfo.hubId) {
     LOGE("Rejecting lookup on unowned endpoint (%" PRId64 ", %" PRId64
          ") from hub %" PRId64,
          id.hubId, id.id, kInfo.hubId);
     return pw::Status::InvalidArgument();
   }
-  if (auto it = mIdToEndpoint.find(id.id); it != mIdToEndpoint.end())
-    return pw::OkStatus();
+  if (auto it = mIdToEndpoint.find(id.id); it != mIdToEndpoint.end()) {
+    if (!serviceDescriptor) return pw::OkStatus();
+    for (const auto &service : it->second.services) {
+      if (service.serviceDescriptor == *serviceDescriptor)
+        return pw::OkStatus();
+    }
+    LOGW("Endpoint (%" PRId64 ", %" PRId64 ") doesn't have service %s",
+         id.hubId, id.id, serviceDescriptor->c_str());
+  }
   return pw::Status::NotFound();
 }
 
@@ -367,7 +377,7 @@ void MessageHubManager::clearEmbeddedState() {
   std::vector<EndpointId> endpoints;
   for (const auto &[hubId, hub] : mIdToEmbeddedHub) {
     for (const auto &[endpointId, endpoint] : hub.idToEndpoint)
-      endpoints.push_back(endpoint.id);
+      if (endpoint.second) endpoints.push_back(endpoint.first.id);
   }
   mIdToEmbeddedHub.clear();
 
@@ -398,7 +408,7 @@ void MessageHubManager::removeEmbeddedHub(int64_t id) {
   auto it = mIdToEmbeddedHub.find(id);
   if (it == mIdToEmbeddedHub.end()) return;
   for (const auto &[endpointId, info] : it->second.idToEndpoint)
-    endpoints.push_back(info.id);
+    if (info.second) endpoints.push_back(info.first.id);
   mIdToEmbeddedHub.erase(it);
 
   // For each host hub, determine which sessions if any are now closed and send
@@ -431,9 +441,36 @@ void MessageHubManager::addEmbeddedEndpoint(const EndpointInfo &endpoint) {
     return;
   }
   addEmbeddedEndpointLocked(endpoint);
+}
+
+void MessageHubManager::addEmbeddedEndpointService(const EndpointId &endpoint,
+                                                   const Service &service) {
+  std::lock_guard lock(mLock);
+  if (!mIdToEmbeddedHubReady) {
+    LOGW("Skipping embedded endpoint registration before initEmbeddedState()");
+    return;
+  }
+  auto statusOrEndpoint = lookupEmbeddedEndpointLocked(endpoint);
+  if (!statusOrEndpoint.ok()) return;
+  if ((*statusOrEndpoint)->second) {
+    LOGE("Adding service to embedded endpoint after ready");
+    return;
+  }
+  (*statusOrEndpoint)->first.services.push_back(service);
+}
+
+void MessageHubManager::setEmbeddedEndpointReady(const EndpointId &id) {
+  std::lock_guard lock(mLock);
+  if (!mIdToEmbeddedHubReady) {
+    LOGW("Skipping embedded endpoint registration before initEmbeddedState()");
+    return;
+  }
+  auto statusOrEndpoint = lookupEmbeddedEndpointLocked(id);
+  if (!statusOrEndpoint.ok() || (*statusOrEndpoint)->second) return;
+  (*statusOrEndpoint)->second = true;
   for (auto &[hostHubId, hub] : mIdToHostHub) {
     ::android::base::ScopedLockAssertion lockAssertion(hub->mManager.mLock);
-    hub->mCallback->onEndpointStarted({endpoint});
+    hub->mCallback->onEndpointStarted({(*statusOrEndpoint)->first});
   }
 }
 
@@ -442,7 +479,7 @@ std::vector<EndpointInfo> MessageHubManager::getEmbeddedEndpoints() const {
   std::vector<EndpointInfo> endpoints;
   for (const auto &[id, hub] : mIdToEmbeddedHub) {
     for (const auto &[endptId, endptInfo] : hub.idToEndpoint)
-      endpoints.push_back(endptInfo);
+      if (endptInfo.second) endpoints.push_back(endptInfo.first);
   }
   return endpoints;
 }
@@ -521,15 +558,32 @@ void MessageHubManager::addEmbeddedEndpointLocked(
          endpoint.id.hubId, endpoint.id.id);
     return;
   }
-  it->second.idToEndpoint.insert({endpoint.id.id, endpoint});
+  it->second.idToEndpoint.insert({endpoint.id.id, {endpoint, false}});
 }
 
 pw::Status MessageHubManager::embeddedEndpointExistsLocked(
-    const EndpointId &id) {
+    const EndpointId &id, std::optional<std::string> serviceDescriptor) {
+  PW_TRY_ASSIGN(const auto *endpoint, lookupEmbeddedEndpointLocked(id));
+  if (!endpoint->second) {
+    LOGW("Accessing remote endpoint (%" PRId64 ", %" PRId64 ") before ready",
+         id.hubId, id.id);
+    return pw::Status::NotFound();
+  }
+  if (!serviceDescriptor) return pw::OkStatus();
+  for (const auto &service : endpoint->first.services) {
+    if (service.serviceDescriptor == *serviceDescriptor) return pw::OkStatus();
+  }
+  LOGW("Endpoint (%" PRId64 ", %" PRId64 ") doesn't have service %s", id.hubId,
+       id.id, serviceDescriptor->c_str());
+  return pw::Status::NotFound();
+}
+
+pw::Result<std::pair<EndpointInfo, bool> *>
+MessageHubManager::lookupEmbeddedEndpointLocked(const EndpointId &id) {
   auto hubIt = mIdToEmbeddedHub.find(id.hubId);
   if (hubIt != mIdToEmbeddedHub.end()) {
     auto it = hubIt->second.idToEndpoint.find(id.id);
-    if (it != hubIt->second.idToEndpoint.end()) return pw::OkStatus();
+    if (it != hubIt->second.idToEndpoint.end()) return &(it->second);
   }
   LOGW("Could not find remote endpoint (%" PRId64 ", %" PRId64 ")", id.hubId,
        id.id);

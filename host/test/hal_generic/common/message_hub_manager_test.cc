@@ -16,6 +16,7 @@
 
 #include "message_hub_manager.h"
 
+#include <cstddef>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -74,20 +75,51 @@ class MockEndpointCallback : public IEndpointCallback {
   MOCK_METHOD(bool, isRemote, (), (override));
   MOCK_METHOD(ScopedAStatus, getInterfaceVersion, (int32_t *), (override));
   MOCK_METHOD(ScopedAStatus, getInterfaceHash, (std::string *), (override));
+
+  MockEndpointCallback() {
+    ON_CALL(*this, onEndpointStarted)
+        .WillByDefault([](const std::vector<EndpointInfo> &) {
+          return ScopedAStatus::ok();
+        });
+    ON_CALL(*this, onEndpointStopped)
+        .WillByDefault([](const std::vector<EndpointId> &, Reason) {
+          return ScopedAStatus::ok();
+        });
+    ON_CALL(*this, onMessageReceived)
+        .WillByDefault(
+            [](int32_t, const Message &) { return ScopedAStatus::ok(); });
+    ON_CALL(*this, onMessageDeliveryStatusReceived)
+        .WillByDefault([](int32_t, const MessageDeliveryStatus &) {
+          return ScopedAStatus::ok();
+        });
+    ON_CALL(*this, onEndpointSessionOpenRequest)
+        .WillByDefault([](int32_t, const EndpointId &, const EndpointId &,
+                          const std::optional<std::string> &) {
+          return ScopedAStatus::ok();
+        });
+    ON_CALL(*this, onCloseEndpointSession).WillByDefault([](int32_t, Reason) {
+      return ScopedAStatus::ok();
+    });
+    ON_CALL(*this, onEndpointSessionOpenComplete).WillByDefault([](int32_t) {
+      return ScopedAStatus::ok();
+    });
+  }
 };
 
 constexpr int64_t kHub1Id = 0x1, kHub2Id = 0x2;
 constexpr int64_t kEndpoint1Id = 0x1, kEndpoint2Id = 0x2;
+const std::string kTestServiceDescriptor = "test_service";
 const HubInfo kHub1Info{.hubId = kHub1Id};
 const HubInfo kHub2Info{.hubId = kHub2Id};
+const Service kTestService{.serviceDescriptor = kTestServiceDescriptor};
 const EndpointInfo kEndpoint1_1Info{
     .id = {.id = kEndpoint1Id, .hubId = kHub1Id}};
 const EndpointInfo kEndpoint1_2Info{
-    .id = {.id = kEndpoint2Id, .hubId = kHub1Id}};
+    .id = {.id = kEndpoint2Id, .hubId = kHub1Id}, .services = {kTestService}};
 const EndpointInfo kEndpoint2_1Info{
     .id = {.id = kEndpoint1Id, .hubId = kHub2Id}};
 const EndpointInfo kEndpoint2_2Info{
-    .id = {.id = kEndpoint2Id, .hubId = kHub2Id}};
+    .id = {.id = kEndpoint2Id, .hubId = kHub2Id}, .services = {kTestService}};
 
 }  // namespace
 
@@ -128,9 +160,13 @@ class MessageHubManagerTest : public ::testing::Test {
     mManager->initEmbeddedState();
     mManager->addEmbeddedHub(kHub2Info);
     mManager->addEmbeddedEndpoint(kEndpoint2_1Info);
+    mManager->setEmbeddedEndpointReady(kEndpoint2_1Info.id);
+    mManager->addEmbeddedEndpoint(kEndpoint2_2Info);
+    mManager->setEmbeddedEndpointReady(kEndpoint2_2Info.id);
     mHostHubCb = SharedRefBase::make<MockEndpointCallback>();
     mHostHub = *mManager->createHostHub(mHostHubCb, kHub1Info, 0, 0);
     EXPECT_TRUE(mHostHub->addEndpoint(kEndpoint1_1Info).ok());
+    EXPECT_TRUE(mHostHub->addEndpoint(kEndpoint1_2Info).ok());
   }
 
   uint16_t setupDefaultHubsAndSession() {
@@ -140,8 +176,7 @@ class MessageHubManagerTest : public ::testing::Test {
                     ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                   range.first, {}, /*hostInitiated=*/true)
                     .ok());
-    EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenComplete(range.first))
-        .WillOnce(Return(ScopedAStatus::ok()));
+    EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenComplete(range.first));
     EXPECT_TRUE(mManager->getHostHub(kHub1Id)
                     ->ackSession(range.first,
                                  /*hostAcked=*/false)
@@ -235,21 +270,15 @@ TEST_F(MessageHubManagerTest, OnClientDeathAfterUnregister) {
 
 TEST_F(MessageHubManagerTest, InitAndClearEmbeddedState) {
   mManager->addEmbeddedHub(kHub1Info);
-  mManager->addEmbeddedEndpoint(kEndpoint1_1Info);
   EXPECT_THAT(mManager->getEmbeddedHubs(), IsEmpty());
-  EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
 
   mManager->initEmbeddedState();
   mManager->addEmbeddedHub(kHub1Info);
-  mManager->addEmbeddedEndpoint(kEndpoint1_1Info);
   EXPECT_THAT(mManager->getEmbeddedHubs(),
               UnorderedElementsAreArray({kHub1Info}));
-  EXPECT_THAT(mManager->getEmbeddedEndpoints(),
-              UnorderedElementsAreArray({kEndpoint1_1Info}));
 
   mManager->clearEmbeddedState();
   EXPECT_THAT(mManager->getEmbeddedHubs(), IsEmpty());
-  EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
 }
 
 TEST_F(MessageHubManagerTest, AddAndRemoveEmbeddedHub) {
@@ -262,24 +291,43 @@ TEST_F(MessageHubManagerTest, AddAndRemoveEmbeddedHub) {
   EXPECT_THAT(mManager->getEmbeddedHubs(), IsEmpty());
 }
 
+MATCHER_P(MatchEndpointInfo, info, "Matches an EndpointInfo") {
+  if (arg.id.id != info.id.id || arg.id.hubId != info.id.hubId ||
+      arg.services.size() != info.services.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < arg.services.size(); ++i) {
+    if (arg.services[i].serviceDescriptor !=
+        info.services[i].serviceDescriptor) {
+      return false;
+    }
+  }
+  return true;
+}
+
 TEST_F(MessageHubManagerTest, AddAndRemoveEmbeddedEndpoint) {
   mHostHubCb = SharedRefBase::make<MockEndpointCallback>();
   auto hostHub = *mManager->createHostHub(mHostHubCb, kHub1Info, 0, 0);
   mManager->initEmbeddedState();
   mManager->addEmbeddedHub(kHub2Info);
 
-  EXPECT_CALL(*mHostHubCb,
-              onEndpointStarted(UnorderedElementsAreArray({kEndpoint2_1Info})))
-      .WillOnce(Return(ScopedAStatus::ok()));
-  mManager->addEmbeddedEndpoint(kEndpoint2_1Info);
+  mManager->addEmbeddedEndpoint({.id = kEndpoint2_2Info.id});
+  EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
+
+  mManager->addEmbeddedEndpointService(kEndpoint2_2Info.id,
+                                       kEndpoint2_2Info.services[0]);
+  EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
+
+  EXPECT_CALL(*mHostHubCb, onEndpointStarted(UnorderedElementsAreArray(
+                               {MatchEndpointInfo(kEndpoint2_2Info)})));
+  mManager->setEmbeddedEndpointReady(kEndpoint2_2Info.id);
   EXPECT_THAT(mManager->getEmbeddedEndpoints(),
-              UnorderedElementsAreArray({kEndpoint2_1Info}));
+              UnorderedElementsAreArray({MatchEndpointInfo(kEndpoint2_2Info)}));
 
   EXPECT_CALL(*mHostHubCb, onEndpointStopped(
-                               UnorderedElementsAreArray({kEndpoint2_1Info.id}),
-                               Reason::ENDPOINT_GONE))
-      .WillOnce(Return(ScopedAStatus::ok()));
-  mManager->removeEmbeddedEndpoint(kEndpoint2_1Info.id);
+                               UnorderedElementsAreArray({kEndpoint2_2Info.id}),
+                               Reason::ENDPOINT_GONE));
+  mManager->removeEmbeddedEndpoint(kEndpoint2_2Info.id);
   EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
 }
 
@@ -287,17 +335,19 @@ TEST_F(MessageHubManagerTest, RemovingEmbeddedHubRemovesEndpoints) {
   mManager->initEmbeddedState();
   mManager->addEmbeddedHub(kHub2Info);
   mManager->addEmbeddedEndpoint(kEndpoint2_1Info);
+  mManager->setEmbeddedEndpointReady(kEndpoint2_1Info.id);
   mManager->addEmbeddedEndpoint(kEndpoint2_2Info);
+  mManager->setEmbeddedEndpointReady(kEndpoint2_2Info.id);
   EXPECT_THAT(mManager->getEmbeddedEndpoints(),
-              UnorderedElementsAreArray({kEndpoint2_1Info, kEndpoint2_2Info}));
+              UnorderedElementsAreArray({MatchEndpointInfo(kEndpoint2_1Info),
+                                         MatchEndpointInfo(kEndpoint2_2Info)}));
 
   mHostHubCb = SharedRefBase::make<MockEndpointCallback>();
   auto hostHub = *mManager->createHostHub(mHostHubCb, kHub1Info, 0, 0);
   EXPECT_CALL(*mHostHubCb,
               onEndpointStopped(UnorderedElementsAreArray(
                                     {kEndpoint2_1Info.id, kEndpoint2_2Info.id}),
-                                Reason::HUB_RESET))
-      .WillOnce(Return(ScopedAStatus::ok()));
+                                Reason::HUB_RESET));
   mManager->removeEmbeddedHub(kHub2Id);
   EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
 }
@@ -305,6 +355,7 @@ TEST_F(MessageHubManagerTest, RemovingEmbeddedHubRemovesEndpoints) {
 TEST_F(MessageHubManagerTest, AddEmbeddedEndpointForUnknownHub) {
   mManager->initEmbeddedState();
   mManager->addEmbeddedEndpoint(kEndpoint1_1Info);
+  mManager->setEmbeddedEndpointReady(kEndpoint1_1Info.id);
   EXPECT_THAT(mManager->getEmbeddedEndpoints(), IsEmpty());
 }
 
@@ -391,8 +442,7 @@ TEST_F(MessageHubManagerTest, OpenEmbeddedSessionRequest) {
   std::optional<std::string> serviceDescriptor;
   EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(
                                kSessionId, kEndpoint1_1Info.id,
-                               kEndpoint2_1Info.id, serviceDescriptor))
-      .WillOnce(Return(ScopedAStatus::ok()));
+                               kEndpoint2_1Info.id, serviceDescriptor));
   EXPECT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
@@ -416,6 +466,7 @@ TEST_F(MessageHubManagerTest, OpenSessionRequestUnknownHostEndpoint) {
   mManager->initEmbeddedState();
   mManager->addEmbeddedHub(kHub2Info);
   mManager->addEmbeddedEndpoint(kEndpoint2_1Info);
+  mManager->setEmbeddedEndpointReady(kEndpoint2_1Info.id);
   mHostHubCb = SharedRefBase::make<MockEndpointCallback>();
   mHostHub = *mManager->createHostHub(mHostHubCb, kHub1Info, 0, 0);
 
@@ -438,6 +489,64 @@ TEST_F(MessageHubManagerTest, OpenSessionRequestUnknownEmbeddedEndpoint) {
             pw::Status::NotFound());
 }
 
+TEST_F(MessageHubManagerTest, OpenHostSessionRequestWithService) {
+  setupDefaultHubs();
+
+  auto range = *mHostHub->reserveSessionIdRange(1);
+  uint16_t sessionId = range.first;
+  EXPECT_TRUE(mHostHub
+                  ->openSession(kEndpoint1_2Info.id, kEndpoint2_2Info.id,
+                                sessionId, kTestServiceDescriptor,
+                                /*hostInitiated=*/true)
+                  .ok());
+}
+
+TEST_F(MessageHubManagerTest, OpenEmbeddedSessionRequestWithService) {
+  setupDefaultHubs();
+
+  auto range = *mHostHub->reserveSessionIdRange(1);
+  uint16_t sessionId = range.first;
+  EXPECT_TRUE(mHostHub
+                  ->openSession(kEndpoint1_2Info.id, kEndpoint2_2Info.id,
+                                sessionId, kTestServiceDescriptor,
+                                /*hostInitiated=*/true)
+                  .ok());
+}
+
+TEST_F(MessageHubManagerTest, OpenSessionWithServiceHostSideDoesNotSupport) {
+  setupDefaultHubs();
+
+  EXPECT_FALSE(mHostHub
+                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_2Info.id,
+                                 kHostSessionIdBase, kTestServiceDescriptor,
+                                 /*hostInitiated=*/true)
+                   .ok());
+}
+
+TEST_F(MessageHubManagerTest,
+       OpenSessionWithServiceEmbeddedSideDoesNotSupport) {
+  setupDefaultHubs();
+
+  EXPECT_FALSE(mHostHub
+                   ->openSession(kEndpoint1_2Info.id, kEndpoint2_1Info.id,
+                                 kHostSessionIdBase, kTestServiceDescriptor,
+                                 /*hostInitiated=*/true)
+                   .ok());
+}
+
+TEST_F(MessageHubManagerTest, OpenSessionRequestServiceSupportedButNotUsed) {
+  setupDefaultHubs();
+
+  std::optional<std::string> serviceDescriptor;
+  auto range = *mHostHub->reserveSessionIdRange(1);
+  uint16_t sessionId = range.first;
+  EXPECT_TRUE(mHostHub
+                  ->openSession(kEndpoint1_2Info.id, kEndpoint2_2Info.id,
+                                sessionId, serviceDescriptor,
+                                /*hostInitiated=*/true)
+                  .ok());
+}
+
 TEST_F(MessageHubManagerTest, OpenHostSessionEmbeddedEndpointAccepts) {
   auto sessionId = setupDefaultHubsAndSession();
   EXPECT_TRUE(mHostHub->checkSessionOpen(sessionId).ok());
@@ -453,8 +562,7 @@ TEST_F(MessageHubManagerTest, OpenHostSessionEmbeddedEndpointRejects) {
 
   EXPECT_CALL(*mHostHubCb,
               onCloseEndpointSession(
-                  range.first, Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED))
-      .WillOnce(Return(ScopedAStatus::ok()));
+                  range.first, Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED));
   EXPECT_TRUE(mManager->getHostHub(kHub1Id)
                   ->closeSession(range.first,
                                  Reason::OPEN_ENDPOINT_SESSION_REQUEST_REJECTED)
@@ -476,8 +584,7 @@ TEST_F(MessageHubManagerTest, OpenHostSessionHostTriesToAck) {
 TEST_F(MessageHubManagerTest, OpenEmbeddedSessionHostEndpointAccepts) {
   setupDefaultHubs();
   static constexpr uint16_t kSessionId = 1;
-  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _));
   ASSERT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
@@ -490,8 +597,7 @@ TEST_F(MessageHubManagerTest, OpenEmbeddedSessionHostEndpointAccepts) {
 TEST_F(MessageHubManagerTest, OpenEmbeddedSessionMessageRouterTriesToAck) {
   setupDefaultHubs();
   static constexpr uint16_t kSessionId = 1;
-  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _));
   ASSERT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
@@ -503,18 +609,15 @@ TEST_F(MessageHubManagerTest, OpenEmbeddedSessionMessageRouterTriesToAck) {
 TEST_F(MessageHubManagerTest, OpenEmbeddedSessionPrunePendingSession) {
   setupDefaultHubs();
   static constexpr uint16_t kSessionId = 1;
-  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _));
   EXPECT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
                   .ok());
   EXPECT_TRUE(mHostHub->ackSession(kSessionId, /*hostAcked=*/true).ok());
 
-  EXPECT_CALL(*mHostHubCb, onCloseEndpointSession(kSessionId, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
-  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onCloseEndpointSession(kSessionId, _));
+  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _));
   EXPECT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
@@ -524,8 +627,7 @@ TEST_F(MessageHubManagerTest, OpenEmbeddedSessionPrunePendingSession) {
 TEST_F(MessageHubManagerTest, OpenEmbeddedSessionMessageRouterAcks) {
   setupDefaultHubs();
   static constexpr uint16_t kSessionId = 1;
-  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onEndpointSessionOpenRequest(kSessionId, _, _, _));
   ASSERT_TRUE(mHostHub
                   ->openSession(kEndpoint1_1Info.id, kEndpoint2_1Info.id,
                                 kSessionId, {}, /*hostInitiated=*/false)
@@ -539,12 +641,12 @@ TEST_F(MessageHubManagerTest, OpenEmbeddedSessionMessageRouterAcks) {
 TEST_F(MessageHubManagerTest, ActiveSessionEmbeddedHubGone) {
   auto sessionId = setupDefaultHubsAndSession();
 
-  EXPECT_CALL(*mHostHubCb, onCloseEndpointSession(sessionId, Reason::HUB_RESET))
-      .WillOnce(Return(ScopedAStatus::ok()));
-  EXPECT_CALL(*mHostHubCb, onEndpointStopped(
-                               UnorderedElementsAreArray({kEndpoint2_1Info.id}),
-                               Reason::HUB_RESET))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb,
+              onCloseEndpointSession(sessionId, Reason::HUB_RESET));
+  EXPECT_CALL(*mHostHubCb,
+              onEndpointStopped(UnorderedElementsAreArray(
+                                    {kEndpoint2_1Info.id, kEndpoint2_2Info.id}),
+                                Reason::HUB_RESET));
   mManager->removeEmbeddedHub(kHub2Id);
   EXPECT_EQ(mHostHub->checkSessionOpen(sessionId), pw::Status::NotFound());
 }
@@ -553,12 +655,10 @@ TEST_F(MessageHubManagerTest, ActiveSessionEmbeddedEndpointGone) {
   auto sessionId = setupDefaultHubsAndSession();
 
   EXPECT_CALL(*mHostHubCb,
-              onCloseEndpointSession(sessionId, Reason::ENDPOINT_GONE))
-      .WillOnce(Return(ScopedAStatus::ok()));
+              onCloseEndpointSession(sessionId, Reason::ENDPOINT_GONE));
   EXPECT_CALL(*mHostHubCb, onEndpointStopped(
                                UnorderedElementsAreArray({kEndpoint2_1Info.id}),
-                               Reason::ENDPOINT_GONE))
-      .WillOnce(Return(ScopedAStatus::ok()));
+                               Reason::ENDPOINT_GONE));
   mManager->removeEmbeddedEndpoint(kEndpoint2_1Info.id);
   EXPECT_EQ(mHostHub->checkSessionOpen(sessionId), pw::Status::NotFound());
 }
@@ -575,8 +675,7 @@ TEST_F(MessageHubManagerTest, HandleMessage) {
   auto sessionId = setupDefaultHubsAndSession();
 
   Message message{.content = {0xde, 0xad, 0xbe, 0xef}};
-  EXPECT_CALL(*mHostHubCb, onMessageReceived(sessionId, message))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onMessageReceived(sessionId, message));
   EXPECT_TRUE(mHostHub->handleMessage(sessionId, message).ok());
 }
 
@@ -592,8 +691,7 @@ TEST_F(MessageHubManagerTest, HandleMessageDeliveryStatus) {
   auto sessionId = setupDefaultHubsAndSession();
 
   MessageDeliveryStatus status{.errorCode = ErrorCode::TRANSIENT_ERROR};
-  EXPECT_CALL(*mHostHubCb, onMessageDeliveryStatusReceived(sessionId, status))
-      .WillOnce(Return(ScopedAStatus::ok()));
+  EXPECT_CALL(*mHostHubCb, onMessageDeliveryStatusReceived(sessionId, status));
   EXPECT_TRUE(mHostHub->handleMessageDeliveryStatus(sessionId, status).ok());
 }
 

@@ -106,6 +106,8 @@ class ContextHubV4Impl {
   void onRegisterMessageHub(const ::chre::fbs::RegisterMessageHubT &msg);
   void onUnregisterMessageHub(const ::chre::fbs::UnregisterMessageHubT &msg);
   void onRegisterEndpoint(const ::chre::fbs::RegisterEndpointT &msg);
+  void onAddServiceToEndpoint(const ::chre::fbs::AddServiceToEndpointT &msg);
+  void onEndpointReady(const ::chre::fbs::EndpointReadyT &msg);
   void onUnregisterEndpoint(const ::chre::fbs::UnregisterEndpointT &msg);
   void onOpenEndpointSessionRequest(
       const ::chre::fbs::OpenEndpointSessionRequestT &msg);

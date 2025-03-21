@@ -25,6 +25,7 @@
 #include "chre/core/host_message_hub_manager.h"
 #include "chre/platform/log.h"
 #include "chre/platform/shared/fbs/host_messages_generated.h"
+#include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 #include "chre/util/system/message_common.h"
 
@@ -32,6 +33,17 @@ using flatbuffers::Offset;
 using flatbuffers::Vector;
 
 namespace chre {
+
+using message::EndpointId;
+using message::EndpointInfo;
+using message::EndpointType;
+using message::MessageHubId;
+using message::MessageHubInfo;
+using message::Reason;
+using message::RpcFormat;
+using message::ServiceInfo;
+using message::Session;
+using message::SessionId;
 
 // This is similar to getStringFromByteVector in host_protocol_host.h. Ensure
 // that method's implementation is kept in sync with this.
@@ -49,15 +61,6 @@ const char *getStringFromByteVector(const flatbuffers::Vector<int8_t> *vec) {
 }
 
 #ifdef CHRE_MESSAGE_ROUTER_SUPPORT_ENABLED
-using ::chre::message::EndpointId;
-using ::chre::message::EndpointInfo;
-using ::chre::message::EndpointType;
-using ::chre::message::MessageHubId;
-using ::chre::message::MessageHubInfo;
-using ::chre::message::Reason;
-using ::chre::message::Session;
-using ::chre::message::SessionId;
-
 namespace {
 HostMessageHubManager &getHostHubManager() {
   return EventLoopManagerSingleton::get()->getHostMessageHubManager();
@@ -320,8 +323,30 @@ bool HostProtocolChre::decodeMessageFromHost(const void *message,
                               fbsEndpoint->version(),
                               static_cast<EndpointType>(fbsEndpoint->type()),
                               fbsEndpoint->required_permissions());
+        DynamicVector<ServiceInfo> services;
+        if (fbsEndpoint->services() && fbsEndpoint->services()->size()) {
+          if (!services.reserve(fbsEndpoint->services()->size())) {
+            LOG_OOM();
+          } else {
+            for (const auto &service : *fbsEndpoint->services()) {
+              auto *serviceDescriptor =
+                  getStringFromByteVector(service->descriptor());
+              if (!serviceDescriptor) continue;
+              auto size = strlen(serviceDescriptor) + 1;
+              auto *buf = static_cast<char *>(memoryAlloc(size));
+              if (!buf) {
+                LOG_OOM();
+                break;
+              }
+              memcpy(buf, serviceDescriptor, size);
+              services.emplace_back(buf, service->major_version(),
+                                    service->minor_version(),
+                                    static_cast<RpcFormat>(service->format()));
+            }
+          }
+        }
         getHostHubManager().registerEndpoint(fbsEndpoint->id()->hubId(),
-                                             endpoint);
+                                             endpoint, std::move(services));
         break;
       }
 
@@ -643,8 +668,8 @@ void HostProtocolChre::encodeGetMessageHubsAndEndpointsResponse(
            msg.Union());
 }
 
-void HostProtocolChre::encodeRegisterMessageHub(
-    ChreFlatBufferBuilder &builder, const message::MessageHubInfo &hub) {
+void HostProtocolChre::encodeRegisterMessageHub(ChreFlatBufferBuilder &builder,
+                                                const MessageHubInfo &hub) {
   auto vendorHub = fbs::CreateVendorHubInfo(
       builder, addStringAsByteVector(builder, hub.name));
   auto fbsHub = fbs::CreateMessageHub(builder, hub.id,
@@ -655,14 +680,14 @@ void HostProtocolChre::encodeRegisterMessageHub(
 }
 
 void HostProtocolChre::encodeUnregisterMessageHub(
-    ChreFlatBufferBuilder &builder, message::MessageHubId id) {
+    ChreFlatBufferBuilder &builder, MessageHubId id) {
   auto msg = fbs::CreateUnregisterMessageHub(builder, id);
   finalize(builder, fbs::ChreMessage::UnregisterMessageHub, msg.Union());
 }
 
-void HostProtocolChre::encodeRegisterEndpoint(
-    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
-    const message::EndpointInfo &endpoint) {
+void HostProtocolChre::encodeRegisterEndpoint(ChreFlatBufferBuilder &builder,
+                                              MessageHubId hub,
+                                              const EndpointInfo &endpoint) {
   auto id = fbs::CreateEndpointId(builder, hub, endpoint.id);
   auto info = fbs::CreateEndpointInfo(
       builder, id, static_cast<fbs::EndpointType>(endpoint.type),
@@ -672,16 +697,37 @@ void HostProtocolChre::encodeRegisterEndpoint(
   finalize(builder, fbs::ChreMessage::RegisterEndpoint, msg.Union());
 }
 
+void HostProtocolChre::encodeAddServiceToEndpoint(
+    ChreFlatBufferBuilder &builder, MessageHubId hub, EndpointId endpoint,
+    const ServiceInfo &service) {
+  auto id = fbs::CreateEndpointId(builder, hub, endpoint);
+  auto serviceDescriptor =
+      addStringAsByteVector(builder, service.serviceDescriptor);
+  auto fbsService = fbs::CreateService(
+      builder, static_cast<fbs::RpcFormat>(service.format), serviceDescriptor,
+      service.majorVersion, service.minorVersion);
+  auto msg = fbs::CreateAddServiceToEndpoint(builder, id, fbsService);
+  finalize(builder, fbs::ChreMessage::AddServiceToEndpoint, msg.Union());
+}
+
+void HostProtocolChre::encodeEndpointReady(ChreFlatBufferBuilder &builder,
+                                           MessageHubId hub,
+                                           EndpointId endpoint) {
+  auto id = fbs::CreateEndpointId(builder, hub, endpoint);
+  auto msg = fbs::CreateEndpointReady(builder, id);
+  finalize(builder, fbs::ChreMessage::EndpointReady, msg.Union());
+}
+
 void HostProtocolChre::encodeUnregisterEndpoint(ChreFlatBufferBuilder &builder,
-                                                message::MessageHubId hub,
-                                                message::EndpointId endpoint) {
+                                                MessageHubId hub,
+                                                EndpointId endpoint) {
   auto id = fbs::CreateEndpointId(builder, hub, endpoint);
   auto msg = fbs::CreateUnregisterEndpoint(builder, id);
   finalize(builder, fbs::ChreMessage::UnregisterEndpoint, msg.Union());
 }
 
 void HostProtocolChre::encodeOpenEndpointSessionRequest(
-    ChreFlatBufferBuilder &builder, const message::Session &session) {
+    ChreFlatBufferBuilder &builder, const Session &session) {
   auto fromEndpoint = fbs::CreateEndpointId(
       builder, session.initiator.messageHubId, session.initiator.endpointId);
   auto toEndpoint = fbs::CreateEndpointId(builder, session.peer.messageHubId,
@@ -693,24 +739,22 @@ void HostProtocolChre::encodeOpenEndpointSessionRequest(
 }
 
 void HostProtocolChre::encodeEndpointSessionOpened(
-    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
-    message::SessionId session) {
+    ChreFlatBufferBuilder &builder, MessageHubId hub, SessionId session) {
   auto msg = fbs::CreateEndpointSessionOpened(builder, hub, session);
   finalize(builder, fbs::ChreMessage::EndpointSessionOpened, msg.Union());
 }
 
 void HostProtocolChre::encodeEndpointSessionClosed(
-    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
-    message::SessionId session, message::Reason reason) {
+    ChreFlatBufferBuilder &builder, MessageHubId hub, SessionId session,
+    Reason reason) {
   auto msg = fbs::CreateEndpointSessionClosed(builder, hub, session,
                                               static_cast<fbs::Reason>(reason));
   finalize(builder, fbs::ChreMessage::EndpointSessionClosed, msg.Union());
 }
 
 void HostProtocolChre::encodeEndpointSessionMessage(
-    ChreFlatBufferBuilder &builder, message::MessageHubId hub,
-    message::SessionId session, pw::UniquePtr<std::byte[]> &&data,
-    uint32_t type, uint32_t permissions) {
+    ChreFlatBufferBuilder &builder, MessageHubId hub, SessionId session,
+    pw::UniquePtr<std::byte[]> &&data, uint32_t type, uint32_t permissions) {
   auto dataVec = builder.CreateVector(reinterpret_cast<uint8_t *>(data.get()),
                                       data.size());
   auto msg = fbs::CreateEndpointSessionMessage(builder, hub, session, type,

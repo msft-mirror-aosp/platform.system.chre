@@ -415,6 +415,30 @@ class HostProtocolChre : public HostProtocolCommon {
                                      const message::EndpointInfo &endpoint);
 
   /**
+   * Encodes a notification to add a service hosted by a new embedded endpoint.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the new endpoint.
+   * @param endpoint Id of the new endpoint.
+   * @param service The service being added.
+   */
+  static void encodeAddServiceToEndpoint(ChreFlatBufferBuilder &builder,
+                                         message::MessageHubId hub,
+                                         message::EndpointId endpoint,
+                                         const message::ServiceInfo &service);
+
+  /**
+   * Encodes an embedded endpoint ready notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the new endpoint.
+   * @param endpoint Id of the new endpoint.
+   */
+  static void encodeEndpointReady(ChreFlatBufferBuilder &builder,
+                                  message::MessageHubId hub,
+                                  message::EndpointId endpoint);
+
+  /**
    * Encodes an embedded endpoint removal notification.
    *
    * @param builder Builder which assembles and stores the message.

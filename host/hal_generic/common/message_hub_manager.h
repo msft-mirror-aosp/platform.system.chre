@@ -43,6 +43,7 @@ using ::aidl::android::hardware::contexthub::IEndpointCallback;
 using ::aidl::android::hardware::contexthub::Message;
 using ::aidl::android::hardware::contexthub::MessageDeliveryStatus;
 using ::aidl::android::hardware::contexthub::Reason;
+using ::aidl::android::hardware::contexthub::Service;
 
 /**
  * Stores host and embedded MessageHub objects and maintains global mappings.
@@ -226,8 +227,10 @@ class MessageHubManager {
     // Returns pw::OkStatus() if the hub is in a valid state.
     pw::Status checkValidLocked() REQUIRES(mManager.mLock);
 
-    // Returns pw::OkStatus() if the given endpoint exists on this hub.
-    pw::Status endpointExistsLocked(const EndpointId &id)
+    // Returns pw::OkStatus() if the given endpoint (with service if given)
+    // exists on this hub.
+    pw::Status endpointExistsLocked(
+        const EndpointId &id, std::optional<std::string> serviceDescriptor)
         REQUIRES(mManager.mLock);
 
     // Returns pw::OkStatus() if the session id is in range for this hub.
@@ -351,6 +354,24 @@ class MessageHubManager {
   void addEmbeddedEndpoint(const EndpointInfo &endpoint);
 
   /**
+   * Adds a service to an embedded endpoint in the cache
+   *
+   * Ignored if the endpoint is already marked ready
+   *
+   * @param endpoint the new endpoint being updated
+   * @param service the service being added
+   */
+  void addEmbeddedEndpointService(const EndpointId &endpoint,
+                                  const Service &service);
+
+  /**
+   * Sets the ready flag on an embedded endpoint
+   *
+   * @param id The id of the endpoint to remove
+   */
+  void setEmbeddedEndpointReady(const EndpointId &endpoint);
+
+  /**
    * Removes an embedded endpoint from the cache
    *
    * @param id The id of the endpoint to remove
@@ -411,7 +432,7 @@ class MessageHubManager {
   // Represents an embedded MessageHub. Stores the hub details as well as a map
   // of all endpoints hosted by the hub.
   struct EmbeddedHub {
-    std::unordered_map<int64_t, EndpointInfo> idToEndpoint;
+    std::unordered_map<int64_t, std::pair<EndpointInfo, bool>> idToEndpoint;
     HubInfo info;
   };
 
@@ -433,8 +454,15 @@ class MessageHubManager {
   // Adds an embedded endpoint to the cache.
   void addEmbeddedEndpointLocked(const EndpointInfo &endpoint) REQUIRES(mLock);
 
-  // Returns pw::OkStatus() if the given embedded endpoint is in the cache.
-  pw::Status embeddedEndpointExistsLocked(const EndpointId &id) REQUIRES(mLock);
+  // Returns pw::OkStatus() if the given embedded endpoint (with service, if
+  // given), is in the cache.
+  pw::Status embeddedEndpointExistsLocked(
+      const EndpointId &id, std::optional<std::string> serviceDescriptor)
+      REQUIRES(mLock);
+
+  // Returns a pointer to an embedded endpoint entry if it exists.
+  pw::Result<std::pair<EndpointInfo, bool> *> lookupEmbeddedEndpointLocked(
+      const EndpointId &id) REQUIRES(mLock);
 
   // Callback to pass up the id of a host hub for a client that disconnected.
   HostHubDownCb mHostHubDownCb;

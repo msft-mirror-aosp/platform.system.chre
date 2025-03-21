@@ -333,6 +333,9 @@ bool ContextHubV4Impl::handleMessageFromChre(
     case ChreMessage::RegisterEndpoint:
       onRegisterEndpoint(*message.AsRegisterEndpoint());
       break;
+    case ChreMessage::UnregisterEndpoint:
+      onUnregisterEndpoint(*message.AsUnregisterEndpoint());
+      break;
     case ChreMessage::OpenEndpointSessionRequest:
       onOpenEndpointSessionRequest(*message.AsOpenEndpointSessionRequest());
       break;
@@ -348,6 +351,12 @@ bool ContextHubV4Impl::handleMessageFromChre(
     case ChreMessage::EndpointSessionMessageDeliveryStatus:
       onEndpointSessionMessageDeliveryStatus(
           *message.AsEndpointSessionMessageDeliveryStatus());
+      break;
+    case ChreMessage::AddServiceToEndpoint:
+      onAddServiceToEndpoint(*message.AsAddServiceToEndpoint());
+      break;
+    case ChreMessage::EndpointReady:
+      onEndpointReady(*message.AsEndpointReady());
       break;
     default:
       LOGW("Got unexpected message type %" PRIu8,
@@ -386,6 +395,22 @@ void ContextHubV4Impl::onRegisterEndpoint(
   LOGI("Adding embedded endpoint (0x%" PRIx64 ", 0x%" PRIx64 ")",
        endpoint.id.hubId, endpoint.id.id);
   mManager.addEmbeddedEndpoint(endpoint);
+}
+
+void ContextHubV4Impl::onAddServiceToEndpoint(
+    const ::chre::fbs::AddServiceToEndpointT &msg) {
+  EndpointId endpoint;
+  Service service;
+  HostProtocolHostV4::decodeAddServiceToEndpoint(msg, endpoint, service);
+  mManager.addEmbeddedEndpointService(endpoint, service);
+}
+
+void ContextHubV4Impl::onEndpointReady(const ::chre::fbs::EndpointReadyT &msg) {
+  EndpointId endpoint;
+  HostProtocolHostV4::decodeEndpointReady(msg, endpoint);
+  LOGI("Embedded endpoint (0x%" PRIx64 ", 0x%" PRIx64 ") ready", endpoint.hubId,
+       endpoint.id);
+  mManager.setEmbeddedEndpointReady(endpoint);
 }
 
 void ContextHubV4Impl::onUnregisterEndpoint(
