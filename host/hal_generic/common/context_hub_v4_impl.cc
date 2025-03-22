@@ -43,24 +43,24 @@ void ContextHubV4Impl::init() {
   // is used both to initialize the CHRE-side host hub proxies and to request
   // embedded hub state.
   HostProtocolHostV4::encodeGetMessageHubsAndEndpointsRequest(builder);
-  // TODO(b/389991052): Uncomment the mSendMessageFn() lines below.
-  // if (!mSendMessageFn(builder))
-  //   LOGE("Failed to initialize CHRE host hub proxies");
-  mManager.forEachHostHub([](HostHub &hub) {
+  if (!mSendMessageFn(builder))
+    LOGE("Failed to initialize CHRE host hub proxies");
+  mManager.forEachHostHub([this](HostHub &hub) {
     flatbuffers::FlatBufferBuilder builder;
     HostProtocolHostV4::encodeRegisterMessageHub(builder, hub.info());
-    // if (!mSendMessageFn(builder)) {
-    //   LOGE("Failed to initialize proxy for host hub %" PRIu64, hub.id);
-    //   return;
-    // }
+    if (!mSendMessageFn(builder)) {
+      LOGE("Failed to initialize proxy for host hub %" PRIu64, hub.id());
+      return;
+    }
     for (const auto &endpoint : hub.getEndpoints()) {
       flatbuffers::FlatBufferBuilder builder;
       HostProtocolHostV4::encodeRegisterEndpoint(builder, endpoint);
-      // if (!mSendMessageFn(builder)) {
-      //   LOGE("Failed to initialize proxy for host endpoint (%" PRIu64 ", %"
-      //        PRIu64 ")", endpoint.hubId, endpoint.id);
-      //   return;
-      // }
+      if (!mSendMessageFn(builder)) {
+        LOGE("Failed to initialize proxy for host endpoint (%" PRIu64
+             ", %" PRIu64 ")",
+             endpoint.id.hubId, endpoint.id.id);
+        return;
+      }
     }
   });
 }
@@ -113,7 +113,7 @@ ScopedAStatus ContextHubV4Impl::getEndpoints(
 
 ScopedAStatus ContextHubV4Impl::registerEndpointHub(
     const std::shared_ptr<IEndpointCallback> &callback, const HubInfo &hubInfo,
-    std::shared_ptr<IEndpointCommunication> * /*hubInterface*/) {
+    std::shared_ptr<IEndpointCommunication> *hubInterface) {
   std::lock_guard lock(mHostHubOpLock);  // See header documentation.
   auto statusOrHub = mManager.createHostHub(
       callback, hubInfo, AIBinder_getCallingUid(), AIBinder_getCallingPid());
@@ -124,19 +124,15 @@ ScopedAStatus ContextHubV4Impl::registerEndpointHub(
   }
   flatbuffers::FlatBufferBuilder builder;
   HostProtocolHostV4::encodeRegisterMessageHub(builder, hubInfo);
-  // TODO(b/389991052): Uncomment the following code.
-  // if (!mSendMessageFn(builder)) {
-  //   LOGE("Failed to send RegisterMessageHub for hub 0x%" PRIx64,
-  //   hubInfo.hubId);
-  //   (*statusOrHub)->unregister();
-  //   return ScopedAStatus::fromServiceSpecificError(
-  //       BnContextHub::EX_CONTEXT_HUB_UNSPECIFIED);
-  // }
-  // *hubInterface = ndk::SharedRefBase::make<HostHubInterface>(
-  //     std::move(*statusOrHub), mSendMessageFn, mHostHubOpLock);
-  // return ScopedAStatus::ok();
-  (*statusOrHub)->unregister();
-  return ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+  if (!mSendMessageFn(builder)) {
+    LOGE("Failed to send RegisterMessageHub for hub 0x%" PRIx64, hubInfo.hubId);
+    (*statusOrHub)->unregister();
+    return ScopedAStatus::fromServiceSpecificError(
+        BnContextHub::EX_CONTEXT_HUB_UNSPECIFIED);
+  }
+  *hubInterface = ndk::SharedRefBase::make<HostHubInterface>(
+      std::move(*statusOrHub), mSendMessageFn, mHostHubOpLock);
+  return ScopedAStatus::ok();
 }
 
 ScopedAStatus HostHubInterface::registerEndpoint(const EndpointInfo &endpoint) {
@@ -333,6 +329,9 @@ bool ContextHubV4Impl::handleMessageFromChre(
     case ChreMessage::RegisterEndpoint:
       onRegisterEndpoint(*message.AsRegisterEndpoint());
       break;
+    case ChreMessage::UnregisterEndpoint:
+      onUnregisterEndpoint(*message.AsUnregisterEndpoint());
+      break;
     case ChreMessage::OpenEndpointSessionRequest:
       onOpenEndpointSessionRequest(*message.AsOpenEndpointSessionRequest());
       break;
@@ -348,6 +347,12 @@ bool ContextHubV4Impl::handleMessageFromChre(
     case ChreMessage::EndpointSessionMessageDeliveryStatus:
       onEndpointSessionMessageDeliveryStatus(
           *message.AsEndpointSessionMessageDeliveryStatus());
+      break;
+    case ChreMessage::AddServiceToEndpoint:
+      onAddServiceToEndpoint(*message.AsAddServiceToEndpoint());
+      break;
+    case ChreMessage::EndpointReady:
+      onEndpointReady(*message.AsEndpointReady());
       break;
     default:
       LOGW("Got unexpected message type %" PRIu8,
@@ -386,6 +391,22 @@ void ContextHubV4Impl::onRegisterEndpoint(
   LOGI("Adding embedded endpoint (0x%" PRIx64 ", 0x%" PRIx64 ")",
        endpoint.id.hubId, endpoint.id.id);
   mManager.addEmbeddedEndpoint(endpoint);
+}
+
+void ContextHubV4Impl::onAddServiceToEndpoint(
+    const ::chre::fbs::AddServiceToEndpointT &msg) {
+  EndpointId endpoint;
+  Service service;
+  HostProtocolHostV4::decodeAddServiceToEndpoint(msg, endpoint, service);
+  mManager.addEmbeddedEndpointService(endpoint, service);
+}
+
+void ContextHubV4Impl::onEndpointReady(const ::chre::fbs::EndpointReadyT &msg) {
+  EndpointId endpoint;
+  HostProtocolHostV4::decodeEndpointReady(msg, endpoint);
+  LOGI("Embedded endpoint (0x%" PRIx64 ", 0x%" PRIx64 ") ready", endpoint.hubId,
+       endpoint.id);
+  mManager.setEmbeddedEndpointReady(endpoint);
 }
 
 void ContextHubV4Impl::onUnregisterEndpoint(

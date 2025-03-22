@@ -24,7 +24,7 @@
 #include "chre/core/event.h"
 #include "chre/platform/mutex.h"
 #include "chre/platform/shared/bt_snoop_log.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 
 namespace chre {
 

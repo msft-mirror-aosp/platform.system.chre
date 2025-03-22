@@ -1,4 +1,5 @@
 include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
+include($ENV{PW_ROOT}/pw_flatbuffers/flatbuffers.cmake)
 include(backend.cmake)
 
 pw_add_facade(chre.platform.shared.authentication INTERFACE
@@ -302,13 +303,18 @@ pw_add_library(chre.platform.shared.dlfcn STATIC
     chre.util
 )
 
-pw_add_library(chre.platform.shared.generated.host_messages_generated INTERFACE
-  HEADERS
-    include/chre/platform/shared/generated/host_messages_generated.h
-  PUBLIC_INCLUDES
-    include
-  PUBLIC_DEPS
+pw_flatbuffer_library(chre.platform.shared.idl.host_messages_generated
+  SOURCES
+    idl/host_messages.fbs
+  FLATC_FLAGS
+    --scoped-enums
+    --cpp-ptr-type chre::UniquePtr
+  DEPS
     chre_third_party.flatbuffers
+  PREFIX
+    chre/platform/shared/fbs
+  STRIP_PREFIX
+    idl
 )
 
 pw_add_library(chre.platform.shared.host_protocol_chre STATIC
@@ -318,7 +324,7 @@ pw_add_library(chre.platform.shared.host_protocol_chre STATIC
     include
   PUBLIC_DEPS
     chre.core
-    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.idl.host_messages_generated.cpp
     chre.platform.shared.host_protocol_common
     chre.util
     chre.util.flatbuffers
@@ -345,7 +351,7 @@ pw_add_library(chre.platform.shared.host_protocol_common STATIC
   SOURCES
     host_protocol_common.cc
   PRIVATE_DEPS
-    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.idl.host_messages_generated.cpp
 )
 
 pw_add_library(chre.platform.shared.loader_util INTERFACE
@@ -366,7 +372,7 @@ pw_add_library(chre.platform.shared.log_buffer STATIC
     chre.core
     chre.platform.mutex
     chre.platform.shared.bt_snoop_log
-    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.idl.host_messages_generated.cpp
   SOURCES
     log_buffer.cc
   PRIVATE_DEPS
@@ -389,7 +395,7 @@ pw_add_facade(chre.platform.shared.log_buffer_manager STATIC
     chre.platform.condition_variable
     chre.platform.mutex
     chre.platform.shared.bt_snoop_log.facade
-    chre.platform.shared.generated.host_messages_generated
+    chre.platform.shared.idl.host_messages_generated.cpp
     chre.platform.shared.log_buffer
     chre.util
   SOURCES

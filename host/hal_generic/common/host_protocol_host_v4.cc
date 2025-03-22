@@ -145,6 +145,15 @@ void HostProtocolHostV4::encodeEndpointSessionMessageDeliveryStatus(
            msg.Union());
 }
 
+namespace {
+
+std::string stringFromBytes(const std::vector<int8_t> &bytes) {
+  auto *cStr = ::android::chre::getStringFromByteVector(bytes);
+  return cStr ? std::string(cStr) : std::string();
+}
+
+}  // namespace
+
 void HostProtocolHostV4::decodeGetMessageHubsAndEndpointsResponse(
     const ::chre::fbs::GetMessageHubsAndEndpointsResponseT &msg,
     std::vector<AidlHubInfo> &hubs, std::vector<AidlEndpointInfo> &endpoints) {
@@ -166,6 +175,21 @@ void HostProtocolHostV4::decodeUnregisterMessageHub(
 void HostProtocolHostV4::decodeRegisterEndpoint(
     const ::chre::fbs::RegisterEndpointT &msg, AidlEndpointInfo &info) {
   info = fbsEndpointInfoToAidl(*msg.endpoint);
+}
+
+void HostProtocolHostV4::decodeAddServiceToEndpoint(
+    const ::chre::fbs::AddServiceToEndpointT &msg, AidlEndpointId &id,
+    AidlService &service) {
+  id = fbsEndpointIdToAidl(*msg.endpoint);
+  service.format = static_cast<AidlRpcFormat>(msg.service->format);
+  service.serviceDescriptor = stringFromBytes(msg.service->descriptor);
+  service.majorVersion = msg.service->major_version;
+  service.minorVersion = msg.service->minor_version;
+}
+
+void HostProtocolHostV4::decodeEndpointReady(
+    const ::chre::fbs::EndpointReadyT &msg, AidlEndpointId &id) {
+  id = fbsEndpointIdToAidl(*msg.endpoint);
 }
 
 void HostProtocolHostV4::decodeUnregisterEndpoint(
@@ -264,15 +288,6 @@ Offset<MessageHub> HostProtocolHostV4::aidlToFbsMessageHub(
   return ::chre::fbs::CreateMessageHub(builder, info.hubId, detailsEnum,
                                        detailsUnion);
 }
-
-namespace {
-
-std::string stringFromBytes(const std::vector<int8_t> &bytes) {
-  auto *cStr = ::android::chre::getStringFromByteVector(bytes);
-  return cStr ? std::string(cStr) : std::string();
-}
-
-}  // namespace
 
 AidlHubInfo HostProtocolHostV4::fbsMessageHubToAidl(
     const ::chre::fbs::MessageHubT &hub) {

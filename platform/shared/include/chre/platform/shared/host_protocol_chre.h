@@ -23,7 +23,7 @@
 #include "chre/core/ble_l2cap_coc_socket_data.h"
 #include "chre/core/nanoapp.h"
 #include "chre/core/settings.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/platform/shared/host_protocol_common.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/flatbuffers/helpers.h"
@@ -413,6 +413,30 @@ class HostProtocolChre : public HostProtocolCommon {
   static void encodeRegisterEndpoint(ChreFlatBufferBuilder &builder,
                                      message::MessageHubId hub,
                                      const message::EndpointInfo &endpoint);
+
+  /**
+   * Encodes a notification to add a service hosted by a new embedded endpoint.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the new endpoint.
+   * @param endpoint Id of the new endpoint.
+   * @param service The service being added.
+   */
+  static void encodeAddServiceToEndpoint(ChreFlatBufferBuilder &builder,
+                                         message::MessageHubId hub,
+                                         message::EndpointId endpoint,
+                                         const message::ServiceInfo &service);
+
+  /**
+   * Encodes an embedded endpoint ready notification.
+   *
+   * @param builder Builder which assembles and stores the message.
+   * @param hub Id of the hub hosting the new endpoint.
+   * @param endpoint Id of the new endpoint.
+   */
+  static void encodeEndpointReady(ChreFlatBufferBuilder &builder,
+                                  message::MessageHubId hub,
+                                  message::EndpointId endpoint);
 
   /**
    * Encodes an embedded endpoint removal notification.

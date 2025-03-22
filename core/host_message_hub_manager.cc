@@ -27,7 +27,7 @@
 #include "chre/platform/log.h"
 #include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/platform/shared/host_protocol_chre.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/memory.h"
@@ -49,6 +49,7 @@ using ::chre::message::MessageHubInfo;
 using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
 using ::chre::message::Reason;
+using ::chre::message::ServiceInfo;
 using ::chre::message::Session;
 using ::chre::message::SessionId;
 
@@ -84,6 +85,16 @@ void HostMessageHubManager::reset() {
       [this](const MessageHubInfo &hub, const EndpointInfo &endpoint) {
         mCb->onEndpointRegistered(hub.id, endpoint);
       });
+  MessageRouterSingleton::get()->forEachService(
+      [this](const MessageHubInfo &hub, const EndpointInfo &endpoint,
+             const ServiceInfo &service) {
+        mCb->onEndpointService(hub.id, endpoint.id, service);
+        return false;
+      });
+  MessageRouterSingleton::get()->forEachEndpoint(
+      [this](const MessageHubInfo &hub, const EndpointInfo &endpoint) {
+        mCb->onEndpointReady(hub.id, endpoint.id);
+      });
   LOGI("Initialized HostMessageHubManager");
 }
 
@@ -106,12 +117,13 @@ void HostMessageHubManager::unregisterHub(MessageHubId id) {
   LOGE("No host hub 0x%" PRIx64 " for unregister", id);
 }
 
-void HostMessageHubManager::registerEndpoint(MessageHubId hubId,
-                                             const EndpointInfo &info) {
+void HostMessageHubManager::registerEndpoint(
+    MessageHubId hubId, const EndpointInfo &info,
+    DynamicVector<ServiceInfo> &&services) {
   LockGuard<Mutex> lock(mHubsLock);
   for (auto &hub : mHubs) {
     if (hub->getMessageHub().getId() != hubId) continue;
-    hub->addEndpoint(info);
+    hub->addEndpoint(info, std::move(services));
     return;
   }
   LOGE("No host hub 0x%" PRIx64 " for add endpoint", hubId);
@@ -257,18 +269,21 @@ void HostMessageHubManager::Hub::clear() {
   deallocateEndpoints(mEndpoints);
 }
 
-void HostMessageHubManager::Hub::addEndpoint(const EndpointInfo &info) {
+void HostMessageHubManager::Hub::addEndpoint(
+    const EndpointInfo &info, DynamicVector<ServiceInfo> &&services) {
   Endpoint *endpoint = nullptr;
   {
     LockGuard<Mutex> managerLock(mManagerLock);
     CHRE_ASSERT_LOG(mManager != nullptr,
                     "The HostMessageHubManager has been destroyed.");
 
-    endpoint = mManager->mEndpointAllocator.allocate(info);
+    endpoint = mManager->mEndpointAllocator.allocate(info, std::move(services));
     if (endpoint == nullptr) {
       LOGE("Failed to allocate storage for endpoint (0x%" PRIx64 ", 0x%" PRIx64
            ")",
            mMessageHub.getId(), info.id);
+      for (const auto &service : services)
+        memoryFree(const_cast<char *>(service.serviceDescriptor));
       return;
     }
   }
@@ -281,20 +296,23 @@ void HostMessageHubManager::Hub::addEndpoint(const EndpointInfo &info) {
 }
 
 void HostMessageHubManager::Hub::removeEndpoint(EndpointId id) {
-  // TODO(b/390447515): Unregister from MessageRouter
-  LockGuard<Mutex> managerLock(mManagerLock);
-  CHRE_ASSERT_LOG(mManager != nullptr,
-                  "The HostMessageHubManager has been destroyed.");
-
-  LockGuard<Mutex> lock(mEndpointsLock);
-  for (auto it = mEndpoints.begin(), eraseIt = mEndpoints.before_begin();
-       it != mEndpoints.end(); ++it, ++eraseIt) {
-    auto &endpoint = *it;
-    if (endpoint.kInfo.id == id) {
-      mEndpoints.erase_after(eraseIt);
-      mManager->mEndpointAllocator.deallocate(&endpoint);
-      return;
+  Endpoint *endpoint = nullptr;
+  {
+    LockGuard<Mutex> lock(mEndpointsLock);
+    for (auto it = mEndpoints.begin(), eraseIt = mEndpoints.before_begin();
+         it != mEndpoints.end(); ++it, ++eraseIt) {
+      if (it->kInfo.id == id) {
+        mEndpoints.erase_after(eraseIt);
+        endpoint = &(*it);
+        break;
+      }
     }
+  }
+  if (endpoint) {
+    LockGuard<Mutex> managerLock(mManagerLock);
+    CHRE_ASSERT_LOG(mManager != nullptr,
+                    "The HostMessageHubManager has been destroyed.");
+    mManager->mEndpointAllocator.deallocate(endpoint);
   }
 }
 
@@ -361,21 +379,39 @@ std::optional<EndpointInfo> HostMessageHubManager::Hub::getEndpointInfo(
 }
 
 std::optional<EndpointId> HostMessageHubManager::Hub::getEndpointForService(
-    const char * /*serviceDescriptor*/) {
-  // TODO(b/390447515): Add support for service descriptors
+    const char *serviceDescriptor) {
+  LockGuard<Mutex> lock(mEndpointsLock);
+  for (const auto &endpoint : mEndpoints) {
+    for (const auto &service : endpoint.mServices) {
+      if (!std::strcmp(serviceDescriptor, service.serviceDescriptor))
+        return endpoint.kInfo.id;
+    }
+  }
   return {};
 }
 
 bool HostMessageHubManager::Hub::doesEndpointHaveService(
-    EndpointId /*endpointId*/, const char * /*serviceDescriptor*/) {
-  // TODO(b/390447515): Add support for service descriptors
+    EndpointId endpointId, const char *serviceDescriptor) {
+  LockGuard<Mutex> lock(mEndpointsLock);
+  for (const auto &endpoint : mEndpoints) {
+    if (endpoint.kInfo.id != endpointId) continue;
+    for (const auto &service : endpoint.mServices) {
+      if (!std::strcmp(serviceDescriptor, service.serviceDescriptor))
+        return true;
+    }
+    return false;
+  }
   return false;
 }
 
 void HostMessageHubManager::Hub::forEachService(
     const pw::Function<bool(const message::EndpointInfo &,
-                            const message::ServiceInfo &)> & /* function */) {
-  // TODO(b/390447515): Add support for service descriptors
+                            const message::ServiceInfo &)> &function) {
+  LockGuard<Mutex> lock(mEndpointsLock);
+  for (const auto &endpoint : mEndpoints) {
+    for (const auto &service : endpoint.mServices)
+      function(endpoint.kInfo, service);
+  }
 }
 
 void HostMessageHubManager::Hub::onHubRegistered(const MessageHubInfo &info) {
@@ -405,15 +441,29 @@ void HostMessageHubManager::Hub::onEndpointRegistered(MessageHubId messageHubId,
   std::optional<EndpointInfo> endpoint =
       MessageRouterSingleton::get()->getEndpointInfo(messageHubId, endpointId);
   if (!endpoint) return;
-
   LockGuard<Mutex> managerLock(mManagerLock);
   if (mManager == nullptr) {
     LOGW("The HostMessageHubManager has been destroyed.");
     return;
   }
-
   LockGuard<Mutex> lock(mManager->mEmbeddedHubOpLock);
+
   mManager->mCb->onEndpointRegistered(messageHubId, *endpoint);
+  struct {
+    HostCallback *cb;
+    MessageHubId hub;
+    EndpointId endpoint;
+  } context = {
+      .cb = mManager->mCb, .hub = messageHubId, .endpoint = endpointId};
+  MessageRouterSingleton::get()->forEachService(
+      [&context](const MessageHubInfo &hub, const EndpointInfo &endpoint,
+                 const ServiceInfo &service) {
+        if (context.hub != hub.id) return false;
+        if (context.endpoint != endpoint.id) return false;
+        context.cb->onEndpointService(hub.id, endpoint.id, service);
+        return false;
+      });
+  mManager->mCb->onEndpointReady(messageHubId, endpointId);
 }
 
 void HostMessageHubManager::Hub::onEndpointUnregistered(

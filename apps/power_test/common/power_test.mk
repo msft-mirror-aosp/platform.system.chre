@@ -22,6 +22,7 @@ NANOAPP_VERSION = 0x00020000
 
 # Include paths.
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/apps/power_test/common/include
+COMMON_CFLAGS += -I$(CHRE_PREFIX)/apps/power_test/common/generated/include
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/external/flatbuffers/include
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
 

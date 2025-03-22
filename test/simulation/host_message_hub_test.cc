@@ -25,6 +25,7 @@
 
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/host_message_hub_manager.h"
+#include "chre/platform/memory.h"
 #include "chre/util/system/message_common.h"
 #include "chre/util/system/message_router.h"
 #include "chre/util/system/message_router_mocks.h"
@@ -47,33 +48,36 @@ using ::chre::message::MessageRouter;
 using ::chre::message::MessageRouterSingleton;
 using ::chre::message::MockMessageHubCallback;
 using ::chre::message::Reason;
+using ::chre::message::RpcFormat;
+using ::chre::message::ServiceInfo;
 using ::chre::message::Session;
 using ::chre::message::SessionId;
 using ::testing::_;
 using ::testing::AnyNumber;
+using ::testing::Expectation;
 using ::testing::NiceMock;
-using ::testing::Sequence;
 using ::testing::UnorderedElementsAreArray;
 
 class MockHostCallback : public HostMessageHubManager::HostCallback {
  public:
   MOCK_METHOD(void, onReset, (), (override));
-  MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &hub), (override));
+  MOCK_METHOD(void, onHubRegistered, (const MessageHubInfo &), (override));
   MOCK_METHOD(void, onHubUnregistered, (MessageHubId), (override));
-  MOCK_METHOD(void, onEndpointRegistered,
-              (MessageHubId hub, const EndpointInfo &endpoint), (override));
-  MOCK_METHOD(void, onEndpointUnregistered,
-              (MessageHubId hub, EndpointId endpoint), (override));
+  MOCK_METHOD(void, onEndpointRegistered, (MessageHubId, const EndpointInfo &),
+              (override));
+  MOCK_METHOD(void, onEndpointService,
+              (MessageHubId, EndpointId, const ServiceInfo &), (override));
+  MOCK_METHOD(void, onEndpointReady, (MessageHubId, EndpointId), (override));
+  MOCK_METHOD(void, onEndpointUnregistered, (MessageHubId, EndpointId),
+              (override));
   MOCK_METHOD(bool, onMessageReceived,
-              (MessageHubId hub, SessionId session,
-               pw::UniquePtr<std::byte[]> &&data, uint32_t type,
-               uint32_t permissions),
+              (MessageHubId, SessionId, pw::UniquePtr<std::byte[]> &&, uint32_t,
+               uint32_t),
               (override));
-  MOCK_METHOD(void, onSessionOpenRequest, (const Session &session), (override));
-  MOCK_METHOD(void, onSessionOpened, (MessageHubId hub, SessionId session),
+  MOCK_METHOD(void, onSessionOpenRequest, (const Session &), (override));
+  MOCK_METHOD(void, onSessionOpened, (MessageHubId, SessionId), (override));
+  MOCK_METHOD(void, onSessionClosed, (MessageHubId, SessionId, Reason),
               (override));
-  MOCK_METHOD(void, onSessionClosed,
-              (MessageHubId hub, SessionId session, Reason reason), (override));
 };
 
 HostMessageHubManager &getManager() {
@@ -84,6 +88,8 @@ MessageRouter &getRouter() {
   return *MessageRouterSingleton::get();
 }
 
+const char *kServiceName = "test_service";
+const ServiceInfo kService(kServiceName, 0, 0, RpcFormat::CUSTOM);
 const EndpointInfo kEndpoints[] = {
     EndpointInfo(0x1, nullptr, 0, EndpointType::GENERIC, 0),
     EndpointInfo(0x2, nullptr, 0, EndpointType::GENERIC, 0)};
@@ -97,38 +103,65 @@ const MessageHubInfo kHostHub{.id = kEmbeddedHub.id + 1, .name = kHostHubName};
 
 class HostMessageHubTest : public TestBase {
  public:
-  HostMessageHubTest()
-      : TestBase(),
-        mEmbeddedEndpoints(kEndpoints, kEndpoints + std::size(kEndpoints)) {}
+  HostMessageHubTest() : TestBase() {
+    for (const auto &endpoint : kEndpoints) {
+      std::vector<ServiceInfo> services;
+      if (endpoint.id > 0x1) services.push_back(kService);
+      mEmbeddedEndpoints.push_back({endpoint, std::move(services)});
+    }
+  }
 
   void SetUp() override {
     TestBase::SetUp();
 
     mEmbeddedHubCb = pw::MakeRefCounted<NiceMock<MockMessageHubCallback>>();
-    EXPECT_NE(mEmbeddedHubCb.get(), nullptr);
+    ASSERT_NE(mEmbeddedHubCb.get(), nullptr);
 
     // Specify uninteresting behaviors for the mock embedded hub callback.
     ON_CALL(*mEmbeddedHubCb, forEachEndpoint(_))
         .WillByDefault(
             [this](const pw::Function<bool(const EndpointInfo &)> &fn) {
-              for (const auto &info : mEmbeddedEndpoints)
-                if (fn(info)) return;
+              for (const auto &endpoint : mEmbeddedEndpoints)
+                if (fn(endpoint.first)) return;
             });
     ON_CALL(*mEmbeddedHubCb, getEndpointInfo(_))
         .WillByDefault([this](EndpointId id) -> std::optional<EndpointInfo> {
           for (const auto &endpoint : mEmbeddedEndpoints)
-            if (endpoint.id == id) return endpoint;
+            if (endpoint.first.id == id) return endpoint.first;
           return {};
         });
     ON_CALL(*mEmbeddedHubCb, getEndpointForService(_))
         .WillByDefault(
-            [](const char *) -> std::optional<EndpointId> { return {}; });
+            [this](const char *service) -> std::optional<EndpointId> {
+              for (const auto &endpoint : mEmbeddedEndpoints) {
+                for (const auto &serviceInfo : endpoint.second) {
+                  if (!std::strcmp(serviceInfo.serviceDescriptor, service))
+                    return endpoint.first.id;
+                }
+              }
+              return {};
+            });
     ON_CALL(*mEmbeddedHubCb, doesEndpointHaveService(_, _))
-        .WillByDefault([](EndpointId, const char *) { return false; });
+        .WillByDefault([this](EndpointId id, const char *service) {
+          for (const auto &endpoint : mEmbeddedEndpoints) {
+            if (endpoint.first.id != id) continue;
+            for (const auto &serviceInfo : endpoint.second) {
+              if (!std::strcmp(serviceInfo.serviceDescriptor, service))
+                return true;
+            }
+          }
+          return false;
+        });
     ON_CALL(*mEmbeddedHubCb, forEachService(_))
         .WillByDefault(
-            [](const pw::Function<bool(const EndpointInfo &,
-                                       const message::ServiceInfo &)> &) {});
+            [this](const pw::Function<bool(const EndpointInfo &,
+                                           const message::ServiceInfo &)> &fn) {
+              for (const auto &endpoint : mEmbeddedEndpoints) {
+                for (const auto &serviceInfo : endpoint.second) {
+                  if (fn(endpoint.first, serviceInfo)) return;
+                }
+              }
+            });
 
     // We mostly don't care about this. Individual tests may override this
     // behavior.
@@ -154,10 +187,51 @@ class HostMessageHubTest : public TestBase {
     EXPECT_CALL(mHostCallback, onReset());
     EXPECT_CALL(mHostCallback, onHubRegistered(_)).Times(AnyNumber());
     EXPECT_CALL(mHostCallback, onEndpointRegistered(_, _)).Times(AnyNumber());
+    EXPECT_CALL(mHostCallback, onEndpointService(_, _, _)).Times(AnyNumber());
+    EXPECT_CALL(mHostCallback, onEndpointReady(_, _)).Times(AnyNumber());
     getManager().reset();
     mEmbeddedHubIntf.unregister();
 
     TestBase::TearDown();
+  }
+
+  DynamicVector<ServiceInfo> getHostEndpointServices() {
+    auto serviceName =
+        static_cast<char *>(memoryAlloc(std::strlen(kServiceName) + 1));
+    std::memcpy(serviceName, kServiceName, std::strlen(kServiceName) + 1);
+    DynamicVector<ServiceInfo> services;
+    services.emplace_back(serviceName, kService.majorVersion,
+                          kService.minorVersion, kService.format);
+    return services;
+  }
+
+  void expectOnEmbeddedEndpoint(
+      const std::pair<EndpointInfo, std::vector<ServiceInfo>> &endpoint,
+      Expectation *sequence) {
+    Expectation previous;
+    if (sequence) {
+      previous =
+          EXPECT_CALL(mHostCallback,
+                      onEndpointRegistered(kEmbeddedHub.id, endpoint.first))
+              .After(*sequence)
+              .RetiresOnSaturation();
+    } else {
+      previous =
+          EXPECT_CALL(mHostCallback,
+                      onEndpointRegistered(kEmbeddedHub.id, endpoint.first))
+              .RetiresOnSaturation();
+    }
+    for (const auto &service : endpoint.second) {
+      previous = EXPECT_CALL(mHostCallback,
+                             onEndpointService(kEmbeddedHub.id,
+                                               endpoint.first.id, service))
+                     .After(previous)
+                     .RetiresOnSaturation();
+    }
+    EXPECT_CALL(mHostCallback,
+                onEndpointReady(kEmbeddedHub.id, endpoint.first.id))
+        .After(previous)
+        .RetiresOnSaturation();
   }
 
  protected:
@@ -165,7 +239,8 @@ class HostMessageHubTest : public TestBase {
   MessageRouter::MessageHub mEmbeddedHubIntf;
   MockHostCallback mHostCallback;
 
-  std::vector<EndpointInfo> mEmbeddedEndpoints;
+  std::vector<std::pair<EndpointInfo, std::vector<ServiceInfo>>>
+      mEmbeddedEndpoints;
 };
 
 MATCHER_P(HubIdMatcher, id, "Matches a MessageHubInfo by id") {
@@ -176,21 +251,19 @@ TEST_F(HostMessageHubTest, Reset) {
   // On each reset(), expect onReset() followed by onHubRegistered() and
   // onEndpointRegistered() for each endpoint.
   auto resetExpectations = [this] {
-    Sequence defaultHub, testHub;
-    EXPECT_CALL(mHostCallback, onReset())
-        .InSequence(defaultHub, testHub)
-        .RetiresOnSaturation();
-    EXPECT_CALL(mHostCallback, onHubRegistered(HubIdMatcher(CHRE_PLATFORM_ID)))
-        .InSequence(defaultHub)
-        .RetiresOnSaturation();
-    EXPECT_CALL(mHostCallback, onHubRegistered(kEmbeddedHub))
-        .InSequence(defaultHub)
-        .RetiresOnSaturation();
-    for (const auto &info : kEndpoints) {
-      EXPECT_CALL(mHostCallback, onEndpointRegistered(kEmbeddedHub.id, info))
-          .InSequence(defaultHub)
-          .RetiresOnSaturation();
-    }
+    Expectation reset =
+        EXPECT_CALL(mHostCallback, onReset()).RetiresOnSaturation();
+    Expectation defaultHub =
+        EXPECT_CALL(mHostCallback,
+                    onHubRegistered(HubIdMatcher(CHRE_PLATFORM_ID)))
+            .After(reset)
+            .RetiresOnSaturation();
+    Expectation testHub =
+        EXPECT_CALL(mHostCallback, onHubRegistered(kEmbeddedHub))
+            .After(reset)
+            .RetiresOnSaturation();
+    for (const auto &endpoint : mEmbeddedEndpoints)
+      expectOnEmbeddedEndpoint(endpoint, &testHub);
   };
 
   // reset() with no host endpoints.
@@ -204,7 +277,7 @@ TEST_F(HostMessageHubTest, Reset) {
   // Add a host hub and endpoint. MessageRouter should see none of them after a
   // second reset().
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
   resetExpectations();
   getManager().reset();
   getRouter().forEachEndpoint(
@@ -219,7 +292,6 @@ TEST_F(HostMessageHubTest, RegisterAndUnregisterHub) {
 
   EXPECT_CALL(*mEmbeddedHubCb, onHubRegistered(kHostHub));
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
   EXPECT_TRUE(getRouter().forEachEndpointOfHub(
       kHostHub.id, [](const EndpointInfo &) { return true; }));
 
@@ -282,7 +354,7 @@ TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpoint) {
 
   EXPECT_CALL(*mEmbeddedHubCb,
               onEndpointRegistered(kHostHub.id, kEndpoints[0].id));
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
   getRouter().forEachEndpointOfHub(kHostHub.id, [](const EndpointInfo &info) {
     EXPECT_EQ(info.id, kEndpoints[0].id);
     return true;
@@ -299,12 +371,54 @@ TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpoint) {
   EXPECT_FALSE(found);
 }
 
+TEST_F(HostMessageHubTest, RegisterAndUnregisterEndpointWithService) {
+  getManager().registerHub(kHostHub);
+
+  EXPECT_CALL(*mEmbeddedHubCb,
+              onEndpointRegistered(kHostHub.id, kEndpoints[0].id));
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0],
+                                getHostEndpointServices());
+  bool found = false;
+  getRouter().forEachService([&found](const MessageHubInfo &hub,
+                                      const EndpointInfo &endpoint,
+                                      const ServiceInfo &service) {
+    if (hub.id != kHostHub.id || endpoint.id != kEndpoints[0].id ||
+        std::strcmp(service.serviceDescriptor, kServiceName)) {
+      return false;
+    }
+    found = true;
+    return true;
+  });
+  EXPECT_TRUE(found);
+
+  EXPECT_CALL(*mEmbeddedHubCb,
+              onEndpointUnregistered(kHostHub.id, kEndpoints[0].id));
+  getManager().unregisterEndpoint(kHostHub.id, kEndpoints[0].id);
+  found = false;
+  getRouter().forEachEndpointOfHub(kHostHub.id, [&found](const EndpointInfo &) {
+    found = true;
+    return true;
+  });
+  EXPECT_FALSE(found);
+}
+
 TEST_F(HostMessageHubTest, OnEndpointRegisteredAndUnregistered) {
   getManager().registerHub(kHostHub);
 
-  mEmbeddedEndpoints.push_back(kExtraEndpoint);
+  mEmbeddedEndpoints.push_back({kExtraEndpoint, {}});
+  expectOnEmbeddedEndpoint(mEmbeddedEndpoints.back(), nullptr);
+  mEmbeddedHubIntf.registerEndpoint(kExtraEndpoint.id);
+
   EXPECT_CALL(mHostCallback,
-              onEndpointRegistered(kEmbeddedHub.id, kExtraEndpoint));
+              onEndpointUnregistered(kEmbeddedHub.id, kExtraEndpoint.id));
+  mEmbeddedHubIntf.unregisterEndpoint(kExtraEndpoint.id);
+}
+
+TEST_F(HostMessageHubTest, OnEndpointWithServiceRegisteredAndUnregistered) {
+  getManager().registerHub(kHostHub);
+
+  mEmbeddedEndpoints.push_back({kExtraEndpoint, {kService}});
+  expectOnEmbeddedEndpoint(mEmbeddedEndpoints.back(), nullptr);
   mEmbeddedHubIntf.registerEndpoint(kExtraEndpoint.id);
 
   EXPECT_CALL(mHostCallback,
@@ -318,7 +432,7 @@ TEST_F(HostMessageHubTest, RegisterMaximumEndpoints) {
   // Try to register one more than the maximum endpoints.
   for (int i = 0; i <= CHRE_MESSAGE_ROUTER_MAX_HOST_ENDPOINTS; ++i) {
     EndpointInfo endpoint(0x1 + i, nullptr, 0, EndpointType::GENERIC, 0);
-    getManager().registerEndpoint(kHostHub.id, endpoint);
+    getManager().registerEndpoint(kHostHub.id, endpoint, {});
   }
 
   int count = 0;
@@ -332,7 +446,7 @@ TEST_F(HostMessageHubTest, RegisterMaximumEndpoints) {
   getManager().unregisterEndpoint(kHostHub.id, 0x1);
   EndpointInfo endpoint(0x1 + CHRE_MESSAGE_ROUTER_MAX_HOST_ENDPOINTS, nullptr,
                         0, EndpointType::GENERIC, 0);
-  getManager().registerEndpoint(kHostHub.id, endpoint);
+  getManager().registerEndpoint(kHostHub.id, endpoint, {});
   bool found = false;
   getRouter().forEachEndpointOfHub(
       kHostHub.id, [&found](const EndpointInfo &info) {
@@ -347,7 +461,7 @@ TEST_F(HostMessageHubTest, RegisterMaximumEndpoints) {
 
 TEST_F(HostMessageHubTest, OpenAndCloseSession) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
 
   constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
   EXPECT_CALL(mHostCallback, onSessionOpened(kHostHub.id, sessionId)).Times(1);
@@ -368,7 +482,7 @@ TEST_F(HostMessageHubTest, OpenAndCloseSession) {
 
 TEST_F(HostMessageHubTest, OpenSessionAndHandleClose) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
 
   constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
   EXPECT_CALL(mHostCallback, onSessionOpened(kHostHub.id, sessionId)).Times(1);
@@ -390,7 +504,7 @@ TEST_F(HostMessageHubTest, OpenSessionAndHandleClose) {
 
 TEST_F(HostMessageHubTest, OpenSessionRejected) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
 
   constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
   EXPECT_CALL(mHostCallback,
@@ -407,9 +521,39 @@ TEST_F(HostMessageHubTest, OpenSessionRejected) {
                            /*serviceDescriptor=*/nullptr);
 }
 
+TEST_F(HostMessageHubTest, OpenSessionWithService) {
+  getManager().registerHub(kHostHub);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0],
+                                getHostEndpointServices());
+
+  constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
+  EXPECT_CALL(mHostCallback, onSessionOpened(kHostHub.id, sessionId)).Times(1);
+  EXPECT_CALL(*mEmbeddedHubCb, onSessionOpenRequest(_))
+      .WillOnce([this](const Session &session) {
+        mEmbeddedHubIntf.onSessionOpenComplete(session.sessionId);
+      });
+  getManager().openSession(kHostHub.id, kEndpoints[0].id, kEmbeddedHub.id,
+                           kEndpoints[1].id, sessionId, kServiceName);
+}
+
+TEST_F(HostMessageHubTest, OnOpenSessionWithService) {
+  getManager().registerHub(kHostHub);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0],
+                                getHostEndpointServices());
+
+  SessionId receivedSessionId;
+  EXPECT_CALL(mHostCallback, onSessionOpenRequest(_))
+      .WillOnce([&receivedSessionId](const Session &session) {
+        receivedSessionId = session.sessionId;
+      });
+  auto sessionId = mEmbeddedHubIntf.openSession(kEndpoints[1].id, kHostHub.id,
+                                                kEndpoints[0].id, kServiceName);
+  EXPECT_EQ(sessionId, receivedSessionId);
+}
+
 TEST_F(HostMessageHubTest, AckSession) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
 
   SessionId receivedSessionId;
   EXPECT_CALL(mHostCallback, onSessionOpenRequest(_))
@@ -434,7 +578,7 @@ MATCHER_P(SessionIdMatcher, session, "matches the session id in Session") {
 
 TEST_F(HostMessageHubTest, SendMessage) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
   constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
   EXPECT_CALL(mHostCallback, onSessionOpened(kHostHub.id, sessionId)).Times(1);
   EXPECT_CALL(*mEmbeddedHubCb, onSessionOpenRequest(_))
@@ -456,7 +600,7 @@ TEST_F(HostMessageHubTest, SendMessage) {
 
 TEST_F(HostMessageHubTest, ReceiveMessage) {
   getManager().registerHub(kHostHub);
-  getManager().registerEndpoint(kHostHub.id, kEndpoints[0]);
+  getManager().registerEndpoint(kHostHub.id, kEndpoints[0], {});
   constexpr auto sessionId = MessageRouter::kDefaultReservedSessionId;
   EXPECT_CALL(mHostCallback, onSessionOpened(kHostHub.id, sessionId)).Times(1);
   EXPECT_CALL(*mEmbeddedHubCb, onSessionOpenRequest(_))

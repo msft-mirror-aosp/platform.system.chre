@@ -19,7 +19,7 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/shared/bt_snoop_log.h"
-#include "chre/platform/shared/generated/host_messages_generated.h"
+#include "chre/platform/shared/fbs/host_messages_generated.h"
 #include "chre/util/lock_guard.h"
 
 #ifdef CHRE_TOKENIZED_LOGGING_ENABLED

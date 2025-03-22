@@ -20,6 +20,7 @@
 
 #include <optional>
 
+#include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
 #include "chre/util/lock_guard.h"
 #include "chre/util/memory_pool.h"
@@ -82,6 +83,19 @@ class HostMessageHubManager : public NonCopyable {
      */
     virtual void onEndpointRegistered(
         message::MessageHubId hub, const message::EndpointInfo &endpoint) = 0;
+
+    /**
+     * Adds a service for a new embedded endpoint.
+     */
+    virtual void onEndpointService(message::MessageHubId hub,
+                                   const message::EndpointId endpoint,
+                                   const message::ServiceInfo &service) = 0;
+
+    /**
+     * Notifies the HAL that it has all information on an embedded endpoint.
+     */
+    virtual void onEndpointReady(message::MessageHubId hub,
+                                 message::EndpointId endpoint) = 0;
 
     /**
      * Notifies the HAL that an embedded endpoint is gone.
@@ -179,9 +193,12 @@ class HostMessageHubManager : public NonCopyable {
    *
    * @param hubId Id of the owning message hub
    * @param info Details of the endpoint
+   * @param services Services exposed by the endpoint. NOTE: serviceDescriptor
+   * must have been allocated with CHRE platform memoryAlloc().
    */
   void registerEndpoint(message::MessageHubId hubId,
-                        const message::EndpointInfo &info);
+                        const message::EndpointInfo &info,
+                        DynamicVector<message::ServiceInfo> &&services);
 
   /**
    * Unregisters a host endpoint
@@ -239,12 +256,21 @@ class HostMessageHubManager : public NonCopyable {
 
  private:
   /**
-   * Wrapper around EndpointInfo which can be allocated from a
-   * pw::allocator::TypedPool and tracked per-hub in a pw::IntrusiveList.
+   * Wrapper around EndpointInfo and ServiceInfos which can be allocated from a
+   * pw::allocator::TypedPool and tracked per-hub in a pw::IntrusiveList. The
+   * serviceDescriptors must have been allocated by memoryAlloc() from
+   * chre/platform/memory.h.
    */
   struct Endpoint : public pw::IntrusiveList<Endpoint>::Item {
     message::EndpointInfo kInfo;
-    explicit Endpoint(const message::EndpointInfo &info) : kInfo(info) {}
+    DynamicVector<message::ServiceInfo> mServices;
+    explicit Endpoint(const message::EndpointInfo &info,
+                      DynamicVector<message::ServiceInfo> &&services)
+        : kInfo(info), mServices(std::move(services)) {}
+    ~Endpoint() {
+      for (const auto &service : mServices)
+        memoryFree(const_cast<char *>(service.serviceDescriptor));
+    }
   };
 
   /**
@@ -285,7 +311,8 @@ class HostMessageHubManager : public NonCopyable {
      */
     void clear();
 
-    void addEndpoint(const message::EndpointInfo &info);
+    void addEndpoint(const message::EndpointInfo &info,
+                     DynamicVector<message::ServiceInfo> &&services);
 
     void removeEndpoint(message::EndpointId id);
 
