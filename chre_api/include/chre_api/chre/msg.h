@@ -22,32 +22,65 @@
 
 /**
  * @file
- * Context Hub Runtime Environment API dealing with generic endpoint messages.
- *
- * These APIs are used to send and receive messages to and from generic
- * endpoints. This API is a single interface to nanoapps to communicate with
- * other nanoapps (endpoints of CHRE), other embedded endpoints, or host
+ * Context Hub Runtime Environment API for session-based messaging with generic
  * endpoints.
  *
- * Nanoapps should use these APIs to communicate with other nanoapps, local
- * endpoints, or host endpoints instead of chreSendEvent() or any other
- * messaging APIs if they do not need to support Android versions prior to
- * Android 16 nor CHRE APIs older than v1.11.
+ * Key concepts:
+ * - **Endpoint**: an entity in the system that can send and receive messages.
+ *   Example endpoints include nanoapps, other offload components outside of
+ *   CHRE, privileged Android applications or Android system components
+ *   (registered via the ContextHubManager.registerEndpoint() API), vendor
+ *   processes (e.g. HALs) registered with the Context Hub HAL, etc.
+ * - **Message**: a datagram sent over a session.
+ * - **Session**: an active connection between two endpoints, optionally scoped
+ *   to a specific service. All messages must be sent over an established
+ *   session. A session will be automatically closed if sending a message fails
+ *   or the remote endpoint otherwise disconnects.
+ * - **Service**: a defined interface and wire format associated with some
+ *   functionality. Endpoints can choose to not register any services, for
+ *   example in cases where the endpoint only functions as a client, or if its
+ *   interface is implied and internal (e.g. a nanoapp that is tightly coupled
+ *   with its host-side code). Endpoints may also register 1 or more services,
+ *   and multiple endpoints may register the same service. This enables
+ *   abstraction between the interface/functionality and the entity/endpoint
+ *   that implements it.
  *
- * This API uses sessions to organize groups of messages between endpoints.
- * Sessions are created when an endpoint is connected to another endpoint and
- * represent an active connection between the endpoints. Messages are sent
- * between endpoints using the session ID. A session will be automatically
- * closed if an error occurs or an endpoint disconnects.
+ * This API provides a single interface for nanoapps to communicate with other
+ * parts of the system, regardless of location.  Nanoapps should use these APIs
+ * rather than chreSendEvent(), chreSendMessageToHostEndpoint(), and related
+ * APIs if they do not need to support Android versions prior to Android 16 nor
+ * CHRE APIs older than v1.11.
  *
- * The general order of API usage is:
+ * The general order of API usage as a client (session initiator) is:
  *
- * 1. Use one of the query APIs to find an endpoint to communicate with. The
- *    nanoapp may also know the message hub ID and endpoint ID of the endpoint
- *    it wants to communicate with.
- * 2. chreMsgSessionOpenAsync() - to open a session with an endpoint.
- * 3. chreMsgSend() - to send a message to an endpoint.
- * 4. chreMsgSessionCloseAsync() - to close a session with an endpoint.
+ * 1. The nanoapp should know the target service and/or endpoint ID it wants to
+ *    interact with, and optionally the target hub ID, and provide this to
+ *    chreMsgConfigureEndpointReadyEvents() or
+ *    chreMsgConfigureServiceReadyEvents().
+ * 2. The nanoapp will receive an event when a suitable endpoint is found. The
+ *    nanoapp then calls chreMsgSessionOpenAsync() to initiate communication.
+ * 3. Once the session is established, the nanoapp receives a
+ *    CHRE_EVENT_MSG_SESSION_OPENED event. If a failure occurred or the target
+ *    endpoint did not accept the session, a CHRE_EVENT_MSG_SESSION_CLOSED event
+ *    will be provided instead.
+ * 4. Assuming the session was opened successfully, the nanoapp can now send
+ *    messages over the session using chreMsgSend() and will receive messages
+ *    via CHRE_EVENT_MSG_FROM_ENDPOINT.
+ * 5. The session may be left open indefinitely, or closed by either endpoint,
+ *    or by the system on error or if one endpoint crashes/disconnects. If the
+ *    target endpoint crashes and then recovers, a new ready event will be
+ *    generated and communication can resume at step 2.
+ *
+ * As a server (session responder), the high-level flow is:
+ *
+ * 1. (Optional) Register one or more services via chreMsgPublishServices().
+ * 2. The nanoapp receives CHRE_EVENT_MSG_SESSION_OPENED when another endpoint
+ *    initiates a session. The session can either be used immediately, or the
+ *    nanoapp can use chreMsgSessionCloseAsync() to reject the session.
+ * 3. Once a session is established, it functions the same regardless of which
+ *    endpoint initiated the session.
+ *
+ * @since v1.11
  */
 
 #include <stdbool.h>
@@ -134,7 +167,7 @@ enum chreMsgEndpointReason {
 #define CHRE_MSG_MAX_NAME_LEN (51)
 
 /**
- * The maximum length of a service descriptor.
+ * The maximum length of a service descriptor (including null terminator).
  */
 #define CHRE_MSG_MAX_SERVICE_DESCRIPTOR_LEN (128)
 
@@ -401,25 +434,24 @@ bool chreMsgGetEndpointInfo(uint64_t hubId, uint64_t endpointId,
                             struct chreMsgEndpointInfo *info);
 
 /**
- * Configures whether this nanoapp will receive updates regarding an
- * endpoint that is connected with a message hub and a specific service.
- * The hubId can be CHRE_MSG_HUB_ID_ANY to configure notifications
- * for all endpoints that are connected with any message hub. The endpoint ID
- * can be CHRE_MSG_ENDPOINT_ID_ANY to configure notifications for all
- * endpoints that match the given hub.
+ * Configures whether this nanoapp will receive updates regarding an endpoint
+ * that is connected with a message hub and a specific service.  The hubId can
+ * be CHRE_MSG_HUB_ID_ANY to configure notifications for matching endpoints that
+ * are connected with any message hub. The endpoint ID can be
+ * CHRE_MSG_ENDPOINT_ID_ANY to configure notifications for all endpoints that
+ * match the given hub.
  *
- * If this API succeeds, the nanoapp will receive endpoint
- * notifications, via the CHRE_EVENT_MSG_ENDPOINT_READY event with an
- * eventData of type chreMsgEndpointReadyEvent.
+ * If this API succeeds, the nanoapp will receive endpoint notifications via
+ * CHRE_EVENT_MSG_ENDPOINT_READY with chreMsgEndpointReadyEvent.
  *
  * If one or more endpoints matching the filter are already ready when this
  * function is called, CHRE_EVENT_MSG_ENDPOINT_READY will be immediately
  * posted to this nanoapp.
  *
  * @param hubId The message hub ID of the endpoint for which to configure
- * notifications for all endpoints that are connected with any message hub.
+ *     notifications for all endpoints that are connected with any message hub.
  * @param endpointId The endpoint ID of the endpoint for which to configure
- * notifications.
+ *     notifications.
  * @param enable true to enable notifications.
  *
  * @return true on success
@@ -430,30 +462,27 @@ bool chreMsgConfigureEndpointReadyEvents(uint64_t hubId, uint64_t endpointId,
                                          bool enable);
 
 /**
- * Configures whether this nanoapp will receive updates regarding all
- * endpoints that are connected with the message hub that provide the specified
- * service.
+ * Configures whether this nanoapp will receive updates regarding all endpoints
+ * that are connected with the message hub that provide the specified service.
  *
- * If this API succeeds, the nanoapp will receive endpoint
- * notifications, via the CHRE_EVENT_MSG_SERVICE_READY event
- * with an eventData of type chreMsgServiceReadyEvent.
+ * If this API succeeds, the nanoapp will receive endpoint notifications via
+ * CHRE_EVENT_MSG_SERVICE_READY with chreMsgServiceReadyEvent.
  *
  * If one or more endpoints matching the filter are already ready when this
- * function is called, CHRE_EVENT_MSG_SERVICE_READY will be
- * immediately posted to this nanoapp.
+ * function is called, CHRE_EVENT_MSG_SERVICE_READY will be immediately posted
+ * to this nanoapp.
  *
  * @param hubId The message hub ID of the endpoint for which to configure
- * notifications for all endpoints that are connected with any message hub.
+ *     notifications for all endpoints that are connected with any message hub.
  * @param serviceDescriptor The descriptor of the service associated with the
- * endpoint for which to configure notifications, a null-terminated ASCII
- * string. If not NULL, the underlying memory must outlive the notifications
- * configuration. If NULL, this will return false.
+ *     endpoint for which to configure notifications, a null-terminated ASCII
+ *     string. If not NULL, the underlying memory must outlive the notifications
+ *     configuration. If NULL, this will return false.
  * @param enable true to enable notifications.
  *
  * @return true on success
  *
  * @see chreMsgConfigureEndpointReadyEvents
- *
  * @since v1.11
  */
 bool chreMsgConfigureServiceReadyEvents(uint64_t hubId,
@@ -461,13 +490,11 @@ bool chreMsgConfigureServiceReadyEvents(uint64_t hubId,
                                         bool enable);
 
 /**
- * Retrieves metadata for a given session ID. Sessions represent an active
- * connection between a nanoapp and an endpoint. The nanoapp will use this
- * session ID to send messages to the endpoint.
+ * Retrieves metadata for a currently active session ID.
  *
  * If the given session ID is not associated with a valid session or if the
- * caller nanoapp is not a participant in the session, this method
- * will return false and info will not be populated.
+ * caller nanoapp is not a participant in the session, this method will return
+ * false and info will not be populated.
  *
  * @param sessionId The session ID of the session for which to get info.
  * @param info The non-null pointer to where the metadata will be stored.
@@ -479,17 +506,16 @@ bool chreMsgConfigureServiceReadyEvents(uint64_t hubId,
 bool chreMsgSessionGetInfo(uint16_t sessionId, struct chreMsgSessionInfo *info);
 
 /**
- * Publishes services from this nanoapp.
+ * Publishes services exposed by this nanoapp, which will be included with the
+ * endpoint metadata visible to other endpoints in the system.
  *
- * When this API is invoked, the list of services will be provided to
- * host applications and endpoints interacting with the nanoapp.
- *
- * This function must be invoked from nanoappStart(), to guarantee stable output
- * of the list of services supported by the nanoapp.
+ * This function must be invoked from nanoappStart(), which ensures stable
+ * output of the list of services supported by the nanoapp. Calls made outside
+ * of nanoappStart() will have no effect.
  *
  * Although nanoapps are recommended to only call this API once with all
- * services it intends to publish, if it is called multiple times, each
- * call will append to the list of published services.
+ * services it intends to publish, if called multiple times, each call will
+ * append to the list of published services.
  *
  * The implementation must allow for a nanoapp to publish at least
  * CHRE_MSG_MINIMUM_SERVICE_LIMIT services and at most UINT8_MAX services. If
@@ -498,7 +524,7 @@ bool chreMsgSessionGetInfo(uint16_t sessionId, struct chreMsgSessionInfo *info);
  *
  * @param services A non-null pointer to the list of services to publish.
  * @param numServices The number of services to publish, i.e. the length of the
- * services array.
+ *     services array.
  *
  * @return true if the publishing is successful.
  *
@@ -510,23 +536,29 @@ bool chreMsgPublishServices(const struct chreMsgServiceInfo *services,
 /**
  * Opens a session with an endpoint.
  *
- * The nanoapp will receive a CHRE_EVENT_MSG_SESSION_OPENED event or a
- * CHRE_EVENT_MSG_SESSION_CLOSED event upon the response from the other
- * hub and endpoint. The event may have a session ID of UINT16_MAX if the
- * session could not be opened before sending any request to the other hub and
- * endpoint, i.e. if the given message hub ID and endpoint ID are not associated
- * with a valid endpoint.
+ * If this function returns true, the result of session initiation will be
+ * provided by a CHRE_EVENT_MSG_SESSION_OPENED or CHRE_EVENT_MSG_SESSION_CLOSED
+ * event containing the same hub ID, endpoint ID, and service descriptor
+ * parameters. Nanoapps may only open one session for each unique combination of
+ * parameters.
  *
- * @param hubId The message hub ID of the endpoint. Can be
- * CHRE_MSG_HUB_ID_ANY to open a session with the default endpoint.
+ * @param hubId The message hub ID of the endpoint. Can be CHRE_MSG_HUB_ID_ANY
+ *     to open a session with the default endpoint.
  * @param endpointId The endpoint ID of the endpoint. Can be
- * CHRE_MSG_ENDPOINT_ID_ANY to open a session with a specified service. The
- * service cannot be NULL in this case.
+ *     CHRE_MSG_ENDPOINT_ID_ANY to open a session with a specified service. The
+ *     service cannot be NULL in this case.
  * @param serviceDescriptor The descriptor of the service associated with the
- * endpoint with which to open the session, a null-terminated ASCII
- * string. Can be NULL. The underlying memory must outlive the session.
+ *     endpoint with which to open the session, a null-terminated ASCII string.
+ *     Can be NULL. The underlying memory must remain valid at least until the
+ *     session is closed - for example, it should be a pointer to a static const
+ *     variable hard-coded in the nanoapp.
+ *     NOTE: as event data supplied to nanoapps does not live beyond the
+ *     nanoappHandleEvent() invocation, it is NOT valid to use the serviceData
+ *     array provided inside chreMsgServiceReadyEvent here.
  *
- * @return whether the request was successfully processed.
+ * @return true if the request was successfully dispatched, or false if a
+ *     synchronous error occurred, in which case no subsequent event will be
+ *     sent.
  *
  * @since v1.11
  */
@@ -537,34 +569,67 @@ bool chreMsgSessionOpenAsync(uint64_t hubId, uint64_t endpointId,
  * Closes a session with an endpoint.
  *
  * If the given session ID is not associated with a valid session or if the
- * caller nanoapp is not a participant in the session, this method
- * will return false.
+ * calling nanoapp is not a participant in the session, this method will return
+ * false.
  *
- * The nanoapp will receive a CHRE_EVENT_MSG_SESSION_CLOSED event upon
- * successful closure of the session.
+ * The nanoapp will receive a CHRE_EVENT_MSG_SESSION_CLOSED event when the
+ * session teardown is complete. The session is immediately unavailable for
+ * sending. It is unspecified whether any in-flight messages sent by the
+ * other endpoint will be received prior to CHRE_EVENT_MSG_SESSION_CLOSED, but
+ * once this event is delivered, no further data will be received.
  *
- * @param sessionId The session ID of the session to close.
+ * @param sessionId ID of the session to close.
  *
- * @return true if the session was successfully closed.
+ * @return true if the session closure process was initiated.
  *
  * @since v1.11
  */
 bool chreMsgSessionCloseAsync(uint16_t sessionId);
 
 /**
- * Send a reliable message to an endpoint.
+ * Send a message to an endpoint over an active session.
  *
- * This function is similar to sending a reliable message using
- * chreSendReliableMessageAsync() with the difference that the message can be
- * sent to any registered endpoint and the nanoapp will not receive the
- * CHRE_EVENT_RELIABLE_MSG_ASYNC_RESULT event. Instead, when the message is
- * successfully processed by the receiving message hub and endpoint, the
- * freeCallback will be invoked. If the receiving message hub sends the message
- * further, i.e. in the case of the host message hub, if the message will be
- * sent reliably. A failure in reliable message delivery will be indicated
- * by the corresponding session closing.
+ * This is similar to the stateless host message APIs, such as
+ * chreSendMessageWithPermissions(), but it supports sending data to an
+ * arbitrary endpoint, which could be a host app, another nanoapp, or something
+ * else.
  *
- * @see chreSendReliableMessageAsync
+ * Messages are guaranteed to be delivered in the order they were sent. If an
+ * error occurs while attempting to deliver the message, the session will be
+ * closed by the system with a suitable reason provided in the data sent with
+ * CHRE_EVENT_MSG_SESSION_CLOSED. While this covers most scenarios, no explicit
+ * end-to-end acknowledgement is provided, and any internal timeouts and/or
+ * retries are implementation-dependent. Similar to chreMsgSessionCloseAsync(),
+ * if the session is closed by the other endpoint or system, it is unspecified
+ * whether any in-flight messages were delivered. The option to send reliable
+ * messages over a socket is planned for a future release. In the meantime, if
+ * full reliability is desired for host communication, use
+ * chreSendReliableMessageAsync().
+ *
+ * @param message Pointer to a block of memory to send to the other endpoint in
+ *     this session. NULL is acceptable only if messageSize is 0. This function
+ *     transfers ownership of the provided memory to the system, so the data
+ *     must stay valid and unmodified until freeCallback is invoked.
+ * @param messageSize The size, in bytes, of the given message. Maximum allowed
+ *     size for the destination endpoint is provided in chreMsgEndpointInfo.
+ * @param messageType An opaque value passed along with the message payload,
+ *     using an application/service-defined scheme.
+ * @param sessionId The session over which to send this message, which also
+ *     implicitly identifies the destination service (if used), endpoint, and
+ *     hub. Provided in chreMsgSessionInfo.
+ * @param messagePermissions Bitmask of permissions that must be held to receive
+ *     this message, and will be attributed to the recipient. Primarily relevant
+ *     when the destination endpoint is an Android application. Refer to
+ *     CHRE_MESSAGE_PERMISSIONS.
+ * @param freeCallback Invoked when the system no longer needs the memory
+ *     holding the message. Note that this does not necessarily mean that the
+ *     message has been delivered. If message is non-NULL, this must be
+ *     non-NULL, and if message is NULL, this must be NULL.
+ *
+ * @return true if the message was accepted for transmission, false otherwise.
+ *     Note that even if this method returns false, the freeCallback will be
+ *     invoked, if non-NULL. In either case, the freeCallback may be invoked
+ *     synchronously, so it must not call chreMsgSend() to avoid recursion.
  *
  * @since v1.11
  */
